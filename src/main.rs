@@ -7,6 +7,7 @@ mod database;
 mod middleware;
 mod models;
 mod network;
+mod smart_contracts;
 
 use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Compress;
@@ -108,6 +109,7 @@ async fn main() -> std::io::Result<()> {
     let mempool = Arc::new(Mutex::new(Mempool::new()));
     let balance_cache = Arc::new(BalanceCache::new());
     let billing_manager = Arc::new(BillingManager::new());
+    let contract_manager = Arc::new(Mutex::new(smart_contracts::ContractManager::new()));
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -117,6 +119,7 @@ async fn main() -> std::io::Result<()> {
         mempool: mempool.clone(),
         balance_cache: balance_cache.clone(),
         billing_manager: billing_manager.clone(),
+        contract_manager: contract_manager.clone(),
     };
 
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);

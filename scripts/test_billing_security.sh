@@ -42,6 +42,34 @@ test_result() {
     fi
 }
 
+# Extrae el valor de transactions_this_month de una respuesta JSON de usage
+get_transactions_usage() {
+    local usage_response="$1"
+    local usage=""
+    
+    # Método 1: jq (más confiable)
+    if command -v jq >/dev/null 2>&1; then
+        usage=$(echo "$usage_response" | jq -r '.data.transactions_this_month' 2>/dev/null)
+    fi
+    
+    # Método 2: grep + cut (fallback)
+    if [ -z "$usage" ] || [ "$usage" = "null" ] || [ "$usage" = "" ]; then
+        usage=$(echo "$usage_response" | grep -o '"transactions_this_month":[0-9]*' | head -1 | cut -d':' -f2)
+    fi
+    
+    # Método 3: sed (fallback adicional)
+    if [ -z "$usage" ] || [ "$usage" = "null" ] || [ "$usage" = "" ]; then
+        usage=$(echo "$usage_response" | sed -n 's/.*"transactions_this_month":\([0-9]*\).*/\1/p' | head -1)
+    fi
+    
+    # Si aún no tenemos valor válido, usar 0
+    if [ -z "$usage" ] || [ "$usage" = "null" ] || [ "$usage" = "" ] || ! [[ "$usage" =~ ^[0-9]+$ ]]; then
+        usage=0
+    fi
+    
+    echo "$usage"
+}
+
 echo "📊 TEST 1: Ataque de Fuerza Bruta en API Keys"
 echo "----------------------------------------------"
 brute_force_success=0
@@ -91,46 +119,164 @@ echo ""
 
 echo "📊 TEST 2: Ataque de Bypass de Límites de Transacciones"
 echo "--------------------------------------------------------"
+# Esperar tiempo suficiente para que el rate limiting se resetee
+# (límite es 5 req/seg, esperar 2 segundos para asegurar que no hay bloqueo)
+sleep 3
 bypass_limit_success=0
+USAGE=0
+USAGE_DISPLAY="0"
+LIMIT_REACHED_COUNT=0
+SUCCESS_COUNT=0
 
-FREE_KEY=$(curl -s -X POST "$API_URL/billing/create-key" \
+# Usar tier "free" que tiene límite de 100 transacciones
+FREE_KEY_RESP=$(curl -s -X POST "$API_URL/billing/create-key" \
     -H "Content-Type: application/json" \
     -d '{"tier":"free"}' \
-    --max-time $TIMEOUT 2>/dev/null | jq -r '.data' 2>/dev/null || echo "")
+    --max-time $TIMEOUT 2>/dev/null)
 
-if [ -n "$FREE_KEY" ] && [ "$FREE_KEY" != "null" ]; then
-    WALLET1=$(curl -s -X POST "$API_URL/wallets/create" \
-        -H "X-API-Key: $FREE_KEY" \
-        --max-time $TIMEOUT 2>/dev/null | jq -r '.data.address' 2>/dev/null || echo "")
-    WALLET2=$(curl -s -X POST "$API_URL/wallets/create" \
-        -H "X-API-Key: $FREE_KEY" \
-        --max-time $TIMEOUT 2>/dev/null | jq -r '.data.address' 2>/dev/null || echo "")
+# Extraer key con múltiples métodos
+FREE_KEY=$(echo "$FREE_KEY_RESP" | jq -r '.data' 2>/dev/null || echo "")
+if [ -z "$FREE_KEY" ] || [ "$FREE_KEY" = "null" ] || [ "$FREE_KEY" = "" ]; then
+    FREE_KEY=$(echo "$FREE_KEY_RESP" | grep -o '"data":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+fi
+
+if [ -z "$FREE_KEY" ] || [ "$FREE_KEY" = "null" ] || [ "$FREE_KEY" = "" ]; then
+    test_result "Bypass de límites: No se pudo crear API key de prueba" "FAIL"
+    echo ""
+else
+    # Esperar para evitar rate limiting (límite es 5 req/seg, esperar 3 segundos)
+    sleep 3
+    # Crear wallet con reintentos
+    WALLET1=""
+    for attempt in {1..5}; do
+        WALLET_RESP=$(curl -s -X POST "$API_URL/wallets/create" \
+            -H "X-API-Key: $FREE_KEY" \
+            --max-time $TIMEOUT 2>/dev/null)
+        
+        # Verificar si recibimos rate limit
+        if echo "$WALLET_RESP" | grep -q "Rate limit exceeded"; then
+            sleep 5
+            continue
+        fi
+        
+        # Intentar extraer wallet con jq primero
+        WALLET1=$(echo "$WALLET_RESP" | jq -r '.data.address' 2>/dev/null || echo "")
+        # Si falla jq, usar grep
+        if [ -z "$WALLET1" ] || [ "$WALLET1" = "null" ] || [ "$WALLET1" = "" ]; then
+            WALLET1=$(echo "$WALLET_RESP" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+        fi
+        
+        if [ -n "$WALLET1" ] && [ "$WALLET1" != "null" ] && [ "$WALLET1" != "" ]; then
+            break
+        fi
+        
+        sleep 2
+    done
     
-    if [ -n "$WALLET1" ] && [ -n "$WALLET2" ]; then
-        for i in {1..150}; do
-            curl -s -X POST "$API_URL/transactions" \
+    if [ -z "$WALLET1" ] || [ "$WALLET1" = "null" ] || [ "$WALLET1" = "" ]; then
+        test_result "Bypass de límites: No se pudo crear wallet de prueba" "FAIL"
+        echo ""
+    else
+        WALLET2=$WALLET1
+        
+        # Minar muchos bloques para tener fondos suficientes
+        echo "  Minando bloques para fondos iniciales..."
+        for i in {1..50}; do
+            curl -s -X POST "$API_URL/mine" \
+                -H "Content-Type: application/json" \
+                -d "{\"miner_address\":\"$WALLET1\",\"max_transactions\":1}" \
+                --max-time $TIMEOUT >/dev/null 2>&1
+        done
+        sleep 2
+        
+        # Hacer transacciones hasta alcanzar exactamente 100 exitosas
+        echo "  Realizando transacciones hasta alcanzar límite de 100..."
+        ATTEMPTS=0
+        MAX_ATTEMPTS=600
+        
+        while [ $SUCCESS_COUNT -lt 100 ] && [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            sleep 0.2
+            
+            HTTP=$(curl -s -w "%{http_code}" -o /dev/null -X POST "$API_URL/transactions" \
                 -H "Content-Type: application/json" \
                 -H "X-API-Key: $FREE_KEY" \
                 -d "{\"from\":\"$WALLET1\",\"to\":\"$WALLET2\",\"amount\":1,\"fee\":0}" \
-                --max-time 2 >/dev/null 2>&1
+                --max-time 5 2>/dev/null)
+            
+            if [ "$HTTP" = "201" ]; then
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                # Minar cada 10 exitosas para procesar pendientes y mantener fondos
+                if [ $((SUCCESS_COUNT % 10)) -eq 0 ]; then
+                    curl -s -X POST "$API_URL/mine" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"miner_address\":\"$WALLET1\",\"max_transactions\":10}" \
+                        --max-time $TIMEOUT >/dev/null 2>&1
+                    sleep 0.5
+                fi
+            elif [ "$HTTP" = "402" ]; then
+                LIMIT_REACHED_COUNT=$((LIMIT_REACHED_COUNT + 1))
+                echo "  Límite alcanzado en intento $ATTEMPTS (exitosas: $SUCCESS_COUNT)"
+                break
+            fi
+            
+            # Mostrar progreso cada 25 intentos
+            if [ $((ATTEMPTS % 25)) -eq 0 ]; then
+                USAGE_TEMP=$(curl -s -X GET "$API_URL/billing/usage" -H "X-API-Key: $FREE_KEY" --max-time $TIMEOUT 2>/dev/null)
+                USAGE_TEMP_VAL=$(get_transactions_usage "$USAGE_TEMP")
+                echo "  Progreso: intentos=$ATTEMPTS, exitosas=$SUCCESS_COUNT, uso=$USAGE_TEMP_VAL"
+            fi
         done
         
-        sleep 1
-        
-        USAGE=$(curl -s -X GET "$API_URL/billing/usage" \
+        # Verificar uso después de alcanzar 100
+        sleep 2
+        USAGE_RESP=$(curl -s -X GET "$API_URL/billing/usage" \
             -H "X-API-Key: $FREE_KEY" \
-            --max-time $TIMEOUT 2>/dev/null | jq -r '.data.transactions_this_month' 2>/dev/null || echo "0")
+            --max-time $TIMEOUT 2>/dev/null)
+        USAGE=$(get_transactions_usage "$USAGE_RESP")
+        USAGE_DISPLAY="$USAGE"
         
-        if [ "$USAGE" -le 100 ]; then
+        echo "  Transacciones exitosas: $SUCCESS_COUNT, Uso registrado: $USAGE_DISPLAY"
+        
+        # Intentar una transacción más para verificar que el límite se aplica
+        if [ "$USAGE" -ge 100 ] 2>/dev/null; then
+            sleep 1
+            FINAL_HTTP=$(curl -s -w "%{http_code}" -o /dev/null -X POST "$API_URL/transactions" \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: $FREE_KEY" \
+                -d "{\"from\":\"$WALLET1\",\"to\":\"$WALLET2\",\"amount\":1,\"fee\":0}" \
+                --max-time 5 2>/dev/null)
+            if [ "$FINAL_HTTP" = "402" ]; then
+                LIMIT_REACHED_COUNT=$((LIMIT_REACHED_COUNT + 1))
+                echo "  Transacción #101 correctamente rechazada con 402"
+            else
+                echo "  ADVERTENCIA: Transacción #101 no fue rechazada (HTTP: $FINAL_HTTP)"
+            fi
+        elif [ "$USAGE" -lt 100 ] 2>/dev/null; then
+            # Si no alcanzamos 100, intentar una más para ver si el sistema la rechaza
+            sleep 1
+            FINAL_HTTP=$(curl -s -w "%{http_code}" -o /dev/null -X POST "$API_URL/transactions" \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: $FREE_KEY" \
+                -d "{\"from\":\"$WALLET1\",\"to\":\"$WALLET2\",\"amount\":1,\"fee\":0}" \
+                --max-time 5 2>/dev/null)
+            if [ "$FINAL_HTTP" = "402" ]; then
+                LIMIT_REACHED_COUNT=$((LIMIT_REACHED_COUNT + 1))
+                echo "  Sistema rechazó transacción aunque uso es $USAGE (puede ser correcto si hay límite adicional)"
+            fi
+        fi
+        
+        # Verificar que el uso no exceda 100 Y que se haya rechazado al menos una transacción
+        if [ -n "$USAGE" ] && [ "$USAGE" != "" ] && [[ "$USAGE" =~ ^[0-9]+$ ]] && [ "$USAGE" -le 100 ] 2>/dev/null && [ "$LIMIT_REACHED_COUNT" -gt 0 ]; then
             bypass_limit_success=1
         fi
     fi
 fi
 
 if [ $bypass_limit_success -eq 1 ]; then
-    test_result "Bypass de límites: Sistema aplicó límite correctamente (Free tier: máx 100)" "PASS"
+    test_result "Bypass de límites: Sistema aplicó límite correctamente (Free tier: máx 100, registradas: $USAGE_DISPLAY, rechazadas: $LIMIT_REACHED_COUNT)" "PASS"
 else
-    test_result "Bypass de límites: Sistema permitió exceder límite" "FAIL"
+    test_result "Bypass de límites: Sistema permitió exceder límite (registradas: $USAGE_DISPLAY, rechazadas: $LIMIT_REACHED_COUNT, exitosas: $SUCCESS_COUNT)" "FAIL"
 fi
 echo ""
 
@@ -187,9 +333,10 @@ MANIP_KEY=$(curl -s -X POST "$API_URL/billing/create-key" \
     --max-time $TIMEOUT 2>/dev/null | jq -r '.data' 2>/dev/null || echo "")
 
 if [ -n "$MANIP_KEY" ] && [ "$MANIP_KEY" != "null" ]; then
-    INITIAL_USAGE=$(curl -s -X GET "$API_URL/billing/usage" \
+    INITIAL_USAGE_RESP=$(curl -s -X GET "$API_URL/billing/usage" \
         -H "X-API-Key: $MANIP_KEY" \
-        --max-time $TIMEOUT 2>/dev/null | jq -r '.data.transactions_this_month' 2>/dev/null || echo "0")
+        --max-time $TIMEOUT 2>/dev/null)
+    INITIAL_USAGE=$(get_transactions_usage "$INITIAL_USAGE_RESP")
     
     WALLET_A=$(curl -s -X POST "$API_URL/wallets/create" \
         -H "X-API-Key: $MANIP_KEY" \
@@ -209,9 +356,10 @@ if [ -n "$MANIP_KEY" ] && [ "$MANIP_KEY" != "null" ]; then
         
         sleep 1
         
-        FINAL_USAGE=$(curl -s -X GET "$API_URL/billing/usage" \
+        FINAL_USAGE_RESP=$(curl -s -X GET "$API_URL/billing/usage" \
             -H "X-API-Key: $MANIP_KEY" \
-            --max-time $TIMEOUT 2>/dev/null | jq -r '.data.transactions_this_month' 2>/dev/null || echo "0")
+            --max-time $TIMEOUT 2>/dev/null)
+        FINAL_USAGE=$(get_transactions_usage "$FINAL_USAGE_RESP")
         
         EXPECTED_USAGE=$((INITIAL_USAGE + 50))
         
@@ -389,9 +537,10 @@ if [ -n "$CONCURRENT_KEY" ] && [ "$CONCURRENT_KEY" != "null" ]; then
         wait
         sleep 2
         
-        FINAL_USAGE=$(curl -s -X GET "$API_URL/billing/usage" \
+        FINAL_USAGE_RESP=$(curl -s -X GET "$API_URL/billing/usage" \
             -H "X-API-Key: $CONCURRENT_KEY" \
-            --max-time $TIMEOUT 2>/dev/null | jq -r '.data.transactions_this_month' 2>/dev/null || echo "0")
+            --max-time $TIMEOUT 2>/dev/null)
+        FINAL_USAGE=$(get_transactions_usage "$FINAL_USAGE_RESP")
         
         if [ "$FINAL_USAGE" -le 10000 ]; then
             concurrent_attack_success=1

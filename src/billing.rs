@@ -176,7 +176,11 @@ impl APIKeyInfo {
         if !self.is_active {
             return false;
         }
-        self.usage.transactions_this_month < self.tier.transaction_limit()
+        let limit = self.tier.transaction_limit();
+        if limit == u64::MAX {
+            return true;
+        }
+        self.usage.transactions_this_month < limit
     }
 
     /**
@@ -186,7 +190,11 @@ impl APIKeyInfo {
         if !self.is_active {
             return false;
         }
-        self.usage.wallets_created < self.tier.wallet_limit()
+        let limit = self.tier.wallet_limit();
+        if limit == u64::MAX {
+            return true;
+        }
+        self.usage.wallets_created < limit
     }
 
     /**
@@ -206,7 +214,6 @@ impl APIKeyInfo {
     /**
      * Incrementa el contador de requests
      */
-    #[allow(dead_code)]
     pub fn increment_requests(&mut self) {
         self.usage.reset_if_needed();
         self.usage.requests_today += 1;
@@ -243,20 +250,27 @@ impl BillingManager {
      * Crea una nueva API key para un tier
      */
     pub fn create_api_key(&self, tier: BillingTier) -> Result<String, String> {
-        let key = self.generate_secure_key();
-        let key_hash = Self::hash_key(&key);
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: u32 = 10;
         
-        let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
-        if keys.contains_key(&key_hash) {
-            return Err("Error generando API key única".to_string());
+        loop {
+            let key = self.generate_secure_key();
+            let key_hash = Self::hash_key(&key);
+            
+            let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
+            
+            if !keys.contains_key(&key_hash) {
+                let mut key_info = APIKeyInfo::new(tier);
+                key_info.key_hash = key_hash.clone();
+                keys.insert(key_hash, key_info);
+                return Ok(key);
+            }
+            
+            attempts += 1;
+            if attempts >= MAX_ATTEMPTS {
+                return Err("Error generando API key única después de múltiples intentos".to_string());
+            }
         }
-
-        let mut key_info = APIKeyInfo::new(tier);
-        key_info.key_hash = key_hash.clone();
-        keys.insert(key_hash, key_info);
-
-        Ok(key)
     }
 
     /**
@@ -305,6 +319,42 @@ impl BillingManager {
     }
 
     /**
+     * Verifica el límite de transacciones sin incrementar (operación atómica)
+     * Útil para verificar antes de procesar una transacción costosa
+     */
+    pub fn check_transaction_limit(&self, key: &str) -> Result<(), String> {
+        if key.is_empty() {
+            return Err("API key vacía".to_string());
+        }
+
+        if !key.starts_with("bc_") || key.len() < 35 {
+            return Err("Formato de API key inválido".to_string());
+        }
+
+        let key_hash = Self::hash_key(key);
+        let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
+        
+        match keys.get_mut(&key_hash) {
+            Some(key_info) => {
+                if !key_info.is_active {
+                    return Err("API key desactivada".to_string());
+                }
+                
+                key_info.usage.reset_if_needed();
+                
+                // Verificar límite sin incrementar (operación atómica)
+                let limit = key_info.tier.transaction_limit();
+                if limit != u64::MAX && key_info.usage.transactions_this_month >= limit {
+                    return Err("Límite de transacciones alcanzado para tu tier".to_string());
+                }
+                
+                Ok(())
+            }
+            None => Err("API key no encontrada".to_string()),
+        }
+    }
+
+    /**
      * Verifica si una API key puede crear un wallet
      */
     pub fn can_create_wallet(&self, key: &str) -> Result<bool, String> {
@@ -313,7 +363,46 @@ impl BillingManager {
     }
 
     /**
-     * Registra una transacción realizada
+     * Intenta registrar una transacción verificando el límite de forma atómica
+     * Retorna Ok(()) si se pudo registrar, Err si se excedió el límite o hubo un error
+     */
+    pub fn try_record_transaction(&self, key: &str) -> Result<(), String> {
+        if key.is_empty() {
+            return Err("API key vacía".to_string());
+        }
+
+        if !key.starts_with("bc_") || key.len() < 35 {
+            return Err("Formato de API key inválido".to_string());
+        }
+
+        let key_hash = Self::hash_key(key);
+        let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
+        
+        match keys.get_mut(&key_hash) {
+            Some(key_info) => {
+                if !key_info.is_active {
+                    return Err("API key desactivada".to_string());
+                }
+                
+                key_info.usage.reset_if_needed();
+                
+                // Verificar límite antes de incrementar (operación atómica)
+                let limit = key_info.tier.transaction_limit();
+                if limit != u64::MAX && key_info.usage.transactions_this_month >= limit {
+                    return Err("Límite de transacciones alcanzado para tu tier".to_string());
+                }
+                
+                // Incrementar contador (dentro del mismo lock, operación atómica)
+                key_info.increment_transactions();
+                Ok(())
+            }
+            None => Err("API key no encontrada".to_string()),
+        }
+    }
+
+    /**
+     * Registra una transacción realizada (sin verificar límite)
+     * Usar solo cuando ya se verificó el límite previamente
      */
     pub fn record_transaction(&self, key: &str) -> Result<(), String> {
         let key_hash = Self::hash_key(key);

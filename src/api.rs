@@ -4,6 +4,7 @@ use crate::cache::BalanceCache;
 use crate::database::BlockchainDB;
 use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
+use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract};
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -21,6 +22,7 @@ pub struct AppState {
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
     pub billing_manager: Arc<BillingManager>,
+    pub contract_manager: Arc<Mutex<ContractManager>>,
 }
 
 /**
@@ -224,19 +226,23 @@ pub async fn create_transaction(
         .and_then(|h| h.to_str().ok())
         .map(|s| s.to_string());
 
-    if let Some(key) = &api_key {
-        match state.billing_manager.can_make_transaction(key) {
-            Ok(can_make) => {
-                if !can_make {
-                    let response: ApiResponse<Transaction> = ApiResponse::error(
-                        "Límite de transacciones alcanzado para tu tier".to_string(),
-                    );
-                    return Ok(HttpResponse::PaymentRequired().json(response));
+    // Verificar límite de billing LO MÁS TEMPRANO POSIBLE
+    // Esto previene procesamiento innecesario si el límite ya se alcanzó
+    // Las transacciones coinbase (from == "0") son del sistema y no deben contarse
+    if req.from != "0" {
+        if let Some(key) = &api_key {
+            match state.billing_manager.check_transaction_limit(key) {
+                Ok(()) => {}
+                Err(e) => {
+                    // Si falla por límite, retornar error de pago requerido inmediatamente
+                    if e.contains("Límite de transacciones alcanzado") {
+                        let response: ApiResponse<Transaction> = ApiResponse::error(e);
+                        return Ok(HttpResponse::PaymentRequired().json(response));
+                    }
+                    // Otros errores (key inválida, etc.)
+                    let response: ApiResponse<Transaction> = ApiResponse::error(e);
+                    return Ok(HttpResponse::Unauthorized().json(response));
                 }
-            }
-            Err(e) => {
-                let response: ApiResponse<Transaction> = ApiResponse::error(e);
-                return Ok(HttpResponse::Unauthorized().json(response));
             }
         }
     }
@@ -311,19 +317,35 @@ pub async fn create_transaction(
             return Ok(HttpResponse::BadRequest().json(response));
         }
         
+        // Agregar al mempool
         if let Err(e) = mempool.add_transaction(tx.clone()) {
+            drop(mempool);
             let response: ApiResponse<Transaction> = ApiResponse::error(e);
             return Ok(HttpResponse::BadRequest().json(response));
         }
         drop(mempool);
-    }
-
-    if let Some(key) = &api_key {
-        if let Err(e) = state.billing_manager.record_transaction(key) {
-            let response: ApiResponse<Transaction> = ApiResponse::error(e);
-            return Ok(HttpResponse::InternalServerError().json(response));
+        
+        // Registrar en billing SOLO si se agregó exitosamente al mempool
+        // Ya verificamos el límite al inicio, así que solo incrementamos el contador
+        // Usar try_record_transaction para verificación atómica final (por si hubo race condition)
+        if let Some(key) = &api_key {
+            match state.billing_manager.try_record_transaction(key) {
+                Ok(()) => {}
+                Err(e) => {
+                    // Si falla por límite aquí, significa que hubo una race condition
+                    // La transacción ya está en el mempool, pero el límite se aplicó correctamente
+                    if e.contains("Límite de transacciones alcanzado") {
+                        let response: ApiResponse<Transaction> = ApiResponse::error(e);
+                        return Ok(HttpResponse::PaymentRequired().json(response));
+                    }
+                    // Otros errores (key inválida, etc.)
+                    let response: ApiResponse<Transaction> = ApiResponse::error(e);
+                    return Ok(HttpResponse::Unauthorized().json(response));
+                }
+            }
         }
     }
+    // Las transacciones coinbase (from == "0") no se registran en billing
 
     if let Some(node) = &state.node {
         let tx_clone = tx.clone();
@@ -952,6 +974,216 @@ pub async fn get_billing_usage(
 }
 
 /**
+ * Request para crear un smart contract
+ */
+#[derive(Deserialize)]
+pub struct DeployContractRequest {
+    pub owner: String,
+    pub contract_type: String,
+    pub name: String,
+    pub symbol: Option<String>,
+    pub total_supply: Option<u64>,
+    pub decimals: Option<u8>,
+}
+
+/**
+ * Request para ejecutar una función de contrato
+ */
+#[derive(Deserialize)]
+pub struct ExecuteContractRequest {
+    pub function: String, // "transfer", "mint", "burn", "custom"
+    pub params: serde_json::Value,
+}
+
+/**
+ * Despliega un nuevo smart contract
+ */
+pub async fn deploy_contract(
+    state: web::Data<AppState>,
+    req: web::Json<DeployContractRequest>,
+) -> ActixResult<HttpResponse> {
+    let contract = SmartContract::new(
+        req.owner.clone(),
+        req.contract_type.clone(),
+        req.name.clone(),
+        req.symbol.clone(),
+        req.total_supply,
+        req.decimals,
+    );
+
+    let mut contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    match contract_manager.deploy_contract(contract) {
+        Ok(address) => {
+            let response: ApiResponse<String> = ApiResponse::success(address);
+            Ok(HttpResponse::Created().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
+ * Obtiene un contrato por dirección
+ */
+pub async fn get_contract(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ActixResult<HttpResponse> {
+    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    match contract_manager.get_contract(&address) {
+        Some(contract) => {
+            let response = ApiResponse::success(contract.clone());
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<SmartContract> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * Ejecuta una función de contrato
+ */
+pub async fn execute_contract_function(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+    req: web::Json<ExecuteContractRequest>,
+) -> ActixResult<HttpResponse> {
+    let mut contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    
+    let function = match req.function.as_str() {
+        "transfer" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let amount = match req.params.get("amount").and_then(|v| v.as_u64()) {
+                Some(a) => a,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'amount' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::Transfer { from, to, amount }
+        }
+        "mint" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let amount = match req.params.get("amount").and_then(|v| v.as_u64()) {
+                Some(a) => a,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'amount' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::Mint { to, amount }
+        }
+        "burn" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let amount = match req.params.get("amount").and_then(|v| v.as_u64()) {
+                Some(a) => a,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'amount' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::Burn { from, amount }
+        }
+        "custom" => {
+            let name = match req.params.get("name").and_then(|v| v.as_str()) {
+                Some(n) => n.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'name' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let params = req.params.get("params")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            ContractFunction::Custom { name, params }
+        }
+        _ => {
+            let response: ApiResponse<String> = ApiResponse::error(
+                format!("Unknown function: {}", req.function)
+            );
+            return Ok(HttpResponse::BadRequest().json(response));
+        }
+    };
+
+    match contract_manager.execute_contract_function(&address, function) {
+        Ok(result) => {
+            let response: ApiResponse<String> = ApiResponse::success(result);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
+ * Obtiene todos los contratos
+ */
+pub async fn get_all_contracts(
+    state: web::Data<AppState>,
+) -> ActixResult<HttpResponse> {
+    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let contracts: Vec<&SmartContract> = contract_manager.get_all_contracts();
+    let contracts_cloned: Vec<SmartContract> = contracts.iter().map(|c| (*c).clone()).collect();
+    let response = ApiResponse::success(contracts_cloned);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtiene el balance de un contrato para una dirección
+ */
+pub async fn get_contract_balance(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, wallet_address) = path.into_inner();
+    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let balance = contract.get_balance(&wallet_address);
+            let response = ApiResponse::success(balance);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
@@ -976,7 +1208,12 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/mine", web::post().to(mine_block))
             .route("/mempool", web::get().to(get_mempool))
             .route("/stats", web::get().to(get_stats))
-            .route("/health", web::get().to(health_check)),
+            .route("/health", web::get().to(health_check))
+            .route("/contracts", web::post().to(deploy_contract))
+            .route("/contracts", web::get().to(get_all_contracts))
+            .route("/contracts/{address}", web::get().to(get_contract))
+            .route("/contracts/{address}/execute", web::post().to(execute_contract_function))
+            .route("/contracts/{address}/balance/{wallet}", web::get().to(get_contract_balance)),
     );
 }
 

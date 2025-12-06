@@ -127,7 +127,6 @@ impl<S> BillingService<S> {
         let public_paths = [
             "/api/v1/health",
             "/api/v1/billing/create-key",
-            "/api/v1/billing/usage",
         ];
         
         !public_paths.iter().any(|p| path.starts_with(p))

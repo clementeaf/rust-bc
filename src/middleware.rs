@@ -177,21 +177,33 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        let path = req.path().to_string();
         let ip = RateLimitMiddleware::get_client_ip(&req);
         let limits = self.limits.clone();
         let config = self.config.clone();
         let fut = self.service.call(req);
 
         Box::pin(async move {
-            let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());
-            let rate_limit_info = limits_guard.entry(ip.clone()).or_insert_with(RateLimitInfo::new);
+            // Rutas públicas que no requieren rate limiting estricto
+            let public_paths = [
+                "/api/v1/health",
+                "/api/v1/billing/create-key",
+            ];
+            
+            let is_public = public_paths.iter().any(|p| path.starts_with(p));
+            
+            if !is_public {
+                let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());
+                let rate_limit_info = limits_guard.entry(ip.clone()).or_insert_with(RateLimitInfo::new);
 
-            if !rate_limit_info.check_limit_strict(&config) {
+                if !rate_limit_info.check_limit_strict(&config) {
+                    drop(limits_guard);
+                    return Err(actix_web::error::ErrorTooManyRequests("Rate limit exceeded"));
+                }
+
                 drop(limits_guard);
-                return Err(actix_web::error::ErrorTooManyRequests("Rate limit exceeded"));
             }
-
-            drop(limits_guard);
+            
             fut.await
         })
     }
