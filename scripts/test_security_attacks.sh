@@ -201,11 +201,11 @@ WALLET7=$(curl -s --max-time 5 -X POST "$API_URL/wallets/create" 2>/dev/null | j
 WALLET8=$(curl -s --max-time 5 -X POST "$API_URL/wallets/create" 2>/dev/null | jq -r '.data.address' 2>/dev/null || echo "")
 
 if [ -n "$WALLET7" ] && [ -n "$WALLET8" ]; then
-    INVALID_TX=$(echo "{\"from\":\"$WALLET7\",\"to\":\"$WALLET8\",\"amount\":10,\"fee\":0,\"signature\":\"invalid_signature_12345\"}" | base64 2>/dev/null || echo "")
+    INVALID_SIG="00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
     
     RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/transactions" \
         -H "Content-Type: application/json" \
-        -d "{\"from\":\"$WALLET7\",\"to\":\"$WALLET8\",\"amount\":10,\"fee\":0,\"signature\":\"invalid_signature_12345\"}" \
+        -d "{\"from\":\"$WALLET7\",\"to\":\"$WALLET8\",\"amount\":10,\"fee\":0,\"signature\":\"$INVALID_SIG\"}" \
         --max-time $TIMEOUT 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
