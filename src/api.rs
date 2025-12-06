@@ -1012,8 +1012,15 @@ pub async fn deploy_contract(
     );
 
     let mut contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
-    match contract_manager.deploy_contract(contract) {
+    match contract_manager.deploy_contract(contract.clone()) {
         Ok(address) => {
+            // Guardar en base de datos
+            let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+            if let Err(e) = db.save_contract(&contract) {
+                eprintln!("Error al guardar contrato en BD: {}", e);
+            }
+            drop(db);
+
             let response: ApiResponse<String> = ApiResponse::success(address);
             Ok(HttpResponse::Created().json(response))
         }
@@ -1137,6 +1144,15 @@ pub async fn execute_contract_function(
 
     match contract_manager.execute_contract_function(&address, function) {
         Ok(result) => {
+            // Guardar estado actualizado en BD
+            if let Some(contract) = contract_manager.get_contract(&address) {
+                let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+                if let Err(e) = db.save_contract(contract) {
+                    eprintln!("Error al guardar estado del contrato en BD: {}", e);
+                }
+                drop(db);
+            }
+
             let response: ApiResponse<String> = ApiResponse::success(result);
             Ok(HttpResponse::Ok().json(response))
         }

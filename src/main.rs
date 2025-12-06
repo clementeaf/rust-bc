@@ -109,7 +109,29 @@ async fn main() -> std::io::Result<()> {
     let mempool = Arc::new(Mutex::new(Mempool::new()));
     let balance_cache = Arc::new(BalanceCache::new());
     let billing_manager = Arc::new(BillingManager::new());
-    let contract_manager = Arc::new(Mutex::new(smart_contracts::ContractManager::new()));
+    
+    // Cargar contratos desde base de datos
+    let mut contract_manager = smart_contracts::ContractManager::new();
+    match db_arc.lock() {
+        Ok(db) => {
+            match db.load_contracts() {
+                Ok(contracts) => {
+                    println!("📋 Cargando {} contratos desde base de datos...", contracts.len());
+                    for contract in contracts {
+                        let _ = contract_manager.deploy_contract(contract);
+                    }
+                    println!("✅ Contratos cargados exitosamente");
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Error al cargar contratos: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("⚠️  Error al acceder a BD para cargar contratos: {}", e);
+        }
+    }
+    let contract_manager = Arc::new(Mutex::new(contract_manager));
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),

@@ -1,5 +1,6 @@
 use crate::blockchain::{Block, Blockchain};
 use crate::models::Transaction;
+use crate::smart_contracts::SmartContract;
 use rusqlite::{params, Connection, Result as SqlResult};
 use serde_json;
 
@@ -61,6 +62,24 @@ impl BlockchainDB {
             [],
         )?;
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS contracts (
+                address TEXT PRIMARY KEY,
+                owner TEXT NOT NULL,
+                contract_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                symbol TEXT,
+                total_supply INTEGER,
+                decimals INTEGER,
+                state TEXT NOT NULL,
+                bytecode TEXT,
+                abi TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -78,6 +97,14 @@ impl BlockchainDB {
         )?;
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contracts_owner ON contracts(owner)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_contracts_type ON contracts(contract_type)",
             [],
         )?;
         Ok(())
@@ -250,6 +277,143 @@ impl BlockchainDB {
             |row| row.get(0),
         )?;
         Ok(count as u64)
+    }
+
+    /**
+     * Guarda un smart contract en la base de datos
+     */
+    pub fn save_contract(&self, contract: &SmartContract) -> SqlResult<()> {
+        let state_json = serde_json::to_string(&contract.state)
+            .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        
+        let bytecode_json = match &contract.bytecode {
+            Some(bc) => serde_json::to_string(bc)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?,
+            None => String::new(),
+        };
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO contracts 
+             (address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                contract.address,
+                contract.owner,
+                contract.contract_type,
+                contract.name,
+                contract.symbol,
+                contract.total_supply,
+                contract.decimals,
+                state_json,
+                bytecode_json,
+                contract.abi,
+                contract.created_at,
+                contract.updated_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    /**
+     * Carga todos los contratos de la base de datos
+     */
+    pub fn load_contracts(&self) -> SqlResult<Vec<SmartContract>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at
+             FROM contracts"
+        )?;
+
+        let contract_iter = stmt.query_map([], |row| {
+            let state_json: String = row.get(7)?;
+            let state: crate::smart_contracts::ContractState = serde_json::from_str(&state_json)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+
+            let bytecode_json: String = row.get(8)?;
+            let bytecode: Option<Vec<u8>> = if bytecode_json.is_empty() {
+                None
+            } else {
+                serde_json::from_str(&bytecode_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
+            };
+
+            Ok(SmartContract {
+                address: row.get(0)?,
+                owner: row.get(1)?,
+                contract_type: row.get(2)?,
+                name: row.get(3)?,
+                symbol: row.get(4)?,
+                total_supply: row.get(5)?,
+                decimals: row.get(6)?,
+                state,
+                bytecode,
+                abi: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })?;
+
+        let mut contracts = Vec::new();
+        for contract in contract_iter {
+            contracts.push(contract?);
+        }
+        Ok(contracts)
+    }
+
+    /**
+     * Obtiene un contrato por dirección
+     */
+    pub fn get_contract_by_address(&self, address: &str) -> SqlResult<Option<SmartContract>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at
+             FROM contracts WHERE address = ?1"
+        )?;
+
+        let mut rows = stmt.query_map(params![address], |row| {
+            let state_json: String = row.get(7)?;
+            let state: crate::smart_contracts::ContractState = serde_json::from_str(&state_json)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+
+            let bytecode_json: String = row.get(8)?;
+            let bytecode: Option<Vec<u8>> = if bytecode_json.is_empty() {
+                None
+            } else {
+                serde_json::from_str(&bytecode_json)
+                    .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
+            };
+
+            Ok(SmartContract {
+                address: row.get(0)?,
+                owner: row.get(1)?,
+                contract_type: row.get(2)?,
+                name: row.get(3)?,
+                symbol: row.get(4)?,
+                total_supply: row.get(5)?,
+                decimals: row.get(6)?,
+                state,
+                bytecode,
+                abi: row.get(9)?,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+            })
+        })?;
+
+        match rows.next() {
+            Some(Ok(contract)) => Ok(Some(contract)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    /**
+     * Elimina un contrato de la base de datos
+     */
+    #[allow(dead_code)]
+    pub fn delete_contract(&self, address: &str) -> SqlResult<()> {
+        self.conn.execute(
+            "DELETE FROM contracts WHERE address = ?1",
+            params![address],
+        )?;
+        Ok(())
     }
 }
 
