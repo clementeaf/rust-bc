@@ -182,7 +182,6 @@ impl APIKeyInfo {
     /**
      * Verifica si puede crear un wallet
      */
-    #[allow(dead_code)]
     pub fn can_create_wallet(&self) -> bool {
         if !self.is_active {
             return false;
@@ -200,7 +199,6 @@ impl APIKeyInfo {
     /**
      * Incrementa el contador de wallets
      */
-    #[allow(dead_code)]
     pub fn increment_wallets(&mut self) {
         self.usage.wallets_created += 1;
     }

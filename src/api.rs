@@ -381,11 +381,50 @@ pub async fn get_wallet_balance(
  */
 pub async fn create_wallet(
     state: web::Data<AppState>,
+    http_req: actix_web::HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    let api_key = http_req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    if let Some(key) = &api_key {
+        match state.billing_manager.can_create_wallet(key) {
+            Ok(can_create) => {
+                if !can_create {
+                    let response: ApiResponse<models::Wallet> = ApiResponse::error(
+                        "Límite de wallets alcanzado para tu tier".to_string(),
+                    );
+                    return Ok(HttpResponse::PaymentRequired().json(response));
+                }
+            }
+            Err(e) => {
+                let response: ApiResponse<models::Wallet> = ApiResponse::error(e);
+                return Ok(HttpResponse::Unauthorized().json(response));
+            }
+        }
+    }
+
     let mut wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
     let wallet = wallet_manager.create_wallet();
+    let address = wallet.address.clone();
 
-    let response = ApiResponse::success(wallet.clone());
+    if let Some(key) = &api_key {
+        if let Err(e) = state.billing_manager.record_wallet_creation(key) {
+            let response: ApiResponse<models::Wallet> = ApiResponse::error(e);
+            return Ok(HttpResponse::InternalServerError().json(response));
+        }
+    }
+
+    if let Some(node) = &state.node {
+        let node_clone = node.clone();
+        tokio::spawn(async move {
+            node_clone.broadcast_wallet_creation(&address).await;
+        });
+    }
+
+    let response = ApiResponse::success(wallet);
     Ok(HttpResponse::Created().json(response))
 }
 
