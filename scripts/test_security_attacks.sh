@@ -228,10 +228,10 @@ load_requests=200
 load_success=0
 load_errors=0
 
-echo "  Enviando $load_requests requests (con timeouts más largos)..."
+echo "  Enviando $load_requests requests (con timeouts y delays)..."
 for i in $(seq 1 $load_requests); do
     RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/health" \
-        --max-time 5 --connect-timeout 3 2>/dev/null)
+        --max-time 3 --connect-timeout 2 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
     if [ "$HTTP_CODE" = "200" ]; then
@@ -244,7 +244,7 @@ for i in $(seq 1 $load_requests); do
         echo -n "."
     fi
     
-    sleep 0.01
+    sleep 0.1
 done
 echo ""
 
@@ -264,8 +264,14 @@ echo "📊 TEST 7: Ataque de Validación de Cadena"
 echo "------------------------------------------"
 chain_validation_success=0
 
-CHAIN_VALID=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null | jq -r '.data.valid' 2>/dev/null || echo "false")
-CHAIN_COUNT=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null | jq -r '.data.block_count' 2>/dev/null || echo "0")
+CHAIN_RESPONSE=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null)
+if [ -z "$CHAIN_RESPONSE" ] || [ "$CHAIN_RESPONSE" = "null" ]; then
+    CHAIN_VALID="false"
+    CHAIN_COUNT="0"
+else
+    CHAIN_VALID=$(echo "$CHAIN_RESPONSE" | jq -r '.data.valid // .data.is_valid // "false"' 2>/dev/null || echo "false")
+    CHAIN_COUNT=$(echo "$CHAIN_RESPONSE" | jq -r '.data.block_count // 0' 2>/dev/null || echo "0")
+fi
 
 if [ "$CHAIN_VALID" = "true" ]; then
     chain_validation_success=1

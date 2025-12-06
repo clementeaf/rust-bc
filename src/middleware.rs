@@ -71,6 +71,24 @@ impl RateLimitInfo {
         self.hour_requests.push(now);
         true
     }
+
+    /**
+     * Verifica límite con ventana deslizante más estricta para requests rápidos
+     */
+    fn check_limit_strict(&mut self, config: &RateLimitConfig) -> bool {
+        let now = Instant::now();
+        let second_ago = now - Duration::from_secs(1);
+        
+        let recent_requests: usize = self.minute_requests.iter()
+            .filter(|&&time| time > second_ago)
+            .count();
+        
+        if recent_requests >= 5 {
+            return false;
+        }
+        
+        self.check_limit(config)
+    }
 }
 
 /**
@@ -168,7 +186,7 @@ where
             let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());
             let rate_limit_info = limits_guard.entry(ip.clone()).or_insert_with(RateLimitInfo::new);
 
-            if !rate_limit_info.check_limit(&config) {
+            if !rate_limit_info.check_limit_strict(&config) {
                 drop(limits_guard);
                 return Err(actix_web::error::ErrorTooManyRequests("Rate limit exceeded"));
             }

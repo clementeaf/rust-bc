@@ -145,6 +145,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .configure(config_routes)
     })
+    .workers(8)
     .bind(&api_bind)?
     .run();
 
