@@ -2,7 +2,7 @@ use crate::blockchain::{Block, Blockchain};
 use crate::billing::{BillingManager, BillingTier, UsageStats};
 use crate::cache::BalanceCache;
 use crate::database::BlockchainDB;
-use crate::models::{Transaction, WalletManager, Mempool};
+use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
@@ -393,14 +393,14 @@ pub async fn create_wallet(
         match state.billing_manager.can_create_wallet(key) {
             Ok(can_create) => {
                 if !can_create {
-                    let response: ApiResponse<models::Wallet> = ApiResponse::error(
+                    let response: ApiResponse<Wallet> = ApiResponse::error(
                         "Límite de wallets alcanzado para tu tier".to_string(),
                     );
                     return Ok(HttpResponse::PaymentRequired().json(response));
                 }
             }
             Err(e) => {
-                let response: ApiResponse<models::Wallet> = ApiResponse::error(e);
+                let response: ApiResponse<Wallet> = ApiResponse::error(e);
                 return Ok(HttpResponse::Unauthorized().json(response));
             }
         }
@@ -412,16 +412,9 @@ pub async fn create_wallet(
 
     if let Some(key) = &api_key {
         if let Err(e) = state.billing_manager.record_wallet_creation(key) {
-            let response: ApiResponse<models::Wallet> = ApiResponse::error(e);
+            let response: ApiResponse<Wallet> = ApiResponse::error(e);
             return Ok(HttpResponse::InternalServerError().json(response));
         }
-    }
-
-    if let Some(node) = &state.node {
-        let node_clone = node.clone();
-        tokio::spawn(async move {
-            node_clone.broadcast_wallet_creation(&address).await;
-        });
     }
 
     let response = ApiResponse::success(wallet);
