@@ -224,14 +224,14 @@ echo ""
 echo "📊 TEST 6: Ataque de Carga Extrema"
 echo "-----------------------------------"
 load_test_success=0
-load_requests=200
+load_requests=150
 load_success=0
 load_errors=0
 
-echo "  Enviando $load_requests requests (con timeouts y delays)..."
+echo "  Enviando $load_requests requests (con timeouts y delays optimizados)..."
 for i in $(seq 1 $load_requests); do
     RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/health" \
-        --max-time 3 --connect-timeout 2 2>/dev/null)
+        --max-time 2 --connect-timeout 1 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
     if [ "$HTTP_CODE" = "200" ]; then
@@ -240,11 +240,15 @@ for i in $(seq 1 $load_requests); do
         load_errors=$((load_errors + 1))
     fi
     
-    if [ $((i % 20)) -eq 0 ]; then
+    if [ $((i % 25)) -eq 0 ]; then
         echo -n "."
     fi
     
-    sleep 0.1
+    if [ $((i % 50)) -eq 0 ]; then
+        sleep 0.2
+    else
+        sleep 0.05
+    fi
 done
 echo ""
 

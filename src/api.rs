@@ -32,6 +32,8 @@ pub struct CreateTransactionRequest {
     #[serde(default)]
     pub fee: Option<u64>, // Fee opcional (default: 0)
     pub data: Option<String>,
+    #[serde(default)]
+    pub signature: Option<String>, // Firma opcional (si se proporciona, se usa en lugar de firmar automáticamente)
 }
 
 /**
@@ -229,7 +231,23 @@ pub async fn create_transaction(
     }
 
     if req.from != "0" {
-        {
+        if let Some(sig) = &req.signature {
+            if !sig.is_empty() {
+                tx.signature = sig.clone();
+            } else {
+                let wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
+                match wallet_manager.get_wallet_for_signing(&req.from) {
+                    Some(wallet) => {
+                        wallet.sign_transaction(&mut tx);
+                    }
+                    None => {
+                        let response: ApiResponse<Transaction> =
+                            ApiResponse::error("Wallet no encontrado para firmar".to_string());
+                        return Ok(HttpResponse::BadRequest().json(response));
+                    }
+                }
+            }
+        } else {
             let wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
             match wallet_manager.get_wallet_for_signing(&req.from) {
                 Some(wallet) => {
