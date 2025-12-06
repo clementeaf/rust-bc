@@ -253,10 +253,11 @@ if [ $load_success -gt $((load_requests * 8 / 10)) ]; then
     load_test_success=1
 fi
 
+success_rate=$((load_success * 100 / load_requests))
 if [ $load_test_success -eq 1 ]; then
-    test_result "Carga extrema: Sistema manejó correctamente ($load_success/$load_requests exitosos)" "PASS"
+    test_result "Carga extrema: Sistema manejó correctamente ($load_success/$load_requests exitosos, ${success_rate}%)" "PASS"
 else
-    test_result "Carga extrema: Sistema falló bajo carga ($load_success/$load_requests exitosos)" "FAIL"
+    test_result "Carga extrema: Sistema falló bajo carga ($load_success/$load_requests exitosos, ${success_rate}%, esperado: >=80%)" "FAIL"
 fi
 echo ""
 
@@ -264,16 +265,18 @@ echo "📊 TEST 7: Ataque de Validación de Cadena"
 echo "------------------------------------------"
 chain_validation_success=0
 
-CHAIN_VALID=$(curl -s "$API_URL/chain/verify" | jq -r '.data.is_valid' 2>/dev/null)
+CHAIN_VALID=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null | jq -r '.data.valid' 2>/dev/null || echo "false")
+CHAIN_COUNT=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null | jq -r '.data.block_count' 2>/dev/null || echo "0")
 
 if [ "$CHAIN_VALID" = "true" ]; then
     chain_validation_success=1
 fi
 
 if [ $chain_validation_success -eq 1 ]; then
-    test_result "Validación de cadena: Cadena es válida" "PASS"
+    test_result "Validación de cadena: Cadena es válida ($CHAIN_COUNT bloques)" "PASS"
 else
-    test_result "Validación de cadena: Cadena es inválida" "FAIL"
+    test_result "Validación de cadena: Cadena es inválida ($CHAIN_COUNT bloques)" "FAIL"
+    echo "   💡 Sugerencia: Ejecuta './scripts/reset_database.sh' para limpiar la base de datos"
 fi
 echo ""
 
