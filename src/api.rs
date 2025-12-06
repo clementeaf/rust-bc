@@ -408,7 +408,7 @@ pub async fn create_wallet(
 
     let mut wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
     let wallet = wallet_manager.create_wallet();
-    let address = wallet.address.clone();
+    let _address = wallet.address.clone();
 
     if let Some(key) = &api_key {
         if let Err(e) = state.billing_manager.record_wallet_creation(key) {
@@ -897,6 +897,33 @@ pub async fn create_api_key(
 }
 
 /**
+ * Request para desactivar una API key
+ */
+#[derive(Deserialize)]
+pub struct DeactivateKeyRequest {
+    pub api_key: String,
+}
+
+/**
+ * Desactiva una API key
+ */
+pub async fn deactivate_api_key(
+    state: web::Data<AppState>,
+    req: web::Json<DeactivateKeyRequest>,
+) -> ActixResult<HttpResponse> {
+    match state.billing_manager.deactivate_key(&req.api_key) {
+        Ok(_) => {
+            let response: ApiResponse<String> = ApiResponse::success("API key desactivada".to_string());
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
  * Obtiene estadísticas de uso de una API key
  */
 pub async fn get_billing_usage(
@@ -931,6 +958,7 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
             .route("/billing/create-key", web::post().to(create_api_key))
+            .route("/billing/deactivate-key", web::post().to(deactivate_api_key))
             .route("/billing/usage", web::get().to(get_billing_usage))
             .route("/blocks", web::get().to(get_blocks))
             .route("/blocks/{hash}", web::get().to(get_block_by_hash))
