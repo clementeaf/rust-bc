@@ -163,20 +163,20 @@ echo ""
 echo "📊 TEST 4: Ataque de Rate Limiting"
 echo "----------------------------------"
 rate_limit_success=0
-rate_limit_attempts=100
+rate_limit_attempts=30
 rate_limited=0
 
-echo "  Enviando $rate_limit_attempts requests rápidamente..."
+echo "  Enviando $rate_limit_attempts requests rápidamente (límite: 20/min)..."
 for i in $(seq 1 $rate_limit_attempts); do
     RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/health" \
-        --max-time $TIMEOUT 2>/dev/null)
+        --max-time 2 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
     if [ "$HTTP_CODE" = "429" ]; then
         rate_limited=$((rate_limited + 1))
     fi
     
-    if [ $((i % 20)) -eq 0 ]; then
+    if [ $((i % 10)) -eq 0 ]; then
         echo -n "."
     fi
 done

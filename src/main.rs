@@ -133,7 +133,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     let rate_limit_config = middleware::RateLimitConfig {
-        requests_per_minute: 30,
+        requests_per_minute: 20,
         requests_per_hour: 1000,
     };
 
