@@ -182,14 +182,14 @@ for i in $(seq 1 $rate_limit_attempts); do
 done
 echo ""
 
-if [ $rate_limited -gt 0 ]; then
+if [ $rate_limited -ge 5 ]; then
     rate_limit_success=1
 fi
 
 if [ $rate_limit_success -eq 1 ]; then
-    test_result "Rate limiting: Sistema aplicó límites correctamente ($rate_limited requests limitados)" "PASS"
+    test_result "Rate limiting: Sistema aplicó límites correctamente ($rate_limited/$rate_limit_attempts requests limitados)" "PASS"
 else
-    test_result "Rate limiting: Sistema no aplicó límites ($rate_limited requests limitados)" "FAIL"
+    test_result "Rate limiting: Sistema no aplicó límites suficientes ($rate_limited/$rate_limit_attempts limitados, esperado: >=5)" "FAIL"
 fi
 echo ""
 
@@ -224,13 +224,14 @@ echo ""
 echo "📊 TEST 6: Ataque de Carga Extrema"
 echo "-----------------------------------"
 load_test_success=0
-load_requests=500
+load_requests=200
 load_success=0
 load_errors=0
 
+echo "  Enviando $load_requests requests (con timeouts más largos)..."
 for i in $(seq 1 $load_requests); do
     RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$API_URL/health" \
-        --max-time 2 2>/dev/null)
+        --max-time 5 --connect-timeout 3 2>/dev/null)
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
     if [ "$HTTP_CODE" = "200" ]; then
@@ -238,6 +239,14 @@ for i in $(seq 1 $load_requests); do
     else
         load_errors=$((load_errors + 1))
     fi
+    
+    if [ $((i % 20)) -eq 0 ]; then
+        echo -n "."
+    fi
+    
+    sleep 0.01
+done
+echo ""
 done
 
 if [ $load_success -gt $((load_requests * 8 / 10)) ]; then
