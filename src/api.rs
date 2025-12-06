@@ -1,4 +1,5 @@
 use crate::blockchain::{Block, Blockchain};
+use crate::billing::{BillingManager, BillingTier, UsageStats};
 use crate::cache::BalanceCache;
 use crate::database::BlockchainDB;
 use crate::models::{Transaction, WalletManager, Mempool};
@@ -19,6 +20,7 @@ pub struct AppState {
     pub node: Option<Arc<Node>>,
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
+    pub billing_manager: Arc<BillingManager>,
 }
 
 /**
@@ -47,7 +49,7 @@ pub struct CreateBlockRequest {
 /**
  * Response estándar de la API
  */
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
@@ -214,7 +216,31 @@ pub async fn create_block(
 pub async fn create_transaction(
     state: web::Data<AppState>,
     req: web::Json<CreateTransactionRequest>,
+    http_req: actix_web::HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    let api_key = http_req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    if let Some(key) = &api_key {
+        match state.billing_manager.can_make_transaction(key) {
+            Ok(can_make) => {
+                if !can_make {
+                    let response: ApiResponse<Transaction> = ApiResponse::error(
+                        "Límite de transacciones alcanzado para tu tier".to_string(),
+                    );
+                    return Ok(HttpResponse::PaymentRequired().json(response));
+                }
+            }
+            Err(e) => {
+                let response: ApiResponse<Transaction> = ApiResponse::error(e);
+                return Ok(HttpResponse::Unauthorized().json(response));
+            }
+        }
+    }
+
     let fee = req.fee.unwrap_or(0);
     let mut tx = Transaction::new_with_fee(
         req.from.clone(),
@@ -290,6 +316,13 @@ pub async fn create_transaction(
             return Ok(HttpResponse::BadRequest().json(response));
         }
         drop(mempool);
+    }
+
+    if let Some(key) = &api_key {
+        if let Err(e) = state.billing_manager.record_transaction(key) {
+            let response: ApiResponse<Transaction> = ApiResponse::error(e);
+            return Ok(HttpResponse::InternalServerError().json(response));
+        }
     }
 
     if let Some(node) = &state.node {
@@ -795,11 +828,78 @@ pub async fn get_stats(state: web::Data<AppState>) -> ActixResult<HttpResponse> 
 }
 
 /**
+ * Request para crear una API key
+ */
+#[derive(Deserialize)]
+pub struct CreateAPIKeyRequest {
+    pub tier: String,
+}
+
+/**
+ * Crea una nueva API key
+ */
+pub async fn create_api_key(
+    state: web::Data<AppState>,
+    req: web::Json<CreateAPIKeyRequest>,
+) -> ActixResult<HttpResponse> {
+    let tier = match BillingTier::from_str(&req.tier) {
+        Some(t) => t,
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error(
+                "Tier inválido. Opciones: free, basic, pro, enterprise".to_string(),
+            );
+            return Ok(HttpResponse::BadRequest().json(response));
+        }
+    };
+
+    match state.billing_manager.create_api_key(tier) {
+        Ok(key) => {
+            let response: ApiResponse<String> = ApiResponse::success(key);
+            Ok(HttpResponse::Created().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::InternalServerError().json(response))
+        }
+    }
+}
+
+/**
+ * Obtiene estadísticas de uso de una API key
+ */
+pub async fn get_billing_usage(
+    state: web::Data<AppState>,
+    req: actix_web::HttpRequest,
+) -> ActixResult<HttpResponse> {
+    let api_key = req
+        .headers()
+        .get("X-API-Key")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            actix_web::error::ErrorUnauthorized("API key requerida en header X-API-Key")
+        })?;
+
+    match state.billing_manager.get_usage(&api_key) {
+        Ok(usage) => {
+            let response: ApiResponse<UsageStats> = ApiResponse::success(usage);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::Unauthorized().json(response))
+        }
+    }
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api/v1")
+            .route("/billing/create-key", web::post().to(create_api_key))
+            .route("/billing/usage", web::get().to(get_billing_usage))
             .route("/blocks", web::get().to(get_blocks))
             .route("/blocks/{hash}", web::get().to(get_block_by_hash))
             .route("/blocks/index/{index}", web::get().to(get_block_by_index))

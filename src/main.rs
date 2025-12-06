@@ -1,4 +1,6 @@
 mod api;
+mod billing;
+mod billing_middleware;
 mod blockchain;
 mod cache;
 mod database;
@@ -9,6 +11,7 @@ mod network;
 use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Compress;
 use api::{config_routes, AppState};
+use billing::BillingManager;
 use blockchain::Blockchain;
 use cache::BalanceCache;
 use database::BlockchainDB;
@@ -104,6 +107,7 @@ async fn main() -> std::io::Result<()> {
 
     let mempool = Arc::new(Mutex::new(Mempool::new()));
     let balance_cache = Arc::new(BalanceCache::new());
+    let billing_manager = Arc::new(BillingManager::new());
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -112,6 +116,7 @@ async fn main() -> std::io::Result<()> {
         node: Some(node_arc.clone()),
         mempool: mempool.clone(),
         balance_cache: balance_cache.clone(),
+        billing_manager: billing_manager.clone(),
     };
 
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);
