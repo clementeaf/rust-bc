@@ -269,11 +269,11 @@ echo "------------------------------------------"
 chain_validation_success=0
 
 CHAIN_RESPONSE=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null)
-if [ -z "$CHAIN_RESPONSE" ] || [ "$CHAIN_RESPONSE" = "null" ]; then
+if [ -z "$CHAIN_RESPONSE" ] || [ "$CHAIN_RESPONSE" = "null" ] || ! echo "$CHAIN_RESPONSE" | jq -e . >/dev/null 2>&1; then
     CHAIN_VALID="false"
     CHAIN_COUNT="0"
 else
-    CHAIN_VALID=$(echo "$CHAIN_RESPONSE" | jq -r '.data.valid // .data.is_valid // "false"' 2>/dev/null || echo "false")
+    CHAIN_VALID=$(echo "$CHAIN_RESPONSE" | jq -r '.data.valid // "false"' 2>/dev/null || echo "false")
     CHAIN_COUNT=$(echo "$CHAIN_RESPONSE" | jq -r '.data.block_count // 0' 2>/dev/null || echo "0")
 fi
 
