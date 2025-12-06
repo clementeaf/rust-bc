@@ -247,7 +247,6 @@ for i in $(seq 1 $load_requests); do
     sleep 0.01
 done
 echo ""
-done
 
 if [ $load_success -gt $((load_requests * 8 / 10)) ]; then
     load_test_success=1
