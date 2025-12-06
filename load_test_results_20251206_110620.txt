@@ -1,0 +1,141 @@
+LOAD TEST - Sat Dec  6 11:06:20 -03 2025
+Duración: 60s, Concurrencia: 10
+
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 7] 10 requests (1 OK, 9 errors, 0 rate-limited)
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 2] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 1] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 5] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 8] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 10] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 6] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 9] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 4] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] 10 requests (0 OK, 10 errors, 0 rate-limited)
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 2] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 1] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 5] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 6] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 10] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/stats
+[Worker 8] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 9] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/mempool
+[Worker 4] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+[Worker 3] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/health
+[Worker 7] Error: HTTP 000 en http://127.0.0.1:8080/api/v1/blocks
+
+ESTADÍSTICAS FINALES
+Total requests: 121
+Exitosos: 1
+Errores: 120
+Rate Limited: 0
+RPS: 2
+Tasa de éxito: 0%

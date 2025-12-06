@@ -1,0 +1,39 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Base de datos
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+rust-bc
+rust-bc.d
+
+# Server logs
+/tmp/rust-bc-server.log
+/tmp/rust-bc.pid
+
+# Backup files
+*.bak
+*.broken
+src/blockchain.rs.broken
+
