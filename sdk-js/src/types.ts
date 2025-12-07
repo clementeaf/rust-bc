@@ -36,10 +36,10 @@ export interface Wallet {
 }
 
 export interface BlockchainInfo {
-  length: number;
+  block_count: number;
   difficulty: number;
-  total_coinbase: number;
   latest_block_hash: string;
+  is_valid: boolean;
 }
 
 export interface ChainVerification {
