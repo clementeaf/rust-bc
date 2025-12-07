@@ -98,14 +98,6 @@ async fn main() -> std::io::Result<()> {
     let blockchain_arc = Arc::new(Mutex::new(blockchain));
     let blockchain_for_network = blockchain_arc.clone();
 
-    let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
-    let mut node_arc = Node::new(node_address, blockchain_for_network.clone());
-    node_arc.set_resources(wallet_manager_arc.clone(), db_arc.clone());
-    let node_arc = Arc::new(node_arc);
-    
-    let mut node_for_server = Node::new(node_address, blockchain_for_network.clone());
-    node_for_server.set_resources(wallet_manager_arc.clone(), db_arc.clone());
-
     let mempool = Arc::new(Mutex::new(Mempool::new()));
     let balance_cache = Arc::new(BalanceCache::new());
     let billing_manager = Arc::new(BillingManager::new());
@@ -116,22 +108,50 @@ async fn main() -> std::io::Result<()> {
         Ok(db) => {
             match db.load_contracts() {
                 Ok(contracts) => {
-                    println!("📋 Cargando {} contratos desde base de datos...", contracts.len());
-                    for contract in contracts {
-                        let _ = contract_manager.deploy_contract(contract);
+                    if !contracts.is_empty() {
+                        println!("📋 Cargando {} contratos desde base de datos...", contracts.len());
+                        for contract in contracts {
+                            let _ = contract_manager.deploy_contract(contract);
+                        }
+                        println!("✅ Contratos cargados exitosamente");
                     }
-                    println!("✅ Contratos cargados exitosamente");
                 }
                 Err(e) => {
                     eprintln!("⚠️  Error al cargar contratos: {}", e);
                 }
             }
+            
         }
         Err(e) => {
             eprintln!("⚠️  Error al acceder a BD para cargar contratos: {}", e);
         }
     }
     let contract_manager = Arc::new(Mutex::new(contract_manager));
+
+    let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
+    let mut node_arc = Node::new(node_address, blockchain_for_network.clone());
+    node_arc.set_resources(wallet_manager_arc.clone(), db_arc.clone());
+    node_arc.set_contract_manager(contract_manager.clone());
+    
+    // Clonar los recursos compartidos antes de crear el Arc
+    let shared_peers = node_arc.peers.clone();
+    let shared_contract_sync_metrics = node_arc.contract_sync_metrics.clone();
+    let shared_pending_broadcasts = node_arc.pending_contract_broadcasts.clone();
+    let shared_recent_receipts = node_arc.recent_contract_receipts.clone();
+    let shared_rate_limits = node_arc.contract_rate_limits.clone();
+    
+    let node_arc = Arc::new(node_arc);
+    
+    // Crear segunda instancia para el servidor P2P que comparte los mismos recursos
+    let mut node_for_server = Node::new(node_address, blockchain_for_network.clone());
+    node_for_server.set_resources(wallet_manager_arc.clone(), db_arc.clone());
+    node_for_server.set_contract_manager(contract_manager.clone());
+    // Compartir los mismos recursos compartidos
+    node_for_server.peers = shared_peers;
+    node_for_server.contract_sync_metrics = shared_contract_sync_metrics;
+    node_for_server.pending_contract_broadcasts = shared_pending_broadcasts;
+    node_for_server.recent_contract_receipts = shared_recent_receipts;
+    node_for_server.contract_rate_limits = shared_rate_limits;
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -179,12 +199,30 @@ async fn main() -> std::io::Result<()> {
     .bind(&api_bind)?
     .run();
 
+    // Tarea periódica para limpiar peers desconectados (cada 60 segundos)
+    let node_for_cleanup = node_arc.clone();
+    let cleanup_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            node_for_cleanup.cleanup_disconnected_peers().await;
+        }
+    });
+
+    // El servidor API debe continuar incluso si el P2P falla
     tokio::select! {
         result = api_handle => {
             result?;
         }
+        _ = cleanup_handle => {
+            // Cleanup task terminó (no debería pasar)
+        }
         _ = server_handle => {
-            println!("Servidor P2P detenido");
+            println!("Servidor P2P detenido, pero servidor API continúa");
+            // Esperar indefinidamente para que el servidor API continúe
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
+            }
         }
     }
 

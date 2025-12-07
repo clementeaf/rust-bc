@@ -75,10 +75,35 @@ impl BlockchainDB {
                 bytecode TEXT,
                 abi TEXT,
                 created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                update_sequence INTEGER NOT NULL DEFAULT 0,
+                integrity_hash TEXT
             )",
             [],
         )?;
+        
+        // Tabla para contratos pendientes de broadcast
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS pending_contract_broadcasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                peer_address TEXT NOT NULL,
+                contract_address TEXT NOT NULL,
+                contract_data TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                retry_count INTEGER NOT NULL DEFAULT 0
+            )",
+            [],
+        )?;
+
+        // Migración: agregar nuevos campos si no existen (para bases de datos existentes)
+        let _ = self.conn.execute(
+            "ALTER TABLE contracts ADD COLUMN update_sequence INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        let _ = self.conn.execute(
+            "ALTER TABLE contracts ADD COLUMN integrity_hash TEXT",
+            [],
+        );
 
         Ok(())
     }
@@ -294,8 +319,8 @@ impl BlockchainDB {
 
         self.conn.execute(
             "INSERT OR REPLACE INTO contracts 
-             (address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             (address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at, update_sequence, integrity_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 contract.address,
                 contract.owner,
@@ -308,7 +333,9 @@ impl BlockchainDB {
                 bytecode_json,
                 contract.abi,
                 contract.created_at,
-                contract.updated_at
+                contract.updated_at,
+                contract.update_sequence,
+                contract.integrity_hash
             ],
         )?;
         Ok(())
@@ -319,7 +346,7 @@ impl BlockchainDB {
      */
     pub fn load_contracts(&self) -> SqlResult<Vec<SmartContract>> {
         let mut stmt = self.conn.prepare(
-            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at
+            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at, update_sequence, integrity_hash
              FROM contracts"
         )?;
 
@@ -336,7 +363,10 @@ impl BlockchainDB {
                     .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
             };
 
-            Ok(SmartContract {
+            let update_sequence: u64 = row.get(12).unwrap_or(0);
+            let integrity_hash: Option<String> = row.get(13).ok();
+
+            let mut contract = SmartContract {
                 address: row.get(0)?,
                 owner: row.get(1)?,
                 contract_type: row.get(2)?,
@@ -349,7 +379,16 @@ impl BlockchainDB {
                 abi: row.get(9)?,
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
-            })
+                update_sequence,
+                integrity_hash,
+            };
+            
+            // Si no tiene hash de integridad, calcularlo
+            if contract.integrity_hash.is_none() {
+                contract.integrity_hash = Some(contract.calculate_hash());
+            }
+            
+            Ok(contract)
         })?;
 
         let mut contracts = Vec::new();
@@ -364,7 +403,7 @@ impl BlockchainDB {
      */
     pub fn get_contract_by_address(&self, address: &str) -> SqlResult<Option<SmartContract>> {
         let mut stmt = self.conn.prepare(
-            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at
+            "SELECT address, owner, contract_type, name, symbol, total_supply, decimals, state, bytecode, abi, created_at, updated_at, update_sequence, integrity_hash
              FROM contracts WHERE address = ?1"
         )?;
 
@@ -381,7 +420,10 @@ impl BlockchainDB {
                     .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?
             };
 
-            Ok(SmartContract {
+            let update_sequence: u64 = row.get(12).unwrap_or(0);
+            let integrity_hash: Option<String> = row.get(13).ok();
+
+            let mut contract = SmartContract {
                 address: row.get(0)?,
                 owner: row.get(1)?,
                 contract_type: row.get(2)?,
@@ -394,7 +436,16 @@ impl BlockchainDB {
                 abi: row.get(9)?,
                 created_at: row.get(10)?,
                 updated_at: row.get(11)?,
-            })
+                update_sequence,
+                integrity_hash,
+            };
+            
+            // Si no tiene hash de integridad, calcularlo
+            if contract.integrity_hash.is_none() {
+                contract.integrity_hash = Some(contract.calculate_hash());
+            }
+            
+            Ok(contract)
         })?;
 
         match rows.next() {
@@ -413,6 +464,82 @@ impl BlockchainDB {
             "DELETE FROM contracts WHERE address = ?1",
             params![address],
         )?;
+        Ok(())
+    }
+
+    /**
+     * Guarda un contrato pendiente de broadcast
+     */
+    pub fn save_pending_broadcast(&self, peer_address: &str, contract: &SmartContract) -> SqlResult<()> {
+        let contract_json = serde_json::to_string(contract)
+            .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        self.conn.execute(
+            "INSERT INTO pending_contract_broadcasts (peer_address, contract_address, contract_data, created_at, retry_count)
+             VALUES (?1, ?2, ?3, ?4, 0)",
+            params![peer_address, contract.address, contract_json, now],
+        )?;
+        
+        Ok(())
+    }
+
+    /**
+     * Carga todos los contratos pendientes de broadcast
+     */
+    pub fn load_pending_broadcasts(&self) -> SqlResult<Vec<(String, SmartContract)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT peer_address, contract_data FROM pending_contract_broadcasts
+             WHERE retry_count < 10
+             ORDER BY created_at ASC"
+        )?;
+        
+        let rows = stmt.query_map([], |row| {
+            let peer_address: String = row.get(0)?;
+            let contract_json: String = row.get(1)?;
+            
+            let contract: SmartContract = serde_json::from_str(&contract_json)
+                .map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+            
+            Ok((peer_address, contract))
+        })?;
+        
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row?);
+        }
+        
+        Ok(result)
+    }
+
+    /**
+     * Elimina un contrato pendiente de broadcast
+     */
+    pub fn remove_pending_broadcast(&self, peer_address: &str, contract_address: &str) -> SqlResult<()> {
+        self.conn.execute(
+            "DELETE FROM pending_contract_broadcasts 
+             WHERE peer_address = ?1 AND contract_address = ?2",
+            params![peer_address, contract_address],
+        )?;
+        
+        Ok(())
+    }
+
+    /**
+     * Incrementa el contador de reintentos de un broadcast pendiente
+     */
+    pub fn increment_pending_retry(&self, peer_address: &str, contract_address: &str) -> SqlResult<()> {
+        self.conn.execute(
+            "UPDATE pending_contract_broadcasts 
+             SET retry_count = retry_count + 1
+             WHERE peer_address = ?1 AND contract_address = ?2",
+            params![peer_address, contract_address],
+        )?;
+        
         Ok(())
     }
 }

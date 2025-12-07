@@ -1021,6 +1021,15 @@ pub async fn deploy_contract(
             }
             drop(db);
 
+            // Broadcast del contrato a todos los peers
+            if let Some(node) = &state.node {
+                let node_clone = node.clone();
+                let contract_clone = contract.clone();
+                tokio::spawn(async move {
+                    node_clone.broadcast_contract(&contract_clone).await;
+                });
+            }
+
             let response: ApiResponse<String> = ApiResponse::success(address);
             Ok(HttpResponse::Created().json(response))
         }
@@ -1144,13 +1153,36 @@ pub async fn execute_contract_function(
 
     match contract_manager.execute_contract_function(&address, function) {
         Ok(result) => {
-            // Guardar estado actualizado en BD
+            // Guardar estado actualizado en BD y broadcast
             if let Some(contract) = contract_manager.get_contract(&address) {
+                let contract_clone = contract.clone();
                 let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-                if let Err(e) = db.save_contract(contract) {
+                if let Err(e) = db.save_contract(&contract_clone) {
                     eprintln!("Error al guardar estado del contrato en BD: {}", e);
                 }
                 drop(db);
+
+                // Broadcast de la actualización del contrato a todos los peers
+                // Hacerlo de forma síncrona para asegurar que se ejecute
+                if let Some(node) = &state.node {
+                    let node_clone = node.clone();
+                    let contract_for_broadcast = contract_clone.clone();
+                    
+                    // Verificar peers antes de hacer broadcast
+                    let peers_count = {
+                        let peers_guard = node_clone.peers.lock().unwrap();
+                        peers_guard.len()
+                    };
+                    
+                    if peers_count > 0 {
+                        println!("📤 Ejecutando broadcast de actualización de contrato {} a {} peers", contract_clone.address, peers_count);
+                        tokio::spawn(async move {
+                            node_clone.broadcast_contract_update(&contract_for_broadcast).await;
+                        });
+                    } else {
+                        println!("⚠️  No hay peers conectados para broadcast de actualización de contrato: {}", contract_clone.address);
+                    }
+                }
             }
 
             let response: ApiResponse<String> = ApiResponse::success(result);

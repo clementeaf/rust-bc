@@ -62,6 +62,10 @@ pub struct SmartContract {
     pub abi: Option<String>, // JSON string
     pub created_at: u64,
     pub updated_at: u64,
+    #[serde(default)]
+    pub update_sequence: u64, // Número de secuencia para resolver race conditions
+    #[serde(default)]
+    pub integrity_hash: Option<String>, // Hash de integridad del contrato
 }
 
 impl SmartContract {
@@ -77,12 +81,9 @@ impl SmartContract {
         decimals: Option<u8>,
     ) -> SmartContract {
         let address = Self::generate_address(&owner, &name);
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let (timestamp, _) = Self::get_timestamp_nanos();
 
-        SmartContract {
+        let mut contract = SmartContract {
             address: address.clone(),
             owner,
             contract_type,
@@ -95,7 +96,13 @@ impl SmartContract {
             abi: None,
             created_at: timestamp,
             updated_at: timestamp,
-        }
+            update_sequence: 0,
+            integrity_hash: None,
+        };
+        
+        // Calcular hash de integridad inicial
+        contract.integrity_hash = Some(contract.calculate_hash());
+        contract
     }
 
     /**
@@ -146,10 +153,10 @@ impl SmartContract {
 
         self.state.balances.insert(from.to_string(), from_balance - amount);
         self.state.balances.insert(to.to_string(), to_balance + amount);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
 
         Ok(format!("Transferred {} from {} to {}", amount, from, to))
     }
@@ -172,10 +179,10 @@ impl SmartContract {
 
         let current_balance = *self.state.balances.get(to).unwrap_or(&0);
         self.state.balances.insert(to.to_string(), current_balance + amount);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
 
         Ok(format!("Minted {} to {}", amount, to))
     }
@@ -194,10 +201,10 @@ impl SmartContract {
         }
 
         self.state.balances.insert(from.to_string(), from_balance - amount);
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
 
         Ok(format!("Burned {} from {}", amount, from))
     }
@@ -207,18 +214,14 @@ impl SmartContract {
      */
     fn execute_custom(&mut self, name: &str, _params: &[String]) -> Result<String, String> {
         // Por ahora, solo registramos la ejecución
+        let (secs, _) = Self::get_timestamp_nanos();
         self.state.metadata.insert(
             format!("last_execution_{}", name),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                .to_string(),
+            secs.to_string(),
         );
-        self.updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
 
         Ok(format!("Executed custom function: {}", name))
     }
@@ -235,6 +238,71 @@ impl SmartContract {
      */
     pub fn get_current_supply(&self) -> u64 {
         self.state.balances.values().sum()
+    }
+
+    /**
+     * Calcula el hash de integridad del contrato
+     */
+    pub fn calculate_hash(&self) -> String {
+        use serde_json;
+        let mut hasher = Sha256::new();
+        
+        // Serializar campos críticos para el hash
+        let data = format!(
+            "{}{}{}{}{:?}{:?}{:?}{}{}{}{}",
+            self.address,
+            self.owner,
+            self.contract_type,
+            self.name,
+            self.symbol,
+            self.total_supply,
+            self.decimals,
+            serde_json::to_string(&self.state).unwrap_or_default(),
+            self.created_at,
+            self.updated_at,
+            self.update_sequence
+        );
+        
+        hasher.update(data.as_bytes());
+        let hash = hasher.finalize();
+        format!("{:x}", hash)
+    }
+
+    /**
+     * Valida el hash de integridad del contrato
+     */
+    pub fn validate_integrity(&self) -> bool {
+        if let Some(stored_hash) = &self.integrity_hash {
+            let calculated_hash = self.calculate_hash();
+            stored_hash == &calculated_hash
+        } else {
+            // Si no tiene hash, calcularlo y actualizarlo
+            false
+        }
+    }
+
+    /**
+     * Actualiza el hash de integridad después de una modificación
+     */
+    fn update_integrity_hash(&mut self) {
+        self.integrity_hash = Some(self.calculate_hash());
+    }
+
+    /**
+     * Obtiene timestamp con nanosegundos para mayor precisión
+     */
+    fn get_timestamp_nanos() -> (u64, u64) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        (now.as_secs(), now.subsec_nanos() as u64)
+    }
+
+    /**
+     * Valida que el owner del contrato no haya cambiado ilegalmente
+     */
+    pub fn validate_owner(&self, expected_owner: &str) -> bool {
+        self.owner == expected_owner
     }
 }
 
