@@ -4,7 +4,7 @@ use crate::cache::BalanceCache;
 use crate::database::BlockchainDB;
 use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
-use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract};
+use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract, NFTMetadata};
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -1162,7 +1162,7 @@ pub async fn execute_contract_function(
     // Rate limiting específico para funciones ERC-20 y NFT (por caller)
     if let Some(caller_addr) = caller {
         if matches!(req.function.as_str(), "transfer" | "transferFrom" | "approve" | "mint" | "burn" | 
-                   "mintNFT" | "transferNFT" | "approveNFT" | "transferFromNFT") {
+                   "mintNFT" | "transferNFT" | "approveNFT" | "transferFromNFT" | "burnNFT") {
             match check_erc20_rate_limit(caller_addr) {
                 Ok(()) => {
                     // Rate limit OK, continuar
@@ -1363,6 +1363,24 @@ pub async fn execute_contract_function(
                 }
             };
             ContractFunction::TransferFromNFT { from, to, token_id }
+        }
+        // NFT: burnNFT(owner, token_id)
+        "burnNFT" => {
+            let owner = match req.params.get("owner").and_then(|v| v.as_str()) {
+                Some(o) => o.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'owner' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::BurnNFT { owner, token_id }
         }
         // NFT: mintNFT(to, token_id, token_uri)
         "mintNFT" => {
@@ -1757,6 +1775,135 @@ pub async fn get_nft_total_supply(
 }
 
 /**
+ * NFT: Lista todos los tokens de un owner (enumeración)
+ */
+pub async fn get_nft_tokens_of_owner(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, owner_address) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let tokens = contract.tokens_of_owner(&owner_address);
+            let response: ApiResponse<Vec<u64>> = ApiResponse::success(tokens);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<Vec<u64>> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene un token por índice (enumeración)
+ */
+pub async fn get_nft_token_by_index(
+    state: web::Data<AppState>,
+    path: web::Path<(String, usize)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, index) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            match contract.token_by_index(index) {
+                Some(token_id) => {
+                    let response: ApiResponse<u64> = ApiResponse::success(token_id);
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                None => {
+                    let response: ApiResponse<u64> = ApiResponse::error(format!("Token at index {} does not exist", index));
+                    Ok(HttpResponse::NotFound().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene metadata estructurada de un token
+ */
+pub async fn get_nft_metadata(
+    state: web::Data<AppState>,
+    path: web::Path<(String, u64)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, token_id) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            match contract.get_nft_metadata(token_id) {
+                Some(metadata) => {
+                    let response: ApiResponse<NFTMetadata> = ApiResponse::success(metadata.clone());
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                None => {
+                    let response: ApiResponse<NFTMetadata> = ApiResponse::error(format!("Metadata for token ID {} does not exist", token_id));
+                    Ok(HttpResponse::NotFound().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<NFTMetadata> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Establece metadata estructurada para un token
+ */
+#[derive(Deserialize)]
+pub struct SetNFTMetadataRequest {
+    pub metadata: NFTMetadata,
+}
+
+pub async fn set_nft_metadata(
+    state: web::Data<AppState>,
+    path: web::Path<(String, u64)>,
+    req: web::Json<SetNFTMetadataRequest>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, token_id) = path.into_inner();
+    let mut contract_manager = state.contract_manager.write().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract_mut(&contract_address) {
+        Some(contract) => {
+            match contract.set_nft_metadata(token_id, req.metadata.clone()) {
+                Ok(()) => {
+                    // Guardar en BD
+                    let contract_for_save = contract.clone();
+                    drop(contract_manager);
+                    
+                    let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Err(e) = db.save_contract(&contract_for_save) {
+                        eprintln!("Error al guardar contrato en BD: {}", e);
+                    }
+                    drop(db);
+
+                    let response: ApiResponse<String> = ApiResponse::success(format!("Metadata set for token {}", token_id));
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                Err(e) => {
+                    let response: ApiResponse<String> = ApiResponse::error(e);
+                    Ok(HttpResponse::BadRequest().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
@@ -1793,8 +1940,12 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/contracts/{address}/nft/{token_id}/owner", web::get().to(get_nft_owner))
             .route("/contracts/{address}/nft/{token_id}/uri", web::get().to(get_nft_token_uri))
             .route("/contracts/{address}/nft/{token_id}/approved", web::get().to(get_nft_approved))
+            .route("/contracts/{address}/nft/{token_id}/metadata", web::get().to(get_nft_metadata))
+            .route("/contracts/{address}/nft/{token_id}/metadata", web::post().to(set_nft_metadata))
             .route("/contracts/{address}/nft/balance/{wallet}", web::get().to(get_nft_balance))
-            .route("/contracts/{address}/nft/totalSupply", web::get().to(get_nft_total_supply)),
+            .route("/contracts/{address}/nft/totalSupply", web::get().to(get_nft_total_supply))
+            .route("/contracts/{address}/nft/tokens/{owner}", web::get().to(get_nft_tokens_of_owner))
+            .route("/contracts/{address}/nft/index/{index}", web::get().to(get_nft_token_by_index)),
     );
 }
 

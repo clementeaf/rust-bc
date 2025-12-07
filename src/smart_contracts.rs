@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /**
@@ -51,10 +51,52 @@ pub enum ContractFunction {
         to: String,
         token_id: u64,
     },
+    // NFT: Funciones avanzadas
+    BurnNFT {
+        owner: String,
+        token_id: u64,
+    },
     Custom {
         name: String,
         params: Vec<String>,
     },
+}
+
+/**
+ * Metadata estructurada para NFTs
+ */
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NFTMetadata {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub image: String,
+    #[serde(default)]
+    pub external_url: String,
+    #[serde(default)]
+    pub attributes: Vec<Attribute>,
+}
+
+/**
+ * Atributo de un NFT (para traits/rarity)
+ */
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Attribute {
+    pub trait_type: String,
+    pub value: String,
+}
+
+impl NFTMetadata {
+    pub fn new(name: String) -> Self {
+        NFTMetadata {
+            name,
+            description: String::new(),
+            image: String::new(),
+            external_url: String::new(),
+            attributes: Vec::new(),
+        }
+    }
 }
 
 /**
@@ -71,11 +113,18 @@ pub struct ContractState {
     #[serde(default)]
     pub token_owners: HashMap<u64, String>, // token_id -> owner address
     #[serde(default)]
-    pub token_uris: HashMap<u64, String>, // token_id -> URI/metadata
+    pub token_uris: HashMap<u64, String>, // token_id -> URI/metadata (legacy, para compatibilidad)
     #[serde(default)]
     pub token_approvals: HashMap<u64, String>, // token_id -> approved address
     #[serde(default)]
     pub nft_balances: HashMap<String, u64>, // owner -> count of NFTs owned
+    // NFT: Mejoras Fase 1
+    #[serde(default)]
+    pub nft_metadata: HashMap<u64, NFTMetadata>, // token_id -> metadata estructurada
+    #[serde(default)]
+    pub owner_to_tokens: HashMap<String, HashSet<u64>>, // owner -> set of token_ids (índice inverso para O(1))
+    #[serde(default)]
+    pub token_index: Vec<u64>, // Lista ordenada de todos los token_ids (para enumeración)
 }
 
 impl ContractState {
@@ -88,6 +137,9 @@ impl ContractState {
             token_uris: HashMap::new(),
             token_approvals: HashMap::new(),
             nft_balances: HashMap::new(),
+            nft_metadata: HashMap::new(),
+            owner_to_tokens: HashMap::new(),
+            token_index: Vec::new(),
         }
     }
 }
@@ -203,6 +255,10 @@ impl SmartContract {
             ContractFunction::TransferFromNFT { from, to, token_id } => {
                 let spender = caller.ok_or("Caller address required for transferFromNFT")?;
                 self.transfer_from_nft(&from, &to, token_id, spender)
+            }
+            ContractFunction::BurnNFT { owner, token_id } => {
+                let caller = caller.ok_or("Caller address required for burnNFT")?;
+                self.burn_nft(&owner, token_id, caller)
             }
             ContractFunction::Custom { name, params } => {
                 self.execute_custom(&name, &params)
@@ -582,11 +638,22 @@ impl SmartContract {
 
         // Asignar el token al owner
         self.state.token_owners.insert(token_id, to.to_string());
-        self.state.token_uris.insert(token_id, token_uri.to_string());
+        if !token_uri.is_empty() {
+            self.state.token_uris.insert(token_id, token_uri.to_string());
+        }
         
         // Actualizar balance de NFTs del owner
         let current_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
         self.state.nft_balances.insert(to.to_string(), current_balance + 1);
+
+        // Mantener índice inverso (owner -> tokens) para búsquedas O(1)
+        self.state.owner_to_tokens
+            .entry(to.to_string())
+            .or_insert_with(HashSet::new)
+            .insert(token_id);
+
+        // Agregar a índice de tokens para enumeración
+        self.state.token_index.push(token_id);
 
         // Emit Transfer event (from zero address to owner)
         self.emit_nft_transfer_event("0", to, token_id);
@@ -645,6 +712,18 @@ impl SmartContract {
         }
         let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
         self.state.nft_balances.insert(to.to_string(), to_balance + 1);
+
+        // Actualizar índice inverso (owner -> tokens)
+        if let Some(from_tokens) = self.state.owner_to_tokens.get_mut(from) {
+            from_tokens.remove(&token_id);
+            if from_tokens.is_empty() {
+                self.state.owner_to_tokens.remove(from);
+            }
+        }
+        self.state.owner_to_tokens
+            .entry(to.to_string())
+            .or_insert_with(HashSet::new)
+            .insert(token_id);
 
         // Emit Transfer event
         self.emit_nft_transfer_event(from, to, token_id);
@@ -741,6 +820,18 @@ impl SmartContract {
         let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
         self.state.nft_balances.insert(to.to_string(), to_balance + 1);
 
+        // Actualizar índice inverso (owner -> tokens)
+        if let Some(from_tokens) = self.state.owner_to_tokens.get_mut(from) {
+            from_tokens.remove(&token_id);
+            if from_tokens.is_empty() {
+                self.state.owner_to_tokens.remove(from);
+            }
+        }
+        self.state.owner_to_tokens
+            .entry(to.to_string())
+            .or_insert_with(HashSet::new)
+            .insert(token_id);
+
         // Emit Transfer event
         self.emit_nft_transfer_event(from, to, token_id);
         
@@ -789,6 +880,138 @@ impl SmartContract {
      */
     pub fn get_approved(&self, token_id: u64) -> Option<String> {
         self.state.token_approvals.get(&token_id).cloned()
+    }
+
+    /**
+     * NFT: Lista todos los tokens de un owner (enumeración)
+     * @param owner - Dirección del owner
+     * @returns Vector de token_ids ordenados
+     */
+    pub fn tokens_of_owner(&self, owner: &str) -> Vec<u64> {
+        self.state.owner_to_tokens
+            .get(owner)
+            .map(|tokens| {
+                let mut token_list: Vec<u64> = tokens.iter().cloned().collect();
+                token_list.sort();
+                token_list
+            })
+            .unwrap_or_default()
+    }
+
+    /**
+     * NFT: Obtiene un token por índice (enumeración)
+     * @param index - Índice del token (0-based)
+     * @returns token_id si existe
+     */
+    pub fn token_by_index(&self, index: usize) -> Option<u64> {
+        self.state.token_index.get(index).copied()
+    }
+
+    /**
+     * NFT: Obtiene el total de tokens (para enumeración)
+     * @returns Total de tokens minteados
+     */
+    pub fn total_supply_enumerable(&self) -> u64 {
+        self.state.token_index.len() as u64
+    }
+
+    /**
+     * NFT: Obtiene metadata estructurada de un token
+     * @param token_id - ID del token
+     * @returns Metadata si existe
+     */
+    pub fn get_nft_metadata(&self, token_id: u64) -> Option<&NFTMetadata> {
+        self.state.nft_metadata.get(&token_id)
+    }
+
+    /**
+     * NFT: Establece metadata estructurada para un token
+     * @param token_id - ID del token
+     * @param metadata - Metadata estructurada
+     */
+    pub fn set_nft_metadata(&mut self, token_id: u64, metadata: NFTMetadata) -> Result<(), String> {
+        // Validar que el token existe
+        if !self.state.token_owners.contains_key(&token_id) {
+            return Err(format!("Token ID {} does not exist", token_id));
+        }
+
+        // Validar límites de tamaño
+        if metadata.name.len() > 256 {
+            return Err("Metadata name exceeds maximum length (256 characters)".to_string());
+        }
+        if metadata.description.len() > 2048 {
+            return Err("Metadata description exceeds maximum length (2048 characters)".to_string());
+        }
+        if metadata.attributes.len() > 50 {
+            return Err("Metadata attributes exceed maximum count (50)".to_string());
+        }
+
+        self.state.nft_metadata.insert(token_id, metadata);
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+        Ok(())
+    }
+
+    /**
+     * NFT: Quema/destruye un token
+     * @param owner - Owner del token
+     * @param token_id - ID del token a quemar
+     * @param caller - Dirección que ejecuta el burn
+     */
+    fn burn_nft(&mut self, owner: &str, token_id: u64, caller: &str) -> Result<String, String> {
+        // Validación de direcciones
+        Self::validate_address(owner)?;
+        Self::validate_address(caller)?;
+
+        // Verificar que el token existe y pertenece al owner
+        let current_owner = self.state.token_owners.get(&token_id)
+            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+
+        if current_owner != owner {
+            return Err(format!("Token {} is not owned by {}", token_id, owner));
+        }
+
+        // Verificar permisos: el caller debe ser el owner
+        if caller != owner {
+            return Err(format!("Caller {} is not authorized to burn token {}", caller, token_id));
+        }
+
+        // Eliminar el token
+        self.state.token_owners.remove(&token_id);
+        self.state.token_uris.remove(&token_id);
+        self.state.token_approvals.remove(&token_id);
+        self.state.nft_metadata.remove(&token_id);
+
+        // Actualizar balance
+        let owner_balance = *self.state.nft_balances.get(owner).unwrap_or(&0);
+        if owner_balance > 0 {
+            self.state.nft_balances.insert(owner.to_string(), owner_balance - 1);
+        }
+
+        // Actualizar índice inverso
+        if let Some(owner_tokens) = self.state.owner_to_tokens.get_mut(owner) {
+            owner_tokens.remove(&token_id);
+            if owner_tokens.is_empty() {
+                self.state.owner_to_tokens.remove(owner);
+            }
+        }
+
+        // Remover del índice de tokens
+        if let Some(pos) = self.state.token_index.iter().position(|&x| x == token_id) {
+            self.state.token_index.remove(pos);
+        }
+
+        // Emit Transfer event (to zero address = burn)
+        self.emit_nft_transfer_event(owner, "0", token_id);
+        
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+
+        Ok(format!("Burned NFT {}", token_id))
     }
 
     /**
@@ -892,9 +1115,12 @@ impl SmartContract {
         let token_uris_json = serde_json::to_string(&self.state.token_uris).unwrap_or_default();
         let token_approvals_json = serde_json::to_string(&self.state.token_approvals).unwrap_or_default();
         let nft_balances_json = serde_json::to_string(&self.state.nft_balances).unwrap_or_default();
+        let nft_metadata_json = serde_json::to_string(&self.state.nft_metadata).unwrap_or_default();
+        let owner_to_tokens_json = serde_json::to_string(&self.state.owner_to_tokens).unwrap_or_default();
+        let token_index_json = serde_json::to_string(&self.state.token_index).unwrap_or_default();
         
         let data = format!(
-            "{}{}{}{}{:?}{:?}{:?}{}{}{}{}{}{}{}{}{}",
+            "{}{}{}{}{:?}{:?}{:?}{}{}{}{}{}{}{}{}{}{}{}{}",
             self.address,
             self.owner,
             self.contract_type,
@@ -908,6 +1134,9 @@ impl SmartContract {
             token_uris_json,
             token_approvals_json,
             nft_balances_json,
+            nft_metadata_json,
+            owner_to_tokens_json,
+            token_index_json,
             self.created_at,
             self.updated_at,
             self.update_sequence
