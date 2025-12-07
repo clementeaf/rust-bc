@@ -1146,17 +1146,34 @@ pub async fn execute_contract_function(
 ) -> ActixResult<HttpResponse> {
     // Extraer caller de la request primero para rate limiting
     // Para ERC-20, el caller debe venir en params para transfer, approve, transferFrom
+    // Para NFT, el caller puede venir en params o ser "from" para transferNFT
     // Si no viene, intentamos obtenerlo de "from" para compatibilidad con código antiguo
     let caller = req.params.get("caller")
         .and_then(|v| v.as_str())
         .or_else(|| {
-            // Para compatibilidad: si hay "from" y la función es transfer, usar "from" como caller
-            if req.function == "transfer" {
+            // Para compatibilidad: si hay "from" y la función es transfer o transferNFT, usar "from" como caller
+            if req.function == "transfer" || req.function == "transferNFT" {
                 req.params.get("from").and_then(|v| v.as_str())
             } else {
                 None
             }
         });
+    
+    // Rate limiting específico para funciones ERC-20 y NFT (por caller)
+    if let Some(caller_addr) = caller {
+        if matches!(req.function.as_str(), "transfer" | "transferFrom" | "approve" | "mint" | "burn" | 
+                   "mintNFT" | "transferNFT" | "approveNFT" | "transferFromNFT") {
+            match check_erc20_rate_limit(caller_addr) {
+                Ok(()) => {
+                    // Rate limit OK, continuar
+                }
+                Err(e) => {
+                    let response: ApiResponse<String> = ApiResponse::error(e);
+                    return Ok(HttpResponse::TooManyRequests().json(response));
+                }
+            }
+        }
+    }
 
     let function = match req.function.as_str() {
         // ERC-20: transfer(to, amount) - caller es el from
@@ -1253,6 +1270,192 @@ pub async fn execute_contract_function(
                 }
             };
             ContractFunction::Burn { from, amount }
+        }
+        // NFT: mintNFT(to, token_id, token_uri)
+        "mintNFT" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_uri = match req.params.get("token_uri").and_then(|v| v.as_str()) {
+                Some(uri) => uri.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_uri' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::MintNFT { to, token_id, token_uri }
+        }
+        // NFT: transferNFT(from, to, token_id) - caller es el from o approved
+        "transferNFT" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::TransferNFT { from, to, token_id }
+        }
+        // NFT: approveNFT(to, token_id) - caller es el owner
+        "approveNFT" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::ApproveNFT { to, token_id }
+        }
+        // NFT: transferFromNFT(from, to, token_id) - caller es el spender
+        "transferFromNFT" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::TransferFromNFT { from, to, token_id }
+        }
+        // NFT: mintNFT(to, token_id, token_uri)
+        "mintNFT" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_uri = match req.params.get("token_uri").and_then(|v| v.as_str()) {
+                Some(uri) => uri.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_uri' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::MintNFT { to, token_id, token_uri }
+        }
+        // NFT: transferNFT(from, to, token_id) - caller es el from o approved
+        "transferNFT" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::TransferNFT { from, to, token_id }
+        }
+        // NFT: approveNFT(to, token_id) - caller es el owner
+        "approveNFT" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::ApproveNFT { to, token_id }
+        }
+        // NFT: transferFromNFT(from, to, token_id) - caller es el spender
+        "transferFromNFT" => {
+            let from = match req.params.get("from").and_then(|v| v.as_str()) {
+                Some(f) => f.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'from' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let token_id = match req.params.get("token_id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'token_id' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::TransferFromNFT { from, to, token_id }
         }
         "custom" => {
             let name = match req.params.get("name").and_then(|v| v.as_str()) {
@@ -1417,6 +1620,143 @@ pub async fn get_contract_total_supply(
 }
 
 /**
+ * NFT: Obtiene el owner de un token
+ */
+pub async fn get_nft_owner(
+    state: web::Data<AppState>,
+    path: web::Path<(String, u64)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, token_id) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            match contract.owner_of(token_id) {
+                Some(owner) => {
+                    let response: ApiResponse<String> = ApiResponse::success(owner);
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error(format!("Token ID {} does not exist", token_id));
+                    Ok(HttpResponse::NotFound().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene la URI/metadata de un token
+ */
+pub async fn get_nft_token_uri(
+    state: web::Data<AppState>,
+    path: web::Path<(String, u64)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, token_id) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            match contract.token_uri(token_id) {
+                Some(uri) => {
+                    let response: ApiResponse<String> = ApiResponse::success(uri);
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error(format!("Token ID {} does not exist", token_id));
+                    Ok(HttpResponse::NotFound().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene la dirección aprobada para un token
+ */
+pub async fn get_nft_approved(
+    state: web::Data<AppState>,
+    path: web::Path<(String, u64)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, token_id) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            match contract.get_approved(token_id) {
+                Some(approved) => {
+                    let response: ApiResponse<String> = ApiResponse::success(approved);
+                    Ok(HttpResponse::Ok().json(response))
+                }
+                None => {
+                    // No hay aprobación, devolver string vacío (comportamiento estándar ERC-721)
+                    let response: ApiResponse<String> = ApiResponse::success(String::new());
+                    Ok(HttpResponse::Ok().json(response))
+                }
+            }
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene el balance de NFTs de una dirección
+ */
+pub async fn get_nft_balance(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, wallet_address) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let balance = contract.balance_of_nft(&wallet_address);
+            let response: ApiResponse<u64> = ApiResponse::success(balance);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * NFT: Obtiene el total supply de NFTs minteados
+ */
+pub async fn get_nft_total_supply(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ActixResult<HttpResponse> {
+    let contract_address = address.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let total_supply = contract.total_supply_nft();
+            let response: ApiResponse<u64> = ApiResponse::success(total_supply);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
@@ -1448,7 +1788,13 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/contracts/{address}/execute", web::post().to(execute_contract_function))
             .route("/contracts/{address}/balance/{wallet}", web::get().to(get_contract_balance))
             .route("/contracts/{address}/allowance/{owner}/{spender}", web::get().to(get_contract_allowance))
-            .route("/contracts/{address}/totalSupply", web::get().to(get_contract_total_supply)),
+            .route("/contracts/{address}/totalSupply", web::get().to(get_contract_total_supply))
+            // NFT endpoints
+            .route("/contracts/{address}/nft/{token_id}/owner", web::get().to(get_nft_owner))
+            .route("/contracts/{address}/nft/{token_id}/uri", web::get().to(get_nft_token_uri))
+            .route("/contracts/{address}/nft/{token_id}/approved", web::get().to(get_nft_approved))
+            .route("/contracts/{address}/nft/balance/{wallet}", web::get().to(get_nft_balance))
+            .route("/contracts/{address}/nft/totalSupply", web::get().to(get_nft_total_supply)),
     );
 }
 

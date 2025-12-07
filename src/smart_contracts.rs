@@ -31,6 +31,26 @@ pub enum ContractFunction {
         from: String,
         amount: u64,
     },
+    // NFT: Funciones básicas (ERC-721 simplificado)
+    MintNFT {
+        to: String,
+        token_id: u64,
+        token_uri: String,
+    },
+    TransferNFT {
+        from: String,
+        to: String,
+        token_id: u64,
+    },
+    ApproveNFT {
+        to: String,
+        token_id: u64,
+    },
+    TransferFromNFT {
+        from: String,
+        to: String,
+        token_id: u64,
+    },
     Custom {
         name: String,
         params: Vec<String>,
@@ -47,6 +67,15 @@ pub struct ContractState {
     // ERC-20: Sistema de approvals (owner -> spender -> amount)
     #[serde(default)]
     pub allowances: HashMap<String, HashMap<String, u64>>, // owner -> (spender -> amount)
+    // NFT: Estructuras para tokens no fungibles
+    #[serde(default)]
+    pub token_owners: HashMap<u64, String>, // token_id -> owner address
+    #[serde(default)]
+    pub token_uris: HashMap<u64, String>, // token_id -> URI/metadata
+    #[serde(default)]
+    pub token_approvals: HashMap<u64, String>, // token_id -> approved address
+    #[serde(default)]
+    pub nft_balances: HashMap<String, u64>, // owner -> count of NFTs owned
 }
 
 impl ContractState {
@@ -55,6 +84,10 @@ impl ContractState {
             balances: HashMap::new(),
             metadata: HashMap::new(),
             allowances: HashMap::new(),
+            token_owners: HashMap::new(),
+            token_uris: HashMap::new(),
+            token_approvals: HashMap::new(),
+            nft_balances: HashMap::new(),
         }
     }
 }
@@ -154,6 +187,22 @@ impl SmartContract {
             }
             ContractFunction::Burn { from, amount } => {
                 self.burn(&from, amount)
+            }
+            // NFT: Funciones básicas
+            ContractFunction::MintNFT { to, token_id, token_uri } => {
+                self.mint_nft(&to, token_id, &token_uri)
+            }
+            ContractFunction::TransferNFT { from, to, token_id } => {
+                let caller = caller.ok_or("Caller address required for transferNFT")?;
+                self.transfer_nft(&from, &to, token_id, caller)
+            }
+            ContractFunction::ApproveNFT { to, token_id } => {
+                let owner = caller.ok_or("Caller address required for approveNFT")?;
+                self.approve_nft(owner, &to, token_id)
+            }
+            ContractFunction::TransferFromNFT { from, to, token_id } => {
+                let spender = caller.ok_or("Caller address required for transferFromNFT")?;
+                self.transfer_from_nft(&from, &to, token_id, spender)
             }
             ContractFunction::Custom { name, params } => {
                 self.execute_custom(&name, &params)
@@ -512,6 +561,287 @@ impl SmartContract {
     }
 
     /**
+     * NFT: Mina un nuevo token no fungible
+     * @param to - Dirección que recibirá el NFT
+     * @param token_id - ID único del token
+     * @param token_uri - URI/metadata del token
+     */
+    fn mint_nft(&mut self, to: &str, token_id: u64, token_uri: &str) -> Result<String, String> {
+        // Validación de dirección
+        Self::validate_address(to)?;
+        
+        // Verificar que el token_id no exista
+        if self.state.token_owners.contains_key(&token_id) {
+            return Err(format!("Token ID {} already exists", token_id));
+        }
+
+        // Verificar límite de URI
+        if token_uri.len() > 2048 {
+            return Err("Token URI exceeds maximum length (2048 characters)".to_string());
+        }
+
+        // Asignar el token al owner
+        self.state.token_owners.insert(token_id, to.to_string());
+        self.state.token_uris.insert(token_id, token_uri.to_string());
+        
+        // Actualizar balance de NFTs del owner
+        let current_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
+        self.state.nft_balances.insert(to.to_string(), current_balance + 1);
+
+        // Emit Transfer event (from zero address to owner)
+        self.emit_nft_transfer_event("0", to, token_id);
+        
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+
+        Ok(format!("Minted NFT {} to {}", token_id, to))
+    }
+
+    /**
+     * NFT: Transfiere un token no fungible
+     * @param from - Dirección actual del owner
+     * @param to - Dirección que recibirá el token
+     * @param token_id - ID del token a transferir
+     * @param caller - Dirección que ejecuta la transferencia
+     */
+    fn transfer_nft(&mut self, from: &str, to: &str, token_id: u64, caller: &str) -> Result<String, String> {
+        // Validación de direcciones
+        Self::validate_address(from)?;
+        Self::validate_address(to)?;
+        Self::validate_address(caller)?;
+
+        if from == to {
+            return Err("Cannot transfer NFT to self".to_string());
+        }
+
+        // Verificar que el token existe
+        let current_owner = self.state.token_owners.get(&token_id)
+            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+
+        // Verificar permisos: el caller debe ser el owner o estar aprobado
+        if current_owner != from {
+            return Err(format!("Token {} is not owned by {}", token_id, from));
+        }
+
+        if caller != from {
+            // Verificar si el caller está aprobado para este token
+            let approved = self.state.token_approvals.get(&token_id);
+            if approved.map(|a| a.as_str()) != Some(caller) {
+                return Err(format!("Caller {} is not authorized to transfer token {}", caller, token_id));
+            }
+            // Limpiar approval después de transferir
+            self.state.token_approvals.remove(&token_id);
+        }
+
+        // Transferir el token
+        self.state.token_owners.insert(token_id, to.to_string());
+
+        // Actualizar balances de NFTs
+        let from_balance = *self.state.nft_balances.get(from).unwrap_or(&0);
+        if from_balance > 0 {
+            self.state.nft_balances.insert(from.to_string(), from_balance - 1);
+        }
+        let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
+        self.state.nft_balances.insert(to.to_string(), to_balance + 1);
+
+        // Emit Transfer event
+        self.emit_nft_transfer_event(from, to, token_id);
+        
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+
+        Ok(format!("Transferred NFT {} from {} to {}", token_id, from, to))
+    }
+
+    /**
+     * NFT: Aprueba que otra dirección transfiera un token
+     * @param owner - Owner del token
+     * @param to - Dirección aprobada para transferir
+     * @param token_id - ID del token
+     */
+    fn approve_nft(&mut self, owner: &str, to: &str, token_id: u64) -> Result<String, String> {
+        // Validación de direcciones
+        Self::validate_address(owner)?;
+        Self::validate_address(to)?;
+
+        if owner == to {
+            return Err("Cannot approve self".to_string());
+        }
+
+        // Verificar que el token existe y pertenece al owner
+        let current_owner = self.state.token_owners.get(&token_id)
+            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+
+        if current_owner != owner {
+            return Err(format!("Token {} is not owned by {}", token_id, owner));
+        }
+
+        // Aprobar
+        self.state.token_approvals.insert(token_id, to.to_string());
+
+        // Emit Approval event
+        self.emit_nft_approval_event(owner, to, token_id);
+        
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+
+        Ok(format!("Approved {} to transfer NFT {}", to, token_id))
+    }
+
+    /**
+     * NFT: Transfiere un token usando approval (transferFrom)
+     * @param from - Owner actual del token
+     * @param to - Dirección que recibirá el token
+     * @param token_id - ID del token
+     * @param spender - Dirección que ejecuta la transferencia (debe estar aprobada)
+     */
+    fn transfer_from_nft(&mut self, from: &str, to: &str, token_id: u64, spender: &str) -> Result<String, String> {
+        // Validación de direcciones
+        Self::validate_address(from)?;
+        Self::validate_address(to)?;
+        Self::validate_address(spender)?;
+
+        if from == to {
+            return Err("Cannot transfer NFT to self".to_string());
+        }
+
+        // Verificar que el token existe y pertenece a 'from'
+        let current_owner = self.state.token_owners.get(&token_id)
+            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+
+        if current_owner != from {
+            return Err(format!("Token {} is not owned by {}", token_id, from));
+        }
+
+        // Verificar que el spender está aprobado
+        let approved = self.state.token_approvals.get(&token_id)
+            .ok_or_else(|| format!("Token {} is not approved for transfer", token_id))?;
+
+        if approved != spender {
+            return Err(format!("Spender {} is not approved to transfer token {}", spender, token_id));
+        }
+
+        // Transferir el token
+        self.state.token_owners.insert(token_id, to.to_string());
+        
+        // Limpiar approval
+        self.state.token_approvals.remove(&token_id);
+
+        // Actualizar balances de NFTs
+        let from_balance = *self.state.nft_balances.get(from).unwrap_or(&0);
+        if from_balance > 0 {
+            self.state.nft_balances.insert(from.to_string(), from_balance - 1);
+        }
+        let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
+        self.state.nft_balances.insert(to.to_string(), to_balance + 1);
+
+        // Emit Transfer event
+        self.emit_nft_transfer_event(from, to, token_id);
+        
+        let (secs, _) = Self::get_timestamp_nanos();
+        self.updated_at = secs;
+        self.update_sequence += 1;
+        self.update_integrity_hash();
+
+        Ok(format!("Transferred NFT {} from {} to {} via {}", token_id, from, to, spender))
+    }
+
+    /**
+     * NFT: Obtiene el owner de un token
+     * @param token_id - ID del token
+     */
+    pub fn owner_of(&self, token_id: u64) -> Option<String> {
+        self.state.token_owners.get(&token_id).cloned()
+    }
+
+    /**
+     * NFT: Obtiene el balance de NFTs de una dirección
+     * @param address - Dirección a consultar
+     */
+    pub fn balance_of_nft(&self, address: &str) -> u64 {
+        *self.state.nft_balances.get(address).unwrap_or(&0)
+    }
+
+    /**
+     * NFT: Obtiene la URI/metadata de un token
+     * @param token_id - ID del token
+     */
+    pub fn token_uri(&self, token_id: u64) -> Option<String> {
+        self.state.token_uris.get(&token_id).cloned()
+    }
+
+    /**
+     * NFT: Obtiene el total de NFTs minteados
+     */
+    pub fn total_supply_nft(&self) -> u64 {
+        self.state.token_owners.len() as u64
+    }
+
+    /**
+     * NFT: Obtiene la dirección aprobada para un token
+     * @param token_id - ID del token
+     */
+    pub fn get_approved(&self, token_id: u64) -> Option<String> {
+        self.state.token_approvals.get(&token_id).cloned()
+    }
+
+    /**
+     * Emite evento Transfer para NFT
+     */
+    fn emit_nft_transfer_event(&mut self, from: &str, to: &str, token_id: u64) {
+        const MAX_EVENTS: usize = 1000;
+        
+        if self.state.metadata.len() >= MAX_EVENTS {
+            let event_keys: Vec<String> = self.state.metadata.keys()
+                .filter(|k| k.starts_with("event_"))
+                .cloned()
+                .collect();
+            
+            if event_keys.len() > 500 {
+                let to_remove = event_keys.len() - 500;
+                for key in event_keys.iter().take(to_remove) {
+                    self.state.metadata.remove(key);
+                }
+            }
+        }
+        
+        let event_key = format!("event_nft_transfer_{}", self.update_sequence);
+        let event_value = format!("from:{}|to:{}|token_id:{}", from, to, token_id);
+        self.state.metadata.insert(event_key, event_value);
+    }
+
+    /**
+     * Emite evento Approval para NFT
+     */
+    fn emit_nft_approval_event(&mut self, owner: &str, approved: &str, token_id: u64) {
+        const MAX_EVENTS: usize = 1000;
+        
+        if self.state.metadata.len() >= MAX_EVENTS {
+            let event_keys: Vec<String> = self.state.metadata.keys()
+                .filter(|k| k.starts_with("event_"))
+                .cloned()
+                .collect();
+            
+            if event_keys.len() > 500 {
+                let to_remove = event_keys.len() - 500;
+                for key in event_keys.iter().take(to_remove) {
+                    self.state.metadata.remove(key);
+                }
+            }
+        }
+        
+        let event_key = format!("event_nft_approval_{}", self.update_sequence);
+        let event_value = format!("owner:{}|approved:{}|token_id:{}", owner, approved, token_id);
+        self.state.metadata.insert(event_key, event_value);
+    }
+
+    /**
      * ERC-20: Obtiene el supply total
      */
     pub fn total_supply(&self) -> u64 {
@@ -554,13 +884,17 @@ impl SmartContract {
         use serde_json;
         let mut hasher = Sha256::new();
         
-        // Serializar solo campos críticos (balances y allowances, no metadata completa)
+        // Serializar solo campos críticos (balances, allowances, NFT data, no metadata completa)
         // Esto mejora performance al evitar serializar eventos históricos
         let balances_json = serde_json::to_string(&self.state.balances).unwrap_or_default();
         let allowances_json = serde_json::to_string(&self.state.allowances).unwrap_or_default();
+        let token_owners_json = serde_json::to_string(&self.state.token_owners).unwrap_or_default();
+        let token_uris_json = serde_json::to_string(&self.state.token_uris).unwrap_or_default();
+        let token_approvals_json = serde_json::to_string(&self.state.token_approvals).unwrap_or_default();
+        let nft_balances_json = serde_json::to_string(&self.state.nft_balances).unwrap_or_default();
         
         let data = format!(
-            "{}{}{}{}{:?}{:?}{:?}{}{}{}{}{}",
+            "{}{}{}{}{:?}{:?}{:?}{}{}{}{}{}{}{}{}{}",
             self.address,
             self.owner,
             self.contract_type,
@@ -570,6 +904,10 @@ impl SmartContract {
             self.decimals,
             balances_json,
             allowances_json,
+            token_owners_json,
+            token_uris_json,
+            token_approvals_json,
+            nft_balances_json,
             self.created_at,
             self.updated_at,
             self.update_sequence
