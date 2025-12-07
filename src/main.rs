@@ -21,7 +21,7 @@ use models::{WalletManager, Mempool};
 use network::Node;
 use std::env;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 /**
  * Función principal - Inicia el servidor API
@@ -126,7 +126,7 @@ async fn main() -> std::io::Result<()> {
             eprintln!("⚠️  Error al acceder a BD para cargar contratos: {}", e);
         }
     }
-    let contract_manager = Arc::new(Mutex::new(contract_manager));
+    let contract_manager = Arc::new(RwLock::new(contract_manager));
 
     let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
     let mut node_arc = Node::new(node_address, blockchain_for_network.clone());

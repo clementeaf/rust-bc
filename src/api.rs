@@ -8,7 +8,7 @@ use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract};
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 /**
  * Estado compartido de la aplicación
@@ -22,7 +22,7 @@ pub struct AppState {
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
     pub billing_manager: Arc<BillingManager>,
-    pub contract_manager: Arc<Mutex<ContractManager>>,
+    pub contract_manager: Arc<RwLock<ContractManager>>,
 }
 
 /**
@@ -1011,7 +1011,7 @@ pub async fn deploy_contract(
         req.decimals,
     );
 
-    let mut contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let mut contract_manager = state.contract_manager.write().unwrap_or_else(|e| e.into_inner());
     match contract_manager.deploy_contract(contract.clone()) {
         Ok(address) => {
             // Guardar en base de datos
@@ -1047,7 +1047,7 @@ pub async fn get_contract(
     state: web::Data<AppState>,
     address: web::Path<String>,
 ) -> ActixResult<HttpResponse> {
-    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
     match contract_manager.get_contract(&address) {
         Some(contract) => {
             let response = ApiResponse::success(contract.clone());
@@ -1063,15 +1063,122 @@ pub async fn get_contract(
 /**
  * Ejecuta una función de contrato
  */
+use std::collections::HashMap;
+use std::time::Instant;
+
+/**
+ * Información de rate limiting por caller
+ */
+struct CallerRateLimitInfo {
+    requests_per_second: Vec<Instant>, // Timestamps de requests en el último segundo
+    requests_per_minute: Vec<Instant>,  // Timestamps de requests en el último minuto
+}
+
+impl CallerRateLimitInfo {
+    fn new() -> Self {
+        CallerRateLimitInfo {
+            requests_per_second: Vec::new(),
+            requests_per_minute: Vec::new(),
+        }
+    }
+    
+    /**
+     * Limpia timestamps antiguos
+     */
+    fn cleanup(&mut self, now: Instant) {
+        let one_second_ago = now - std::time::Duration::from_secs(1);
+        let one_minute_ago = now - std::time::Duration::from_secs(60);
+        
+        self.requests_per_second.retain(|&time| time > one_second_ago);
+        self.requests_per_minute.retain(|&time| time > one_minute_ago);
+    }
+}
+
+/**
+ * Rate limiting específico para funciones ERC-20
+ * Tracking por caller con timestamps para límites precisos
+ */
+lazy_static::lazy_static! {
+    static ref ERC20_RATE_LIMIT: std::sync::Mutex<HashMap<String, CallerRateLimitInfo>> = 
+        std::sync::Mutex::new(HashMap::new());
+}
+
+/**
+ * Verifica rate limiting para un caller específico
+ * @param caller - Dirección del caller
+ * @returns Ok(()) si está dentro del límite, Err si excede
+ */
+fn check_erc20_rate_limit(caller: &str) -> Result<(), String> {
+    const MAX_REQUESTS_PER_SECOND: u32 = 10;
+    const MAX_REQUESTS_PER_MINUTE: u32 = 100;
+    
+    let mut limits = ERC20_RATE_LIMIT.lock().unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    
+    // Obtener o crear entrada para el caller específico
+    let caller_info = limits.entry(caller.to_string())
+        .or_insert_with(CallerRateLimitInfo::new);
+    
+    // Limpiar timestamps antiguos para este caller
+    caller_info.cleanup(now);
+    
+    // Verificar límite por segundo para ESTE caller específico
+    if caller_info.requests_per_second.len() >= MAX_REQUESTS_PER_SECOND as usize {
+        return Err("Rate limit exceeded: too many requests per second".to_string());
+    }
+    
+    // Verificar límite por minuto para ESTE caller específico
+    if caller_info.requests_per_minute.len() >= MAX_REQUESTS_PER_MINUTE as usize {
+        return Err("Rate limit exceeded: too many requests per minute".to_string());
+    }
+    
+    // Registrar esta request
+    caller_info.requests_per_second.push(now);
+    caller_info.requests_per_minute.push(now);
+    
+    Ok(())
+}
+
 pub async fn execute_contract_function(
     state: web::Data<AppState>,
     address: web::Path<String>,
     req: web::Json<ExecuteContractRequest>,
 ) -> ActixResult<HttpResponse> {
-    let mut contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
-    
+    // Extraer caller de la request primero para rate limiting
+    // Para ERC-20, el caller debe venir en params para transfer, approve, transferFrom
+    // Si no viene, intentamos obtenerlo de "from" para compatibilidad con código antiguo
+    let caller = req.params.get("caller")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            // Para compatibilidad: si hay "from" y la función es transfer, usar "from" como caller
+            if req.function == "transfer" {
+                req.params.get("from").and_then(|v| v.as_str())
+            } else {
+                None
+            }
+        });
+
     let function = match req.function.as_str() {
+        // ERC-20: transfer(to, amount) - caller es el from
         "transfer" => {
+            let to = match req.params.get("to").and_then(|v| v.as_str()) {
+                Some(t) => t.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'to' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let amount = match req.params.get("amount").and_then(|v| v.as_u64()) {
+                Some(a) => a,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'amount' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::Transfer { to, amount }
+        }
+        // ERC-20: transferFrom(from, to, amount) - caller es el spender
+        "transferFrom" => {
             let from = match req.params.get("from").and_then(|v| v.as_str()) {
                 Some(f) => f.to_string(),
                 None => {
@@ -1093,7 +1200,25 @@ pub async fn execute_contract_function(
                     return Ok(HttpResponse::BadRequest().json(response));
                 }
             };
-            ContractFunction::Transfer { from, to, amount }
+            ContractFunction::TransferFrom { from, to, amount }
+        }
+        // ERC-20: approve(spender, amount) - caller es el owner
+        "approve" => {
+            let spender = match req.params.get("spender").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'spender' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            let amount = match req.params.get("amount").and_then(|v| v.as_u64()) {
+                Some(a) => a,
+                None => {
+                    let response: ApiResponse<String> = ApiResponse::error("Missing 'amount' parameter".to_string());
+                    return Ok(HttpResponse::BadRequest().json(response));
+                }
+            };
+            ContractFunction::Approve { spender, amount }
         }
         "mint" => {
             let to = match req.params.get("to").and_then(|v| v.as_str()) {
@@ -1151,11 +1276,20 @@ pub async fn execute_contract_function(
         }
     };
 
-    match contract_manager.execute_contract_function(&address, function) {
+    // Adquirir lock solo cuando necesitamos ejecutar
+    let mut contract_manager = state.contract_manager.write().unwrap_or_else(|e| e.into_inner());
+    
+    // Ejecutar función con mejor manejo de errores
+    let execution_result = contract_manager.execute_contract_function(&address, function, caller);
+    
+    match execution_result {
         Ok(result) => {
             // Guardar estado actualizado en BD y broadcast
-            if let Some(contract) = contract_manager.get_contract(&address) {
-                let contract_clone = contract.clone();
+            let contract_for_broadcast = contract_manager.get_contract(&address).cloned();
+            drop(contract_manager); // Liberar lock antes de operaciones I/O
+            
+            if let Some(contract_clone) = contract_for_broadcast {
+                // Guardar en BD
                 let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
                 if let Err(e) = db.save_contract(&contract_clone) {
                     eprintln!("Error al guardar estado del contrato en BD: {}", e);
@@ -1163,7 +1297,6 @@ pub async fn execute_contract_function(
                 drop(db);
 
                 // Broadcast de la actualización del contrato a todos los peers
-                // Hacerlo de forma síncrona para asegurar que se ejecute
                 if let Some(node) = &state.node {
                     let node_clone = node.clone();
                     let contract_for_broadcast = contract_clone.clone();
@@ -1175,12 +1308,9 @@ pub async fn execute_contract_function(
                     };
                     
                     if peers_count > 0 {
-                        println!("📤 Ejecutando broadcast de actualización de contrato {} a {} peers", contract_clone.address, peers_count);
                         tokio::spawn(async move {
                             node_clone.broadcast_contract_update(&contract_for_broadcast).await;
                         });
-                    } else {
-                        println!("⚠️  No hay peers conectados para broadcast de actualización de contrato: {}", contract_clone.address);
                     }
                 }
             }
@@ -1189,7 +1319,16 @@ pub async fn execute_contract_function(
             Ok(HttpResponse::Ok().json(response))
         }
         Err(e) => {
-            let response: ApiResponse<String> = ApiResponse::error(e);
+            // Mejorar mensajes de error para debugging
+            let error_msg = if e.contains("Insufficient") {
+                e
+            } else if e.contains("not found") {
+                format!("Contract execution failed: {}", e)
+            } else {
+                format!("Execution error: {}", e)
+            };
+            
+            let response: ApiResponse<String> = ApiResponse::error(error_msg);
             Ok(HttpResponse::BadRequest().json(response))
         }
     }
@@ -1201,7 +1340,7 @@ pub async fn execute_contract_function(
 pub async fn get_all_contracts(
     state: web::Data<AppState>,
 ) -> ActixResult<HttpResponse> {
-    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
     let contracts: Vec<&SmartContract> = contract_manager.get_all_contracts();
     let contracts_cloned: Vec<SmartContract> = contracts.iter().map(|c| (*c).clone()).collect();
     let response = ApiResponse::success(contracts_cloned);
@@ -1216,12 +1355,58 @@ pub async fn get_contract_balance(
     path: web::Path<(String, String)>,
 ) -> ActixResult<HttpResponse> {
     let (contract_address, wallet_address) = path.into_inner();
-    let contract_manager = state.contract_manager.lock().unwrap_or_else(|e| e.into_inner());
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
     
     match contract_manager.get_contract(&contract_address) {
         Some(contract) => {
             let balance = contract.get_balance(&wallet_address);
             let response = ApiResponse::success(balance);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * ERC-20: Obtiene el allowance (owner, spender)
+ */
+pub async fn get_contract_allowance(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String, String)>,
+) -> ActixResult<HttpResponse> {
+    let (contract_address, owner_address, spender_address) = path.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let allowance = contract.allowance(&owner_address, &spender_address);
+            let response: ApiResponse<u64> = ApiResponse::success(allowance);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<u64> = ApiResponse::error("Contract not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * ERC-20: Obtiene el total supply del token
+ */
+pub async fn get_contract_total_supply(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ActixResult<HttpResponse> {
+    let contract_address = address.into_inner();
+    let contract_manager = state.contract_manager.read().unwrap_or_else(|e| e.into_inner());
+
+    match contract_manager.get_contract(&contract_address) {
+        Some(contract) => {
+            let total_supply = contract.total_supply();
+            let response: ApiResponse<u64> = ApiResponse::success(total_supply);
             Ok(HttpResponse::Ok().json(response))
         }
         None => {
@@ -1261,7 +1446,9 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/contracts", web::get().to(get_all_contracts))
             .route("/contracts/{address}", web::get().to(get_contract))
             .route("/contracts/{address}/execute", web::post().to(execute_contract_function))
-            .route("/contracts/{address}/balance/{wallet}", web::get().to(get_contract_balance)),
+            .route("/contracts/{address}/balance/{wallet}", web::get().to(get_contract_balance))
+            .route("/contracts/{address}/allowance/{owner}/{spender}", web::get().to(get_contract_allowance))
+            .route("/contracts/{address}/totalSupply", web::get().to(get_contract_total_supply)),
     );
 }
 

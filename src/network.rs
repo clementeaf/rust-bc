@@ -5,7 +5,7 @@ use crate::smart_contracts::{ContractManager, SmartContract};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -60,7 +60,7 @@ pub struct Node {
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
     pub db: Option<Arc<Mutex<BlockchainDB>>>,
-    pub contract_manager: Option<Arc<Mutex<ContractManager>>>,
+    pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub listening: bool,
     pub contract_sync_metrics: Arc<Mutex<HashMap<String, ContractSyncMetrics>>>,
     pub pending_contract_broadcasts: Arc<Mutex<Vec<(String, SmartContract)>>>,
@@ -105,7 +105,7 @@ impl Node {
     /**
      * Configura el contract manager para el nodo
      */
-    pub fn set_contract_manager(&mut self, contract_manager: Arc<Mutex<ContractManager>>) {
+    pub fn set_contract_manager(&mut self, contract_manager: Arc<RwLock<ContractManager>>) {
         self.contract_manager = Some(contract_manager);
     }
 
@@ -177,7 +177,7 @@ impl Node {
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
         db: Option<Arc<Mutex<BlockchainDB>>>,
-        contract_manager: Option<Arc<Mutex<ContractManager>>>,
+        contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
@@ -275,7 +275,7 @@ impl Node {
         blockchain: &Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
         db: Option<Arc<Mutex<BlockchainDB>>>,
-        contract_manager: Option<Arc<Mutex<ContractManager>>>,
+        contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         source_peer: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -487,7 +487,7 @@ impl Node {
             // Mensajes de contratos
             Message::GetContracts => {
                 if let Some(cm) = &contract_manager {
-                    let cm_guard = cm.lock().unwrap();
+                    let cm_guard = cm.read().unwrap();
                     let contracts: Vec<SmartContract> = cm_guard.get_all_contracts()
                         .iter()
                         .map(|c| (*c).clone())
@@ -500,7 +500,7 @@ impl Node {
             
             Message::GetContractsSince { timestamp } => {
                 if let Some(cm) = &contract_manager {
-                    let cm_guard = cm.lock().unwrap();
+                    let cm_guard = cm.read().unwrap();
                     let contracts: Vec<SmartContract> = cm_guard.get_all_contracts()
                         .iter()
                         .filter(|c| c.updated_at > timestamp || (c.updated_at == timestamp && c.update_sequence > 0))
@@ -514,7 +514,7 @@ impl Node {
             
             Message::Contracts(contracts) => {
                 if let Some(cm) = &contract_manager {
-                    let mut cm_guard = cm.lock().unwrap();
+                    let mut cm_guard = cm.write().unwrap();
                     let mut synced = 0;
                     let mut errors = 0;
                     
@@ -640,7 +640,7 @@ impl Node {
                         return Ok(None);
                     }
                     
-                    let mut cm_guard = cm.lock().unwrap();
+                    let mut cm_guard = cm.write().unwrap();
                     
                     // Verificar si el contrato ya existe
                     if cm_guard.get_contract(&contract.address).is_none() {
@@ -725,7 +725,7 @@ impl Node {
                         return Ok(None);
                     }
                     
-                    let mut cm_guard = cm.lock().unwrap();
+                    let mut cm_guard = cm.write().unwrap();
                     
                     if let Some(existing_mut) = cm_guard.get_contract_mut(&contract.address) {
                         // Validar que el owner no haya cambiado ilegalmente
@@ -1205,7 +1205,7 @@ impl Node {
         
         if let Ok(Message::Contracts(contracts)) = serde_json::from_str(&response_str) {
             if let Some(cm) = &self.contract_manager {
-                let mut cm_guard = cm.lock().unwrap();
+                let mut cm_guard = cm.write().unwrap();
                 let mut synced = 0;
                 let mut errors = 0;
                 
