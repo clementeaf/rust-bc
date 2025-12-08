@@ -22,6 +22,32 @@ Una implementación completa de blockchain en Rust con características avanzada
 
 ## 🔧 Instalación
 
+### Opción 1: Docker (Recomendado) 🐳
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/clementeaf/rust-bc.git
+cd rust-bc
+
+# Construir imagen
+docker build -t rust-bc:latest .
+
+# Ejecutar nodo
+docker run -d \
+  --name rust-bc-node \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -v blockchain-data:/app/data \
+  rust-bc:latest
+
+# O usar docker-compose para múltiples nodos
+docker-compose up -d
+```
+
+Ver [DOCKER.md](DOCKER.md) para documentación completa de Docker.
+
+### Opción 2: Compilación Local
+
 ```bash
 # Clonar el repositorio
 git clone https://github.com/clementeaf/rust-bc.git

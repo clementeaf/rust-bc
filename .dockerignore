@@ -1,0 +1,44 @@
+# Rust
+target/
+Cargo.lock
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+Documents/
+*.md
+!README.md
+
+# Scripts (except docker-entrypoint.sh)
+scripts/
+!scripts/docker-entrypoint.sh
+
+# Test results
+test_results_*/
+load_test_results_*.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SDK and explorer (opcional, pueden incluirse si se necesitan)
+sdk-js/
+block-explorer/
+
+# Logs
+*.log
+
