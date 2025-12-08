@@ -6,6 +6,7 @@ use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
 use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract, NFTMetadata};
 use actix_web::{web, HttpResponse, Result as ActixResult};
+use actix_web::web::Bytes;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::{Arc, Mutex, RwLock};
@@ -996,12 +997,53 @@ pub struct ExecuteContractRequest {
 }
 
 /**
+ * Versión de debug que recibe el body crudo para investigar problemas de deserialización
+ */
+pub async fn deploy_contract_debug(
+    state: web::Data<AppState>,
+    body: Bytes,
+) -> ActixResult<HttpResponse> {
+    eprintln!("[DEPLOY DEBUG] ========================================");
+    eprintln!("[DEPLOY DEBUG] Request recibido en endpoint debug");
+    eprintln!("[DEPLOY DEBUG] Body length: {}", body.len());
+    let body_str = String::from_utf8_lossy(&body);
+    eprintln!("[DEPLOY DEBUG] Body (first 500 chars): {}", &body_str[..body_str.len().min(500)]);
+    
+    // Llamar directamente a deploy_contract con el body
+    deploy_contract(state, body).await
+}
+
+/**
  * Despliega un nuevo smart contract
+ * NOTA: Este endpoint tiene problemas con el extractor JSON de Actix-Web.
+ * Usar /contracts/debug como alternativa funcional.
  */
 pub async fn deploy_contract(
     state: web::Data<AppState>,
-    req: web::Json<DeployContractRequest>,
+    body: Bytes,
 ) -> ActixResult<HttpResponse> {
+    eprintln!("[DEPLOY] ========================================");
+    eprintln!("[DEPLOY] FUNCIÓN deploy_contract() EJECUTADA");
+    eprintln!("[DEPLOY] Body recibido, length: {}", body.len());
+    
+    // Parsear JSON manualmente (igual que el endpoint debug)
+    let req: DeployContractRequest = match serde_json::from_slice(&body) {
+        Ok(r) => {
+            eprintln!("[DEPLOY] JSON parseado exitosamente");
+            r
+        },
+        Err(e) => {
+            eprintln!("[DEPLOY] ERROR al parsear JSON: {}", e);
+            let response: ApiResponse<String> = ApiResponse::error(format!("Invalid JSON: {}", e));
+            return Ok(HttpResponse::BadRequest().json(response));
+        }
+    };
+    
+    eprintln!("[DEPLOY] Request recibido exitosamente");
+    eprintln!("[DEPLOY] Tipo: {}, Owner: {}", req.contract_type, req.owner);
+    eprintln!("[DEPLOY] Name: {}, Symbol: {:?}", req.name, req.symbol);
+    
+    eprintln!("[DEPLOY] Creando SmartContract::new()...");
     let contract = SmartContract::new(
         req.owner.clone(),
         req.contract_type.clone(),
@@ -1011,33 +1053,50 @@ pub async fn deploy_contract(
         req.decimals,
     );
 
-    let mut contract_manager = state.contract_manager.write().unwrap_or_else(|e| e.into_inner());
-    match contract_manager.deploy_contract(contract.clone()) {
-        Ok(address) => {
-            // Guardar en base de datos
-            let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-            if let Err(e) = db.save_contract(&contract) {
-                eprintln!("Error al guardar contrato en BD: {}", e);
+    eprintln!("[DEPLOY] Adquiriendo write lock de contract_manager...");
+    let address = {
+        let mut contract_manager = state.contract_manager.write().unwrap_or_else(|e| e.into_inner());
+        eprintln!("[DEPLOY] Write lock adquirido, llamando deploy_contract()...");
+        match contract_manager.deploy_contract(contract.clone()) {
+            Ok(addr) => {
+                eprintln!("[DEPLOY] deploy_contract() exitoso, address: {}", addr);
+                addr
+            },
+            Err(e) => {
+                eprintln!("[DEPLOY] ERROR en deploy_contract(): {}", e);
+                let response: ApiResponse<String> = ApiResponse::error(e);
+                return Ok(HttpResponse::BadRequest().json(response));
             }
-            drop(db);
-
-            // Broadcast del contrato a todos los peers
-            if let Some(node) = &state.node {
-                let node_clone = node.clone();
-                let contract_clone = contract.clone();
-                tokio::spawn(async move {
-                    node_clone.broadcast_contract(&contract_clone).await;
-                });
-            }
-
-            let response: ApiResponse<String> = ApiResponse::success(address);
-            Ok(HttpResponse::Created().json(response))
         }
-        Err(e) => {
-            let response: ApiResponse<String> = ApiResponse::error(e);
-            Ok(HttpResponse::BadRequest().json(response))
+    };
+    eprintln!("[DEPLOY] Write lock liberado");
+    
+    // Guardar en base de datos (lock ya liberado)
+    eprintln!("[DEPLOY] Guardando en base de datos...");
+    {
+        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(e) = db.save_contract(&contract) {
+            eprintln!("[DEPLOY] Error al guardar contrato en BD: {}", e);
+        } else {
+            eprintln!("[DEPLOY] Contrato guardado en BD exitosamente");
         }
     }
+
+    // Broadcast del contrato a todos los peers
+    if let Some(node) = &state.node {
+        eprintln!("[DEPLOY] Iniciando broadcast a peers...");
+        let node_clone = node.clone();
+        let contract_clone = contract.clone();
+        tokio::spawn(async move {
+            node_clone.broadcast_contract(&contract_clone).await;
+        });
+    }
+
+    eprintln!("[DEPLOY] Creando respuesta exitosa...");
+    let address_clone = address.clone();
+    let response: ApiResponse<String> = ApiResponse::success(address);
+    eprintln!("[DEPLOY] Deploy completado exitosamente, address: {}", address_clone);
+    Ok(HttpResponse::Created().json(response))
 }
 
 /**
@@ -1929,8 +1988,11 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/mempool", web::get().to(get_mempool))
             .route("/stats", web::get().to(get_stats))
             .route("/health", web::get().to(health_check))
-            .route("/contracts", web::post().to(deploy_contract))
+            // IMPORTANTE: Rutas exactas ANTES de rutas con parámetros
+            .route("/contracts/debug", web::post().to(deploy_contract_debug))
             .route("/contracts", web::get().to(get_all_contracts))
+            .route("/contracts", web::post().to(deploy_contract))
+            // Rutas con parámetros DESPUÉS de rutas exactas
             .route("/contracts/{address}", web::get().to(get_contract))
             .route("/contracts/{address}/execute", web::post().to(execute_contract_function))
             .route("/contracts/{address}/balance/{wallet}", web::get().to(get_contract_balance))

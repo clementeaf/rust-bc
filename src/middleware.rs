@@ -177,6 +177,7 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
+        eprintln!("[MIDDLEWARE] Request recibida: {} {}", req.method(), req.path());
         let path = req.path().to_string();
         let ip = RateLimitMiddleware::get_client_ip(&req);
         let limits = self.limits.clone();

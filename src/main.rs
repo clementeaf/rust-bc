@@ -188,11 +188,26 @@ async fn main() -> std::io::Result<()> {
     };
 
     let api_bind = format!("127.0.0.1:{}", api_port);
+    
+    // Configurar límite de tamaño para JSON (256KB por defecto, aumentamos a 1MB)
+    let json_config = web::JsonConfig::default()
+        .limit(1_048_576) // 1MB
+        .error_handler(|err, _req| {
+            eprintln!("[JSON ERROR] Error al deserializar JSON: {:?}", err);
+            actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {}", err))
+        });
+    
     let api_handle = HttpServer::new(move || {
         App::new()
             .wrap(Compress::default())
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .app_data(web::Data::new(app_state.clone()))
+            .app_data(json_config.clone())
+            .app_data(web::JsonConfig::default().error_handler(|err, _req| {
+                eprintln!("[JSON CONFIG ERROR] Error en deserialización: {:?}", err);
+                eprintln!("[JSON CONFIG ERROR] Request path: {}", _req.path());
+                actix_web::error::ErrorBadRequest(format!("JSON error: {}", err))
+            }))
             .configure(config_routes)
     })
     .workers(8)
