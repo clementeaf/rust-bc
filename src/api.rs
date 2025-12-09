@@ -5,6 +5,7 @@ use crate::database::BlockchainDB;
 use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
 use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract, NFTMetadata};
+use crate::staking::StakingManager;
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use actix_web::web::Bytes;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,7 @@ pub struct AppState {
     pub balance_cache: Arc<BalanceCache>,
     pub billing_manager: Arc<BillingManager>,
     pub contract_manager: Arc<RwLock<ContractManager>>,
+    pub staking_manager: Arc<StakingManager>,
 }
 
 /**
@@ -517,12 +519,24 @@ pub async fn connect_peer(
         let address_str = address.clone();
         let node_clone = node.clone();
         
-        actix_web::rt::spawn(async move {
-            let _ = node_clone.connect_to_peer(&address_str).await;
-        });
-
-        let response = ApiResponse::success(format!("Conectando a {}", address));
-        Ok(HttpResponse::Ok().json(response))
+        // Ejecutar conexión y esperar resultado para poder retornar errores
+        match node_clone.connect_to_peer(&address_str).await {
+            Ok(_) => {
+                let response = ApiResponse::success(format!("Conectado a {}", address));
+                Ok(HttpResponse::Ok().json(response))
+            }
+            Err(e) => {
+                let error_msg = format!("Error conectando a {}: {}", address, e);
+                // Si es Network ID mismatch, retornar BadRequest
+                if e.to_string().contains("Network ID mismatch") {
+                    let response: ApiResponse<String> = ApiResponse::error(error_msg);
+                    Ok(HttpResponse::BadRequest().json(response))
+                } else {
+                    let response: ApiResponse<String> = ApiResponse::error(error_msg);
+                    Ok(HttpResponse::InternalServerError().json(response))
+                }
+            }
+        }
     } else {
         let response: ApiResponse<String> = ApiResponse::error("Nodo P2P no disponible".to_string());
         Ok(HttpResponse::ServiceUnavailable().json(response))
@@ -589,19 +603,37 @@ pub async fn mine_block(
         mempool.get_transactions_for_block(max_txs)
     };
 
-    let miner_address = req.miner_address.clone();
     let blockchain_state = state.blockchain.clone();
     let wallet_manager_state = state.wallet_manager.clone();
+    let staking_manager_state = state.staking_manager.clone();
     
-    let (hash, latest, reward) = actix_web::web::block(move || {
+    // Seleccionar validador usando PoS
+    let previous_hash = {
+        let blockchain = blockchain_state.lock().unwrap_or_else(|e| e.into_inner());
+        blockchain.get_latest_block().hash.clone()
+    };
+    
+    let validator_address = staking_manager_state.select_validator(&previous_hash);
+    
+    let (hash, latest, reward, validator) = actix_web::web::block(move || {
         let mut blockchain = blockchain_state.lock().unwrap_or_else(|e| e.into_inner());
         let wallet_manager = wallet_manager_state.lock().unwrap_or_else(|e| e.into_inner());
         
+        // Si hay validadores, usar PoS; si no, usar PoW con miner_address
+        let validator_addr = validator_address.clone();
+        let address_to_use = validator_addr.as_ref().unwrap_or(&req.miner_address);
+        
         let reward = blockchain.calculate_mining_reward();
-        match blockchain.mine_block_with_reward(&miner_address, transactions, &wallet_manager) {
+        match blockchain.mine_block_with_reward(address_to_use, transactions, &wallet_manager) {
             Ok(h) => {
                 let latest = blockchain.get_latest_block().clone();
-                Ok((h, latest, reward))
+                
+                // Registrar validación si usamos PoS
+                if let Some(validator_addr) = &validator_addr {
+                    staking_manager_state.record_validation(validator_addr, latest.index, reward);
+                }
+                
+                Ok((h, latest, reward, validator_addr))
             }
             Err(e) => Err(e),
         }
@@ -640,12 +672,17 @@ pub async fn mine_block(
         hash: String,
         reward: u64,
         transactions_count: usize,
+        validator: Option<String>,
+        consensus: String,
     }
 
+    let consensus = if validator.is_some() { "PoS" } else { "PoW" };
     let response_data = MineResponse {
         hash,
         reward,
         transactions_count: latest.transactions.len(),
+        validator,
+        consensus: consensus.to_string(),
     };
 
     let response = ApiResponse::success(response_data);
@@ -1963,6 +2000,214 @@ pub async fn set_nft_metadata(
 }
 
 /**
+ * Request para staking
+ */
+#[derive(Deserialize)]
+pub struct StakeRequest {
+    pub address: String,
+    pub amount: u64,
+}
+
+/**
+ * Request para unstaking
+ */
+#[derive(Deserialize)]
+pub struct UnstakeRequest {
+    pub address: String,
+    #[serde(default)]
+    pub amount: Option<u64>, // Opcional, si es None retira todo
+}
+
+/**
+ * Stakear tokens para convertirse en validador
+ */
+pub async fn stake(state: web::Data<AppState>, req: web::Json<StakeRequest>) -> ActixResult<HttpResponse> {
+    // Verificar balance antes de stakear
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let balance = blockchain.calculate_balance(&req.address);
+    drop(blockchain);
+    
+    if balance < req.amount {
+        let response: ApiResponse<String> = ApiResponse::error(
+            format!("Saldo insuficiente. Disponible: {}, Requerido: {}", balance, req.amount)
+        );
+        return Ok(HttpResponse::BadRequest().json(response));
+    }
+    
+    let wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
+    
+    match state.staking_manager.stake(&req.address, req.amount, &wallet_manager) {
+        Ok(_) => {
+            // Crear transacción especial de staking: from -> "STAKING"
+            // Esta transacción "lockea" los tokens en el sistema de staking
+            let mut wallet = wallet_manager
+                .get_wallet_for_signing(&req.address)
+                .ok_or_else(|| {
+                    let response: ApiResponse<String> = ApiResponse::error("Wallet no encontrado para firmar".to_string());
+                    return actix_web::error::ErrorBadRequest("Wallet not found");
+                })?;
+            
+            let mut tx = Transaction::new_with_fee(
+                req.address.clone(),
+                "STAKING".to_string(), // Dirección especial para staking
+                req.amount,
+                0,
+                Some(format!("Staking: {} tokens", req.amount)),
+            );
+            
+            wallet.sign_transaction(&mut tx);
+            let _ = wallet;
+            drop(wallet_manager);
+            
+            // Agregar al mempool
+            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
+            if let Err(e) = mempool.add_transaction(tx.clone()) {
+                drop(mempool);
+                let response: ApiResponse<String> = ApiResponse::error(e);
+                return Ok(HttpResponse::BadRequest().json(response));
+            }
+            drop(mempool);
+            
+            // Guardar validador en base de datos
+            if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
+                if let Ok(db) = state.db.lock() {
+                    if let Err(e) = db.save_validator(&validator) {
+                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                    }
+                }
+            }
+            
+            let response: ApiResponse<String> = ApiResponse::success(
+                format!("Staked {} tokens successfully. Transaction added to mempool.", req.amount)
+            );
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
+ * Solicitar unstaking (retiro de tokens)
+ */
+pub async fn request_unstake(state: web::Data<AppState>, req: web::Json<UnstakeRequest>) -> ActixResult<HttpResponse> {
+    match state.staking_manager.request_unstake(&req.address, req.amount) {
+        Ok(amount) => {
+            // Guardar validador actualizado en base de datos
+            if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
+                if let Ok(db) = state.db.lock() {
+                    if let Err(e) = db.save_validator(&validator) {
+                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                    }
+                }
+            }
+            
+            let response: ApiResponse<u64> = ApiResponse::success(amount);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
+ * Completar unstaking después del período de lock
+ */
+pub async fn complete_unstake(state: web::Data<AppState>, address: web::Path<String>) -> ActixResult<HttpResponse> {
+    match state.staking_manager.complete_unstake(&address) {
+        Ok(amount) => {
+            // Crear transacción especial de unstaking: "STAKING" -> address
+            // Esta transacción devuelve los tokens del sistema de staking al usuario
+            let mut tx = Transaction::new_with_fee(
+                "STAKING".to_string(), // Dirección especial para staking
+                address.clone(),
+                amount,
+                0,
+                Some(format!("Unstaking: {} tokens", amount)),
+            );
+            
+            // Las transacciones desde "STAKING" no requieren firma (son del sistema)
+            // Agregar al mempool
+            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
+            if let Err(e) = mempool.add_transaction(tx.clone()) {
+                drop(mempool);
+                let response: ApiResponse<String> = ApiResponse::error(e);
+                return Ok(HttpResponse::BadRequest().json(response));
+            }
+            drop(mempool);
+            
+            // Si el validador fue removido, eliminarlo de la BD; si no, actualizarlo
+            if let Some(validator) = state.staking_manager.get_validator_for_save(&address) {
+                if let Ok(db) = state.db.lock() {
+                    if let Err(e) = db.save_validator(&validator) {
+                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                    }
+                }
+            } else {
+                // Validador fue removido, eliminarlo de la BD
+                if let Ok(db) = state.db.lock() {
+                    if let Err(e) = db.remove_validator(&address) {
+                        eprintln!("⚠️  Error al eliminar validador de BD: {}", e);
+                    }
+                }
+            }
+            
+            let response: ApiResponse<u64> = ApiResponse::success(amount);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => {
+            let response: ApiResponse<String> = ApiResponse::error(e);
+            Ok(HttpResponse::BadRequest().json(response))
+        }
+    }
+}
+
+/**
+ * Obtener lista de validadores activos
+ */
+pub async fn get_validators(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+    let validators = state.staking_manager.get_active_validators();
+    let response: ApiResponse<Vec<crate::staking::Validator>> = ApiResponse::success(validators);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtener información de un validador específico
+ */
+pub async fn get_validator(state: web::Data<AppState>, address: web::Path<String>) -> ActixResult<HttpResponse> {
+    match state.staking_manager.get_validator(&address) {
+        Some(validator) => {
+            let response: ApiResponse<crate::staking::Validator> = ApiResponse::success(validator);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Validator not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * Obtener información de staking del usuario
+ */
+pub async fn get_my_stake(state: web::Data<AppState>, address: web::Path<String>) -> ActixResult<HttpResponse> {
+    match state.staking_manager.get_validator(&address) {
+        Some(validator) => {
+            let response: ApiResponse<crate::staking::Validator> = ApiResponse::success(validator);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("You are not a validator".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
@@ -2007,7 +2252,14 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/contracts/{address}/nft/balance/{wallet}", web::get().to(get_nft_balance))
             .route("/contracts/{address}/nft/totalSupply", web::get().to(get_nft_total_supply))
             .route("/contracts/{address}/nft/tokens/{owner}", web::get().to(get_nft_tokens_of_owner))
-            .route("/contracts/{address}/nft/index/{index}", web::get().to(get_nft_token_by_index)),
+            .route("/contracts/{address}/nft/index/{index}", web::get().to(get_nft_token_by_index))
+            // Staking endpoints
+            .route("/staking/stake", web::post().to(stake))
+            .route("/staking/unstake", web::post().to(request_unstake))
+            .route("/staking/complete-unstake/{address}", web::post().to(complete_unstake))
+            .route("/staking/validators", web::get().to(get_validators))
+            .route("/staking/validator/{address}", web::get().to(get_validator))
+            .route("/staking/my-stake/{address}", web::get().to(get_my_stake)),
     );
 }
 

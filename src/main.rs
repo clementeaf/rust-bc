@@ -8,6 +8,7 @@ mod middleware;
 mod models;
 mod network;
 mod smart_contracts;
+mod staking;
 
 use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Compress;
@@ -19,6 +20,7 @@ use database::BlockchainDB;
 use middleware::RateLimitMiddleware;
 use models::{WalletManager, Mempool};
 use network::Node;
+use staking::StakingManager;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -49,6 +51,53 @@ async fn main() -> std::io::Result<()> {
         .cloned()
         .unwrap_or_else(|| env::var("DB_NAME").unwrap_or_else(|_| "blockchain".to_string()));
     
+    // Network ID: "mainnet" o "testnet" (default: "mainnet")
+    let network_id = env::var("NETWORK_ID")
+        .unwrap_or_else(|_| "mainnet".to_string());
+    
+    // Bootstrap nodes: lista separada por comas (ej: "127.0.0.1:8081,127.0.0.1:8083")
+    let bootstrap_nodes_str = env::var("BOOTSTRAP_NODES").unwrap_or_default();
+    let bootstrap_nodes: Vec<String> = if bootstrap_nodes_str.is_empty() {
+        Vec::new()
+    } else {
+        bootstrap_nodes_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    
+    // Seed nodes: lista separada por comas (siempre se intentan, incluso sin bootstrap)
+    // Estas son nodos conocidos que siempre están disponibles para discovery
+    let seed_nodes_str = env::var("SEED_NODES").unwrap_or_default();
+    let seed_nodes: Vec<String> = if seed_nodes_str.is_empty() {
+        Vec::new()
+    } else {
+        seed_nodes_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    
+    // Auto-discovery: intervalo en segundos (default: 120 = 2 minutos)
+    let auto_discovery_interval = env::var("AUTO_DISCOVERY_INTERVAL")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(120);
+    
+    // Auto-discovery: máximo número de conexiones por ciclo (default: 5)
+    let auto_discovery_max_connections = env::var("AUTO_DISCOVERY_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(5);
+    
+    // Auto-discovery: delay inicial en segundos (default: 30)
+    let auto_discovery_initial_delay = env::var("AUTO_DISCOVERY_INITIAL_DELAY")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(30);
+    
     let db_path = format!("{}.db", db_name);
 
     println!("🚀 Iniciando Blockchain API Server...");
@@ -56,6 +105,15 @@ async fn main() -> std::io::Result<()> {
     println!("💾 Base de datos: {}", db_path);
     println!("🌐 Puerto API: {}", api_port);
     println!("📡 Puerto P2P: {}", p2p_port);
+    println!("🌍 Network ID: {}", network_id);
+    if !bootstrap_nodes.is_empty() {
+        println!("🔗 Bootstrap nodes: {}", bootstrap_nodes.join(", "));
+    }
+    if !seed_nodes.is_empty() {
+        println!("🌱 Seed nodes: {}", seed_nodes.join(", "));
+    }
+    println!("🔍 Auto-discovery: intervalo {}s, max conexiones {}, delay inicial {}s", 
+        auto_discovery_interval, auto_discovery_max_connections, auto_discovery_initial_delay);
 
     let db = match BlockchainDB::new(&db_path) {
         Ok(db) => {
@@ -129,7 +187,13 @@ async fn main() -> std::io::Result<()> {
     let contract_manager = Arc::new(RwLock::new(contract_manager));
 
     let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
-    let mut node_arc = Node::new(node_address, blockchain_for_network.clone());
+    let mut node_arc = Node::new(
+        node_address,
+        blockchain_for_network.clone(),
+        Some(network_id.clone()),
+        Some(bootstrap_nodes.clone()),
+        Some(seed_nodes.clone()),
+    );
     node_arc.set_resources(wallet_manager_arc.clone(), db_arc.clone());
     node_arc.set_contract_manager(contract_manager.clone());
     
@@ -139,11 +203,18 @@ async fn main() -> std::io::Result<()> {
     let shared_pending_broadcasts = node_arc.pending_contract_broadcasts.clone();
     let shared_recent_receipts = node_arc.recent_contract_receipts.clone();
     let shared_rate_limits = node_arc.contract_rate_limits.clone();
+    let shared_failed_peers = node_arc.failed_peers.clone();
     
     let node_arc = Arc::new(node_arc);
     
     // Crear segunda instancia para el servidor P2P que comparte los mismos recursos
-    let mut node_for_server = Node::new(node_address, blockchain_for_network.clone());
+    let mut node_for_server = Node::new(
+        node_address,
+        blockchain_for_network.clone(),
+        Some(network_id.clone()),
+        Some(bootstrap_nodes.clone()),
+        Some(seed_nodes.clone()),
+    );
     node_for_server.set_resources(wallet_manager_arc.clone(), db_arc.clone());
     node_for_server.set_contract_manager(contract_manager.clone());
     // Compartir los mismos recursos compartidos
@@ -152,6 +223,53 @@ async fn main() -> std::io::Result<()> {
     node_for_server.pending_contract_broadcasts = shared_pending_broadcasts;
     node_for_server.recent_contract_receipts = shared_recent_receipts;
     node_for_server.contract_rate_limits = shared_rate_limits;
+    node_for_server.failed_peers = shared_failed_peers;
+
+    // Crear StakingManager
+    // Min stake: 1000 tokens (configurable vía MIN_STAKE env var)
+    let min_stake = env::var("MIN_STAKE")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(1000);
+    
+    // Unstaking period: 7 días (configurable vía UNSTAKING_PERIOD env var, en segundos)
+    let unstaking_period = env::var("UNSTAKING_PERIOD")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(604800); // 7 días
+    
+    // Slash percentage: 5% (configurable vía SLASH_PERCENTAGE env var)
+    let slash_percentage = env::var("SLASH_PERCENTAGE")
+        .ok()
+        .and_then(|s| s.parse::<u8>().ok())
+        .unwrap_or(5);
+    
+    let staking_manager = Arc::new(StakingManager::new(
+        Some(min_stake),
+        Some(unstaking_period),
+        Some(slash_percentage),
+    ));
+
+    // Cargar validadores desde base de datos
+    match db_arc.lock() {
+        Ok(db) => {
+            match db.load_validators() {
+                Ok(validators) => {
+                    if !validators.is_empty() {
+                        println!("📋 Cargando {} validadores desde base de datos...", validators.len());
+                        staking_manager.load_validators(validators);
+                        println!("✅ Validadores cargados exitosamente");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Error al cargar validadores: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("⚠️  Error al acceder a BD para cargar validadores: {}", e);
+        }
+    }
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -162,6 +280,7 @@ async fn main() -> std::io::Result<()> {
         balance_cache: balance_cache.clone(),
         billing_manager: billing_manager.clone(),
         contract_manager: contract_manager.clone(),
+        staking_manager: staking_manager.clone(),
     };
 
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);
@@ -176,11 +295,24 @@ async fn main() -> std::io::Result<()> {
     println!("   GET  /api/v1/chain/info");
     println!("\n💡 Presiona Ctrl+C para detener el servidor\n");
 
+    // Clonar node_arc para conectar a bootstrap nodes después de iniciar
+    let node_for_bootstrap = node_arc.clone();
+    let bootstrap_nodes_clone = bootstrap_nodes.clone();
+    
     let server_handle = tokio::spawn(async move {
         if let Err(e) = node_for_server.start_server(p2p_port).await {
             eprintln!("Error en servidor P2P: {}", e);
         }
     });
+
+    // Conectar a bootstrap nodes después de un breve delay
+    if !bootstrap_nodes_clone.is_empty() {
+        tokio::spawn(async move {
+            // Esperar a que el servidor esté listo
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            node_for_bootstrap.connect_to_bootstrap_nodes().await;
+        });
+    }
 
     let rate_limit_config = middleware::RateLimitConfig {
         requests_per_minute: 20,
@@ -224,6 +356,26 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
+    // Tarea periódica para auto-discovery de peers
+    let node_for_discovery = node_arc.clone();
+    let discovery_interval_secs = auto_discovery_interval;
+    let discovery_max_connections = auto_discovery_max_connections;
+    let discovery_initial_delay_secs = auto_discovery_initial_delay;
+    let discovery_handle = tokio::spawn(async move {
+        // Esperar delay inicial para que los bootstrap nodes se conecten
+        tokio::time::sleep(tokio::time::Duration::from_secs(discovery_initial_delay_secs)).await;
+        
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(discovery_interval_secs));
+        loop {
+            interval.tick().await;
+            
+            // auto_discover_and_connect ya maneja:
+            // 1. Reconexión a bootstrap si no hay peers (en discover_peers)
+            // 2. Conexión a bootstrap si hay pocos peers (< 3)
+            node_for_discovery.auto_discover_and_connect(discovery_max_connections).await;
+        }
+    });
+
     // El servidor API debe continuar incluso si el P2P falla
     tokio::select! {
         result = api_handle => {
@@ -231,6 +383,9 @@ async fn main() -> std::io::Result<()> {
         }
         _ = cleanup_handle => {
             // Cleanup task terminó (no debería pasar)
+        }
+        _ = discovery_handle => {
+            // Discovery task terminó (no debería pasar)
         }
         _ = server_handle => {
             println!("Servidor P2P detenido, pero servidor API continúa");

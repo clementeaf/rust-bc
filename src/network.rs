@@ -27,6 +27,7 @@ pub enum Message {
         block_count: usize,
         latest_hash: String,
         p2p_address: Option<String>, // Dirección P2P del nodo que envía el mensaje
+        network_id: Option<String>, // Network ID para separar testnet/mainnet
     },
     // Mensajes de contratos
     GetContracts,
@@ -68,13 +69,32 @@ pub struct Node {
     pub recent_contract_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>, // (contract_address, timestamp, source_peer)
     // Rate limiting para contratos por peer
     pub contract_rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>, // (peer_address, (timestamp, count))
+    // Network ID para separar testnet/mainnet
+    pub network_id: String,
+    // Bootstrap nodes para auto-conexión
+    pub bootstrap_nodes: Vec<String>,
+    // Seed nodes hardcodeadas (siempre se intentan, incluso sin bootstrap)
+    pub seed_nodes: Vec<String>,
+    // Peers fallidos con timestamp para retry
+    pub failed_peers: Arc<Mutex<HashMap<String, (u64, u32)>>>, // (peer_address, (timestamp, attempt_count))
 }
 
 impl Node {
     /**
      * Crea un nuevo nodo
+     * @param address - Dirección del nodo
+     * @param blockchain - Blockchain compartida
+     * @param network_id - Network ID para separar testnet/mainnet (default: "mainnet")
+     * @param bootstrap_nodes - Lista de bootstrap nodes para auto-conexión
+     * @param seed_nodes - Lista de seed nodes (siempre se intentan, incluso sin bootstrap)
      */
-    pub fn new(address: SocketAddr, blockchain: Arc<Mutex<Blockchain>>) -> Node {
+    pub fn new(
+        address: SocketAddr,
+        blockchain: Arc<Mutex<Blockchain>>,
+        network_id: Option<String>,
+        bootstrap_nodes: Option<Vec<String>>,
+        seed_nodes: Option<Vec<String>>,
+    ) -> Node {
         Node {
             address,
             peers: Arc::new(Mutex::new(HashSet::new())),
@@ -87,6 +107,10 @@ impl Node {
             pending_contract_broadcasts: Arc::new(Mutex::new(Vec::new())),
             recent_contract_receipts: Arc::new(Mutex::new(HashMap::new())),
             contract_rate_limits: Arc::new(Mutex::new(HashMap::new())),
+            network_id: network_id.unwrap_or_else(|| "mainnet".to_string()),
+            bootstrap_nodes: bootstrap_nodes.unwrap_or_default(),
+            seed_nodes: seed_nodes.unwrap_or_default(),
+            failed_peers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -129,6 +153,7 @@ impl Node {
         let recent_receipts = self.recent_contract_receipts.clone();
         let rate_limits = self.contract_rate_limits.clone();
         let pending_broadcasts = self.pending_contract_broadcasts.clone();
+        let network_id = self.network_id.clone();
 
         loop {
             match listener.accept().await {
@@ -143,6 +168,7 @@ impl Node {
                     let recent_receipts_clone = recent_receipts.clone();
                     let rate_limits_clone = rate_limits.clone();
                     let pending_broadcasts_clone = pending_broadcasts.clone();
+                    let network_id_clone = network_id.clone();
 
                     tokio::spawn(async move {
                         if let Err(e) = Self::handle_connection(
@@ -156,6 +182,7 @@ impl Node {
                             recent_receipts_clone,
                             rate_limits_clone,
                             pending_broadcasts_clone,
+                            Some(network_id_clone),
                         ).await {
                             eprintln!("Error manejando conexión: {}", e);
                         }
@@ -182,6 +209,7 @@ impl Node {
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
         pending_broadcasts: Arc<Mutex<Vec<(String, SmartContract)>>>,
+        network_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr = stream.peer_addr()?;
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
@@ -230,10 +258,20 @@ impl Node {
 
             let message_str = String::from_utf8_lossy(&buffer[..n]);
             if let Ok(message) = serde_json::from_str::<Message>(&message_str) {
-                // Si es el primer mensaje y es Version, responder con nuestra dirección P2P
+                // Si es el primer mensaje y es Version, validar network_id y responder
                 if first_message {
-                    if let Message::Version { p2p_address, .. } = &message {
-                        // Agregar el peer que se conectó a nuestra lista
+                    if let Message::Version { p2p_address, network_id: their_network_id, .. } = &message {
+                        // Validar Network ID - rechazar si no coincide
+                        if let (Some(their_id), Some(my_id)) = (their_network_id, &network_id) {
+                            if *their_id != **my_id {
+                                eprintln!("❌ Network ID mismatch: expected '{}', got '{}'. Rejecting connection.", my_id, their_id);
+                                // Enviar mensaje de error antes de cerrar (aunque el cliente puede no procesarlo)
+                                // Cerrar el stream inmediatamente para que el cliente detecte el rechazo
+                                return Err(format!("Network ID mismatch: expected '{}', got '{}'", my_id, their_id).into());
+                            }
+                        }
+                        
+                        // Agregar el peer que se conectó a nuestra lista SOLO si pasó la validación
                         if let Some(their_p2p_addr) = p2p_address {
                             let mut peers_guard = peers.lock().unwrap();
                             peers_guard.insert(their_p2p_addr.clone());
@@ -254,6 +292,7 @@ impl Node {
                     Some(peer_addr_str.clone()),
                     recent_receipts.clone(),
                     rate_limits.clone(),
+                    network_id.clone(),
                 ).await?;
                 
                 if let Some(response_msg) = response {
@@ -280,6 +319,7 @@ impl Node {
         source_peer: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
+        network_id: Option<String>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
@@ -457,7 +497,14 @@ impl Node {
                 Ok(None)
             }
             
-            Message::Version { block_count: their_count, latest_hash: their_hash, p2p_address, .. } => {
+            Message::Version { block_count: their_count, latest_hash: their_hash, p2p_address, network_id: their_network_id, .. } => {
+                // Validar Network ID - rechazar si no coincide
+                if let (Some(their_id), Some(my_id)) = (their_network_id, &network_id) {
+                    if *their_id != **my_id {
+                        return Err(format!("Network ID mismatch: expected '{}', got '{}'", my_id, their_id).into());
+                    }
+                }
+                
                 // Si el peer envió su dirección P2P, agregarlo a nuestra lista
                 if let Some(their_p2p_addr) = p2p_address {
                     let mut peers_guard = peers.lock().unwrap();
@@ -479,6 +526,7 @@ impl Node {
                     block_count: my_count,
                     latest_hash: my_hash,
                     p2p_address: my_p2p_address,
+                    network_id: network_id.clone(),
                 }))
             }
             
@@ -813,6 +861,7 @@ impl Node {
                 block_count: blockchain.chain.len(),
                 latest_hash: latest.hash.clone(),
                 p2p_address: Some(p2p_addr),
+                network_id: Some(self.network_id.clone()),
             }
         };
 
@@ -820,24 +869,47 @@ impl Node {
         stream.write_all(msg_json.as_bytes()).await?;
 
         let mut buffer = [0; 4096];
-        let n = stream.read(&mut buffer).await?;
+        let n = match stream.read(&mut buffer).await {
+            Ok(0) => {
+                // Conexión cerrada sin respuesta - probablemente rechazada por el servidor
+                return Err("Connection closed by peer (likely Network ID mismatch or rejection)".into());
+            }
+            Ok(n) => n,
+            Err(e) => {
+                // Error al leer - conexión probablemente cerrada
+                return Err(format!("Error reading response from peer: {} (connection may have been rejected)", e).into());
+            }
+        };
+        
         let response_str = String::from_utf8_lossy(&buffer[..n]);
         
-        if let Ok(Message::Version { block_count: their_count, latest_hash: their_hash, p2p_address, .. }) = serde_json::from_str(&response_str) {
+        if let Ok(Message::Version { block_count: their_count, latest_hash: their_hash, p2p_address, network_id: their_network_id, .. }) = serde_json::from_str(&response_str) {
+            // Validar Network ID PRIMERO - rechazar conexión si no coincide (ANTES de agregar a peers)
+            if let Some(their_id) = their_network_id {
+                if their_id != self.network_id {
+                    return Err(format!("Network ID mismatch: expected '{}', got '{}'. Rejecting connection.", self.network_id, their_id).into());
+                }
+            } else {
+                // Si el peer no envía network_id, asumimos compatibilidad (backward compatibility)
+                println!("⚠️  Peer {} no envió network_id, asumiendo compatibilidad", address);
+            }
+            
             // Si el peer envió su dirección P2P, usarla; si no, usar la dirección de conexión
             let peer_p2p_addr = p2p_address.unwrap_or_else(|| address.to_string());
             
-            // Agregar el peer a nuestra lista ANTES de sincronizar
+            // Agregar el peer a nuestra lista DESPUÉS de validar Network ID
             {
                 let mut peers = self.peers.lock().unwrap();
                 peers.insert(peer_p2p_addr.clone());
                 println!("📡 Peer agregado en connect_to_peer: {}", peer_p2p_addr);
             }
             
-            let blockchain = self.blockchain.lock().unwrap();
-            let my_count = blockchain.chain.len();
-            let my_latest = blockchain.get_latest_block().hash.clone();
-            drop(blockchain);
+            let (my_count, my_latest) = {
+                let blockchain = self.blockchain.lock().unwrap();
+                let count = blockchain.chain.len();
+                let latest = blockchain.get_latest_block().hash.clone();
+                (count, latest)
+            };
             
             // Sincronizar si el peer tiene más bloques
             if their_count > my_count {
@@ -928,6 +1000,351 @@ impl Node {
     }
 
     /**
+     * Conecta automáticamente a los bootstrap nodes
+     */
+    pub async fn connect_to_bootstrap_nodes(&self) {
+        if self.bootstrap_nodes.is_empty() {
+            return;
+        }
+
+        println!("🔗 Intentando conectar a bootstrap nodes...");
+        let mut connected = 0;
+        let mut failed = 0;
+
+        for bootstrap_addr in &self.bootstrap_nodes {
+            // Evitar conectarse a sí mismo
+            let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+            if bootstrap_addr == &my_addr {
+                continue;
+            }
+
+            match self.connect_to_peer(bootstrap_addr).await {
+                Ok(_) => {
+                    println!("✅ Conectado a bootstrap node: {}", bootstrap_addr);
+                    connected += 1;
+                }
+                Err(e) => {
+                    println!("⚠️  No se pudo conectar a bootstrap node {}: {}", bootstrap_addr, e);
+                    failed += 1;
+                }
+            }
+            
+            // Pequeño delay entre conexiones
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        if connected > 0 {
+            println!("✅ Conectado a {}/{} bootstrap nodes", connected, self.bootstrap_nodes.len());
+        } else if failed > 0 {
+            println!("⚠️  No se pudo conectar a ningún bootstrap node (esto es normal si es el primer nodo)");
+        }
+    }
+
+    /**
+     * Pide la lista de peers a un peer específico
+     * @param address - Dirección del peer al que pedir la lista
+     * @returns Lista de peers o error
+     */
+    pub async fn request_peers_from_peer(&self, address: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let mut stream = TcpStream::connect(address).await?;
+        
+        let get_peers_msg = Message::GetPeers;
+        let msg_json = serde_json::to_string(&get_peers_msg)?;
+        stream.write_all(msg_json.as_bytes()).await?;
+
+        let mut buffer = [0; 4096];
+        let n = match stream.read(&mut buffer).await {
+            Ok(0) => return Err("Connection closed by peer".into()),
+            Ok(n) => n,
+            Err(e) => return Err(format!("Error reading response: {}", e).into()),
+        };
+        
+        let response_str = String::from_utf8_lossy(&buffer[..n]);
+        
+        if let Ok(Message::Peers(peer_list)) = serde_json::from_str(&response_str) {
+            Ok(peer_list)
+        } else {
+            Err("Invalid response from peer".into())
+        }
+    }
+
+    /**
+     * Intenta conectar a bootstrap nodes y seed nodes
+     * @param force - Si es true, intenta conectar incluso si ya hay peers (útil para descubrir más)
+     * @returns true si conectó a al menos un node
+     */
+    pub async fn try_bootstrap_reconnect(&self, force: bool) -> bool {
+        // Obtener información sobre peers actuales (soltar lock antes de await)
+        let (has_peers, current_peers) = {
+            let peers_guard = self.peers.lock().unwrap();
+            let has = !peers_guard.is_empty();
+            let current: HashSet<String> = peers_guard.iter().cloned().collect();
+            (has, current)
+        };
+
+        // Si ya hay peers y no es forzado, no hacer nada
+        if has_peers && !force {
+            return false;
+        }
+
+        // Combinar bootstrap nodes y seed nodes
+        let mut all_nodes: Vec<String> = Vec::new();
+        all_nodes.extend_from_slice(&self.bootstrap_nodes);
+        all_nodes.extend_from_slice(&self.seed_nodes);
+
+        if all_nodes.is_empty() {
+            return false;
+        }
+
+        let log_msg = if has_peers {
+            "🔄 Intentando conectar a bootstrap/seed nodes para descubrir más peers..."
+        } else {
+            "🔄 Sin peers conectados, intentando conectar a bootstrap/seed nodes..."
+        };
+        println!("{}", log_msg);
+
+        let mut connected = 0;
+
+        for node_addr in &all_nodes {
+            // Evitar conectarse a sí mismo
+            let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+            if node_addr == &my_addr {
+                continue;
+            }
+
+            // Si ya estamos conectados a este node, saltarlo
+            if current_peers.contains(node_addr) {
+                continue;
+            }
+
+            match self.connect_to_peer(node_addr).await {
+                Ok(_) => {
+                    // Determinar si es bootstrap o seed para el log
+                    let node_type = if self.bootstrap_nodes.contains(node_addr) {
+                        "bootstrap"
+                    } else {
+                        "seed"
+                    };
+                    println!("✅ Conectado a {} node: {}", node_type, node_addr);
+                    connected += 1;
+                    // Si no es forzado, con uno es suficiente
+                    if !force {
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Silenciosamente ignorar errores
+                }
+            }
+            
+            // Pequeño delay entre intentos
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        connected > 0
+    }
+
+    /**
+     * Descubre nuevos peers pidiendo la lista a todos los peers conectados
+     * @returns Número de nuevos peers descubiertos
+     */
+    pub async fn discover_peers(&self) -> usize {
+        let current_peers: Vec<String> = {
+            let peers_guard = self.peers.lock().unwrap();
+            peers_guard.iter().cloned().collect()
+        };
+
+        // Si no hay peers, intentar conectar a bootstrap/seed nodes primero
+        if current_peers.is_empty() {
+            // Combinar bootstrap y seed nodes para verificar si hay alguno disponible
+            let has_any_nodes = !self.bootstrap_nodes.is_empty() || !self.seed_nodes.is_empty();
+            
+            if has_any_nodes {
+                if self.try_bootstrap_reconnect(false).await {
+                    // Si reconectamos, esperar un momento y obtener la nueva lista
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    let peers_guard = self.peers.lock().unwrap();
+                    if peers_guard.is_empty() {
+                        return 0;
+                    }
+                    // Continuar con el discovery normal
+                } else {
+                    return 0;
+                }
+            } else {
+                // Sin bootstrap ni seed nodes, no hay forma de descubrir
+                return 0;
+            }
+        }
+        
+        // Re-obtener lista actualizada después de posible reconexión
+        let current_peers: Vec<String> = {
+            let peers_guard = self.peers.lock().unwrap();
+            peers_guard.iter().cloned().collect()
+        };
+
+        let mut discovered_peers = HashSet::new();
+        let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+
+        // Pedir peers a cada peer conectado
+        for peer_addr in &current_peers {
+            match self.request_peers_from_peer(peer_addr).await {
+                Ok(peer_list) => {
+                    for discovered_peer in peer_list {
+                        // Evitar agregarnos a nosotros mismos
+                        if discovered_peer != my_addr {
+                            discovered_peers.insert(discovered_peer);
+                        }
+                    }
+                }
+                Err(e) => {
+                    // Silenciosamente ignorar errores (peer puede estar desconectado)
+                    eprintln!("⚠️  Error obteniendo peers de {}: {}", peer_addr, e);
+                }
+            }
+            
+            // Pequeño delay entre requests
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+        }
+
+        // Agregar nuevos peers descubiertos a nuestra lista (sin conectar aún)
+        // Límite máximo de 200 peers para evitar crecimiento indefinido
+        const MAX_PEERS: usize = 200;
+        let mut new_peers_count = 0;
+        {
+            let mut peers_guard = self.peers.lock().unwrap();
+            let current_count = peers_guard.len();
+            
+            for discovered_peer in discovered_peers {
+                if !peers_guard.contains(&discovered_peer) {
+                    // Si ya tenemos el máximo, no agregar más
+                    if current_count + new_peers_count >= MAX_PEERS {
+                        break;
+                    }
+                    peers_guard.insert(discovered_peer.clone());
+                    new_peers_count += 1;
+                }
+            }
+        }
+
+        if new_peers_count > 0 {
+            println!("🔍 Descubiertos {} nuevos peers", new_peers_count);
+        }
+
+        new_peers_count
+    }
+
+    /**
+     * Auto-descubre peers y se conecta automáticamente a los nuevos
+     * @param max_new_connections - Máximo número de nuevas conexiones a establecer (default: 5)
+     */
+    pub async fn auto_discover_and_connect(&self, max_new_connections: usize) {
+        // Si tenemos pocos peers (menos de 3), intentar conectar a bootstrap/seed nodes también
+        // Esto ayuda a descubrir más peers incluso si ya tenemos algunos
+        let (peer_count, has_any_nodes) = {
+            let peers_guard = self.peers.lock().unwrap();
+            let count = peers_guard.len();
+            let has_nodes = !self.bootstrap_nodes.is_empty() || !self.seed_nodes.is_empty();
+            (count, has_nodes)
+        };
+        
+        if peer_count < 3 && has_any_nodes {
+            // Intentar conectar a bootstrap/seed nodes para descubrir más (force=true)
+            self.try_bootstrap_reconnect(true).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+        
+        // Primero descubrir nuevos peers
+        let discovered = self.discover_peers().await;
+        
+        // Limpiar peers fallidos antiguos (más de 10 minutos) y con muchos intentos (más de 5)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        {
+            let mut failed = self.failed_peers.lock().unwrap();
+            failed.retain(|_, (ts, attempts)| {
+                let age = now.saturating_sub(*ts);
+                // Mantener si tiene menos de 10 minutos y menos de 5 intentos
+                age < 600 && *attempts < 5
+            });
+        }
+
+        // Obtener lista de peers actuales
+        let all_peers: Vec<String> = {
+            let peers_guard = self.peers.lock().unwrap();
+            peers_guard.iter().cloned().collect()
+        };
+
+        let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+        let mut connected_count = 0;
+        let mut new_peers_to_try: Vec<String> = Vec::new();
+
+        // Separar peers nuevos descubiertos de peers fallidos para retry
+        {
+            let failed = self.failed_peers.lock().unwrap();
+            for peer_addr in &all_peers {
+                if peer_addr == &my_addr {
+                    continue;
+                }
+                
+                // Verificar si es un peer fallido que podemos reintentar
+                if let Some((failed_ts, attempts)) = failed.get(peer_addr) {
+                    let age = now.saturating_sub(*failed_ts);
+                    // Reintentar si han pasado al menos 2 minutos y tiene menos de 5 intentos
+                    if age >= 120 && *attempts < 5 {
+                        new_peers_to_try.push(peer_addr.clone());
+                    }
+                } else {
+                    // Peer nuevo o no fallido, agregar a la lista
+                    new_peers_to_try.push(peer_addr.clone());
+                }
+            }
+        }
+
+        // Limitar número de peers a intentar
+        let peers_to_try: Vec<String> = new_peers_to_try.into_iter().take(max_new_connections).collect();
+
+        // Intentar conectar a los peers
+        for peer_addr in peers_to_try {
+            // Verificar si ya estamos conectados (ping rápido con timeout más corto)
+            let is_connected = tokio::time::timeout(
+                tokio::time::Duration::from_secs(2),
+                self.ping_peer(&peer_addr)
+            ).await.unwrap_or(false);
+
+            if !is_connected {
+                // No está conectado, intentar conectar
+                match self.connect_to_peer(&peer_addr).await {
+                    Ok(_) => {
+                        println!("✅ Auto-conectado a peer: {}", peer_addr);
+                        connected_count += 1;
+                        
+                        // Remover de peers fallidos si estaba ahí
+                        let mut failed = self.failed_peers.lock().unwrap();
+                        failed.remove(&peer_addr);
+                    }
+                    Err(e) => {
+                        // Registrar como peer fallido
+                        let mut failed = self.failed_peers.lock().unwrap();
+                        let entry = failed.entry(peer_addr.clone()).or_insert((now, 0));
+                        entry.1 += 1;
+                        eprintln!("⚠️  No se pudo auto-conectar a {} (intento {}): {}", peer_addr, entry.1, e);
+                    }
+                }
+            }
+
+            // Delay entre conexiones
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        if connected_count > 0 {
+            println!("✅ Auto-conectado a {} peers", connected_count);
+        }
+    }
+
+    /**
      * Limpia peers desconectados verificando su conectividad
      */
     pub async fn cleanup_disconnected_peers(&self) {
@@ -974,6 +1391,7 @@ impl Node {
             block_count: my_count,
             latest_hash: my_latest.clone(),
             p2p_address: Some(p2p_addr),
+            network_id: Some(self.network_id.clone()),
         };
 
         let msg_json = serde_json::to_string(&version_msg)?;

@@ -1,6 +1,7 @@
 use crate::blockchain::{Block, Blockchain};
 use crate::models::Transaction;
 use crate::smart_contracts::SmartContract;
+use crate::staking::Validator;
 use rusqlite::{params, Connection, Result as SqlResult};
 use serde_json;
 
@@ -95,6 +96,23 @@ impl BlockchainDB {
             [],
         )?;
 
+        // Tabla para validadores (PoS)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS validators (
+                address TEXT PRIMARY KEY,
+                staked_amount INTEGER NOT NULL,
+                is_active INTEGER NOT NULL,
+                total_rewards INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_validated_block INTEGER NOT NULL,
+                validation_count INTEGER NOT NULL,
+                slash_count INTEGER NOT NULL,
+                unstaking_requested INTEGER NOT NULL,
+                unstaking_timestamp INTEGER
+            )",
+            [],
+        )?;
+
         // Migración: agregar nuevos campos si no existen (para bases de datos existentes)
         let _ = self.conn.execute(
             "ALTER TABLE contracts ADD COLUMN update_sequence INTEGER NOT NULL DEFAULT 0",
@@ -130,6 +148,10 @@ impl BlockchainDB {
         )?;
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_contracts_type ON contracts(contract_type)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_validators_active ON validators(is_active)",
             [],
         )?;
         Ok(())
@@ -540,6 +562,74 @@ impl BlockchainDB {
             params![peer_address, contract_address],
         )?;
         
+        Ok(())
+    }
+
+    /**
+     * Guarda un validador en la base de datos
+     */
+    pub fn save_validator(&self, validator: &Validator) -> SqlResult<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO validators 
+             (address, staked_amount, is_active, total_rewards, created_at, 
+              last_validated_block, validation_count, slash_count, unstaking_requested, unstaking_timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                validator.address,
+                validator.staked_amount,
+                if validator.is_active { 1 } else { 0 },
+                validator.total_rewards,
+                validator.created_at,
+                validator.last_validated_block,
+                validator.validation_count,
+                validator.slash_count,
+                if validator.unstaking_requested { 1 } else { 0 },
+                validator.unstaking_timestamp,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /**
+     * Carga todos los validadores desde la base de datos
+     */
+    pub fn load_validators(&self) -> SqlResult<Vec<Validator>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT address, staked_amount, is_active, total_rewards, created_at,
+                    last_validated_block, validation_count, slash_count, unstaking_requested, unstaking_timestamp
+             FROM validators"
+        )?;
+
+        let validator_iter = stmt.query_map([], |row| {
+            Ok(Validator {
+                address: row.get(0)?,
+                staked_amount: row.get(1)?,
+                is_active: row.get::<_, i32>(2)? != 0,
+                total_rewards: row.get(3)?,
+                created_at: row.get(4)?,
+                last_validated_block: row.get(5)?,
+                validation_count: row.get(6)?,
+                slash_count: row.get(7)?,
+                unstaking_requested: row.get::<_, i32>(8)? != 0,
+                unstaking_timestamp: row.get(9)?,
+            })
+        })?;
+
+        let mut validators = Vec::new();
+        for validator in validator_iter {
+            validators.push(validator?);
+        }
+        Ok(validators)
+    }
+
+    /**
+     * Elimina un validador de la base de datos
+     */
+    pub fn remove_validator(&self, address: &str) -> SqlResult<()> {
+        self.conn.execute(
+            "DELETE FROM validators WHERE address = ?1",
+            params![address],
+        )?;
         Ok(())
     }
 }
