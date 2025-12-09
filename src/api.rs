@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct AppState {
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Arc<Mutex<WalletManager>>,
-    pub db: Arc<Mutex<BlockchainDB>>,
+    pub db: Arc<Mutex<Option<BlockchainDB>>>,
     pub node: Option<Arc<Node>>,
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,

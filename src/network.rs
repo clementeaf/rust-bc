@@ -60,7 +60,7 @@ pub struct Node {
     pub peers: Arc<Mutex<HashSet<String>>>,
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-    pub db: Option<Arc<Mutex<BlockchainDB>>>,
+    pub db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub listening: bool,
     pub contract_sync_metrics: Arc<Mutex<HashMap<String, ContractSyncMetrics>>>,
@@ -120,7 +120,7 @@ impl Node {
     pub fn set_resources(
         &mut self,
         wallet_manager: Arc<Mutex<WalletManager>>,
-        db: Arc<Mutex<BlockchainDB>>,
+        db: Arc<Mutex<Option<BlockchainDB>>>,
     ) {
         self.wallet_manager = Some(wallet_manager);
         self.db = Some(db);
@@ -357,9 +357,13 @@ impl Node {
                             
                             // Guardar en base de datos si está disponible
                             if let Some(db) = &db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_blockchain(&blockchain) {
-                                    eprintln!("⚠️  Error guardando blockchain en BD: {}", e);
+                                if let Some(db) = db.as_ref() {
+                                    let db_guard = db.lock().unwrap();
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_blockchain(&blockchain) {
+                                            eprintln!("⚠️  Error guardando blockchain en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -468,9 +472,13 @@ impl Node {
                 
                 // Guardar en base de datos si está disponible
                 if let Some(db) = &db {
-                    let db_guard = db.lock().unwrap();
-                    if let Err(e) = db_guard.save_block(&block_clone) {
-                        eprintln!("⚠️  Error guardando bloque en BD: {}", e);
+                    if let Some(db) = db.as_ref() {
+                        let db_guard = db.lock().unwrap();
+                        if let Some(ref db_inner) = *db_guard {
+                            if let Err(e) = db_inner.save_block(&block_clone) {
+                                eprintln!("⚠️  Error guardando bloque en BD: {}", e);
+                            }
+                        }
                     }
                 }
                 
@@ -582,9 +590,13 @@ impl Node {
                                 
                                 // Guardar en BD si está disponible
                                 if let Some(db) = &db {
-                                    let db_guard = db.lock().unwrap();
-                                    if let Err(e) = db_guard.save_contract(&contract) {
-                                        eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
+                                    if let Some(db) = db.as_ref() {
+                                        let db_guard = db.lock().unwrap();
+                                        if let Some(ref db_inner) = *db_guard {
+                                            if let Err(e) = db_inner.save_contract(&contract) {
+                                                eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -610,9 +622,13 @@ impl Node {
                                         
                                         // Guardar en BD
                                         if let Some(db) = &db {
-                                            let db_guard = db.lock().unwrap();
-                                            if let Err(e) = db_guard.save_contract(&contract) {
-                                                eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                            if let Some(db) = db.as_ref() {
+                                                let db_guard = db.lock().unwrap();
+                                                if let Some(ref db_inner) = *db_guard {
+                                                    if let Err(e) = db_inner.save_contract(&contract) {
+                                                        eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                                    }
+                                                }
                                             }
                                         }
                                     }

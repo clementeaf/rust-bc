@@ -2,6 +2,7 @@ mod airdrop;
 mod api;
 mod billing;
 mod billing_middleware;
+mod block_storage;
 mod blockchain;
 mod cache;
 mod database;
@@ -9,6 +10,7 @@ mod middleware;
 mod models;
 mod network;
 mod smart_contracts;
+mod state_reconstructor;
 mod staking;
 
 use actix_web::{web, App, HttpServer};
@@ -18,11 +20,13 @@ use airdrop::AirdropManager;
 use api::{config_routes, AppState};
 use billing::BillingManager;
 use blockchain::Blockchain;
+use block_storage::BlockStorage;
 use cache::BalanceCache;
 use database::BlockchainDB;
 use middleware::RateLimitMiddleware;
 use models::{WalletManager, Mempool};
 use network::Node;
+use state_reconstructor::ReconstructedState;
 use staking::StakingManager;
 use std::env;
 use std::net::SocketAddr;
@@ -102,10 +106,12 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or(30);
     
     let db_path = format!("{}.db", db_name);
+    let blocks_dir = format!("{}_blocks", db_name);
 
     println!("🚀 Iniciando Blockchain API Server...");
     println!("📊 Dificultad: {}", difficulty);
     println!("💾 Base de datos: {}", db_path);
+    println!("📁 Directorio de bloques: {}", blocks_dir);
     println!("🌐 Puerto API: {}", api_port);
     println!("📡 Puerto P2P: {}", p2p_port);
     println!("🌍 Network ID: {}", network_id);
@@ -118,42 +124,163 @@ async fn main() -> std::io::Result<()> {
     println!("🔍 Auto-discovery: intervalo {}s, max conexiones {}, delay inicial {}s", 
         auto_discovery_interval, auto_discovery_max_connections, auto_discovery_initial_delay);
 
-    let db = match BlockchainDB::new(&db_path) {
-        Ok(db) => {
-            println!("✅ Base de datos conectada");
-            db
+    // Inicializar BlockStorage (nuevo sistema)
+    let block_storage = match BlockStorage::new(&blocks_dir) {
+        Ok(storage) => {
+            println!("✅ BlockStorage inicializado");
+            Some(storage)
         }
         Err(e) => {
-            eprintln!("❌ Error al conectar con la base de datos: {}", e);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Error de base de datos: {}", e),
-            ));
+            eprintln!("⚠️  Error al inicializar BlockStorage: {}", e);
+            None
         }
     };
 
-    let blockchain = match db.load_blockchain(difficulty) {
-        Ok(mut bc) => {
-            if bc.chain.is_empty() {
-                println!("📦 Creando bloque génesis...");
-                bc.create_genesis_block();
-                if let Err(e) = db.save_blockchain(&bc) {
-                    eprintln!("⚠️  Error al guardar blockchain inicial: {}", e);
-                }
-            }
-            println!("✅ Blockchain cargada: {} bloques", bc.chain.len());
-            bc
+    // Intentar conectar a BD (fallback durante migración)
+    let db = match BlockchainDB::new(&db_path) {
+        Ok(db) => {
+            println!("✅ Base de datos conectada (fallback)");
+            Some(db)
         }
         Err(e) => {
-            eprintln!("⚠️  Error al cargar blockchain, creando nueva: {}", e);
+            eprintln!("⚠️  Error al conectar con la base de datos: {}", e);
+            None
+        }
+    };
+
+    // Cargar blockchain: intentar desde archivos primero, luego BD como fallback
+    let blockchain = if let Some(ref storage) = block_storage {
+        // Intentar cargar desde archivos
+        match storage.load_all_blocks() {
+            Ok(blocks) if !blocks.is_empty() => {
+                println!("✅ Blockchain cargada desde archivos: {} bloques", blocks.len());
+                Blockchain {
+                    chain: blocks,
+                    difficulty,
+                    target_block_time: 60,
+                    difficulty_adjustment_interval: 10,
+                    max_transactions_per_block: 1000,
+                    max_block_size_bytes: 1_000_000,
+                }
+            }
+            Ok(_) => {
+                // No hay bloques en archivos, intentar desde BD
+                if let Some(ref db) = db {
+                    match db.load_blockchain(difficulty) {
+                        Ok(mut bc) => {
+                            if bc.chain.is_empty() {
+                                println!("📦 Creando bloque génesis...");
+                                bc.create_genesis_block();
+                                // Guardar en archivos
+                                if let Some(ref storage) = block_storage {
+                                    for block in &bc.chain {
+                                        if let Err(e) = storage.save_block(block) {
+                                            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
+                                        }
+                                    }
+                                }
+                            } else {
+                                println!("✅ Blockchain cargada desde BD (fallback): {} bloques", bc.chain.len());
+                                // Migrar a archivos
+                                if let Some(ref storage) = block_storage {
+                                    println!("🔄 Migrando bloques a archivos...");
+                                    for block in &bc.chain {
+                                        if let Err(e) = storage.save_block(block) {
+                                            eprintln!("⚠️  Error al migrar bloque a archivos: {}", e);
+                                        }
+                                    }
+                                    println!("✅ Migración completada");
+                                }
+                            }
+                            bc
+                        }
+                        Err(e) => {
+                            eprintln!("⚠️  Error al cargar blockchain desde BD: {}", e);
+                            let mut bc = Blockchain::new(difficulty);
+                            // Guardar bloque génesis en archivos
+                            if let Some(ref storage) = block_storage {
+                                for block in &bc.chain {
+                                    if let Err(e) = storage.save_block(block) {
+                                        eprintln!("⚠️  Error al guardar bloque génesis: {}", e);
+                                    }
+                                }
+                            }
+                            bc
+                        }
+                    }
+                } else {
+                    // Sin BD, crear nueva blockchain
+                    let mut bc = Blockchain::new(difficulty);
+                    // Guardar bloque génesis en archivos
+                    if let Some(ref storage) = block_storage {
+                        for block in &bc.chain {
+                            if let Err(e) = storage.save_block(block) {
+                                eprintln!("⚠️  Error al guardar bloque génesis: {}", e);
+                            }
+                        }
+                    }
+                    bc
+                }
+            }
+            Err(e) => {
+                eprintln!("⚠️  Error al cargar bloques desde archivos: {}", e);
+                // Fallback a BD
+                if let Some(ref db) = db {
+                    match db.load_blockchain(difficulty) {
+                        Ok(mut bc) => {
+                            if bc.chain.is_empty() {
+                                println!("📦 Creando bloque génesis...");
+                                bc.create_genesis_block();
+                            }
+                            println!("✅ Blockchain cargada desde BD (fallback): {} bloques", bc.chain.len());
+                            bc
+                        }
+                        Err(_) => {
+                            eprintln!("⚠️  Error al cargar blockchain, creando nueva");
+                            Blockchain::new(difficulty)
+                        }
+                    }
+                } else {
+                    Blockchain::new(difficulty)
+                }
+            }
+        }
+    } else {
+        // Sin BlockStorage, usar solo BD
+        if let Some(ref db) = db {
+            match db.load_blockchain(difficulty) {
+                Ok(mut bc) => {
+                    if bc.chain.is_empty() {
+                        println!("📦 Creando bloque génesis...");
+                        bc.create_genesis_block();
+                        if let Err(e) = db.save_blockchain(&bc) {
+                            eprintln!("⚠️  Error al guardar blockchain inicial: {}", e);
+                        }
+                    }
+                    println!("✅ Blockchain cargada desde BD: {} bloques", bc.chain.len());
+                    bc
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Error al cargar blockchain, creando nueva: {}", e);
+                    Blockchain::new(difficulty)
+                }
+            }
+        } else {
+            eprintln!("❌ No hay BlockStorage ni BD disponible, creando nueva blockchain");
             Blockchain::new(difficulty)
         }
     };
 
+    // Reconstruir estado desde blockchain
+    let reconstructed_state = ReconstructedState::from_blockchain(&blockchain.chain);
+    println!("✅ Estado reconstruido desde blockchain");
+    
     let mut wallet_manager = WalletManager::new();
     wallet_manager.sync_from_blockchain(&blockchain.chain);
     println!("✅ Wallets sincronizados desde blockchain");
     let wallet_manager_arc = Arc::new(Mutex::new(wallet_manager));
+    
+    // Mantener BD como Arc<Option<Mutex<BlockchainDB>>> para compatibilidad durante migración
     let db_arc = Arc::new(Mutex::new(db));
 
     let blockchain_arc = Arc::new(Mutex::new(blockchain));
@@ -163,14 +290,18 @@ async fn main() -> std::io::Result<()> {
     let balance_cache = Arc::new(BalanceCache::new());
     let billing_manager = Arc::new(BillingManager::new());
     
-    // Cargar contratos desde base de datos
+    // Cargar contratos: intentar desde estado reconstruido, luego BD como fallback
     let mut contract_manager = smart_contracts::ContractManager::new();
-    match db_arc.lock() {
-        Ok(db) => {
+    
+    // Por ahora, los contratos se mantienen en memoria (ContractManager)
+    // En el futuro, podrían reconstruirse desde blockchain si se incluyen en transacciones
+    // Por ahora, cargar desde BD como fallback durante migración
+    if let Ok(db_guard) = db_arc.lock() {
+        if let Some(ref db) = *db_guard {
             match db.load_contracts() {
                 Ok(contracts) => {
                     if !contracts.is_empty() {
-                        println!("📋 Cargando {} contratos desde base de datos...", contracts.len());
+                        println!("📋 Cargando {} contratos desde base de datos (fallback)...", contracts.len());
                         for contract in contracts {
                             let _ = contract_manager.deploy_contract(contract);
                         }
@@ -181,10 +312,6 @@ async fn main() -> std::io::Result<()> {
                     eprintln!("⚠️  Error al cargar contratos: {}", e);
                 }
             }
-            
-        }
-        Err(e) => {
-            eprintln!("⚠️  Error al acceder a BD para cargar contratos: {}", e);
         }
     }
     let contract_manager = Arc::new(RwLock::new(contract_manager));
@@ -294,20 +421,25 @@ async fn main() -> std::io::Result<()> {
         airdrop_wallet.clone(),
     ));
 
-    // Cargar tracking desde base de datos
-    match db_arc.lock() {
-        Ok(db) => {
-            match airdrop_manager.load_from_db(&db) {
+    // Cargar tracking: intentar desde estado reconstruido, luego BD como fallback
+    // Por ahora, el tracking de airdrop se reconstruye desde blockchain en cada inicio
+    // En el futuro, podríamos usar snapshots para acelerar
+    let airdrop_tracking = reconstructed_state.get_airdrop_tracking();
+    if !airdrop_tracking.is_empty() {
+        println!("📋 Tracking de airdrop reconstruido: {} nodos", airdrop_tracking.len());
+    }
+    
+    // Fallback a BD durante migración (si AirdropManager tiene método load_from_db)
+    if let Ok(db_guard) = db_arc.lock() {
+        if let Some(ref db) = *db_guard {
+            match airdrop_manager.load_from_db(db) {
                 Ok(()) => {
-                    println!("✅ Tracking de airdrop cargado desde base de datos");
+                    println!("✅ Tracking de airdrop cargado desde base de datos (fallback)");
                 }
                 Err(e) => {
                     eprintln!("⚠️  Error al cargar tracking de airdrop: {}", e);
                 }
             }
-        }
-        Err(e) => {
-            eprintln!("⚠️  Error al acceder a BD para cargar tracking: {}", e);
         }
     }
 
