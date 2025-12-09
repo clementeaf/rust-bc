@@ -119,3 +119,76 @@ export async function getMempool(): Promise<Transaction[]> {
   throw new Error(response.data.message || 'Failed to get mempool');
 }
 
+export interface Validator {
+  address: string;
+  staked_amount: number;
+  is_active: boolean;
+  total_rewards: number;
+  created_at: number;
+  last_validated_block: number;
+  validation_count: number;
+  slash_count: number;
+  unstaking_requested: boolean;
+  unstake_start_time: number | null;
+}
+
+export interface SmartContract {
+  address: string;
+  code: string;
+  state: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+  update_sequence: number;
+}
+
+export async function getValidators(): Promise<Validator[]> {
+  const response = await client.get<ApiResponse<Validator[]>>('/staking/validators');
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get validators');
+}
+
+export async function getValidator(address: string): Promise<Validator> {
+  const response = await client.get<ApiResponse<Validator>>(`/staking/validator/${address}`);
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Validator not found');
+}
+
+export async function getAllContracts(): Promise<SmartContract[]> {
+  const response = await client.get<ApiResponse<SmartContract[]>>('/contracts');
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get contracts');
+}
+
+export async function getContract(address: string): Promise<SmartContract> {
+  const response = await client.get<ApiResponse<SmartContract>>(`/contracts/${address}`);
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Contract not found');
+}
+
+export async function searchByHash(hash: string): Promise<{ type: 'block' | 'transaction' | 'wallet' | 'contract'; data: unknown }> {
+  try {
+    const block = await getBlockByHash(hash);
+    return { type: 'block', data: block };
+  } catch {
+    try {
+      const contract = await getContract(hash);
+      return { type: 'contract', data: contract };
+    } catch {
+      try {
+        const wallet = await getWallet(hash);
+        return { type: 'wallet', data: wallet };
+      } catch {
+        throw new Error('Not found');
+      }
+    }
+  }
+}
+

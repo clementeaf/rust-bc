@@ -12,6 +12,7 @@ mod staking;
 
 use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Compress;
+use actix_cors::Cors;
 use api::{config_routes, AppState};
 use billing::BillingManager;
 use blockchain::Blockchain;
@@ -330,7 +331,15 @@ async fn main() -> std::io::Result<()> {
         });
     
     let api_handle = HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .supports_credentials()
+            .max_age(3600);
+        
         App::new()
+            .wrap(cors)
             .wrap(Compress::default())
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .app_data(web::Data::new(app_state.clone()))
