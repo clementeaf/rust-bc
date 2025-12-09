@@ -47,8 +47,23 @@ impl ReconstructedState {
         let mut state = ReconstructedState::new();
         
         // Procesar cada bloque desde génesis
-        for block in chain {
+        // Si hay muchos bloques, mostrar progreso
+        let total = chain.len();
+        if total > 100 {
+            println!("🔄 Reconstruyendo estado desde {} bloques...", total);
+        }
+        
+        for (i, block) in chain.iter().enumerate() {
             state.process_block(block);
+            
+            // Mostrar progreso cada 1000 bloques
+            if total > 1000 && i > 0 && i % 1000 == 0 {
+                println!("   Procesados {}/{} bloques...", i, total);
+            }
+        }
+        
+        if total > 100 {
+            println!("✅ Estado reconstruido: {} bloques procesados", total);
         }
         
         state

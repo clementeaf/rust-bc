@@ -80,7 +80,14 @@ impl BlockStorage {
         let mut blocks = Vec::new();
         
         // Leer todos los archivos block_*.dat
-        let entries = fs::read_dir(&self.blocks_dir)?;
+        let entries = match fs::read_dir(&self.blocks_dir) {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Directorio no existe aún, retornar vacío
+                return Ok(Vec::new());
+            }
+            Err(e) => return Err(e),
+        };
         
         for entry in entries {
             let entry = entry?;
@@ -89,11 +96,18 @@ impl BlockStorage {
             if let Some(filename) = path.file_name() {
                 if let Some(filename_str) = filename.to_str() {
                     if filename_str.starts_with("block_") && filename_str.ends_with(".dat") {
-                        let data = fs::read(&path)?;
-                        match bincode::deserialize::<Block>(&data) {
-                            Ok(block) => blocks.push(block),
+                        match fs::read(&path) {
+                            Ok(data) => {
+                                match bincode::deserialize::<Block>(&data) {
+                                    Ok(block) => blocks.push(block),
+                                    Err(e) => {
+                                        eprintln!("⚠️  Error deserializando bloque {}: {}", filename_str, e);
+                                        continue;
+                                    }
+                                }
+                            }
                             Err(e) => {
-                                eprintln!("⚠️  Error deserializando bloque {}: {}", filename_str, e);
+                                eprintln!("⚠️  Error leyendo bloque {}: {}", filename_str, e);
                                 continue;
                             }
                         }

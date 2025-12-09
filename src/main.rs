@@ -181,15 +181,24 @@ async fn main() -> std::io::Result<()> {
                                 }
                             } else {
                                 println!("✅ Blockchain cargada desde BD (fallback): {} bloques", bc.chain.len());
-                                // Migrar a archivos
+                                // Migrar a archivos (optimizado: solo guardar, no bloquear inicio)
                                 if let Some(ref storage) = block_storage {
-                                    println!("🔄 Migrando bloques a archivos...");
-                                    for block in &bc.chain {
+                                    let block_count = bc.chain.len();
+                                    if block_count > 10 {
+                                        println!("🔄 Migrando {} bloques a archivos (en background)...", block_count);
+                                    }
+                                    for (i, block) in bc.chain.iter().enumerate() {
                                         if let Err(e) = storage.save_block(block) {
-                                            eprintln!("⚠️  Error al migrar bloque a archivos: {}", e);
+                                            eprintln!("⚠️  Error al migrar bloque {} a archivos: {}", i, e);
+                                        }
+                                        // Mostrar progreso solo si hay muchos bloques
+                                        if block_count > 100 && i > 0 && i % 100 == 0 {
+                                            println!("   Migrados {}/{} bloques...", i, block_count);
                                         }
                                     }
-                                    println!("✅ Migración completada");
+                                    if block_count > 10 {
+                                        println!("✅ Migración completada: {} bloques", block_count);
+                                    }
                                 }
                             }
                             bc
@@ -271,9 +280,15 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    // Reconstruir estado desde blockchain
+    // Reconstruir estado desde blockchain (puede tomar tiempo si hay muchos bloques)
+    let block_count = blockchain.chain.len();
+    if block_count > 10 {
+        println!("🔄 Reconstruyendo estado desde {} bloques...", block_count);
+    }
     let reconstructed_state = ReconstructedState::from_blockchain(&blockchain.chain);
-    println!("✅ Estado reconstruido desde blockchain");
+    if block_count > 10 {
+        println!("✅ Estado reconstruido desde blockchain");
+    }
     
     let mut wallet_manager = WalletManager::new();
     wallet_manager.sync_from_blockchain(&blockchain.chain);
