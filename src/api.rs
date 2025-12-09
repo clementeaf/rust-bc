@@ -1,3 +1,4 @@
+use crate::airdrop::AirdropManager;
 use crate::blockchain::{Block, Blockchain};
 use crate::billing::{BillingManager, BillingTier, UsageStats};
 use crate::cache::BalanceCache;
@@ -26,6 +27,7 @@ pub struct AppState {
     pub billing_manager: Arc<BillingManager>,
     pub contract_manager: Arc<RwLock<ContractManager>>,
     pub staking_manager: Arc<StakingManager>,
+    pub airdrop_manager: Arc<AirdropManager>,
 }
 
 /**
@@ -606,6 +608,7 @@ pub async fn mine_block(
     let blockchain_state = state.blockchain.clone();
     let wallet_manager_state = state.wallet_manager.clone();
     let staking_manager_state = state.staking_manager.clone();
+    let airdrop_manager_state = state.airdrop_manager.clone();
     
     // Seleccionar validador usando PoS
     let previous_hash = {
@@ -615,13 +618,14 @@ pub async fn mine_block(
     
     let validator_address = staking_manager_state.select_validator(&previous_hash);
     
+    let miner_address_clone = req.miner_address.clone();
     let (hash, latest, reward, validator) = actix_web::web::block(move || {
         let mut blockchain = blockchain_state.lock().unwrap_or_else(|e| e.into_inner());
         let wallet_manager = wallet_manager_state.lock().unwrap_or_else(|e| e.into_inner());
         
         // Si hay validadores, usar PoS; si no, usar PoW con miner_address
         let validator_addr = validator_address.clone();
-        let address_to_use = validator_addr.as_ref().unwrap_or(&req.miner_address);
+        let address_to_use = validator_addr.as_ref().unwrap_or(&miner_address_clone);
         
         let reward = blockchain.calculate_mining_reward();
         match blockchain.mine_block_with_reward(address_to_use, transactions, &wallet_manager) {
@@ -633,6 +637,13 @@ pub async fn mine_block(
                     staking_manager_state.record_validation(validator_addr, latest.index, reward);
                 }
                 
+                // Registrar tracking de airdrop
+                airdrop_manager_state.record_block_validation(
+                    address_to_use,
+                    latest.index,
+                    latest.timestamp,
+                );
+                
                 Ok((h, latest, reward, validator_addr))
             }
             Err(e) => Err(e),
@@ -641,6 +652,14 @@ pub async fn mine_block(
     .await
     .map_err(|e| actix_web::error::ErrorInternalServerError(format!("Mining error: {}", e)))?
     .map_err(|e| actix_web::error::ErrorBadRequest(e))?;
+
+    // Guardar tracking en base de datos
+    {
+        let address_to_save = validator.as_ref().unwrap_or(&req.miner_address);
+        if let Ok(db) = state.db.lock() {
+            let _ = state.airdrop_manager.save_to_db(&db, address_to_save);
+        }
+    }
 
     {
         let mut wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
@@ -2208,6 +2227,150 @@ pub async fn get_my_stake(state: web::Data<AppState>, address: web::Path<String>
 }
 
 /**
+ * Request para reclamar airdrop
+ */
+#[derive(Deserialize)]
+pub struct ClaimAirdropRequest {
+    pub node_address: String,
+}
+
+/**
+ * Reclamar airdrop para un nodo elegible
+ */
+pub async fn claim_airdrop(
+    state: web::Data<AppState>,
+    req: web::Json<ClaimAirdropRequest>,
+) -> ActixResult<HttpResponse> {
+    let node_address = req.node_address.clone();
+
+    // Verificar elegibilidad
+    if !state.airdrop_manager.is_eligible(&node_address) {
+        let response: ApiResponse<String> = ApiResponse::error(
+            "Node is not eligible for airdrop or has already claimed".to_string(),
+        );
+        return Ok(HttpResponse::BadRequest().json(response));
+    }
+
+    // Obtener información del tracking
+    let tracking = match state.airdrop_manager.get_node_tracking(&node_address) {
+        Some(t) => t,
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Node tracking not found".to_string());
+            return Ok(HttpResponse::NotFound().json(response));
+        }
+    };
+
+    // Verificar que el wallet de airdrop tenga suficiente balance
+    let airdrop_amount = state.airdrop_manager.get_airdrop_amount();
+    let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
+
+    let airdrop_wallet_balance = {
+        let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+        blockchain.calculate_balance(&airdrop_wallet)
+    };
+
+    if airdrop_wallet_balance < airdrop_amount {
+        let response: ApiResponse<String> = ApiResponse::error(
+            format!(
+                "Insufficient airdrop wallet balance. Required: {}, Available: {}",
+                airdrop_amount, airdrop_wallet_balance
+            ),
+        );
+        return Ok(HttpResponse::PaymentRequired().json(response));
+    }
+
+    // Crear transacción de airdrop
+    let mut wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
+    
+    let wallet_for_signing = match wallet_manager.get_wallet_for_signing(&airdrop_wallet) {
+        Some(w) => w,
+        None => {
+            drop(wallet_manager);
+            let response: ApiResponse<String> = ApiResponse::error(
+                format!(
+                    "Airdrop wallet '{}' not found. Please ensure the wallet exists (create it via /api/v1/wallets/create) and has sufficient balance. You can configure AIRDROP_WALLET environment variable to use a specific wallet address.",
+                    airdrop_wallet
+                ),
+            );
+            return Ok(HttpResponse::BadRequest().json(response));
+        }
+    };
+
+    let mut airdrop_tx = Transaction::new_with_fee(
+        airdrop_wallet.clone(),
+        node_address.clone(),
+        airdrop_amount,
+        0,
+        None,
+    );
+
+    wallet_for_signing.sign_transaction(&mut airdrop_tx);
+    drop(wallet_manager);
+
+    // Agregar transacción al mempool
+    {
+        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = mempool.add_transaction(airdrop_tx.clone());
+    }
+
+    // Marcar como reclamado
+    state.airdrop_manager.mark_as_claimed(&node_address);
+
+    // Guardar en base de datos
+    {
+        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = state.airdrop_manager.save_claim_to_db(&db, &node_address);
+        let _ = state.airdrop_manager.save_to_db(&db, &node_address);
+    }
+
+    let response: ApiResponse<serde_json::Value> = ApiResponse::success(serde_json::json!({
+        "node_address": node_address,
+        "airdrop_amount": airdrop_amount,
+        "transaction_id": airdrop_tx.id,
+        "message": "Airdrop claimed successfully. Transaction added to mempool."
+    }));
+
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtener información de tracking de un nodo
+ */
+pub async fn get_node_tracking(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ActixResult<HttpResponse> {
+    match state.airdrop_manager.get_node_tracking(&address) {
+        Some(tracking) => {
+            let response: ApiResponse<crate::airdrop::NodeTracking> = ApiResponse::success(tracking);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Node tracking not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * Obtener estadísticas del airdrop
+ */
+pub async fn get_airdrop_statistics(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+    let stats = state.airdrop_manager.get_statistics();
+    let response: ApiResponse<crate::airdrop::AirdropStatistics> = ApiResponse::success(stats);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtener lista de nodos elegibles
+ */
+pub async fn get_eligible_nodes(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+    let nodes = state.airdrop_manager.get_eligible_nodes();
+    let response: ApiResponse<Vec<crate::airdrop::NodeTracking>> = ApiResponse::success(nodes);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
@@ -2259,7 +2422,12 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/staking/complete-unstake/{address}", web::post().to(complete_unstake))
             .route("/staking/validators", web::get().to(get_validators))
             .route("/staking/validator/{address}", web::get().to(get_validator))
-            .route("/staking/my-stake/{address}", web::get().to(get_my_stake)),
+            .route("/staking/my-stake/{address}", web::get().to(get_my_stake))
+            // Airdrop endpoints
+            .route("/airdrop/claim", web::post().to(claim_airdrop))
+            .route("/airdrop/tracking/{address}", web::get().to(get_node_tracking))
+            .route("/airdrop/statistics", web::get().to(get_airdrop_statistics))
+            .route("/airdrop/eligible", web::get().to(get_eligible_nodes)),
     );
 }
 

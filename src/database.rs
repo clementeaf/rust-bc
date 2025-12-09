@@ -1,3 +1,4 @@
+use crate::airdrop::NodeTracking;
 use crate::blockchain::{Block, Blockchain};
 use crate::models::Transaction;
 use crate::smart_contracts::SmartContract;
@@ -96,6 +97,34 @@ impl BlockchainDB {
             [],
         )?;
 
+        // Tabla para tracking de nodos (Airdrop)
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS node_tracking (
+                node_address TEXT PRIMARY KEY,
+                first_block_index INTEGER NOT NULL,
+                first_block_timestamp INTEGER NOT NULL,
+                blocks_validated INTEGER NOT NULL DEFAULT 0,
+                last_block_timestamp INTEGER NOT NULL,
+                is_eligible INTEGER NOT NULL DEFAULT 0,
+                airdrop_claimed INTEGER NOT NULL DEFAULT 0,
+                claim_timestamp INTEGER
+            )",
+            [],
+        )?;
+
+        // Tabla para claims de airdrop
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS airdrop_claims (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_address TEXT NOT NULL UNIQUE,
+                claim_timestamp INTEGER NOT NULL,
+                airdrop_amount INTEGER NOT NULL,
+                transaction_hash TEXT,
+                block_index INTEGER
+            )",
+            [],
+        )?;
+
         // Tabla para validadores (PoS)
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS validators (
@@ -144,6 +173,18 @@ impl BlockchainDB {
         )?;
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_contracts_owner ON contracts(owner)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_node_tracking_address ON node_tracking(node_address)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_node_tracking_eligible ON node_tracking(is_eligible)",
+            [],
+        )?;
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_airdrop_claims_address ON airdrop_claims(node_address)",
             [],
         )?;
         self.conn.execute(
@@ -631,6 +672,105 @@ impl BlockchainDB {
             params![address],
         )?;
         Ok(())
+    }
+
+    /**
+     * Guarda información de tracking de un nodo
+     */
+    pub fn save_node_tracking(&self, tracking: &NodeTracking) -> SqlResult<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO node_tracking 
+             (node_address, first_block_index, first_block_timestamp, blocks_validated,
+              last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                tracking.node_address,
+                tracking.first_block_index,
+                tracking.first_block_timestamp,
+                tracking.blocks_validated,
+                tracking.last_block_timestamp,
+                if tracking.is_eligible { 1 } else { 0 },
+                if tracking.airdrop_claimed { 1 } else { 0 },
+                tracking.claim_timestamp,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /**
+     * Carga todos los tracking de nodos desde la base de datos
+     */
+    pub fn load_node_tracking(&self) -> SqlResult<Vec<NodeTracking>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_address, first_block_index, first_block_timestamp, blocks_validated,
+                    last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp
+             FROM node_tracking"
+        )?;
+
+        let tracking_iter = stmt.query_map([], |row| {
+            Ok(NodeTracking {
+                node_address: row.get(0)?,
+                first_block_index: row.get(1)?,
+                first_block_timestamp: row.get(2)?,
+                blocks_validated: row.get(3)?,
+                last_block_timestamp: row.get(4)?,
+                is_eligible: row.get::<_, i32>(5)? != 0,
+                airdrop_claimed: row.get::<_, i32>(6)? != 0,
+                claim_timestamp: row.get(7)?,
+            })
+        })?;
+
+        let mut trackings = Vec::new();
+        for tracking in tracking_iter {
+            trackings.push(tracking?);
+        }
+        Ok(trackings)
+    }
+
+    /**
+     * Guarda un claim de airdrop
+     */
+    pub fn save_airdrop_claim(&self, tracking: &NodeTracking) -> SqlResult<()> {
+        if let Some(claim_timestamp) = tracking.claim_timestamp {
+            self.conn.execute(
+                "INSERT OR REPLACE INTO airdrop_claims 
+                 (node_address, claim_timestamp, airdrop_amount, transaction_hash, block_index)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    tracking.node_address,
+                    claim_timestamp,
+                    0, // Se actualizará cuando se procese la transacción
+                    "", // Se actualizará cuando se procese la transacción
+                    tracking.first_block_index,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    /**
+     * Obtiene todos los claims de airdrop
+     */
+    pub fn get_airdrop_claims(&self) -> SqlResult<Vec<(String, u64, Option<String>, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_address, claim_timestamp, transaction_hash, block_index
+             FROM airdrop_claims"
+        )?;
+
+        let claim_iter = stmt.query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+            ))
+        })?;
+
+        let mut claims = Vec::new();
+        for claim in claim_iter {
+            claims.push(claim?);
+        }
+        Ok(claims)
     }
 }
 

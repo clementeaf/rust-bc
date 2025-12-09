@@ -1,3 +1,4 @@
+mod airdrop;
 mod api;
 mod billing;
 mod billing_middleware;
@@ -13,6 +14,7 @@ mod staking;
 use actix_web::{web, App, HttpServer};
 use actix_web::middleware::Compress;
 use actix_cors::Cors;
+use airdrop::AirdropManager;
 use api::{config_routes, AppState};
 use billing::BillingManager;
 use blockchain::Blockchain;
@@ -272,6 +274,43 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
+    // Inicializar AirdropManager
+    let max_eligible_nodes = env::var("AIRDROP_MAX_NODES")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(500);
+    
+    let airdrop_amount_per_node = env::var("AIRDROP_AMOUNT_PER_NODE")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(1000);
+    
+    let airdrop_wallet = env::var("AIRDROP_WALLET")
+        .unwrap_or_else(|_| "AIRDROP".to_string());
+    
+    let airdrop_manager = Arc::new(AirdropManager::new(
+        max_eligible_nodes,
+        airdrop_amount_per_node,
+        airdrop_wallet.clone(),
+    ));
+
+    // Cargar tracking desde base de datos
+    match db_arc.lock() {
+        Ok(db) => {
+            match airdrop_manager.load_from_db(&db) {
+                Ok(()) => {
+                    println!("✅ Tracking de airdrop cargado desde base de datos");
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Error al cargar tracking de airdrop: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("⚠️  Error al acceder a BD para cargar tracking: {}", e);
+        }
+    }
+
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
@@ -282,6 +321,7 @@ async fn main() -> std::io::Result<()> {
         billing_manager: billing_manager.clone(),
         contract_manager: contract_manager.clone(),
         staking_manager: staking_manager.clone(),
+        airdrop_manager: airdrop_manager.clone(),
     };
 
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);
