@@ -192,3 +192,137 @@ export async function searchByHash(hash: string): Promise<{ type: 'block' | 'tra
   }
 }
 
+/**
+ * Airdrop interfaces and functions
+ */
+export interface NodeTracking {
+  node_address: string;
+  first_block_index: number;
+  first_block_timestamp: number;
+  blocks_validated: number;
+  last_block_timestamp: number;
+  is_eligible: boolean;
+  airdrop_claimed: boolean;
+  claim_timestamp: number | null;
+  claim_transaction_id: string | null;
+  claim_block_index: number | null;
+  claim_verified: boolean;
+  uptime_seconds: number;
+  eligibility_tier: number;
+}
+
+export interface AirdropStatistics {
+  total_nodes: number;
+  eligible_nodes: number;
+  claimed_nodes: number;
+  pending_claims: number;
+  pending_verification: number;
+  verified_claims: number;
+  airdrop_amount_per_node: number;
+  total_distributed: number;
+  max_eligible_nodes: number;
+  tiers_count: number;
+}
+
+export interface EligibilityInfo {
+  is_eligible: boolean;
+  node_address: string;
+  tier: number;
+  estimated_amount: number;
+  blocks_validated: number;
+  uptime_days: number;
+  requirements: {
+    min_blocks_validated: number;
+    min_uptime_days: number;
+    max_eligible_nodes: number;
+    current_blocks: number;
+    current_uptime_days: number;
+    meets_blocks_requirement: boolean;
+    meets_uptime_requirement: boolean;
+    meets_position_requirement: boolean;
+  };
+}
+
+export interface ClaimRecord {
+  node_address: string;
+  claim_timestamp: number;
+  airdrop_amount: number;
+  transaction_id: string;
+  block_index: number | null;
+  tier_id: number;
+  verified: boolean;
+  verification_timestamp: number | null;
+}
+
+export interface AirdropTier {
+  tier_id: number;
+  name: string;
+  min_block_index: number;
+  max_block_index: number;
+  base_amount: number;
+  bonus_per_block: number;
+  bonus_per_uptime_day: number;
+}
+
+export async function getAirdropStatistics(): Promise<AirdropStatistics> {
+  const response = await client.get<ApiResponse<AirdropStatistics>>('/airdrop/statistics');
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get airdrop statistics');
+}
+
+export async function getEligibilityInfo(address: string): Promise<EligibilityInfo> {
+  const response = await client.get<ApiResponse<EligibilityInfo>>(`/airdrop/eligibility/${address}`);
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get eligibility info');
+}
+
+export async function getEligibleNodes(): Promise<NodeTracking[]> {
+  const response = await client.get<ApiResponse<NodeTracking[]>>('/airdrop/eligible');
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get eligible nodes');
+}
+
+export async function getClaimHistory(limit?: number, nodeAddress?: string): Promise<ClaimRecord[]> {
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', limit.toString());
+  if (nodeAddress) params.append('node_address', nodeAddress);
+  
+  const response = await client.get<ApiResponse<ClaimRecord[]>>(`/airdrop/history?${params.toString()}`);
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get claim history');
+}
+
+export async function getAirdropTiers(): Promise<AirdropTier[]> {
+  const response = await client.get<ApiResponse<AirdropTier[]>>('/airdrop/tiers');
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get airdrop tiers');
+}
+
+export async function claimAirdrop(nodeAddress: string): Promise<{ node_address: string; airdrop_amount: number; transaction_id: string; tier: number; message: string }> {
+  const response = await client.post<ApiResponse<{ node_address: string; airdrop_amount: number; transaction_id: string; tier: number; message: string }>>('/airdrop/claim', {
+    node_address: nodeAddress,
+  });
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to claim airdrop');
+}
+
+export async function getNodeTracking(address: string): Promise<NodeTracking> {
+  const response = await client.get<ApiResponse<NodeTracking>>(`/airdrop/tracking/${address}`);
+  if (response.data.success && response.data.data) {
+    return response.data.data;
+  }
+  throw new Error(response.data.message || 'Failed to get node tracking');
+}
+
