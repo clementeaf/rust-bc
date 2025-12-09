@@ -107,7 +107,12 @@ impl BlockchainDB {
                 last_block_timestamp INTEGER NOT NULL,
                 is_eligible INTEGER NOT NULL DEFAULT 0,
                 airdrop_claimed INTEGER NOT NULL DEFAULT 0,
-                claim_timestamp INTEGER
+                claim_timestamp INTEGER,
+                claim_transaction_id TEXT,
+                claim_block_index INTEGER,
+                claim_verified INTEGER NOT NULL DEFAULT 0,
+                uptime_seconds INTEGER NOT NULL DEFAULT 0,
+                eligibility_tier INTEGER NOT NULL DEFAULT 0
             )",
             [],
         )?;
@@ -116,11 +121,16 @@ impl BlockchainDB {
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS airdrop_claims (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                node_address TEXT NOT NULL UNIQUE,
+                node_address TEXT NOT NULL,
                 claim_timestamp INTEGER NOT NULL,
                 airdrop_amount INTEGER NOT NULL,
+                transaction_id TEXT NOT NULL,
                 transaction_hash TEXT,
-                block_index INTEGER
+                block_index INTEGER,
+                tier_id INTEGER NOT NULL,
+                verified INTEGER NOT NULL DEFAULT 0,
+                verification_timestamp INTEGER,
+                retry_count INTEGER NOT NULL DEFAULT 0
             )",
             [],
         )?;
@@ -681,8 +691,9 @@ impl BlockchainDB {
         self.conn.execute(
             "INSERT OR REPLACE INTO node_tracking 
              (node_address, first_block_index, first_block_timestamp, blocks_validated,
-              last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+              last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp,
+              claim_transaction_id, claim_block_index, claim_verified, uptime_seconds, eligibility_tier)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 tracking.node_address,
                 tracking.first_block_index,
@@ -692,6 +703,11 @@ impl BlockchainDB {
                 if tracking.is_eligible { 1 } else { 0 },
                 if tracking.airdrop_claimed { 1 } else { 0 },
                 tracking.claim_timestamp,
+                tracking.claim_transaction_id,
+                tracking.claim_block_index,
+                if tracking.claim_verified { 1 } else { 0 },
+                tracking.uptime_seconds,
+                tracking.eligibility_tier,
             ],
         )?;
         Ok(())
@@ -703,7 +719,8 @@ impl BlockchainDB {
     pub fn load_node_tracking(&self) -> SqlResult<Vec<NodeTracking>> {
         let mut stmt = self.conn.prepare(
             "SELECT node_address, first_block_index, first_block_timestamp, blocks_validated,
-                    last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp
+                    last_block_timestamp, is_eligible, airdrop_claimed, claim_timestamp,
+                    claim_transaction_id, claim_block_index, claim_verified, uptime_seconds, eligibility_tier
              FROM node_tracking"
         )?;
 
@@ -717,6 +734,11 @@ impl BlockchainDB {
                 is_eligible: row.get::<_, i32>(5)? != 0,
                 airdrop_claimed: row.get::<_, i32>(6)? != 0,
                 claim_timestamp: row.get(7)?,
+                claim_transaction_id: row.get(8)?,
+                claim_block_index: row.get(9)?,
+                claim_verified: row.get::<_, i32>(10)? != 0,
+                uptime_seconds: row.get(11).unwrap_or(0),
+                eligibility_tier: row.get(12).unwrap_or(0),
             })
         })?;
 
@@ -732,16 +754,22 @@ impl BlockchainDB {
      */
     pub fn save_airdrop_claim(&self, tracking: &NodeTracking) -> SqlResult<()> {
         if let Some(claim_timestamp) = tracking.claim_timestamp {
+            let transaction_id = tracking.claim_transaction_id.as_deref().unwrap_or("");
             self.conn.execute(
                 "INSERT OR REPLACE INTO airdrop_claims 
-                 (node_address, claim_timestamp, airdrop_amount, transaction_hash, block_index)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                 (node_address, claim_timestamp, airdrop_amount, transaction_id, transaction_hash, block_index, tier_id, verified, verification_timestamp, retry_count)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 params![
                     tracking.node_address,
                     claim_timestamp,
                     0, // Se actualizará cuando se procese la transacción
+                    transaction_id,
                     "", // Se actualizará cuando se procese la transacción
-                    tracking.first_block_index,
+                    tracking.claim_block_index,
+                    tracking.eligibility_tier,
+                    if tracking.claim_verified { 1 } else { 0 },
+                    None::<i64>, // verification_timestamp
+                    0, // retry_count
                 ],
             )?;
         }
@@ -751,19 +779,24 @@ impl BlockchainDB {
     /**
      * Obtiene todos los claims de airdrop
      */
-    pub fn get_airdrop_claims(&self) -> SqlResult<Vec<(String, u64, Option<String>, u64)>> {
+    pub fn load_airdrop_claims(&self) -> SqlResult<Vec<crate::airdrop::ClaimRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT node_address, claim_timestamp, transaction_hash, block_index
-             FROM airdrop_claims"
+            "SELECT node_address, claim_timestamp, airdrop_amount, transaction_id, block_index, tier_id, verified, verification_timestamp
+             FROM airdrop_claims
+             ORDER BY claim_timestamp DESC"
         )?;
 
         let claim_iter = stmt.query_map([], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-            ))
+            Ok(crate::airdrop::ClaimRecord {
+                node_address: row.get(0)?,
+                claim_timestamp: row.get(1)?,
+                airdrop_amount: row.get(2)?,
+                transaction_id: row.get(3)?,
+                block_index: row.get(4)?,
+                tier_id: row.get(5).unwrap_or(0),
+                verified: row.get::<_, i32>(6)? != 0,
+                verification_timestamp: row.get(7)?,
+            })
         })?;
 
         let mut claims = Vec::new();

@@ -12,6 +12,7 @@ use actix_web::web::Bytes;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /**
  * Estado compartido de la aplicación
@@ -674,6 +675,20 @@ pub async fn mine_block(
 
     if let Ok(db) = state.db.lock() {
         let _ = db.save_block(&latest);
+    }
+
+    // Verificar transacciones de airdrop en el bloque minado
+    let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
+    (*state.airdrop_manager).verify_pending_claims_in_block(&latest.transactions, latest.index, &airdrop_wallet);
+    
+    // Guardar tracking actualizado en base de datos
+    {
+        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
+        // Guardar todos los nodos que tienen claims pendientes
+        let pending = (*state.airdrop_manager).get_pending_claims();
+        for node_address in pending.keys() {
+            let _ = (*state.airdrop_manager).save_to_db(&db, node_address);
+        }
     }
 
     if let Some(node) = &state.node {
@@ -2240,8 +2255,21 @@ pub struct ClaimAirdropRequest {
 pub async fn claim_airdrop(
     state: web::Data<AppState>,
     req: web::Json<ClaimAirdropRequest>,
+    peer_addr: actix_web::HttpRequest,
 ) -> ActixResult<HttpResponse> {
     let node_address = req.node_address.clone();
+
+    // Rate limiting: máximo 10 claims por minuto por IP
+    let client_ip = peer_addr.connection_info().peer_addr()
+        .unwrap_or("unknown")
+        .to_string();
+    
+    if !(*state.airdrop_manager).check_rate_limit(&client_ip, 10) {
+        let response: ApiResponse<String> = ApiResponse::error(
+            "Rate limit exceeded. Maximum 10 claims per minute.".to_string(),
+        );
+        return Ok(HttpResponse::TooManyRequests().json(response));
+    }
 
     // Verificar elegibilidad
     if !state.airdrop_manager.is_eligible(&node_address) {
@@ -2260,8 +2288,8 @@ pub async fn claim_airdrop(
         }
     };
 
-    // Verificar que el wallet de airdrop tenga suficiente balance
-    let airdrop_amount = state.airdrop_manager.get_airdrop_amount();
+    // Calcular cantidad de airdrop basada en tier y participación
+    let airdrop_amount = state.airdrop_manager.calculate_airdrop_amount(&tracking);
     let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
 
     let airdrop_wallet_balance = {
@@ -2305,6 +2333,7 @@ pub async fn claim_airdrop(
     );
 
     wallet_for_signing.sign_transaction(&mut airdrop_tx);
+    let transaction_id = airdrop_tx.id.clone();
     drop(wallet_manager);
 
     // Agregar transacción al mempool
@@ -2313,8 +2342,25 @@ pub async fn claim_airdrop(
         let _ = mempool.add_transaction(airdrop_tx.clone());
     }
 
-    // Marcar como reclamado
-    state.airdrop_manager.mark_as_claimed(&node_address);
+    // Marcar como reclamado y agregar a pending claims
+    (*state.airdrop_manager).mark_as_claimed(&node_address, transaction_id.clone());
+    (*state.airdrop_manager).add_pending_claim(&node_address, transaction_id.clone());
+
+    // Agregar al historial
+    let claim_record = crate::airdrop::ClaimRecord {
+        node_address: node_address.clone(),
+        claim_timestamp: SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+        airdrop_amount,
+        transaction_id: transaction_id.clone(),
+        block_index: None,
+        tier_id: tracking.eligibility_tier,
+        verified: false,
+        verification_timestamp: None,
+    };
+    state.airdrop_manager.add_claim_to_history(claim_record);
 
     // Guardar en base de datos
     {
@@ -2326,8 +2372,9 @@ pub async fn claim_airdrop(
     let response: ApiResponse<serde_json::Value> = ApiResponse::success(serde_json::json!({
         "node_address": node_address,
         "airdrop_amount": airdrop_amount,
-        "transaction_id": airdrop_tx.id,
-        "message": "Airdrop claimed successfully. Transaction added to mempool."
+        "transaction_id": transaction_id,
+        "tier": tracking.eligibility_tier,
+        "message": "Airdrop claimed successfully. Transaction added to mempool. Verification pending."
     }));
 
     Ok(HttpResponse::Ok().json(response))
@@ -2367,6 +2414,51 @@ pub async fn get_airdrop_statistics(state: web::Data<AppState>) -> ActixResult<H
 pub async fn get_eligible_nodes(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
     let nodes = state.airdrop_manager.get_eligible_nodes();
     let response: ApiResponse<Vec<crate::airdrop::NodeTracking>> = ApiResponse::success(nodes);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtener información de elegibilidad de un nodo (sin hacer claim)
+ */
+pub async fn get_eligibility_info(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ActixResult<HttpResponse> {
+    match state.airdrop_manager.get_eligibility_info(&address) {
+        Some(info) => {
+            let response: ApiResponse<crate::airdrop::EligibilityInfo> = ApiResponse::success(info);
+            Ok(HttpResponse::Ok().json(response))
+        }
+        None => {
+            let response: ApiResponse<String> = ApiResponse::error("Node tracking not found".to_string());
+            Ok(HttpResponse::NotFound().json(response))
+        }
+    }
+}
+
+/**
+ * Obtener historial de claims
+ */
+pub async fn get_claim_history(
+    state: web::Data<AppState>,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> ActixResult<HttpResponse> {
+    let limit = query.get("limit")
+        .and_then(|s| s.parse::<u64>().ok());
+    let node_address = query.get("node_address")
+        .map(|s| s.as_str());
+    
+    let history = state.airdrop_manager.get_claim_history(limit, node_address);
+    let response: ApiResponse<Vec<crate::airdrop::ClaimRecord>> = ApiResponse::success(history);
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Obtener información de tiers disponibles
+ */
+pub async fn get_airdrop_tiers(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+    let tiers = state.airdrop_manager.get_tiers();
+    let response: ApiResponse<Vec<crate::airdrop::AirdropTier>> = ApiResponse::success(tiers);
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -2427,7 +2519,10 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/airdrop/claim", web::post().to(claim_airdrop))
             .route("/airdrop/tracking/{address}", web::get().to(get_node_tracking))
             .route("/airdrop/statistics", web::get().to(get_airdrop_statistics))
-            .route("/airdrop/eligible", web::get().to(get_eligible_nodes)),
+            .route("/airdrop/eligible", web::get().to(get_eligible_nodes))
+            .route("/airdrop/eligibility/{address}", web::get().to(get_eligibility_info))
+            .route("/airdrop/history", web::get().to(get_claim_history))
+            .route("/airdrop/tiers", web::get().to(get_airdrop_tiers)),
     );
 }
 
