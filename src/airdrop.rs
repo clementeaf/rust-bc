@@ -1,6 +1,6 @@
-use crate::database::BlockchainDB;
+// use crate::database::BlockchainDB; // Eliminado - ya no usamos BD
 use crate::models::Transaction;
-use rusqlite::{params, Result as SqlResult};
+use rusqlite::Result as SqlResult;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -460,39 +460,28 @@ impl AirdropManager {
     /**
      * Carga tracking desde la base de datos
      */
-    pub fn load_from_db(&self, db: &BlockchainDB) -> SqlResult<()> {
-        match db.load_node_tracking() {
-            Ok(nodes) => {
-                let mut tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
-                for node in nodes {
-                    tracking.insert(node.node_address.clone(), node);
-                }
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+    #[allow(dead_code)]
+    pub fn load_from_db(&self, _db: &dyn std::any::Any) -> SqlResult<()> {
+        // Base de datos eliminada - el tracking se reconstruye desde blockchain
+        Ok(())
     }
 
     /**
      * Guarda tracking en la base de datos
      */
-    pub fn save_to_db(&self, db: &BlockchainDB, node_address: &str) -> SqlResult<()> {
-        if let Some(tracking) = self.get_node_tracking(node_address) {
-            db.save_node_tracking(&tracking)
-        } else {
-            Ok(())
-        }
+    #[allow(dead_code)]
+    pub fn save_to_db(&self, _db: &dyn std::any::Any, _node_address: &str) -> SqlResult<()> {
+        // Base de datos eliminada - el tracking se reconstruye desde blockchain
+        Ok(())
     }
 
     /**
      * Guarda claim en la base de datos
      */
-    pub fn save_claim_to_db(&self, db: &BlockchainDB, node_address: &str) -> SqlResult<()> {
-        if let Some(tracking) = self.get_node_tracking(node_address) {
-            db.save_airdrop_claim(&tracking)
-        } else {
-            Ok(())
-        }
+    #[allow(dead_code)]
+    pub fn save_claim_to_db(&self, _db: &dyn std::any::Any, _node_address: &str) -> SqlResult<()> {
+        // Base de datos eliminada - el tracking se reconstruye desde blockchain
+        Ok(())
     }
 
     /**

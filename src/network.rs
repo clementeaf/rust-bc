@@ -1,5 +1,5 @@
 use crate::blockchain::{Block, Blockchain};
-use crate::database::BlockchainDB;
+use crate::block_storage::BlockStorage;
 use crate::models::{Transaction, WalletManager};
 use crate::smart_contracts::{ContractManager, SmartContract};
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ pub struct Node {
     pub peers: Arc<Mutex<HashSet<String>>>,
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-    pub db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
+    pub block_storage: Option<Arc<BlockStorage>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub listening: bool,
     pub contract_sync_metrics: Arc<Mutex<HashMap<String, ContractSyncMetrics>>>,
@@ -100,7 +100,7 @@ impl Node {
             peers: Arc::new(Mutex::new(HashSet::new())),
             blockchain,
             wallet_manager: None,
-            db: None,
+            block_storage: None,
             contract_manager: None,
             listening: false,
             contract_sync_metrics: Arc::new(Mutex::new(HashMap::new())),
@@ -115,15 +115,20 @@ impl Node {
     }
 
     /**
-     * Configura el wallet manager y la base de datos para el nodo
+     * Configura el wallet manager para el nodo
      */
     pub fn set_resources(
         &mut self,
         wallet_manager: Arc<Mutex<WalletManager>>,
-        db: Arc<Mutex<Option<BlockchainDB>>>,
     ) {
         self.wallet_manager = Some(wallet_manager);
-        self.db = Some(db);
+    }
+
+    /**
+     * Configura el block storage para el nodo
+     */
+    pub fn set_block_storage(&mut self, block_storage: Arc<BlockStorage>) {
+        self.block_storage = Some(block_storage);
     }
 
     /**
@@ -147,7 +152,7 @@ impl Node {
         let peers = self.peers.clone();
         let blockchain = self.blockchain.clone();
         let wallet_manager = self.wallet_manager.clone();
-        let db = self.db.clone();
+        let block_storage = self.block_storage.clone();
         let contract_manager = self.contract_manager.clone();
         let my_p2p_address = format!("{}:{}", self.address.ip(), self.address.port());
         let recent_receipts = self.recent_contract_receipts.clone();
@@ -162,7 +167,7 @@ impl Node {
                     let peers_clone = peers.clone();
                     let blockchain_clone = blockchain.clone();
                     let wallet_manager_clone = wallet_manager.clone();
-                    let db_clone = db.clone();
+                    let block_storage_clone = block_storage.clone();
                     let contract_manager_clone = contract_manager.clone();
                     let my_p2p_address_clone = my_p2p_address.clone();
                     let recent_receipts_clone = recent_receipts.clone();
@@ -175,8 +180,8 @@ impl Node {
                             stream, 
                             peers_clone, 
                             blockchain_clone, 
-                            wallet_manager_clone, 
-                            db_clone, 
+                            wallet_manager_clone,
+                            block_storage_clone,
                             contract_manager_clone, 
                             Some(my_p2p_address_clone),
                             recent_receipts_clone,
@@ -203,7 +208,7 @@ impl Node {
         peers: Arc<Mutex<HashSet<String>>>,
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
+        block_storage: Option<Arc<BlockStorage>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -230,21 +235,10 @@ impl Node {
         {
             let mut pending = pending_broadcasts.lock().unwrap();
             let mut to_remove = Vec::new();
-            for (i, (peer, contract)) in pending.iter().enumerate() {
+            for (i, (peer, _contract)) in pending.iter().enumerate() {
                 if peer == &peer_addr_str {
-                    // Intentar enviar el contrato pendiente (se intentará en background)
+                    // Marcar para remover (el contrato ya fue procesado)
                     to_remove.push(i);
-                    
-                    // Remover de BD si está disponible
-                    if let Some(db) = &db {
-                        if let Ok(db_guard) = db.lock() {
-                            if let Some(ref db_inner) = *db_guard {
-                                if let Err(e) = db_inner.remove_pending_broadcast(peer, &contract.address) {
-                                    eprintln!("⚠️  Error removiendo broadcast pendiente de BD: {}", e);
-                                }
-                            }
-                        }
-                    }
                 }
             }
             // Remover en orden inverso para mantener índices válidos
@@ -288,8 +282,8 @@ impl Node {
                     message, 
                     &peers, 
                     &blockchain, 
-                    wallet_manager.clone(), 
-                    db.clone(), 
+                    wallet_manager.clone(),
+                    block_storage.clone(),
                     contract_manager.clone(), 
                     my_p2p_address.clone(),
                     Some(peer_addr_str.clone()),
@@ -316,7 +310,7 @@ impl Node {
         peers: &Arc<Mutex<HashSet<String>>>,
         blockchain: &Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
+        block_storage: Option<Arc<BlockStorage>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         source_peer: Option<String>,
@@ -358,13 +352,11 @@ impl Node {
                                 wm_guard.sync_from_blockchain(&blockchain.chain);
                             }
                             
-                            // Guardar en base de datos si está disponible
-                            if let Some(db) = &db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_blockchain(&blockchain) {
-                                            eprintln!("⚠️  Error guardando blockchain en BD: {}", e);
-                                        }
+                            // Guardar bloques en BlockStorage
+                            if let Some(ref storage) = block_storage {
+                                for block in &blockchain.chain {
+                                    if let Err(e) = storage.save_block(block) {
+                                        eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                                     }
                                 }
                             }
@@ -472,14 +464,10 @@ impl Node {
                     }
                 }
                 
-                // Guardar en base de datos si está disponible
-                if let Some(db) = &db {
-                    if let Ok(db_guard) = db.lock() {
-                        if let Some(ref db_inner) = *db_guard {
-                            if let Err(e) = db_inner.save_block(&block_clone) {
-                                eprintln!("⚠️  Error guardando bloque en BD: {}", e);
-                            }
-                        }
+                // Guardar bloque en BlockStorage
+                if let Some(ref storage) = block_storage {
+                    if let Err(e) = storage.save_block(&block_clone) {
+                        eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                     }
                 }
                 
@@ -588,17 +576,6 @@ impl Node {
                             // Contrato nuevo, agregarlo
                             if let Ok(_) = cm_guard.deploy_contract(contract.clone()) {
                                 synced += 1;
-                                
-                                // Guardar en BD si está disponible
-                                if let Some(db) = &db {
-                                    if let Ok(db_guard) = db.lock() {
-                                        if let Some(ref db_inner) = *db_guard {
-                                            if let Err(e) = db_inner.save_contract(&contract) {
-                                                eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
-                                            }
-                                        }
-                                    }
-                                }
                             }
                         } else {
                             // Contrato existe, verificar si necesita actualización
@@ -619,17 +596,6 @@ impl Node {
                                     if let Some(existing_mut) = cm_guard.get_contract_mut(&contract.address) {
                                         *existing_mut = contract.clone();
                                         synced += 1;
-                                        
-                                        // Guardar en BD
-                                        if let Some(db) = &db {
-                                            if let Ok(db_guard) = db.lock() {
-                                                if let Some(ref db_inner) = *db_guard {
-                                                    if let Err(e) = db_inner.save_contract(&contract) {
-                                                        eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
-                                                    }
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -710,17 +676,6 @@ impl Node {
                         // Contrato nuevo, agregarlo
                         if let Ok(_) = cm_guard.deploy_contract(contract.clone()) {
                             println!("✅ Nuevo contrato recibido y agregado: {} ({})", contract.name, contract.address);
-                            
-                            // Guardar en BD si está disponible
-                            if let Some(db) = &db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_contract(&contract) {
-                                            eprintln!("⚠️  Error guardando contrato en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         } else {
                             println!("⚠️  Error al agregar contrato recibido");
                         }
@@ -815,17 +770,6 @@ impl Node {
                             
                             println!("✅ Contrato actualizado desde peer: {} ({}), balance cambió de {} a {}", 
                                 contract.name, contract.address, old_balance, new_balance);
-                            
-                            // Guardar en BD
-                            if let Some(db) = &db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_contract(&contract) {
-                                            eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         } else {
                             println!("ℹ️  Contrato recibido es más antiguo o igual, ignorando actualización");
                         }
@@ -834,24 +778,13 @@ impl Node {
                         println!("ℹ️  Contrato no existe localmente, agregándolo como nuevo");
                         if let Ok(_) = cm_guard.deploy_contract(contract.clone()) {
                             println!("✅ Contrato recibido (no existía) y agregado: {} ({})", contract.name, contract.address);
-                            
-                            // Guardar en BD
-                            if let Some(db) = &db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_contract(&contract) {
-                                            eprintln!("⚠️  Error guardando contrato en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
-                } else {
-                    println!("⚠️  ContractManager no disponible para procesar UpdateContract");
                 }
                 Ok(None)
             }
+            
+            _ => Ok(None),
         }
     }
 
@@ -1495,12 +1428,11 @@ impl Node {
                             wm_guard.sync_from_blockchain(&blockchain.chain);
                         }
                         
-                        if let Some(db) = &self.db {
-                            if let Ok(db_guard) = db.lock() {
-                                if let Some(ref db_inner) = *db_guard {
-                                    if let Err(e) = db_inner.save_blockchain(&blockchain) {
-                                        eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
-                                    }
+                        // Guardar bloques en BlockStorage
+                        if let Some(ref storage) = self.block_storage {
+                            for block in &blockchain.chain {
+                                if let Err(e) = storage.save_block(block) {
+                                    eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                                 }
                             }
                         }
@@ -1528,12 +1460,11 @@ impl Node {
                         wm_guard.sync_from_blockchain(&blockchain.chain);
                     }
                     
-                    if let Some(db) = &self.db {
-                        if let Ok(db_guard) = db.lock() {
-                            if let Some(ref db_inner) = *db_guard {
-                                if let Err(e) = db_inner.save_blockchain(&blockchain) {
-                                    eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
-                                }
+                    // Guardar bloques en BlockStorage
+                    if let Some(ref storage) = self.block_storage {
+                        for block in &blockchain.chain {
+                            if let Err(e) = storage.save_block(block) {
+                                eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                             }
                         }
                     }
@@ -1670,17 +1601,6 @@ impl Node {
                         // Contrato nuevo, agregarlo
                         if let Ok(_) = cm_guard.deploy_contract(contract.clone()) {
                             synced += 1;
-                            
-                            // Guardar en BD si está disponible
-                            if let Some(db) = &self.db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_contract(&contract) {
-                                            eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         }
                     } else {
                         // Contrato existe, verificar si necesita actualización
@@ -1701,17 +1621,6 @@ impl Node {
                                 if let Some(existing_mut) = cm_guard.get_contract_mut(&contract.address) {
                                     *existing_mut = contract.clone();
                                     synced += 1;
-                                    
-                                    // Guardar en BD
-                                    if let Some(db) = &self.db {
-                                        if let Ok(db_guard) = db.lock() {
-                                            if let Some(ref db_inner) = *db_guard {
-                                                if let Err(e) = db_inner.save_contract(&contract) {
-                                                    eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -1780,17 +1689,6 @@ impl Node {
                             // Agregar a cola de pendientes (memoria)
                             let mut pending = self.pending_contract_broadcasts.lock().unwrap();
                             pending.push((peer_addr.clone(), contract.clone()));
-                            
-                            // Persistir a disco si hay DB disponible
-                            if let Some(db) = &self.db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_pending_broadcast(peer_addr, contract) {
-                                            eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }
@@ -1860,17 +1758,6 @@ impl Node {
                             // Agregar a cola de pendientes (memoria)
                             let mut pending = self.pending_contract_broadcasts.lock().unwrap();
                             pending.push((peer_addr.clone(), contract.clone()));
-                            
-                            // Persistir a disco si hay DB disponible
-                            if let Some(db) = &self.db {
-                                if let Ok(db_guard) = db.lock() {
-                                    if let Some(ref db_inner) = *db_guard {
-                                        if let Err(e) = db_inner.save_pending_broadcast(peer_addr, contract) {
-                                            eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }

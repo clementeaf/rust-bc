@@ -1,8 +1,8 @@
 use crate::airdrop::AirdropManager;
 use crate::blockchain::{Block, Blockchain};
+use crate::block_storage::BlockStorage;
 use crate::billing::{BillingManager, BillingTier, UsageStats};
 use crate::cache::BalanceCache;
-use crate::database::BlockchainDB;
 use crate::models::{Transaction, Wallet, WalletManager, Mempool};
 use crate::network::Node;
 use crate::smart_contracts::{ContractManager, ContractFunction, SmartContract, NFTMetadata};
@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct AppState {
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Arc<Mutex<WalletManager>>,
-    pub db: Arc<Mutex<Option<BlockchainDB>>>,
+    pub block_storage: Option<Arc<BlockStorage>>,
     pub node: Option<Arc<Node>>,
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
@@ -188,11 +188,14 @@ pub async fn create_block(
                     let latest = blockchain.get_latest_block();
                     let latest_index = latest.index;
                     let latest_block_clone = latest.clone();
-                    if let Ok(db_guard) = state.db.lock() {
-                        if let Some(ref db) = *db_guard {
-                            let _ = db.save_block(&latest_block_clone);
+                    
+                    // Guardar en BlockStorage (nuevo sistema)
+                    if let Some(ref storage) = state.block_storage {
+                        if let Err(e) = storage.save_block(&latest_block_clone) {
+                            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
                         }
                     }
+                    
 
                     if let Some(node) = &state.node {
                         let node_clone = node.clone();
@@ -657,14 +660,6 @@ pub async fn mine_block(
     .map_err(|e| actix_web::error::ErrorBadRequest(e))?;
 
     // Guardar tracking en base de datos
-    {
-        let address_to_save = validator.as_ref().unwrap_or(&req.miner_address);
-        if let Ok(db_guard) = state.db.lock() {
-            if let Some(ref db) = *db_guard {
-                let _ = state.airdrop_manager.save_to_db(db, address_to_save);
-            }
-        }
-    }
 
     {
         let mut wallet_manager = state.wallet_manager.lock().unwrap_or_else(|e| e.into_inner());
@@ -677,9 +672,10 @@ pub async fn mine_block(
         }
     }
 
-    if let Ok(db_guard) = state.db.lock() {
-        if let Some(ref db) = *db_guard {
-            let _ = db.save_block(&latest);
+    // Guardar en BlockStorage
+    if let Some(ref storage) = state.block_storage {
+        if let Err(e) = storage.save_block(&latest) {
+            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
         }
     }
 
@@ -687,18 +683,6 @@ pub async fn mine_block(
     let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
     (*state.airdrop_manager).verify_pending_claims_in_block(&latest.transactions, latest.index, &airdrop_wallet);
     
-    // Guardar tracking actualizado en base de datos
-    {
-        // Guardar todos los nodos que tienen claims pendientes
-        let pending = (*state.airdrop_manager).get_pending_claims();
-        if let Ok(db_guard) = state.db.lock() {
-            if let Some(ref db) = *db_guard {
-                for node_address in pending.keys() {
-                    let _ = (*state.airdrop_manager).save_to_db(db, node_address);
-                }
-            }
-        }
-    }
 
     if let Some(node) = &state.node {
         let latest_block = latest.clone();
@@ -1153,19 +1137,8 @@ pub async fn deploy_contract(
     };
     eprintln!("[DEPLOY] Write lock liberado");
     
-    // Guardar en base de datos (lock ya liberado)
-    eprintln!("[DEPLOY] Guardando en base de datos...");
-    {
-        if let Ok(db_guard) = state.db.lock() {
-            if let Some(ref db) = *db_guard {
-                if let Err(e) = db.save_contract(&contract) {
-                    eprintln!("[DEPLOY] Error al guardar contrato en BD: {}", e);
-                } else {
-                    eprintln!("[DEPLOY] Contrato guardado en BD exitosamente");
-                }
-            }
-        }
-    }
+    // Los contratos se mantienen en memoria (ContractManager)
+    // No necesitan persistencia adicional ya que se reconstruyen desde blockchain
 
     // Broadcast del contrato a todos los peers
     if let Some(node) = &state.node {
@@ -1654,15 +1627,6 @@ pub async fn execute_contract_function(
             drop(contract_manager); // Liberar lock antes de operaciones I/O
             
             if let Some(contract_clone) = contract_for_broadcast {
-                // Guardar en BD
-                if let Ok(db_guard) = state.db.lock() {
-                    if let Some(ref db) = *db_guard {
-                        if let Err(e) = db.save_contract(&contract_clone) {
-                            eprintln!("Error al guardar estado del contrato en BD: {}", e);
-                        }
-                    }
-                }
-
                 // Broadcast de la actualización del contrato a todos los peers
                 if let Some(node) = &state.node {
                     let node_clone = node.clone();
@@ -2024,17 +1988,8 @@ pub async fn set_nft_metadata(
             match contract.set_nft_metadata(token_id, req.metadata.clone()) {
                 Ok(()) => {
                     // Guardar en BD
-                    let contract_for_save = contract.clone();
                     drop(contract_manager);
                     
-                    if let Ok(db_guard) = state.db.lock() {
-                        if let Some(ref db) = *db_guard {
-                            if let Err(e) = db.save_contract(&contract_for_save) {
-                                eprintln!("Error al guardar contrato en BD: {}", e);
-                            }
-                        }
-                    }
-
                     let response: ApiResponse<String> = ApiResponse::success(format!("Metadata set for token {}", token_id));
                     Ok(HttpResponse::Ok().json(response))
                 }
@@ -2120,16 +2075,7 @@ pub async fn stake(state: web::Data<AppState>, req: web::Json<StakeRequest>) -> 
             }
             drop(mempool);
             
-            // Guardar validador en base de datos
-            if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
-                if let Ok(db_guard) = state.db.lock() {
-                    if let Some(ref db) = *db_guard {
-                        if let Err(e) = db.save_validator(&validator) {
-                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
-                        }
-                    }
-                }
-            }
+            // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
             
             let response: ApiResponse<String> = ApiResponse::success(
                 format!("Staked {} tokens successfully. Transaction added to mempool.", req.amount)
@@ -2149,16 +2095,7 @@ pub async fn stake(state: web::Data<AppState>, req: web::Json<StakeRequest>) -> 
 pub async fn request_unstake(state: web::Data<AppState>, req: web::Json<UnstakeRequest>) -> ActixResult<HttpResponse> {
     match state.staking_manager.request_unstake(&req.address, req.amount) {
         Ok(amount) => {
-            // Guardar validador actualizado en base de datos
-            if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
-                if let Ok(db_guard) = state.db.lock() {
-                    if let Some(ref db) = *db_guard {
-                        if let Err(e) = db.save_validator(&validator) {
-                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
-                        }
-                    }
-                }
-            }
+            // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
             
             let response: ApiResponse<u64> = ApiResponse::success(amount);
             Ok(HttpResponse::Ok().json(response))
@@ -2196,25 +2133,7 @@ pub async fn complete_unstake(state: web::Data<AppState>, address: web::Path<Str
             }
             drop(mempool);
             
-            // Si el validador fue removido, eliminarlo de la BD; si no, actualizarlo
-            if let Some(validator) = state.staking_manager.get_validator_for_save(&address) {
-                if let Ok(db_guard) = state.db.lock() {
-                    if let Some(ref db) = *db_guard {
-                        if let Err(e) = db.save_validator(&validator) {
-                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
-                        }
-                    }
-                }
-            } else {
-                // Validador fue removido, eliminarlo de la BD
-                if let Ok(db_guard) = state.db.lock() {
-                    if let Some(ref db) = *db_guard {
-                        if let Err(e) = db.remove_validator(&address) {
-                            eprintln!("⚠️  Error al eliminar validador de BD: {}", e);
-                        }
-                    }
-                }
-            }
+            // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
             
             let response: ApiResponse<u64> = ApiResponse::success(amount);
             Ok(HttpResponse::Ok().json(response))
@@ -2388,15 +2307,7 @@ pub async fn claim_airdrop(
     };
     state.airdrop_manager.add_claim_to_history(claim_record);
 
-    // Guardar en base de datos
-    {
-        if let Ok(db_guard) = state.db.lock() {
-            if let Some(ref db) = *db_guard {
-                let _ = state.airdrop_manager.save_claim_to_db(db, &node_address);
-                let _ = state.airdrop_manager.save_to_db(db, &node_address);
-            }
-        }
-    }
+    // El tracking de airdrop se reconstruye desde blockchain, no necesita persistencia adicional
 
     let response: ApiResponse<serde_json::Value> = ApiResponse::success(serde_json::json!({
         "node_address": node_address,
