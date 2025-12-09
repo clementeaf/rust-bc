@@ -65,8 +65,30 @@ export default function ContractsPage() {
         )}
 
         {contracts.length === 0 && !loading ? (
-          <div className="bg-white rounded-lg shadow p-6 text-center">
-            <p className="text-gray-600">No contracts found</p>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center py-8">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-gray-100 mb-4">
+                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay contratos desplegados</h3>
+              <p className="text-gray-600 mb-4">
+                Aún no se han desplegado contratos inteligentes en la blockchain.
+              </p>
+              <div className="bg-gray-50 rounded-lg p-4 text-left max-w-2xl mx-auto">
+                <p className="text-sm font-semibold text-gray-900 mb-2">Para desplegar un contrato:</p>
+                <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                  <li>Crear un wallet o usar uno existente</li>
+                  <li>Preparar el código del contrato (ERC-20, NFT, o contrato personalizado)</li>
+                  <li>Desplegar usando: <code className="bg-gray-200 px-1 rounded">POST /api/v1/contracts/deploy</code></li>
+                  <li>Una vez desplegado, aparecerá en esta lista</li>
+                </ol>
+                <p className="text-sm text-gray-600 mt-3">
+                  <span className="font-semibold">Tip:</span> Puedes desplegar contratos ERC-20 para tokens o NFTs para tokens no fungibles.
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow">
