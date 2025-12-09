@@ -185,12 +185,14 @@ pub async fn create_block(
                         }
                     }
 
-                    let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
                     let latest = blockchain.get_latest_block();
                     let latest_index = latest.index;
                     let latest_block_clone = latest.clone();
-                    let _ = db.save_block(&latest_block_clone);
-                    drop(db);
+                    if let Ok(db_guard) = state.db.lock() {
+                        if let Some(ref db) = *db_guard {
+                            let _ = db.save_block(&latest_block_clone);
+                        }
+                    }
 
                     if let Some(node) = &state.node {
                         let node_clone = node.clone();
@@ -657,8 +659,10 @@ pub async fn mine_block(
     // Guardar tracking en base de datos
     {
         let address_to_save = validator.as_ref().unwrap_or(&req.miner_address);
-        if let Ok(db) = state.db.lock() {
-            let _ = state.airdrop_manager.save_to_db(&db, address_to_save);
+        if let Ok(db_guard) = state.db.lock() {
+            if let Some(ref db) = *db_guard {
+                let _ = state.airdrop_manager.save_to_db(db, address_to_save);
+            }
         }
     }
 
@@ -673,8 +677,10 @@ pub async fn mine_block(
         }
     }
 
-    if let Ok(db) = state.db.lock() {
-        let _ = db.save_block(&latest);
+    if let Ok(db_guard) = state.db.lock() {
+        if let Some(ref db) = *db_guard {
+            let _ = db.save_block(&latest);
+        }
     }
 
     // Verificar transacciones de airdrop en el bloque minado
@@ -683,11 +689,14 @@ pub async fn mine_block(
     
     // Guardar tracking actualizado en base de datos
     {
-        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
         // Guardar todos los nodos que tienen claims pendientes
         let pending = (*state.airdrop_manager).get_pending_claims();
-        for node_address in pending.keys() {
-            let _ = (*state.airdrop_manager).save_to_db(&db, node_address);
+        if let Ok(db_guard) = state.db.lock() {
+            if let Some(ref db) = *db_guard {
+                for node_address in pending.keys() {
+                    let _ = (*state.airdrop_manager).save_to_db(db, node_address);
+                }
+            }
         }
     }
 
@@ -750,9 +759,12 @@ pub async fn get_mempool(state: web::Data<AppState>) -> ActixResult<HttpResponse
  */
 pub async fn health_check(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
     let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
     let mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
     let (cache_size, cache_block_index) = state.balance_cache.stats();
+    
+    // Obtener block count desde blockchain en lugar de BD
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let block_count = blockchain.chain.len() as u64;
     
     let peers_count = if let Some(node) = &state.node {
         let peers = node.peers.lock().unwrap_or_else(|e| e.into_inner());
@@ -770,7 +782,6 @@ pub async fn health_check(state: web::Data<AppState>) -> ActixResult<HttpRespons
     };
 
     drop(blockchain);
-    drop(db);
     drop(mempool);
 
     #[derive(Serialize)]
@@ -1145,11 +1156,14 @@ pub async fn deploy_contract(
     // Guardar en base de datos (lock ya liberado)
     eprintln!("[DEPLOY] Guardando en base de datos...");
     {
-        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = db.save_contract(&contract) {
-            eprintln!("[DEPLOY] Error al guardar contrato en BD: {}", e);
-        } else {
-            eprintln!("[DEPLOY] Contrato guardado en BD exitosamente");
+        if let Ok(db_guard) = state.db.lock() {
+            if let Some(ref db) = *db_guard {
+                if let Err(e) = db.save_contract(&contract) {
+                    eprintln!("[DEPLOY] Error al guardar contrato en BD: {}", e);
+                } else {
+                    eprintln!("[DEPLOY] Contrato guardado en BD exitosamente");
+                }
+            }
         }
     }
 
@@ -1641,11 +1655,13 @@ pub async fn execute_contract_function(
             
             if let Some(contract_clone) = contract_for_broadcast {
                 // Guardar en BD
-                let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-                if let Err(e) = db.save_contract(&contract_clone) {
-                    eprintln!("Error al guardar estado del contrato en BD: {}", e);
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Some(ref db) = *db_guard {
+                        if let Err(e) = db.save_contract(&contract_clone) {
+                            eprintln!("Error al guardar estado del contrato en BD: {}", e);
+                        }
+                    }
                 }
-                drop(db);
 
                 // Broadcast de la actualización del contrato a todos los peers
                 if let Some(node) = &state.node {
@@ -2011,11 +2027,13 @@ pub async fn set_nft_metadata(
                     let contract_for_save = contract.clone();
                     drop(contract_manager);
                     
-                    let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Err(e) = db.save_contract(&contract_for_save) {
-                        eprintln!("Error al guardar contrato en BD: {}", e);
+                    if let Ok(db_guard) = state.db.lock() {
+                        if let Some(ref db) = *db_guard {
+                            if let Err(e) = db.save_contract(&contract_for_save) {
+                                eprintln!("Error al guardar contrato en BD: {}", e);
+                            }
+                        }
                     }
-                    drop(db);
 
                     let response: ApiResponse<String> = ApiResponse::success(format!("Metadata set for token {}", token_id));
                     Ok(HttpResponse::Ok().json(response))
@@ -2104,9 +2122,11 @@ pub async fn stake(state: web::Data<AppState>, req: web::Json<StakeRequest>) -> 
             
             // Guardar validador en base de datos
             if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
-                if let Ok(db) = state.db.lock() {
-                    if let Err(e) = db.save_validator(&validator) {
-                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Some(ref db) = *db_guard {
+                        if let Err(e) = db.save_validator(&validator) {
+                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                        }
                     }
                 }
             }
@@ -2131,9 +2151,11 @@ pub async fn request_unstake(state: web::Data<AppState>, req: web::Json<UnstakeR
         Ok(amount) => {
             // Guardar validador actualizado en base de datos
             if let Some(validator) = state.staking_manager.get_validator_for_save(&req.address) {
-                if let Ok(db) = state.db.lock() {
-                    if let Err(e) = db.save_validator(&validator) {
-                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Some(ref db) = *db_guard {
+                        if let Err(e) = db.save_validator(&validator) {
+                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                        }
                     }
                 }
             }
@@ -2176,16 +2198,20 @@ pub async fn complete_unstake(state: web::Data<AppState>, address: web::Path<Str
             
             // Si el validador fue removido, eliminarlo de la BD; si no, actualizarlo
             if let Some(validator) = state.staking_manager.get_validator_for_save(&address) {
-                if let Ok(db) = state.db.lock() {
-                    if let Err(e) = db.save_validator(&validator) {
-                        eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Some(ref db) = *db_guard {
+                        if let Err(e) = db.save_validator(&validator) {
+                            eprintln!("⚠️  Error al guardar validador en BD: {}", e);
+                        }
                     }
                 }
             } else {
                 // Validador fue removido, eliminarlo de la BD
-                if let Ok(db) = state.db.lock() {
-                    if let Err(e) = db.remove_validator(&address) {
-                        eprintln!("⚠️  Error al eliminar validador de BD: {}", e);
+                if let Ok(db_guard) = state.db.lock() {
+                    if let Some(ref db) = *db_guard {
+                        if let Err(e) = db.remove_validator(&address) {
+                            eprintln!("⚠️  Error al eliminar validador de BD: {}", e);
+                        }
                     }
                 }
             }
@@ -2364,9 +2390,12 @@ pub async fn claim_airdrop(
 
     // Guardar en base de datos
     {
-        let db = state.db.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = state.airdrop_manager.save_claim_to_db(&db, &node_address);
-        let _ = state.airdrop_manager.save_to_db(&db, &node_address);
+        if let Ok(db_guard) = state.db.lock() {
+            if let Some(ref db) = *db_guard {
+                let _ = state.airdrop_manager.save_claim_to_db(db, &node_address);
+                let _ = state.airdrop_manager.save_to_db(db, &node_address);
+            }
+        }
     }
 
     let response: ApiResponse<serde_json::Value> = ApiResponse::success(serde_json::json!({

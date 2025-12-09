@@ -203,7 +203,7 @@ impl Node {
         peers: Arc<Mutex<HashSet<String>>>,
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        db: Option<Arc<Mutex<BlockchainDB>>>,
+        db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -237,9 +237,12 @@ impl Node {
                     
                     // Remover de BD si está disponible
                     if let Some(db) = &db {
-                        let db_guard = db.lock().unwrap();
-                        if let Err(e) = db_guard.remove_pending_broadcast(peer, &contract.address) {
-                            eprintln!("⚠️  Error removiendo broadcast pendiente de BD: {}", e);
+                        if let Ok(db_guard) = db.lock() {
+                            if let Some(ref db_inner) = *db_guard {
+                                if let Err(e) = db_inner.remove_pending_broadcast(peer, &contract.address) {
+                                    eprintln!("⚠️  Error removiendo broadcast pendiente de BD: {}", e);
+                                }
+                            }
                         }
                     }
                 }
@@ -313,7 +316,7 @@ impl Node {
         peers: &Arc<Mutex<HashSet<String>>>,
         blockchain: &Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        db: Option<Arc<Mutex<BlockchainDB>>>,
+        db: Option<Arc<Mutex<Option<BlockchainDB>>>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         my_p2p_address: Option<String>,
         source_peer: Option<String>,
@@ -357,8 +360,7 @@ impl Node {
                             
                             // Guardar en base de datos si está disponible
                             if let Some(db) = &db {
-                                if let Some(db) = db.as_ref() {
-                                    let db_guard = db.lock().unwrap();
+                                if let Ok(db_guard) = db.lock() {
                                     if let Some(ref db_inner) = *db_guard {
                                         if let Err(e) = db_inner.save_blockchain(&blockchain) {
                                             eprintln!("⚠️  Error guardando blockchain en BD: {}", e);
@@ -472,8 +474,7 @@ impl Node {
                 
                 // Guardar en base de datos si está disponible
                 if let Some(db) = &db {
-                    if let Some(db) = db.as_ref() {
-                        let db_guard = db.lock().unwrap();
+                    if let Ok(db_guard) = db.lock() {
                         if let Some(ref db_inner) = *db_guard {
                             if let Err(e) = db_inner.save_block(&block_clone) {
                                 eprintln!("⚠️  Error guardando bloque en BD: {}", e);
@@ -590,8 +591,7 @@ impl Node {
                                 
                                 // Guardar en BD si está disponible
                                 if let Some(db) = &db {
-                                    if let Some(db) = db.as_ref() {
-                                        let db_guard = db.lock().unwrap();
+                                    if let Ok(db_guard) = db.lock() {
                                         if let Some(ref db_inner) = *db_guard {
                                             if let Err(e) = db_inner.save_contract(&contract) {
                                                 eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
@@ -622,8 +622,7 @@ impl Node {
                                         
                                         // Guardar en BD
                                         if let Some(db) = &db {
-                                            if let Some(db) = db.as_ref() {
-                                                let db_guard = db.lock().unwrap();
+                                            if let Ok(db_guard) = db.lock() {
                                                 if let Some(ref db_inner) = *db_guard {
                                                     if let Err(e) = db_inner.save_contract(&contract) {
                                                         eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
@@ -714,9 +713,12 @@ impl Node {
                             
                             // Guardar en BD si está disponible
                             if let Some(db) = &db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_contract(&contract) {
-                                    eprintln!("⚠️  Error guardando contrato en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_contract(&contract) {
+                                            eprintln!("⚠️  Error guardando contrato en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -816,9 +818,12 @@ impl Node {
                             
                             // Guardar en BD
                             if let Some(db) = &db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_contract(&contract) {
-                                    eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_contract(&contract) {
+                                            eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -832,9 +837,12 @@ impl Node {
                             
                             // Guardar en BD
                             if let Some(db) = &db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_contract(&contract) {
-                                    eprintln!("⚠️  Error guardando contrato en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_contract(&contract) {
+                                            eprintln!("⚠️  Error guardando contrato en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1488,9 +1496,12 @@ impl Node {
                         }
                         
                         if let Some(db) = &self.db {
-                            let db_guard = db.lock().unwrap();
-                            if let Err(e) = db_guard.save_blockchain(&blockchain) {
-                                eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
+                            if let Ok(db_guard) = db.lock() {
+                                if let Some(ref db_inner) = *db_guard {
+                                    if let Err(e) = db_inner.save_blockchain(&blockchain) {
+                                        eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1518,9 +1529,12 @@ impl Node {
                     }
                     
                     if let Some(db) = &self.db {
-                        let db_guard = db.lock().unwrap();
-                        if let Err(e) = db_guard.save_blockchain(&blockchain) {
-                            eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
+                        if let Ok(db_guard) = db.lock() {
+                            if let Some(ref db_inner) = *db_guard {
+                                if let Err(e) = db_inner.save_blockchain(&blockchain) {
+                                    eprintln!("⚠️  Error guardando blockchain sincronizada en BD: {}", e);
+                                }
+                            }
                         }
                     }
                 } else {
@@ -1659,9 +1673,12 @@ impl Node {
                             
                             // Guardar en BD si está disponible
                             if let Some(db) = &self.db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_contract(&contract) {
-                                    eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_contract(&contract) {
+                                            eprintln!("⚠️  Error guardando contrato sincronizado en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1687,9 +1704,12 @@ impl Node {
                                     
                                     // Guardar en BD
                                     if let Some(db) = &self.db {
-                                        let db_guard = db.lock().unwrap();
-                                        if let Err(e) = db_guard.save_contract(&contract) {
-                                            eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                        if let Ok(db_guard) = db.lock() {
+                                            if let Some(ref db_inner) = *db_guard {
+                                                if let Err(e) = db_inner.save_contract(&contract) {
+                                                    eprintln!("⚠️  Error guardando contrato actualizado en BD: {}", e);
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1763,9 +1783,12 @@ impl Node {
                             
                             // Persistir a disco si hay DB disponible
                             if let Some(db) = &self.db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_pending_broadcast(peer_addr, contract) {
-                                    eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_pending_broadcast(peer_addr, contract) {
+                                            eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1840,9 +1863,12 @@ impl Node {
                             
                             // Persistir a disco si hay DB disponible
                             if let Some(db) = &self.db {
-                                let db_guard = db.lock().unwrap();
-                                if let Err(e) = db_guard.save_pending_broadcast(peer_addr, contract) {
-                                    eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
+                                if let Ok(db_guard) = db.lock() {
+                                    if let Some(ref db_inner) = *db_guard {
+                                        if let Err(e) = db_inner.save_pending_broadcast(peer_addr, contract) {
+                                            eprintln!("⚠️  Error guardando broadcast pendiente en BD: {}", e);
+                                        }
+                                    }
                                 }
                             }
                         }

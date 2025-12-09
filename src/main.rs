@@ -27,7 +27,7 @@ use middleware::RateLimitMiddleware;
 use models::{WalletManager, Mempool};
 use network::Node;
 use state_reconstructor::ReconstructedState;
-use staking::StakingManager;
+use staking::{StakingManager, Validator};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -380,24 +380,29 @@ async fn main() -> std::io::Result<()> {
         Some(slash_percentage),
     ));
 
-    // Cargar validadores desde base de datos
-    match db_arc.lock() {
-        Ok(db) => {
-            match db.load_validators() {
-                Ok(validators) => {
-                    if !validators.is_empty() {
-                        println!("📋 Cargando {} validadores desde base de datos...", validators.len());
-                        staking_manager.load_validators(validators);
-                        println!("✅ Validadores cargados exitosamente");
+    // Cargar validadores: intentar desde estado reconstruido, luego BD como fallback
+    let validators_from_state: Vec<Validator> = reconstructed_state.validators.values().cloned().collect();
+    if !validators_from_state.is_empty() {
+        println!("📋 Cargando {} validadores desde estado reconstruido...", validators_from_state.len());
+        staking_manager.load_validators(validators_from_state);
+        println!("✅ Validadores cargados exitosamente");
+    } else {
+        // Fallback a BD durante migración
+        if let Ok(db_guard) = db_arc.lock() {
+            if let Some(ref db) = *db_guard {
+                match db.load_validators() {
+                    Ok(validators) => {
+                        if !validators.is_empty() {
+                            println!("📋 Cargando {} validadores desde base de datos (fallback)...", validators.len());
+                            staking_manager.load_validators(validators);
+                            println!("✅ Validadores cargados exitosamente");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️  Error al cargar validadores: {}", e);
                     }
                 }
-                Err(e) => {
-                    eprintln!("⚠️  Error al cargar validadores: {}", e);
-                }
             }
-        }
-        Err(e) => {
-            eprintln!("⚠️  Error al acceder a BD para cargar validadores: {}", e);
         }
     }
 
