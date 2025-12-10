@@ -319,22 +319,20 @@ pub async fn create_transaction(
         }
         drop(wallet_manager);
 
-        let (balance, validation_ok) = {
+        // Validar transacción (incluye validación de fee con token nativo)
+        let (balance, validation_result) = {
             let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
             let wallet_manager = state
                 .wallet_manager
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
             let bal = blockchain.calculate_balance(&req.from);
-            let valid = blockchain
-                .validate_transaction(&tx, &wallet_manager)
-                .is_ok();
-            (bal, valid)
+            let validation = blockchain.validate_transaction(&tx, &wallet_manager);
+            (bal, validation)
         };
 
-        if !validation_ok {
-            let response: ApiResponse<Transaction> =
-                ApiResponse::error("Transacción inválida".to_string());
+        if let Err(e) = validation_result {
+            let response: ApiResponse<Transaction> = ApiResponse::error(e);
             return Ok(HttpResponse::BadRequest().json(response));
         }
 
@@ -346,14 +344,16 @@ pub async fn create_transaction(
             return Ok(HttpResponse::BadRequest().json(response));
         }
 
+        // Validar balance disponible considerando transacciones pendientes en mempool
+        // IMPORTANTE: El balance es del token nativo, los fees solo se pueden pagar con token nativo
         let pending_spent = mempool.calculate_pending_spent(&req.from);
         let total_required = tx.amount + tx.fee;
         let available_balance = balance.saturating_sub(pending_spent);
 
         if available_balance < total_required {
             let response: ApiResponse<Transaction> = ApiResponse::error(format!(
-                "Saldo insuficiente. Disponible: {}, Requerido: {} (incluyendo {} pendientes)",
-                available_balance, total_required, pending_spent
+                "Saldo insuficiente de token nativo. Disponible: {}, Requerido: {} (amount: {} + fee: {}). Pendiente en mempool: {}. Los fees solo se pueden pagar con el token nativo.",
+                available_balance, total_required, tx.amount, tx.fee, pending_spent
             ));
             return Ok(HttpResponse::BadRequest().json(response));
         }

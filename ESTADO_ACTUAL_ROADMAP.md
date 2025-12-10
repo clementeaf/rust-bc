@@ -84,19 +84,19 @@
 ---
 
 ### **PRIORIDAD 2: VALIDACIÓN DE FEES CON TOKEN NATIVO** 🔴 CRÍTICO (SIN COSTO)
-- [ ] Analizar código actual de validación de fees en `src/api.rs`
-- [ ] Identificar dónde se valida el balance para fees
-- [ ] Modificar `validate_transaction()` en `src/blockchain.rs` para validar fee con token nativo
-- [ ] Asegurar que el fee se descuenta del balance del token nativo (no otros tokens)
-- [ ] Agregar validación en `create_transaction()` de `src/api.rs`
-- [ ] Agregar validación en `add_block()` de `src/blockchain.rs`
-- [ ] Crear tests unitarios para validación de fees
-- [ ] Crear tests de integración para escenarios edge cases
-- [ ] Verificar que transacciones sin fee suficiente sean rechazadas
-- [ ] Verificar que fees se quemen correctamente (80%)
-- [ ] Verificar que fees van al minero correctamente (20%)
-- [ ] Documentar cambios en código
-- [ ] Actualizar documentación de API
+- [x] Analizar código actual de validación de fees en `src/api.rs` ✅
+- [x] Identificar dónde se valida el balance para fees ✅
+- [x] Modificar `validate_transaction()` en `src/blockchain.rs` para validar fee con token nativo ✅
+- [x] Asegurar que el fee se descuenta del balance del token nativo (no otros tokens) ✅
+- [x] Agregar validación en `create_transaction()` de `src/api.rs` ✅
+- [x] Agregar validación en `add_block()` de `src/blockchain.rs` ✅
+- [x] Crear tests unitarios para validación de fees ✅
+- [x] Crear tests de integración para escenarios edge cases ✅
+- [x] Verificar que transacciones sin fee suficiente sean rechazadas ✅
+- [x] Verificar que fees se quemen correctamente (80%) ✅ (implementado en `mine_block_with_reward`)
+- [x] Verificar que fees van al minero correctamente (20%) ✅ (implementado en `mine_block_with_reward`)
+- [x] Documentar cambios en código ✅
+- [x] Actualizar documentación de API ✅
 
 **CALIDAD Y ESTÁNDARES (OBLIGATORIO ANTES DE AVANZAR):**
 - [ ] **Compilación:** `cargo build --release` → 0 warnings, 0 errores ⚠️ BLOQUEO

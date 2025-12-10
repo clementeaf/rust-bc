@@ -472,9 +472,11 @@ impl Blockchain {
         let coinbase = Self::create_coinbase_transaction(miner_address, Some(total_reward));
 
         // Crear transacción de burn para los fees quemados
+        // Usar dirección especial de 32 caracteres para el burn
+        const BURN_ADDRESS: &str = "BURN_ADDRESS_00000000000000000000";
         let mut all_transactions = vec![coinbase];
         if fees_to_burn > 0 {
-            let burn_tx = Self::create_coinbase_transaction("BURN", Some(fees_to_burn));
+            let burn_tx = Self::create_coinbase_transaction(BURN_ADDRESS, Some(fees_to_burn));
             all_transactions.push(burn_tx);
         }
         all_transactions.extend(transactions);
@@ -697,7 +699,17 @@ impl Blockchain {
     }
 
     /**
-     * Valida una transacción verificando su firma digital
+     * Valida una transacción verificando su firma digital y balance
+     *
+     * VALIDACIÓN DE FEES CON TOKEN NATIVO:
+     * - Los fees SOLO se pueden pagar con el token nativo de la blockchain
+     * - No se pueden usar tokens ERC-20 u otros para pagar fees
+     * - El balance del token nativo debe ser suficiente para cubrir: amount + fee
+     * - Esta validación asegura que todas las transacciones generen demanda del token nativo
+     *
+     * @param tx - Transacción a validar
+     * @param wallet_manager - Gestor de wallets para verificación de firma
+     * @returns Ok(()) si la transacción es válida, Err con mensaje descriptivo si no
      */
     pub fn validate_transaction(
         &self,
@@ -731,10 +743,21 @@ impl Blockchain {
             return Err("Firma digital inválida".to_string());
         }
 
-        let balance = self.calculate_balance(&tx.from);
+        // VALIDACIÓN CRÍTICA: Fees SOLO se pueden pagar con token nativo
+        // calculate_balance() calcula el balance del token nativo desde la blockchain
+        let native_token_balance = self.calculate_balance(&tx.from);
         let total_required = tx.amount + tx.fee;
-        if balance < total_required {
-            return Err("Saldo insuficiente (incluyendo fee)".to_string());
+
+        if native_token_balance < total_required {
+            return Err(format!(
+                "Saldo insuficiente de token nativo. Disponible: {}, Requerido: {} (amount: {} + fee: {}). Los fees solo se pueden pagar con el token nativo.",
+                native_token_balance, total_required, tx.amount, tx.fee
+            ));
+        }
+
+        // Validar que el fee es mayor que 0 (excepto para transacciones especiales)
+        if tx.fee == 0 && tx.from != "0" && tx.from != "STAKING" {
+            return Err("Fee requerido: todas las transacciones deben incluir un fee > 0 pagado con token nativo".to_string());
         }
 
         if self.is_double_spend(tx) {
