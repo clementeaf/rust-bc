@@ -4,7 +4,7 @@
  */
 use rust_bc::blockchain::Blockchain;
 use rust_bc::models::WalletManager;
-use rust_bc::state_reconstructor::ReconstructedState;
+use rust_bc::ReconstructedState;
 
 #[test]
 fn test_reconstruction_sequential_vs_parallel() {
