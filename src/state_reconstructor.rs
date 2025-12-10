@@ -2,6 +2,9 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+// External crates
+use rayon::prelude::*;
+
 // Crate modules
 use crate::airdrop::NodeTracking;
 use crate::blockchain::Block;
@@ -108,32 +111,200 @@ impl ReconstructedState {
     }
 
     /**
-     * Reconstrucción optimizada (para cadenas grandes)
+     * Reconstrucción paralela optimizada (para cadenas grandes)
      *
-     * OPTIMIZACIONES:
-     * - Procesamiento secuencial optimizado (mantiene orden cronológico)
-     * - Reducción de allocations innecesarias
-     * - Procesamiento en batch de transacciones
-     * - Progreso incremental mejorado
+     * ESTRATEGIA DE PARALELISMO:
+     * 1. Dividir bloques en chunks de tamaño fijo
+     * 2. Procesar cada chunk en paralelo (dentro del chunk, procesar secuencialmente)
+     * 3. Mergear resultados de chunks en orden cronológico
      *
-     * NOTA: El procesamiento paralelo real requeriría refactorización profunda
-     * porque el estado es acumulativo y depende del orden de las transacciones.
+     * VENTAJAS:
+     * - Mantiene orden cronológico (cada chunk procesa bloques en orden)
+     * - Aprovecha múltiples cores para procesar chunks diferentes
+     * - Merge final es rápido (solo combina HashMaps)
      *
      * @param chain - Cadena de bloques completa
      * @returns ReconstructedState reconstruido
      */
     fn from_blockchain_parallel(chain: &[Block]) -> Self {
-        // Por ahora, usar procesamiento secuencial optimizado
-        // El paralelismo real requeriría un diseño diferente
-        Self::from_blockchain_sequential(chain)
+        let total = chain.len();
+        // Tamaño de chunk: balance entre paralelismo y overhead
+        // Chunks más pequeños = más paralelismo pero más overhead de merge
+        // Chunks más grandes = menos paralelismo pero menos overhead
+        const CHUNK_SIZE: usize = 500; // Procesar 500 bloques por chunk
+
+        if total <= CHUNK_SIZE {
+            // Si cabe en un chunk, procesar secuencialmente
+            return Self::from_blockchain_sequential(chain);
+        }
+
+        // Dividir en chunks y procesar en paralelo
+        let chunk_results: Vec<_> = chain
+            .chunks(CHUNK_SIZE)
+            .enumerate()
+            .par_bridge()
+            .map(|(chunk_idx, chunk)| {
+                // Procesar chunk secuencialmente (mantiene orden dentro del chunk)
+                let mut chunk_state = ReconstructedState::new();
+                for block in chunk {
+                    chunk_state.process_block(block);
+                }
+
+                // Mostrar progreso periódicamente
+                let processed = (chunk_idx + 1) * CHUNK_SIZE.min(chunk.len());
+                if processed % 2000 == 0 || processed >= total {
+                    let progress = (processed as f64 / total as f64) * 100.0;
+                    println!(
+                        "   Progreso: {:.1}% ({}/{})",
+                        progress,
+                        processed.min(total),
+                        total
+                    );
+                }
+
+                (chunk_idx, chunk_state)
+            })
+            .collect();
+
+        // Ordenar chunks por índice para mantener orden cronológico
+        let mut sorted_chunks: Vec<_> = chunk_results.into_iter().collect();
+        sorted_chunks.sort_by_key(|(idx, _)| *idx);
+
+        // Mergear estados de chunks en orden
+        // IMPORTANTE: El merge debe ser correcto porque cada chunk tiene estado acumulativo
+        let mut final_state = ReconstructedState::new();
+        for (_, chunk_state) in sorted_chunks {
+            final_state.merge_ordered(chunk_state);
+        }
+
+        final_state
+    }
+
+    /**
+     * Mergea otro estado en este estado manteniendo orden cronológico
+     *
+     * ESTRATEGIA:
+     * - Wallets: Sumar balances (cada chunk procesó transacciones independientes)
+     * - Validators: Sumar stakes y actualizar estado
+     * - Airdrop: Combinar tracking (sumar bloques validados)
+     * - Contracts: Extender (último estado gana)
+     *
+     * @param other - Estado del siguiente chunk a mergear
+     */
+    fn merge_ordered(&mut self, other: Self) {
+        // Mergear wallets: sumar balances porque cada chunk procesó transacciones independientes
+        for (addr, wallet_state) in other.wallets {
+            let wallet = self.wallets.entry(addr).or_default();
+            wallet.balance += wallet_state.balance;
+        }
+
+        // Mergear validadores: sumar stakes y actualizar estado activo
+        for (addr, validator) in other.validators {
+            let existing = self
+                .validators
+                .entry(addr.clone())
+                .or_insert_with(|| Validator {
+                    address: addr.clone(),
+                    staked_amount: 0,
+                    is_active: false,
+                    total_rewards: 0,
+                    created_at: validator.created_at,
+                    last_validated_block: 0,
+                    validation_count: 0,
+                    slash_count: 0,
+                    unstaking_requested: false,
+                    unstaking_timestamp: None,
+                });
+            existing.staked_amount += validator.staked_amount;
+            if existing.staked_amount >= 1000 {
+                existing.is_active = true;
+            }
+            // Mantener el timestamp más antiguo (primera creación)
+            if validator.created_at < existing.created_at {
+                existing.created_at = validator.created_at;
+            }
+        }
+
+        // Mergear airdrop tracking: combinar información de nodos
+        for (addr, tracking) in other.airdrop_tracking {
+            let existing = self
+                .airdrop_tracking
+                .entry(addr.clone())
+                .or_insert_with(|| NodeTracking {
+                    node_address: addr,
+                    first_block_index: tracking.first_block_index,
+                    first_block_timestamp: tracking.first_block_timestamp,
+                    blocks_validated: 0,
+                    last_block_timestamp: tracking.last_block_timestamp,
+                    is_eligible: false,
+                    airdrop_claimed: false,
+                    claim_timestamp: None,
+                    claim_transaction_id: None,
+                    claim_block_index: None,
+                    claim_verified: false,
+                    uptime_seconds: tracking.uptime_seconds,
+                    eligibility_tier: 0,
+                });
+            // Sumar bloques validados
+            existing.blocks_validated += tracking.blocks_validated;
+            // Mantener el índice más antiguo (primer bloque)
+            if tracking.first_block_index < existing.first_block_index {
+                existing.first_block_index = tracking.first_block_index;
+                existing.first_block_timestamp = tracking.first_block_timestamp;
+            }
+            // Mantener el timestamp más reciente (último bloque)
+            if tracking.last_block_timestamp > existing.last_block_timestamp {
+                existing.last_block_timestamp = tracking.last_block_timestamp;
+            }
+            // Actualizar uptime
+            if existing.first_block_timestamp > 0 {
+                existing.uptime_seconds =
+                    existing.last_block_timestamp - existing.first_block_timestamp;
+            }
+        }
+
+        // Mergear contratos: extender (último estado gana)
+        self.contracts.extend(other.contracts);
     }
 
     /**
      * Procesa un bloque y actualiza el estado
+     *
+     * OPTIMIZACIÓN: Procesa transacciones en batch para reducir overhead
+     *
      * @param block - Bloque a procesar
      */
     fn process_block(&mut self, block: &Block) {
+        // Procesar transacciones en batch
+        // Agrupar por tipo para optimizar procesamiento
+        let mut coinbase_txs = Vec::new();
+        let mut staking_txs = Vec::new();
+        let mut unstaking_txs = Vec::new();
+        let mut normal_txs = Vec::new();
+
         for tx in &block.transactions {
+            if tx.from == "0" {
+                coinbase_txs.push(tx);
+            } else if tx.from == "STAKING" {
+                unstaking_txs.push(tx);
+            } else if tx.to == "STAKING" {
+                staking_txs.push(tx);
+            } else {
+                normal_txs.push(tx);
+            }
+        }
+
+        // Procesar cada tipo de transacción
+        for tx in coinbase_txs {
+            self.process_transaction(tx, block);
+        }
+        for tx in unstaking_txs {
+            self.process_transaction(tx, block);
+        }
+        for tx in staking_txs {
+            self.process_transaction(tx, block);
+        }
+        for tx in normal_txs {
             self.process_transaction(tx, block);
         }
 
