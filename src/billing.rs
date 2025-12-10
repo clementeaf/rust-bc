@@ -172,6 +172,7 @@ impl APIKeyInfo {
     /**
      * Verifica si puede realizar una transacción
      */
+    #[allow(dead_code)]
     pub fn can_make_transaction(&self) -> bool {
         if !self.is_active {
             return false;
@@ -214,6 +215,7 @@ impl APIKeyInfo {
     /**
      * Incrementa el contador de requests
      */
+    #[allow(dead_code)]
     pub fn increment_requests(&mut self) {
         self.usage.reset_if_needed();
         self.usage.requests_today += 1;
@@ -252,23 +254,25 @@ impl BillingManager {
     pub fn create_api_key(&self, tier: BillingTier) -> Result<String, String> {
         let mut attempts = 0;
         const MAX_ATTEMPTS: u32 = 10;
-        
+
         loop {
             let key = self.generate_secure_key();
             let key_hash = Self::hash_key(&key);
-            
+
             let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-            
-            if !keys.contains_key(&key_hash) {
+
+            if let std::collections::hash_map::Entry::Vacant(e) = keys.entry(key_hash) {
                 let mut key_info = APIKeyInfo::new(tier);
-                key_info.key_hash = key_hash.clone();
-                keys.insert(key_hash, key_info);
+                key_info.key_hash = e.key().clone();
+                e.insert(key_info);
                 return Ok(key);
             }
-            
+
             attempts += 1;
             if attempts >= MAX_ATTEMPTS {
-                return Err("Error generando API key única después de múltiples intentos".to_string());
+                return Err(
+                    "Error generando API key única después de múltiples intentos".to_string(),
+                );
             }
         }
     }
@@ -297,7 +301,7 @@ impl BillingManager {
 
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 if !key_info.is_active {
@@ -313,6 +317,7 @@ impl BillingManager {
     /**
      * Verifica si una API key puede realizar una transacción
      */
+    #[allow(dead_code)]
     pub fn can_make_transaction(&self, key: &str) -> Result<bool, String> {
         let key_info = self.validate_key(key)?;
         Ok(key_info.can_make_transaction())
@@ -333,21 +338,21 @@ impl BillingManager {
 
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 if !key_info.is_active {
                     return Err("API key desactivada".to_string());
                 }
-                
+
                 key_info.usage.reset_if_needed();
-                
+
                 // Verificar límite sin incrementar (operación atómica)
                 let limit = key_info.tier.transaction_limit();
                 if limit != u64::MAX && key_info.usage.transactions_this_month >= limit {
                     return Err("Límite de transacciones alcanzado para tu tier".to_string());
                 }
-                
+
                 Ok(())
             }
             None => Err("API key no encontrada".to_string()),
@@ -377,21 +382,21 @@ impl BillingManager {
 
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 if !key_info.is_active {
                     return Err("API key desactivada".to_string());
                 }
-                
+
                 key_info.usage.reset_if_needed();
-                
+
                 // Verificar límite antes de incrementar (operación atómica)
                 let limit = key_info.tier.transaction_limit();
                 if limit != u64::MAX && key_info.usage.transactions_this_month >= limit {
                     return Err("Límite de transacciones alcanzado para tu tier".to_string());
                 }
-                
+
                 // Incrementar contador (dentro del mismo lock, operación atómica)
                 key_info.increment_transactions();
                 Ok(())
@@ -404,10 +409,11 @@ impl BillingManager {
      * Registra una transacción realizada (sin verificar límite)
      * Usar solo cuando ya se verificó el límite previamente
      */
+    #[allow(dead_code)]
     pub fn record_transaction(&self, key: &str) -> Result<(), String> {
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 key_info.increment_transactions();
@@ -423,7 +429,7 @@ impl BillingManager {
     pub fn record_wallet_creation(&self, key: &str) -> Result<(), String> {
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 key_info.increment_wallets();
@@ -436,10 +442,11 @@ impl BillingManager {
     /**
      * Registra un request
      */
+    #[allow(dead_code)]
     pub fn record_request(&self, key: &str) -> Result<(), String> {
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 key_info.increment_requests();
@@ -460,6 +467,7 @@ impl BillingManager {
     /**
      * Obtiene información completa de una API key
      */
+    #[allow(dead_code)]
     pub fn get_key_info(&self, key: &str) -> Result<APIKeyInfo, String> {
         self.validate_key(key)
     }
@@ -470,7 +478,7 @@ impl BillingManager {
     pub fn deactivate_key(&self, key: &str) -> Result<(), String> {
         let key_hash = Self::hash_key(key);
         let mut keys = self.keys.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         match keys.get_mut(&key_hash) {
             Some(key_info) => {
                 key_info.is_active = false;
@@ -483,6 +491,7 @@ impl BillingManager {
     /**
      * Obtiene el rate limit de una API key
      */
+    #[allow(dead_code)]
     pub fn get_rate_limit(&self, key: &str) -> Result<u32, String> {
         let key_info = self.validate_key(key)?;
         Ok(key_info.rate_limit_per_minute)
@@ -494,4 +503,3 @@ impl Default for BillingManager {
         Self::new()
     }
 }
-

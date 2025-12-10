@@ -2,6 +2,7 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error,
 };
+use std::task::{Context, Poll};
 use std::{
     collections::HashMap,
     future::{ready, Future, Ready},
@@ -9,7 +10,6 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use std::task::{Context, Poll};
 
 /**
  * Configuración de rate limiting
@@ -58,7 +58,7 @@ impl RateLimitInfo {
         self.cleanup_old_requests();
 
         let now = Instant::now();
-        
+
         if self.minute_requests.len() >= config.requests_per_minute as usize {
             return false;
         }
@@ -78,15 +78,17 @@ impl RateLimitInfo {
     fn check_limit_strict(&mut self, config: &RateLimitConfig) -> bool {
         let now = Instant::now();
         let second_ago = now - Duration::from_secs(1);
-        
-        let recent_requests: usize = self.minute_requests.iter()
+
+        let recent_requests: usize = self
+            .minute_requests
+            .iter()
             .filter(|&&time| time > second_ago)
             .count();
-        
+
         if recent_requests >= 5 {
             return false;
         }
-        
+
         self.check_limit(config)
     }
 }
@@ -177,7 +179,11 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        eprintln!("[MIDDLEWARE] Request recibida: {} {}", req.method(), req.path());
+        eprintln!(
+            "[MIDDLEWARE] Request recibida: {} {}",
+            req.method(),
+            req.path()
+        );
         let path = req.path().to_string();
         let ip = RateLimitMiddleware::get_client_ip(&req);
         let limits = self.limits.clone();
@@ -186,27 +192,27 @@ where
 
         Box::pin(async move {
             // Rutas públicas que no requieren rate limiting estricto
-            let public_paths = [
-                "/api/v1/health",
-                "/api/v1/billing/create-key",
-            ];
-            
+            let public_paths = ["/api/v1/health", "/api/v1/billing/create-key"];
+
             let is_public = public_paths.iter().any(|p| path.starts_with(p));
-            
+
             if !is_public {
                 let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());
-                let rate_limit_info = limits_guard.entry(ip.clone()).or_insert_with(RateLimitInfo::new);
+                let rate_limit_info = limits_guard
+                    .entry(ip.clone())
+                    .or_insert_with(RateLimitInfo::new);
 
                 if !rate_limit_info.check_limit_strict(&config) {
                     drop(limits_guard);
-                    return Err(actix_web::error::ErrorTooManyRequests("Rate limit exceeded"));
+                    return Err(actix_web::error::ErrorTooManyRequests(
+                        "Rate limit exceeded",
+                    ));
                 }
 
                 drop(limits_guard);
             }
-            
+
             fut.await
         })
     }
 }
-

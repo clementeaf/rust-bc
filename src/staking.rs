@@ -83,6 +83,13 @@ impl Validator {
         self.slash_count += 1;
         let actual_slash = slash_amount.min(self.staked_amount);
         self.staked_amount -= actual_slash;
+
+        // Si el stake cae por debajo del mínimo después de slashing, desactivar
+        if self.staked_amount < 1000 {
+            // min_stake típico
+            self.is_active = false;
+        }
+
         actual_slash
     }
 }
@@ -94,7 +101,7 @@ pub struct StakingManager {
     validators: Arc<Mutex<HashMap<String, Validator>>>,
     min_stake: u64,
     unstaking_period: u64, // Período de lock en segundos (ej: 7 días = 604800)
-    slash_percentage: u8, // Porcentaje de slashing (ej: 5%)
+    slash_percentage: u8,  // Porcentaje de slashing (ej: 5%)
 }
 
 impl StakingManager {
@@ -105,7 +112,11 @@ impl StakingManager {
      * @param slash_percentage - Porcentaje de slashing (default: 5%)
      * @returns Nuevo gestor de staking
      */
-    pub fn new(min_stake: Option<u64>, unstaking_period: Option<u64>, slash_percentage: Option<u8>) -> StakingManager {
+    pub fn new(
+        min_stake: Option<u64>,
+        unstaking_period: Option<u64>,
+        slash_percentage: Option<u8>,
+    ) -> StakingManager {
         StakingManager {
             validators: Arc::new(Mutex::new(HashMap::new())),
             min_stake: min_stake.unwrap_or(1000),
@@ -252,7 +263,9 @@ impl StakingManager {
         // Filtrar solo validadores activos
         let active_validators: Vec<(&String, &Validator)> = validators
             .iter()
-            .filter(|(_, v)| v.is_active && !v.unstaking_requested && v.has_minimum_stake(self.min_stake))
+            .filter(|(_, v)| {
+                v.is_active && !v.unstaking_requested && v.has_minimum_stake(self.min_stake)
+            })
             .collect();
 
         if active_validators.is_empty() {
@@ -270,7 +283,7 @@ impl StakingManager {
         let mut hasher = Sha256::new();
         hasher.update(block_hash.as_bytes());
         let hash_bytes = hasher.finalize();
-        
+
         // Convertir primeros 8 bytes a u64
         let mut random_value = 0u64;
         for i in 0..8 {
@@ -309,18 +322,22 @@ impl StakingManager {
         let validators = self.validators.lock().unwrap();
         validators
             .values()
-            .filter(|v| v.is_active && !v.unstaking_requested && v.has_minimum_stake(self.min_stake))
+            .filter(|v| {
+                v.is_active && !v.unstaking_requested && v.has_minimum_stake(self.min_stake)
+            })
             .cloned()
             .collect()
     }
 
     /**
-     * Obtiene todos los validadores
-     * @returns Lista de todos los validadores
+     * Carga validadores desde la base de datos
+     * @param validators_from_db - Lista de validadores desde la base de datos
      */
-    pub fn get_all_validators(&self) -> Vec<Validator> {
-        let validators = self.validators.lock().unwrap();
-        validators.values().cloned().collect()
+    pub fn load_validators(&self, validators_from_db: Vec<Validator>) {
+        let mut validators = self.validators.lock().unwrap();
+        for validator in validators_from_db {
+            validators.insert(validator.address.clone(), validator);
+        }
     }
 
     /**
@@ -338,71 +355,37 @@ impl StakingManager {
     }
 
     /**
-     * Aplica slashing a un validador
-     * @param address - Dirección del validador
-     * @param reason - Razón del slashing
-     * @returns Cantidad slasheada
+     * Detecta y aplica slashing por doble firma
+     * Si un validador firma dos bloques en el mismo índice, se aplica slashing
+     * @param validator_address - Dirección del validador
+     * @param block_index - Índice del bloque
+     * @param block_hash - Hash del bloque firmado
+     * @returns true si se detectó y aplicó slashing
      */
-    pub fn slash_validator(&self, address: &str, _reason: &str) -> Result<u64, String> {
+    pub fn detect_and_slash_double_sign(
+        &self,
+        validator_address: &str,
+        block_index: u64,
+        _block_hash: &str,
+    ) -> bool {
         let mut validators = self.validators.lock().unwrap();
-        let validator = validators
-            .get_mut(address)
-            .ok_or_else(|| "Validador no encontrado".to_string())?;
 
-        let slash_amount = (validator.staked_amount as f64 * (self.slash_percentage as f64 / 100.0)) as u64;
-        let actual_slash = validator.slash(slash_amount);
+        if let Some(validator) = validators.get_mut(validator_address) {
+            // Verificar si ya validó este índice de bloque (doble firma)
+            if validator.last_validated_block == block_index {
+                // Doble firma detectada: aplicar slashing
+                let slash_amount = (validator.staked_amount * self.slash_percentage as u64) / 100;
+                let slashed = validator.slash(slash_amount);
 
-        // Si el stake queda por debajo del mínimo, desactivar
-        if validator.staked_amount < self.min_stake {
-            validator.is_active = false;
+                eprintln!(
+                    "⚡ SLASHING aplicado a {}: {} tokens slasheados por doble firma en bloque {}",
+                    validator_address, slashed, block_index
+                );
+
+                return true;
+            }
         }
 
-        Ok(actual_slash)
-    }
-
-    /**
-     * Obtiene el stake mínimo requerido
-     * @returns Stake mínimo
-     */
-    pub fn get_min_stake(&self) -> u64 {
-        self.min_stake
-    }
-
-    /**
-     * Obtiene el período de unstaking
-     * @returns Período en segundos
-     */
-    pub fn get_unstaking_period(&self) -> u64 {
-        self.unstaking_period
-    }
-
-    /**
-     * Carga validadores desde la base de datos
-     * @param validators_from_db - Lista de validadores desde la base de datos
-     */
-    pub fn load_validators(&self, validators_from_db: Vec<Validator>) {
-        let mut validators = self.validators.lock().unwrap();
-        for validator in validators_from_db {
-            validators.insert(validator.address.clone(), validator);
-        }
-    }
-
-    /**
-     * Guarda un validador en la base de datos (debe ser llamado externamente)
-     * @param validator - Validador a guardar
-     * @returns Clon del validador para guardar
-     */
-    pub fn get_validator_for_save(&self, address: &str) -> Option<Validator> {
-        let validators = self.validators.lock().unwrap();
-        validators.get(address).cloned()
-    }
-
-    /**
-     * Obtiene todos los validadores para guardar en BD
-     */
-    pub fn get_all_validators_for_save(&self) -> Vec<Validator> {
-        let validators = self.validators.lock().unwrap();
-        validators.values().cloned().collect()
+        false
     }
 }
-

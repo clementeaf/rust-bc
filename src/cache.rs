@@ -35,12 +35,15 @@ impl BalanceCache {
      */
     pub fn get(&self, address: &str, current_block_index: u64) -> Option<u64> {
         let balances = self.balances.lock().unwrap_or_else(|e| e.into_inner());
-        let last_index = self.last_block_index.lock().unwrap_or_else(|e| e.into_inner());
-        
+        let last_index = self
+            .last_block_index
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
         if *last_index != current_block_index {
             return None;
         }
-        
+
         balances.get(address).map(|cached| cached.balance)
     }
 
@@ -52,13 +55,19 @@ impl BalanceCache {
      */
     pub fn set(&self, address: String, balance: u64, block_index: u64) {
         let mut balances = self.balances.lock().unwrap_or_else(|e| e.into_inner());
-        let mut last_index = self.last_block_index.lock().unwrap_or_else(|e| e.into_inner());
-        
-        balances.insert(address, CachedBalance {
-            balance,
-            block_index,
-        });
-        
+        let mut last_index = self
+            .last_block_index
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        balances.insert(
+            address,
+            CachedBalance {
+                balance,
+                block_index,
+            },
+        );
+
         *last_index = block_index;
     }
 
@@ -68,8 +77,11 @@ impl BalanceCache {
      */
     pub fn invalidate(&self, new_block_index: u64) {
         let mut balances = self.balances.lock().unwrap_or_else(|e| e.into_inner());
-        let mut last_index = self.last_block_index.lock().unwrap_or_else(|e| e.into_inner());
-        
+        let mut last_index = self
+            .last_block_index
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
         if *last_index != new_block_index {
             balances.clear();
             *last_index = new_block_index;
@@ -101,7 +113,10 @@ impl BalanceCache {
      */
     pub fn stats(&self) -> (usize, u64) {
         let balances = self.balances.lock().unwrap_or_else(|e| e.into_inner());
-        let last_index = self.last_block_index.lock().unwrap_or_else(|e| e.into_inner());
+        let last_index = self
+            .last_block_index
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         (balances.len(), *last_index)
     }
 }
@@ -111,4 +126,3 @@ impl Default for BalanceCache {
         Self::new()
     }
 }
-

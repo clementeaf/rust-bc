@@ -1,7 +1,34 @@
-use crate::models::{Transaction, WalletManager};
+// Standard library
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// External crates
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::time::{SystemTime, UNIX_EPOCH};
+
+// Crate modules
+use crate::models::{Transaction, WalletManager};
+
+/**
+ * Constantes de configuración de la blockchain
+ *
+ * DECISIONES DE DISEÑO:
+ * - GENESIS_TIMESTAMP: Timestamp fijo para el bloque génesis (1700000000 = 2023-11-14)
+ *   Esto asegura que todos los nodos tengan el mismo bloque génesis
+ *
+ * - GENESIS_NONCE_LIMIT: Límite de intentos de nonce para el bloque génesis
+ *   Si se excede, se usa un nonce fijo para evitar loops infinitos
+ *
+ * - MAX_COINBASE_AMOUNT: Límite máximo de recompensa de minería por bloque
+ *   Previene emisión excesiva de tokens
+ *
+ * - MIN_ADDRESS_LENGTH: Longitud mínima de direcciones para validación
+ *   Asegura que las direcciones tengan formato válido (hexadecimal de 32+ caracteres)
+ */
+const GENESIS_TIMESTAMP: u64 = 1700000000;
+const GENESIS_NONCE_LIMIT: u64 = 10_000_000;
+const GENESIS_FALLBACK_NONCE: u64 = 12345;
+const MAX_COINBASE_AMOUNT: u64 = 1_000_000_000;
+const MIN_ADDRESS_LENGTH: usize = 32;
 
 /**
  * Representa un bloque en la blockchain con transacciones
@@ -55,10 +82,7 @@ impl Block {
             return String::new();
         }
 
-        let mut hashes: Vec<String> = transactions
-            .iter()
-            .map(|tx| tx.calculate_hash())
-            .collect();
+        let mut hashes: Vec<String> = transactions.iter().map(|tx| tx.calculate_hash()).collect();
 
         while hashes.len() > 1 {
             let mut next_level = Vec::new();
@@ -119,7 +143,7 @@ impl Block {
     pub fn is_valid(&self) -> bool {
         let target = "0".repeat(self.difficulty as usize);
         let calculated_merkle = Self::calculate_merkle_root(&self.transactions);
-        
+
         self.hash == self.calculate_hash()
             && self.hash.starts_with(&target)
             && self.merkle_root == calculated_merkle
@@ -166,7 +190,7 @@ impl Blockchain {
         }
 
         let adjustment_interval = self.difficulty_adjustment_interval as usize;
-        if self.chain.len() % adjustment_interval != 0 {
+        if !self.chain.len().is_multiple_of(adjustment_interval) {
             return false;
         }
 
@@ -175,10 +199,11 @@ impl Blockchain {
             return false;
         }
 
-        let time_span = recent_blocks[recent_blocks.len() - 1].timestamp
+        let time_span = recent_blocks[recent_blocks.len() - 1]
+            .timestamp
             .saturating_sub(recent_blocks[0].timestamp);
         let expected_time = self.target_block_time * adjustment_interval as u64;
-        
+
         let ratio = if time_span > 0 {
             expected_time as f64 / time_span as f64
         } else {
@@ -186,22 +211,20 @@ impl Blockchain {
         };
 
         let old_difficulty = self.difficulty;
-        
+
         if ratio < 0.8 {
             self.difficulty = (self.difficulty as u16 + 1).min(255) as u8;
         } else if ratio > 1.2 {
             self.difficulty = (self.difficulty as u16).saturating_sub(1) as u8;
         }
 
-        if self.difficulty < 1 {
-            self.difficulty = 1;
-        }
-        if self.difficulty > 20 {
-            self.difficulty = 20;
-        }
+        self.difficulty = self.difficulty.clamp(1, 20);
 
         if old_difficulty != self.difficulty {
-            println!("📊 Dificultad ajustada: {} -> {} (ratio: {:.2})", old_difficulty, self.difficulty, ratio);
+            println!(
+                "📊 Dificultad ajustada: {} -> {} (ratio: {:.2})",
+                old_difficulty, self.difficulty, ratio
+            );
             true
         } else {
             false
@@ -224,44 +247,34 @@ impl Blockchain {
             Some("Genesis Block - Rust Blockchain".to_string()),
         );
 
-        let timestamp = 1700000000u64;
+        let timestamp = GENESIS_TIMESTAMP;
         let previous_hash = "0".to_string();
-        let merkle_root = Self::calculate_merkle_root_static(&vec![genesis_tx.clone()]);
-        
+        let merkle_root = Self::calculate_merkle_root_static(std::slice::from_ref(&genesis_tx));
+
         let data = format!(
             "{}{}{}{}{}{}",
-            0u64,
-            timestamp,
-            merkle_root,
-            previous_hash,
-            0u64,
-            1usize
+            0u64, timestamp, merkle_root, previous_hash, 0u64, 1usize
         );
         let mut hasher = Sha256::new();
         hasher.update(data.as_bytes());
         let hash = format!("{:x}", hasher.finalize());
-        
+
         let target = "0".repeat(self.difficulty as usize);
         let mut nonce = 0u64;
         let mut final_hash = hash.clone();
-        
+
         while !final_hash.starts_with(&target) {
             let data = format!(
                 "{}{}{}{}{}{}",
-                0u64,
-                timestamp,
-                merkle_root,
-                previous_hash,
-                nonce,
-                1usize
+                0u64, timestamp, merkle_root, previous_hash, nonce, 1usize
             );
             let mut hasher = Sha256::new();
             hasher.update(data.as_bytes());
             final_hash = format!("{:x}", hasher.finalize());
             nonce += 1;
-            
-            if nonce > 10000000 {
-                nonce = 12345;
+
+            if nonce > GENESIS_NONCE_LIMIT {
+                nonce = GENESIS_FALLBACK_NONCE;
                 let data = format!(
                     "{}{}{}{}{}{}",
                     0u64, timestamp, merkle_root, previous_hash, nonce, 1usize
@@ -283,7 +296,7 @@ impl Blockchain {
             difficulty: self.difficulty,
             merkle_root,
         };
-        
+
         self.chain.push(genesis);
     }
 
@@ -295,10 +308,7 @@ impl Blockchain {
             return String::new();
         }
 
-        let mut hashes: Vec<String> = transactions
-            .iter()
-            .map(|tx| tx.calculate_hash())
-            .collect();
+        let mut hashes: Vec<String> = transactions.iter().map(|tx| tx.calculate_hash()).collect();
 
         while hashes.len() > 1 {
             let mut next_level = Vec::new();
@@ -326,13 +336,39 @@ impl Blockchain {
     }
 
     /**
+     * Calcula la dificultad acumulada hasta un bloque específico
+     * @param block_index - Índice del bloque (None para el último bloque)
+     * @returns Dificultad acumulada
+     */
+    pub fn calculate_cumulative_difficulty(&self, block_index: Option<u64>) -> u64 {
+        let end_index = block_index.unwrap_or_else(|| {
+            if self.chain.is_empty() {
+                0
+            } else {
+                self.chain.len() as u64 - 1
+            }
+        });
+
+        let mut cumulative = 0u64;
+        for i in 0..=end_index.min(self.chain.len() as u64 - 1) {
+            if let Some(block) = self.chain.get(i as usize) {
+                // La dificultad acumulada es la suma de 2^difficulty para cada bloque
+                // Esto da más peso a bloques con mayor dificultad
+                cumulative += 2u64.pow(block.difficulty as u32);
+            }
+        }
+        cumulative
+    }
+
+    /**
      * Calcula el tamaño aproximado de un bloque en bytes
      */
     fn calculate_block_size(transactions: &[Transaction]) -> usize {
         let base_size = 200;
-        let tx_size: usize = transactions.iter().map(|tx| {
-            tx.from.len() + tx.to.len() + tx.signature.len() + 50
-        }).sum();
+        let tx_size: usize = transactions
+            .iter()
+            .map(|tx| tx.from.len() + tx.to.len() + tx.signature.len() + 50)
+            .sum();
         base_size + tx_size
     }
 
@@ -354,7 +390,10 @@ impl Blockchain {
         }
 
         if transactions.len() > self.max_transactions_per_block {
-            return Err(format!("Bloque excede máximo de transacciones: {}", transactions.len()));
+            return Err(format!(
+                "Bloque excede máximo de transacciones: {}",
+                transactions.len()
+            ));
         }
 
         let mut coinbase_count = 0;
@@ -367,10 +406,8 @@ impl Blockchain {
             } else if tx.from == "STAKING" {
                 // Transacciones de unstaking: permitidas sin validación adicional
                 // (se validan en el contexto de staking)
-            } else {
-                if let Err(e) = self.validate_transaction(tx, wallet_manager) {
-                    return Err(format!("Transacción inválida: {}", e));
-                }
+            } else if let Err(e) = self.validate_transaction(tx, wallet_manager) {
+                return Err(format!("Transacción inválida: {}", e));
             }
         }
 
@@ -397,7 +434,17 @@ impl Blockchain {
 
     /**
      * Mina un nuevo bloque con recompensa automática para el minero
-     * Los fees de las transacciones se suman a la recompensa del minero
+     *
+     * DECISIÓN DE DISEÑO - Fee Distribution:
+     * Los fees de las transacciones se distribuyen así:
+     * - 80% se queman (reduce supply total, deflacionario)
+     * - 20% va al minero (incentiva minería/validación)
+     *
+     * Esta distribución:
+     * 1. Crea un modelo deflacionario (supply disminuye con el tiempo)
+     * 2. Incentiva la minería/validación con una porción de los fees
+     * 3. Previene inflación excesiva del supply total
+     *
      * @param miner_address - Dirección del minero que recibirá la recompensa
      * @param transactions - Transacciones a incluir en el bloque (opcional)
      * @param wallet_manager - Gestor de wallets para validación
@@ -411,13 +458,27 @@ impl Blockchain {
     ) -> Result<String, String> {
         let base_reward = self.calculate_mining_reward();
         let total_fees = Self::calculate_total_fees(&transactions);
-        let total_reward = base_reward + total_fees;
-        
+
+        // Fee-only-token: 80% se quema, 20% va al minero
+        const BURN_PERCENTAGE: u64 = 80;
+        const MINER_FEE_SHARE: u64 = 20;
+        let burn_percentage = BURN_PERCENTAGE;
+        let miner_fee_share = MINER_FEE_SHARE;
+        let fees_to_burn = (total_fees * burn_percentage) / 100;
+        let fees_to_miner = (total_fees * miner_fee_share) / 100;
+
+        let total_reward = base_reward + fees_to_miner;
+
         let coinbase = Self::create_coinbase_transaction(miner_address, Some(total_reward));
-        
+
+        // Crear transacción de burn para los fees quemados
         let mut all_transactions = vec![coinbase];
+        if fees_to_burn > 0 {
+            let burn_tx = Self::create_coinbase_transaction("BURN", Some(fees_to_burn));
+            all_transactions.push(burn_tx);
+        }
         all_transactions.extend(transactions);
-        
+
         self.add_block(all_transactions, wallet_manager)
     }
 
@@ -463,7 +524,20 @@ impl Blockchain {
 
     /**
      * Resuelve conflictos usando la regla de la cadena más larga
-     * Retorna true si se reemplazó la cadena actual
+     *
+     * DECISIÓN DE DISEÑO - Consenso:
+     * Esta implementación usa la regla de "longest chain wins" (cadena más larga gana):
+     * - Si otra cadena es más larga y válida, reemplaza la actual
+     * - Valida todas las transacciones antes de aceptar la nueva cadena
+     * - Esto previene ataques de reorganización con cadenas inválidas
+     *
+     * Limitaciones conocidas:
+     * - No protege contra ataques de 51% (ver CheckpointManager para protección adicional)
+     * - Requiere validación completa de transacciones (puede ser costoso)
+     *
+     * @param other_chain - Cadena alternativa a evaluar
+     * @param wallet_manager - Gestor de wallets para validación de transacciones
+     * @returns true si se reemplazó la cadena actual, false en caso contrario
      */
     pub fn resolve_conflict(
         &mut self,
@@ -481,7 +555,8 @@ impl Blockchain {
         for block in other_chain {
             for tx in &block.transactions {
                 if tx.from != "0" {
-                    if let Err(_) = self.validate_transaction(tx, wallet_manager) {
+                    if let Err(e) = self.validate_transaction(tx, wallet_manager) {
+                        eprintln!("⚠️  Error validando transacción en resolución de conflicto (bloque {}): {}", block.index, e);
                         return false;
                     }
                 }
@@ -531,14 +606,10 @@ impl Blockchain {
     #[allow(dead_code)]
     pub fn find_common_ancestor(&self, other_chain: &[Block]) -> Option<usize> {
         let min_len = self.chain.len().min(other_chain.len());
-        
-        for i in (0..min_len).rev() {
-            if self.chain[i].hash == other_chain[i].hash {
-                return Some(i);
-            }
-        }
-        
-        None
+
+        (0..min_len)
+            .rev()
+            .find(|&i| self.chain[i].hash == other_chain[i].hash)
     }
 
     /**
@@ -571,7 +642,7 @@ impl Blockchain {
      */
     pub fn calculate_balance(&self, address: &str) -> u64 {
         let mut balance = 0u64;
-        
+
         for block in &self.chain {
             for tx in &block.transactions {
                 if tx.from == "0" && tx.to == address {
@@ -581,9 +652,10 @@ impl Blockchain {
                 } else if tx.to == address {
                     balance += tx.amount;
                 }
+                // Las transacciones a "BURN" reducen el supply total (no afectan balance individual)
             }
         }
-        
+
         balance
     }
 
@@ -603,16 +675,22 @@ impl Blockchain {
             return Err("Cantidad de coinbase debe ser mayor a 0".to_string());
         }
 
-        if tx.amount > 1_000_000_000 {
-            return Err("Cantidad de coinbase excede el límite máximo".to_string());
+        if tx.amount > MAX_COINBASE_AMOUNT {
+            return Err(format!(
+                "Cantidad de coinbase excede el límite máximo: {}",
+                MAX_COINBASE_AMOUNT
+            ));
         }
 
         if !tx.signature.is_empty() {
             return Err("Transacciones coinbase no deben tener firma".to_string());
         }
 
-        if tx.to.len() < 32 {
-            return Err("Dirección destinataria de coinbase debe tener formato válido".to_string());
+        if tx.to.len() < MIN_ADDRESS_LENGTH {
+            return Err(format!(
+                "Dirección destinataria de coinbase debe tener al menos {} caracteres",
+                MIN_ADDRESS_LENGTH
+            ));
         }
 
         Ok(())
@@ -701,7 +779,7 @@ impl Blockchain {
     pub fn calculate_mining_reward(&self) -> u64 {
         let base_reward = 50u64;
         let halving_interval = 210000u64;
-        
+
         let halvings = self.chain.len() as u64 / halving_interval;
         base_reward >> halvings.min(64)
     }

@@ -4,6 +4,47 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /**
+ * Constantes de validación para direcciones y tokens
+ *
+ * DECISIONES DE DISEÑO:
+ * - Límites de direcciones: MIN_ADDRESS_LENGTH (32) y MAX_ADDRESS_LENGTH (128)
+ *   Basado en direcciones hexadecimales estándar (64 chars) con margen para prefijos
+ *
+ * - MAX_TOKEN_ID: Límite de 1 billón para prevenir problemas de serialización y DoS
+ *   Suficientemente grande para la mayoría de casos de uso, pero acotado
+ *
+ * - MAX_AMOUNT: Límite de 1 trillón de tokens por transacción
+ *   Previene overflow y ataques de DoS con cantidades excesivas
+ *
+ * - MAX_TOKENS_PER_CONTRACT: 10 millones de NFTs por contrato
+ *   Balance entre flexibilidad y rendimiento de serialización
+ *
+ * - MAX_TOKENS_PER_OWNER: 1 millón de NFTs por owner
+ *   Previene que un solo owner monopolice el almacenamiento
+ *
+ * - Límites de metadata: Basados en estándares ERC-721
+ *   Name: 256 chars, Description: 2048 chars, URLs: 512 chars
+ *   Attributes: máximo 50, con trait_type (64) y value (256) limitados
+ *
+ * - RESERVED_TOKEN_ID: Token ID 0 reservado para eventos de mint
+ *   Convención estándar en contratos NFT
+ */
+const MIN_ADDRESS_LENGTH: usize = 32;
+const MAX_ADDRESS_LENGTH: usize = 128;
+const MAX_TOKEN_ID: u64 = 1_000_000_000;
+const MAX_AMOUNT: u64 = 1_000_000_000_000;
+const MAX_TOKENS_PER_CONTRACT: usize = 10_000_000;
+const MAX_TOKENS_PER_OWNER: usize = 1_000_000;
+const MAX_TOKEN_URI_LENGTH: usize = 2048;
+const MAX_METADATA_NAME_LENGTH: usize = 256;
+const MAX_METADATA_DESCRIPTION_LENGTH: usize = 2048;
+const MAX_METADATA_URL_LENGTH: usize = 512;
+const MAX_METADATA_ATTRIBUTES: usize = 50;
+const MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH: usize = 64;
+const MAX_ATTRIBUTE_VALUE_LENGTH: usize = 256;
+const RESERVED_TOKEN_ID: u64 = 0;
+
+/**
  * Tipos de funciones de contrato soportadas
  */
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -92,6 +133,7 @@ pub struct Attribute {
 }
 
 impl NFTMetadata {
+    #[allow(dead_code)]
     pub fn new(name: String) -> Self {
         NFTMetadata {
             name,
@@ -202,7 +244,7 @@ impl SmartContract {
             update_sequence: 0,
             integrity_hash: None,
         };
-        
+
         // Calcular hash de integridad inicial
         contract.integrity_hash = Some(contract.calculate_hash());
         contract
@@ -224,7 +266,11 @@ impl SmartContract {
      * @param function - Función a ejecutar
      * @param caller - Dirección que llama la función (para ERC-20)
      */
-    pub fn execute(&mut self, function: ContractFunction, caller: Option<&str>) -> Result<String, String> {
+    pub fn execute(
+        &mut self,
+        function: ContractFunction,
+        caller: Option<&str>,
+    ) -> Result<String, String> {
         match function {
             ContractFunction::Transfer { to, amount } => {
                 let from = caller.ok_or("Caller address required for transfer")?;
@@ -238,16 +284,14 @@ impl SmartContract {
                 let owner = caller.ok_or("Caller address required for approve")?;
                 self.approve(owner, &spender, amount)
             }
-            ContractFunction::Mint { to, amount } => {
-                self.mint(&to, amount)
-            }
-            ContractFunction::Burn { from, amount } => {
-                self.burn(&from, amount)
-            }
+            ContractFunction::Mint { to, amount } => self.mint(&to, amount),
+            ContractFunction::Burn { from, amount } => self.burn(&from, amount),
             // NFT: Funciones básicas
-            ContractFunction::MintNFT { to, token_id, token_uri } => {
-                self.mint_nft(&to, token_id, &token_uri)
-            }
+            ContractFunction::MintNFT {
+                to,
+                token_id,
+                token_uri,
+            } => self.mint_nft(&to, token_id, &token_uri),
             ContractFunction::TransferNFT { from, to, token_id } => {
                 let caller = caller.ok_or("Caller address required for transferNFT")?;
                 self.transfer_nft(&from, &to, token_id, caller)
@@ -264,57 +308,72 @@ impl SmartContract {
                 let caller = caller.ok_or("Caller address required for burnNFT")?;
                 self.burn_nft(&owner, token_id, caller)
             }
-            ContractFunction::SetNFTMetadata { token_id, metadata } => {
-                self.set_nft_metadata(token_id, metadata)
-                    .map(|_| format!("Metadata set for token {}", token_id))
-            }
-            ContractFunction::Custom { name, params } => {
-                self.execute_custom(&name, &params)
-            }
+            ContractFunction::SetNFTMetadata { token_id, metadata } => self
+                .set_nft_metadata(token_id, metadata)
+                .map(|_| format!("Metadata set for token {}", token_id)),
+            ContractFunction::Custom { name, params } => self.execute_custom(&name, &params),
         }
     }
 
     /**
      * Valida una dirección de wallet
+     * @param address - Dirección a validar
+     * @returns Ok(()) si es válida, Err con mensaje descriptivo si no
      */
     fn validate_address(address: &str) -> Result<(), String> {
         if address.is_empty() {
             return Err("Address cannot be empty".to_string());
         }
-        
+
         // Protección contra zero address
         if address == "0" || (address.len() == 1 && address.chars().all(|c| c == '0')) {
             return Err("Zero address is not allowed".to_string());
         }
-        
-        if address.len() < 32 {
-            return Err("Address format invalid (too short)".to_string());
+
+        if address.len() < MIN_ADDRESS_LENGTH {
+            return Err(format!(
+                "Address format invalid: minimum length is {} characters",
+                MIN_ADDRESS_LENGTH
+            ));
         }
-        if address.len() > 128 {
-            return Err("Address format invalid (too long)".to_string());
+        if address.len() > MAX_ADDRESS_LENGTH {
+            return Err(format!(
+                "Address format invalid: maximum length is {} characters",
+                MAX_ADDRESS_LENGTH
+            ));
         }
-        // Validar que sea hexadecimal (opcional, pero buena práctica)
-        if !address.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
-            return Err("Address contains invalid characters".to_string());
+        // Validar que sea alfanumérico con caracteres permitidos
+        if !address
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err("Address contains invalid characters (only alphanumeric, underscore, and hyphen allowed)".to_string());
         }
         Ok(())
     }
 
     /**
      * Valida un token_id para NFTs
+     * @param token_id - ID del token a validar
+     * @returns Ok(()) si es válido, Err con mensaje descriptivo si no
      */
     fn validate_token_id(token_id: u64) -> Result<(), String> {
         // Token ID 0 está reservado (usado para eventos de mint)
-        if token_id == 0 {
-            return Err("Token ID 0 is reserved and cannot be used".to_string());
+        if token_id == RESERVED_TOKEN_ID {
+            return Err(format!(
+                "Token ID {} is reserved and cannot be used",
+                RESERVED_TOKEN_ID
+            ));
         }
-        
+
         // Límite máximo para prevenir problemas de serialización y DoS
-        const MAX_TOKEN_ID: u64 = 1_000_000_000; // 1 billón
         if token_id > MAX_TOKEN_ID {
-            return Err(format!("Token ID exceeds maximum allowed: {}", MAX_TOKEN_ID));
+            return Err(format!(
+                "Token ID exceeds maximum allowed: {}",
+                MAX_TOKEN_ID
+            ));
         }
-        
+
         Ok(())
     }
 
@@ -323,8 +382,10 @@ impl SmartContract {
      */
     fn ensure_contract_type(&self, expected_type: &str) -> Result<(), String> {
         if self.contract_type != expected_type {
-            return Err(format!("This function is only available for {} contracts, but contract is {}", 
-                expected_type, self.contract_type));
+            return Err(format!(
+                "This function is only available for {} contracts, but contract is {}",
+                expected_type, self.contract_type
+            ));
         }
         Ok(())
     }
@@ -336,13 +397,12 @@ impl SmartContract {
         // Validaciones de entrada
         Self::validate_address(from)?;
         Self::validate_address(to)?;
-        
+
         if amount == 0 {
             return Err("Amount must be greater than 0".to_string());
         }
 
-        // Límite máximo de amount para prevenir DoS (1 billón de tokens)
-        const MAX_AMOUNT: u64 = 1_000_000_000_000;
+        // Límite máximo de amount para prevenir DoS
         if amount > MAX_AMOUNT {
             return Err(format!("Amount exceeds maximum allowed: {}", MAX_AMOUNT));
         }
@@ -357,21 +417,25 @@ impl SmartContract {
         }
 
         let to_balance = *self.state.balances.get(to).unwrap_or(&0);
-        
+
         // Protección contra overflow usando checked_add
-        let new_to_balance = to_balance.checked_add(amount)
-            .ok_or_else(|| "Balance overflow: recipient balance would exceed maximum".to_string())?;
-        
+        let new_to_balance = to_balance.checked_add(amount).ok_or_else(|| {
+            "Balance overflow: recipient balance would exceed maximum".to_string()
+        })?;
+
         // Protección contra underflow usando checked_sub (ya validamos arriba, pero por seguridad)
-        let new_from_balance = from_balance.checked_sub(amount)
+        let new_from_balance = from_balance
+            .checked_sub(amount)
             .ok_or_else(|| "Balance underflow: insufficient balance".to_string())?;
 
-        self.state.balances.insert(from.to_string(), new_from_balance);
+        self.state
+            .balances
+            .insert(from.to_string(), new_from_balance);
         self.state.balances.insert(to.to_string(), new_to_balance);
-        
+
         // Emit Transfer event (tracked in metadata)
         self.emit_transfer_event(from, to, amount);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
@@ -383,12 +447,18 @@ impl SmartContract {
     /**
      * ERC-20: Transfiere tokens desde una dirección a otra usando allowance
      */
-    fn transfer_from(&mut self, from: &str, to: &str, amount: u64, spender: &str) -> Result<String, String> {
+    fn transfer_from(
+        &mut self,
+        from: &str,
+        to: &str,
+        amount: u64,
+        spender: &str,
+    ) -> Result<String, String> {
         // Validaciones de entrada
         Self::validate_address(from)?;
         Self::validate_address(to)?;
         Self::validate_address(spender)?;
-        
+
         if amount == 0 {
             return Err("Amount must be greater than 0".to_string());
         }
@@ -417,14 +487,18 @@ impl SmartContract {
 
         // Realizar transferencia con protección contra overflow
         let to_balance = *self.state.balances.get(to).unwrap_or(&0);
-        
-        let new_to_balance = to_balance.checked_add(amount)
-            .ok_or_else(|| "Balance overflow: recipient balance would exceed maximum".to_string())?;
-        
-        let new_from_balance = from_balance.checked_sub(amount)
+
+        let new_to_balance = to_balance.checked_add(amount).ok_or_else(|| {
+            "Balance overflow: recipient balance would exceed maximum".to_string()
+        })?;
+
+        let new_from_balance = from_balance
+            .checked_sub(amount)
             .ok_or_else(|| "Balance underflow: insufficient balance".to_string())?;
-        
-        self.state.balances.insert(from.to_string(), new_from_balance);
+
+        self.state
+            .balances
+            .insert(from.to_string(), new_from_balance);
         self.state.balances.insert(to.to_string(), new_to_balance);
 
         // Reducir allowance
@@ -432,13 +506,16 @@ impl SmartContract {
 
         // Emit Transfer event
         self.emit_transfer_event(from, to, amount);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Transferred {} from {} to {} via {}", amount, from, to, spender))
+        Ok(format!(
+            "Transferred {} from {} to {} via {}",
+            amount, from, to, spender
+        ))
     }
 
     /**
@@ -448,7 +525,7 @@ impl SmartContract {
         // Validaciones de entrada
         Self::validate_address(owner)?;
         Self::validate_address(spender)?;
-        
+
         if owner == spender {
             return Err("Cannot approve self".to_string());
         }
@@ -456,30 +533,36 @@ impl SmartContract {
         // Límite máximo de allowance
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!("Allowance amount exceeds maximum allowed: {}", MAX_AMOUNT));
+            return Err(format!(
+                "Allowance amount exceeds maximum allowed: {}",
+                MAX_AMOUNT
+            ));
         }
 
         // Establecer allowance
-        let owner_allowances = self.state.allowances.entry(owner.to_string())
-            .or_insert_with(HashMap::new);
+        let owner_allowances = self.state.allowances.entry(owner.to_string()).or_default();
         owner_allowances.insert(spender.to_string(), amount);
 
         // Emit Approval event
         self.emit_approval_event(owner, spender, amount);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Approved {} to spend {} tokens from {}", spender, amount, owner))
+        Ok(format!(
+            "Approved {} to spend {} tokens from {}",
+            spender, amount, owner
+        ))
     }
 
     /**
      * ERC-20: Obtiene la cantidad aprobada que spender puede gastar de owner
      */
     pub fn allowance(&self, owner: &str, spender: &str) -> u64 {
-        self.state.allowances
+        self.state
+            .allowances
             .get(owner)
             .and_then(|allowances| allowances.get(spender).copied())
             .unwrap_or(0)
@@ -510,14 +593,17 @@ impl SmartContract {
      */
     fn emit_transfer_event(&mut self, from: &str, to: &str, value: u64) {
         const MAX_EVENTS: usize = 1000; // Límite de eventos en metadata
-        
+
         // Limpiar eventos antiguos si hay demasiados
         if self.state.metadata.len() >= MAX_EVENTS {
-            let event_keys: Vec<String> = self.state.metadata.keys()
+            let event_keys: Vec<String> = self
+                .state
+                .metadata
+                .keys()
                 .filter(|k| k.starts_with("event_"))
                 .cloned()
                 .collect();
-            
+
             // Mantener solo los últimos 500 eventos
             if event_keys.len() > 500 {
                 let to_remove = event_keys.len() - 500;
@@ -526,7 +612,7 @@ impl SmartContract {
                 }
             }
         }
-        
+
         let event_key = format!("event_transfer_{}", self.update_sequence);
         let event_value = format!("from:{}|to:{}|value:{}", from, to, value);
         self.state.metadata.insert(event_key, event_value);
@@ -538,14 +624,17 @@ impl SmartContract {
      */
     fn emit_approval_event(&mut self, owner: &str, spender: &str, value: u64) {
         const MAX_EVENTS: usize = 1000; // Límite de eventos en metadata
-        
+
         // Limpiar eventos antiguos si hay demasiados
         if self.state.metadata.len() >= MAX_EVENTS {
-            let event_keys: Vec<String> = self.state.metadata.keys()
+            let event_keys: Vec<String> = self
+                .state
+                .metadata
+                .keys()
                 .filter(|k| k.starts_with("event_"))
                 .cloned()
                 .collect();
-            
+
             // Mantener solo los últimos 500 eventos
             if event_keys.len() > 500 {
                 let to_remove = event_keys.len() - 500;
@@ -554,7 +643,7 @@ impl SmartContract {
                 }
             }
         }
-        
+
         let event_key = format!("event_approval_{}", self.update_sequence);
         let event_value = format!("owner:{}|spender:{}|value:{}", owner, spender, value);
         self.state.metadata.insert(event_key, event_value);
@@ -566,7 +655,7 @@ impl SmartContract {
     fn mint(&mut self, to: &str, amount: u64) -> Result<String, String> {
         // Validación de dirección
         Self::validate_address(to)?;
-        
+
         if amount == 0 {
             return Err("Amount must be greater than 0".to_string());
         }
@@ -574,24 +663,29 @@ impl SmartContract {
         // Límite máximo de amount
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!("Mint amount exceeds maximum allowed: {}", MAX_AMOUNT));
+            return Err(format!(
+                "Mint amount exceeds maximum allowed: {}",
+                MAX_AMOUNT
+            ));
         }
 
         // Verificar límite de supply si existe
         if let Some(max_supply) = self.total_supply {
             let current_supply: u64 = self.state.balances.values().sum();
-            let new_supply = current_supply.checked_add(amount)
+            let new_supply = current_supply
+                .checked_add(amount)
                 .ok_or_else(|| "Supply overflow: minting would cause overflow".to_string())?;
-            
+
             if new_supply > max_supply {
                 return Err("Minting would exceed total supply".to_string());
             }
         }
 
         let current_balance = *self.state.balances.get(to).unwrap_or(&0);
-        let new_balance = current_balance.checked_add(amount)
-            .ok_or_else(|| "Balance overflow: recipient balance would exceed maximum".to_string())?;
-        
+        let new_balance = current_balance.checked_add(amount).ok_or_else(|| {
+            "Balance overflow: recipient balance would exceed maximum".to_string()
+        })?;
+
         self.state.balances.insert(to.to_string(), new_balance);
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
@@ -607,7 +701,7 @@ impl SmartContract {
     fn burn(&mut self, from: &str, amount: u64) -> Result<String, String> {
         // Validación de dirección
         Self::validate_address(from)?;
-        
+
         if amount == 0 {
             return Err("Amount must be greater than 0".to_string());
         }
@@ -615,7 +709,10 @@ impl SmartContract {
         // Límite máximo de amount
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!("Burn amount exceeds maximum allowed: {}", MAX_AMOUNT));
+            return Err(format!(
+                "Burn amount exceeds maximum allowed: {}",
+                MAX_AMOUNT
+            ));
         }
 
         let from_balance = *self.state.balances.get(from).unwrap_or(&0);
@@ -623,9 +720,10 @@ impl SmartContract {
             return Err("Insufficient balance to burn".to_string());
         }
 
-        let new_balance = from_balance.checked_sub(amount)
+        let new_balance = from_balance
+            .checked_sub(amount)
             .ok_or_else(|| "Balance underflow: insufficient balance".to_string())?;
-        
+
         self.state.balances.insert(from.to_string(), new_balance);
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
@@ -641,10 +739,9 @@ impl SmartContract {
     fn execute_custom(&mut self, name: &str, _params: &[String]) -> Result<String, String> {
         // Por ahora, solo registramos la ejecución
         let (secs, _) = Self::get_timestamp_nanos();
-        self.state.metadata.insert(
-            format!("last_execution_{}", name),
-            secs.to_string(),
-        );
+        self.state
+            .metadata
+            .insert(format!("last_execution_{}", name), secs.to_string());
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
@@ -668,53 +765,67 @@ impl SmartContract {
     fn mint_nft(&mut self, to: &str, token_id: u64, token_uri: &str) -> Result<String, String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validación de dirección
         Self::validate_address(to)?;
-        
+
         // Validar token_id
         Self::validate_token_id(token_id)?;
-        
+
         // Verificar que el token_id no exista
         if self.state.token_owners.contains_key(&token_id) {
             return Err(format!("Token ID {} already exists", token_id));
         }
 
         // Límites de DoS: tokens por contrato
-        const MAX_TOKENS_PER_CONTRACT: usize = 10_000_000; // 10 millones
         if self.state.token_index.len() >= MAX_TOKENS_PER_CONTRACT {
-            return Err(format!("Maximum tokens per contract reached: {}", MAX_TOKENS_PER_CONTRACT));
+            return Err(format!(
+                "Maximum tokens per contract reached: {}",
+                MAX_TOKENS_PER_CONTRACT
+            ));
         }
 
         // Límites de DoS: tokens por owner
-        const MAX_TOKENS_PER_OWNER: usize = 1_000_000; // 1 millón
-        let owner_token_count = self.state.owner_to_tokens
+        let owner_token_count = self
+            .state
+            .owner_to_tokens
             .get(to)
             .map(|tokens| tokens.len())
             .unwrap_or(0);
         if owner_token_count >= MAX_TOKENS_PER_OWNER {
-            return Err(format!("Maximum tokens per owner reached: {}", MAX_TOKENS_PER_OWNER));
+            return Err(format!(
+                "Maximum tokens per owner reached: {}",
+                MAX_TOKENS_PER_OWNER
+            ));
         }
 
         // Verificar límite de URI
-        if !token_uri.is_empty() && token_uri.len() > 2048 {
-            return Err("Token URI exceeds maximum length (2048 characters)".to_string());
+        if !token_uri.is_empty() && token_uri.len() > MAX_TOKEN_URI_LENGTH {
+            return Err(format!(
+                "Token URI exceeds maximum length ({} characters)",
+                MAX_TOKEN_URI_LENGTH
+            ));
         }
 
         // Asignar el token al owner
         self.state.token_owners.insert(token_id, to.to_string());
         if !token_uri.is_empty() {
-            self.state.token_uris.insert(token_id, token_uri.to_string());
+            self.state
+                .token_uris
+                .insert(token_id, token_uri.to_string());
         }
-        
+
         // Actualizar balance de NFTs del owner
         let current_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
-        self.state.nft_balances.insert(to.to_string(), current_balance + 1);
+        self.state
+            .nft_balances
+            .insert(to.to_string(), current_balance + 1);
 
         // Mantener índice inverso (owner -> tokens) para búsquedas O(1)
-        self.state.owner_to_tokens
+        self.state
+            .owner_to_tokens
             .entry(to.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(token_id);
 
         // Agregar a índice de tokens para enumeración
@@ -722,7 +833,7 @@ impl SmartContract {
 
         // Emit Transfer event (from zero address to owner)
         self.emit_nft_transfer_event("0", to, token_id);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
@@ -738,10 +849,16 @@ impl SmartContract {
      * @param token_id - ID del token a transferir
      * @param caller - Dirección que ejecuta la transferencia
      */
-    fn transfer_nft(&mut self, from: &str, to: &str, token_id: u64, caller: &str) -> Result<String, String> {
+    fn transfer_nft(
+        &mut self,
+        from: &str,
+        to: &str,
+        token_id: u64,
+        caller: &str,
+    ) -> Result<String, String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validación de direcciones
         Self::validate_address(from)?;
         Self::validate_address(to)?;
@@ -752,7 +869,10 @@ impl SmartContract {
         }
 
         // Verificar que el token existe
-        let current_owner = self.state.token_owners.get(&token_id)
+        let current_owner = self
+            .state
+            .token_owners
+            .get(&token_id)
             .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
 
         // Verificar permisos: el caller debe ser el owner o estar aprobado
@@ -764,7 +884,10 @@ impl SmartContract {
             // Verificar si el caller está aprobado para este token
             let approved = self.state.token_approvals.get(&token_id);
             if approved.map(|a| a.as_str()) != Some(caller) {
-                return Err(format!("Caller {} is not authorized to transfer token {}", caller, token_id));
+                return Err(format!(
+                    "Caller {} is not authorized to transfer token {}",
+                    caller, token_id
+                ));
             }
             // Limpiar approval después de transferir
             self.state.token_approvals.remove(&token_id);
@@ -776,10 +899,14 @@ impl SmartContract {
         // Actualizar balances de NFTs
         let from_balance = *self.state.nft_balances.get(from).unwrap_or(&0);
         if from_balance > 0 {
-            self.state.nft_balances.insert(from.to_string(), from_balance - 1);
+            self.state
+                .nft_balances
+                .insert(from.to_string(), from_balance - 1);
         }
         let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
-        self.state.nft_balances.insert(to.to_string(), to_balance + 1);
+        self.state
+            .nft_balances
+            .insert(to.to_string(), to_balance + 1);
 
         // Actualizar índice inverso (owner -> tokens)
         if let Some(from_tokens) = self.state.owner_to_tokens.get_mut(from) {
@@ -788,20 +915,24 @@ impl SmartContract {
                 self.state.owner_to_tokens.remove(from);
             }
         }
-        self.state.owner_to_tokens
+        self.state
+            .owner_to_tokens
             .entry(to.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(token_id);
 
         // Emit Transfer event
         self.emit_nft_transfer_event(from, to, token_id);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Transferred NFT {} from {} to {}", token_id, from, to))
+        Ok(format!(
+            "Transferred NFT {} from {} to {}",
+            token_id, from, to
+        ))
     }
 
     /**
@@ -813,7 +944,7 @@ impl SmartContract {
     fn approve_nft(&mut self, owner: &str, to: &str, token_id: u64) -> Result<String, String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validación de direcciones
         Self::validate_address(owner)?;
         Self::validate_address(to)?;
@@ -823,7 +954,10 @@ impl SmartContract {
         }
 
         // Verificar que el token existe y pertenece al owner
-        let current_owner = self.state.token_owners.get(&token_id)
+        let current_owner = self
+            .state
+            .token_owners
+            .get(&token_id)
             .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
 
         if current_owner != owner {
@@ -835,7 +969,7 @@ impl SmartContract {
 
         // Emit Approval event
         self.emit_nft_approval_event(owner, to, token_id);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
@@ -851,10 +985,16 @@ impl SmartContract {
      * @param token_id - ID del token
      * @param spender - Dirección que ejecuta la transferencia (debe estar aprobada)
      */
-    fn transfer_from_nft(&mut self, from: &str, to: &str, token_id: u64, spender: &str) -> Result<String, String> {
+    fn transfer_from_nft(
+        &mut self,
+        from: &str,
+        to: &str,
+        token_id: u64,
+        spender: &str,
+    ) -> Result<String, String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validación de direcciones
         Self::validate_address(from)?;
         Self::validate_address(to)?;
@@ -865,7 +1005,10 @@ impl SmartContract {
         }
 
         // Verificar que el token existe y pertenece a 'from'
-        let current_owner = self.state.token_owners.get(&token_id)
+        let current_owner = self
+            .state
+            .token_owners
+            .get(&token_id)
             .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
 
         if current_owner != from {
@@ -873,26 +1016,36 @@ impl SmartContract {
         }
 
         // Verificar que el spender está aprobado
-        let approved = self.state.token_approvals.get(&token_id)
+        let approved = self
+            .state
+            .token_approvals
+            .get(&token_id)
             .ok_or_else(|| format!("Token {} is not approved for transfer", token_id))?;
 
         if approved != spender {
-            return Err(format!("Spender {} is not approved to transfer token {}", spender, token_id));
+            return Err(format!(
+                "Spender {} is not approved to transfer token {}",
+                spender, token_id
+            ));
         }
 
         // Transferir el token
         self.state.token_owners.insert(token_id, to.to_string());
-        
+
         // Limpiar approval
         self.state.token_approvals.remove(&token_id);
 
         // Actualizar balances de NFTs
         let from_balance = *self.state.nft_balances.get(from).unwrap_or(&0);
         if from_balance > 0 {
-            self.state.nft_balances.insert(from.to_string(), from_balance - 1);
+            self.state
+                .nft_balances
+                .insert(from.to_string(), from_balance - 1);
         }
         let to_balance = *self.state.nft_balances.get(to).unwrap_or(&0);
-        self.state.nft_balances.insert(to.to_string(), to_balance + 1);
+        self.state
+            .nft_balances
+            .insert(to.to_string(), to_balance + 1);
 
         // Actualizar índice inverso (owner -> tokens)
         if let Some(from_tokens) = self.state.owner_to_tokens.get_mut(from) {
@@ -901,20 +1054,24 @@ impl SmartContract {
                 self.state.owner_to_tokens.remove(from);
             }
         }
-        self.state.owner_to_tokens
+        self.state
+            .owner_to_tokens
             .entry(to.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(token_id);
 
         // Emit Transfer event
         self.emit_nft_transfer_event(from, to, token_id);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Transferred NFT {} from {} to {} via {}", token_id, from, to, spender))
+        Ok(format!(
+            "Transferred NFT {} from {} to {} via {}",
+            token_id, from, to, spender
+        ))
     }
 
     /**
@@ -962,7 +1119,8 @@ impl SmartContract {
      * @returns Vector de token_ids ordenados
      */
     pub fn tokens_of_owner(&self, owner: &str) -> Vec<u64> {
-        self.state.owner_to_tokens
+        self.state
+            .owner_to_tokens
             .get(owner)
             .map(|tokens| {
                 let mut token_list: Vec<u64> = tokens.iter().cloned().collect();
@@ -982,14 +1140,6 @@ impl SmartContract {
     }
 
     /**
-     * NFT: Obtiene el total de tokens (para enumeración)
-     * @returns Total de tokens minteados
-     */
-    pub fn total_supply_enumerable(&self) -> u64 {
-        self.state.token_index.len() as u64
-    }
-
-    /**
      * NFT: Obtiene metadata estructurada de un token
      * @param token_id - ID del token
      * @returns Metadata si existe
@@ -1003,9 +1153,10 @@ impl SmartContract {
      * Útil para debugging y detección de corrupción
      * @returns Ok(()) si todo es consistente, Err con detalles si hay inconsistencias
      */
+    #[allow(dead_code)]
     pub fn verify_nft_integrity(&self) -> Result<(), String> {
         // Verificar que todos los tokens en token_owners están en token_index
-        for (token_id, _) in &self.state.token_owners {
+        for token_id in self.state.token_owners.keys() {
             if !self.state.token_index.contains(token_id) {
                 return Err(format!("Token {} in owners but not in index", token_id));
             }
@@ -1020,13 +1171,17 @@ impl SmartContract {
 
         // Verificar que balances coinciden con owner_to_tokens
         for (owner, balance) in &self.state.nft_balances {
-            let actual_count = self.state.owner_to_tokens
+            let actual_count = self
+                .state
+                .owner_to_tokens
                 .get(owner)
                 .map(|tokens| tokens.len())
                 .unwrap_or(0) as u64;
             if *balance != actual_count {
-                return Err(format!("Balance mismatch for owner {}: balance={}, actual tokens={}", 
-                    owner, balance, actual_count));
+                return Err(format!(
+                    "Balance mismatch for owner {}: balance={}, actual tokens={}",
+                    owner, balance, actual_count
+                ));
             }
         }
 
@@ -1035,12 +1190,16 @@ impl SmartContract {
             for token_id in tokens {
                 if let Some(token_owner) = self.state.token_owners.get(token_id) {
                     if token_owner != owner {
-                        return Err(format!("Token {} owned by {} but in owner_to_tokens for {}", 
-                            token_id, token_owner, owner));
+                        return Err(format!(
+                            "Token {} owned by {} but in owner_to_tokens for {}",
+                            token_id, token_owner, owner
+                        ));
                     }
                 } else {
-                    return Err(format!("Token {} in owner_to_tokens for {} but has no owner", 
-                        token_id, owner));
+                    return Err(format!(
+                        "Token {} in owner_to_tokens for {} but has no owner",
+                        token_id, owner
+                    ));
                 }
             }
         }
@@ -1049,8 +1208,10 @@ impl SmartContract {
         let total_by_owners = self.state.token_owners.len() as u64;
         let total_by_index = self.state.token_index.len() as u64;
         if total_by_owners != total_by_index {
-            return Err(format!("Total supply mismatch: token_owners={}, token_index={}", 
-                total_by_owners, total_by_index));
+            return Err(format!(
+                "Total supply mismatch: token_owners={}, token_index={}",
+                total_by_owners, total_by_index
+            ));
         }
 
         Ok(())
@@ -1064,39 +1225,60 @@ impl SmartContract {
     pub fn set_nft_metadata(&mut self, token_id: u64, metadata: NFTMetadata) -> Result<(), String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validar token_id
         Self::validate_token_id(token_id)?;
-        
+
         // Validar que el token existe
         if !self.state.token_owners.contains_key(&token_id) {
             return Err(format!("Token ID {} does not exist", token_id));
         }
 
         // Validar límites de tamaño
-        if metadata.name.len() > 256 {
-            return Err("Metadata name exceeds maximum length (256 characters)".to_string());
+        if metadata.name.len() > MAX_METADATA_NAME_LENGTH {
+            return Err(format!(
+                "Metadata name exceeds maximum length ({} characters)",
+                MAX_METADATA_NAME_LENGTH
+            ));
         }
-        if metadata.description.len() > 2048 {
-            return Err("Metadata description exceeds maximum length (2048 characters)".to_string());
+        if metadata.description.len() > MAX_METADATA_DESCRIPTION_LENGTH {
+            return Err(format!(
+                "Metadata description exceeds maximum length ({} characters)",
+                MAX_METADATA_DESCRIPTION_LENGTH
+            ));
         }
-        if metadata.image.len() > 512 {
-            return Err("Metadata image URL exceeds maximum length (512 characters)".to_string());
+        if metadata.image.len() > MAX_METADATA_URL_LENGTH {
+            return Err(format!(
+                "Metadata image URL exceeds maximum length ({} characters)",
+                MAX_METADATA_URL_LENGTH
+            ));
         }
-        if metadata.external_url.len() > 512 {
-            return Err("Metadata external_url exceeds maximum length (512 characters)".to_string());
+        if metadata.external_url.len() > MAX_METADATA_URL_LENGTH {
+            return Err(format!(
+                "Metadata external_url exceeds maximum length ({} characters)",
+                MAX_METADATA_URL_LENGTH
+            ));
         }
-        if metadata.attributes.len() > 50 {
-            return Err("Metadata attributes exceed maximum count (50)".to_string());
+        if metadata.attributes.len() > MAX_METADATA_ATTRIBUTES {
+            return Err(format!(
+                "Metadata attributes exceed maximum count ({})",
+                MAX_METADATA_ATTRIBUTES
+            ));
         }
 
         // Validar tamaño de cada atributo
         for attr in &metadata.attributes {
-            if attr.trait_type.len() > 64 {
-                return Err("Attribute trait_type exceeds maximum length (64 characters)".to_string());
+            if attr.trait_type.len() > MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH {
+                return Err(format!(
+                    "Attribute trait_type exceeds maximum length ({} characters)",
+                    MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH
+                ));
             }
-            if attr.value.len() > 256 {
-                return Err("Attribute value exceeds maximum length (256 characters)".to_string());
+            if attr.value.len() > MAX_ATTRIBUTE_VALUE_LENGTH {
+                return Err(format!(
+                    "Attribute value exceeds maximum length ({} characters)",
+                    MAX_ATTRIBUTE_VALUE_LENGTH
+                ));
             }
         }
 
@@ -1117,13 +1299,16 @@ impl SmartContract {
     fn burn_nft(&mut self, owner: &str, token_id: u64, caller: &str) -> Result<String, String> {
         // Verificar tipo de contrato
         self.ensure_contract_type("nft")?;
-        
+
         // Validación de direcciones
         Self::validate_address(owner)?;
         Self::validate_address(caller)?;
 
         // Verificar que el token existe y pertenece al owner
-        let current_owner = self.state.token_owners.get(&token_id)
+        let current_owner = self
+            .state
+            .token_owners
+            .get(&token_id)
             .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
 
         if current_owner != owner {
@@ -1132,7 +1317,10 @@ impl SmartContract {
 
         // Verificar permisos: el caller debe ser el owner
         if caller != owner {
-            return Err(format!("Caller {} is not authorized to burn token {}", caller, token_id));
+            return Err(format!(
+                "Caller {} is not authorized to burn token {}",
+                caller, token_id
+            ));
         }
 
         // Eliminar el token
@@ -1144,7 +1332,9 @@ impl SmartContract {
         // Actualizar balance
         let owner_balance = *self.state.nft_balances.get(owner).unwrap_or(&0);
         if owner_balance > 0 {
-            self.state.nft_balances.insert(owner.to_string(), owner_balance - 1);
+            self.state
+                .nft_balances
+                .insert(owner.to_string(), owner_balance - 1);
         }
 
         // Actualizar índice inverso
@@ -1162,7 +1352,7 @@ impl SmartContract {
 
         // Emit Transfer event (to zero address = burn)
         self.emit_nft_transfer_event(owner, "0", token_id);
-        
+
         let (secs, _) = Self::get_timestamp_nanos();
         self.updated_at = secs;
         self.update_sequence += 1;
@@ -1176,13 +1366,16 @@ impl SmartContract {
      */
     fn emit_nft_transfer_event(&mut self, from: &str, to: &str, token_id: u64) {
         const MAX_EVENTS: usize = 1000;
-        
+
         if self.state.metadata.len() >= MAX_EVENTS {
-            let event_keys: Vec<String> = self.state.metadata.keys()
+            let event_keys: Vec<String> = self
+                .state
+                .metadata
+                .keys()
                 .filter(|k| k.starts_with("event_"))
                 .cloned()
                 .collect();
-            
+
             if event_keys.len() > 500 {
                 let to_remove = event_keys.len() - 500;
                 for key in event_keys.iter().take(to_remove) {
@@ -1190,7 +1383,7 @@ impl SmartContract {
                 }
             }
         }
-        
+
         let event_key = format!("event_nft_transfer_{}", self.update_sequence);
         let event_value = format!("from:{}|to:{}|token_id:{}", from, to, token_id);
         self.state.metadata.insert(event_key, event_value);
@@ -1201,13 +1394,16 @@ impl SmartContract {
      */
     fn emit_nft_approval_event(&mut self, owner: &str, approved: &str, token_id: u64) {
         const MAX_EVENTS: usize = 1000;
-        
+
         if self.state.metadata.len() >= MAX_EVENTS {
-            let event_keys: Vec<String> = self.state.metadata.keys()
+            let event_keys: Vec<String> = self
+                .state
+                .metadata
+                .keys()
                 .filter(|k| k.starts_with("event_"))
                 .cloned()
                 .collect();
-            
+
             if event_keys.len() > 500 {
                 let to_remove = event_keys.len() - 500;
                 for key in event_keys.iter().take(to_remove) {
@@ -1215,9 +1411,12 @@ impl SmartContract {
                 }
             }
         }
-        
+
         let event_key = format!("event_nft_approval_{}", self.update_sequence);
-        let event_value = format!("owner:{}|approved:{}|token_id:{}", owner, approved, token_id);
+        let event_value = format!(
+            "owner:{}|approved:{}|token_id:{}",
+            owner, approved, token_id
+        );
         self.state.metadata.insert(event_key, event_value);
     }
 
@@ -1225,7 +1424,8 @@ impl SmartContract {
      * ERC-20: Obtiene el supply total
      */
     pub fn total_supply(&self) -> u64 {
-        self.total_supply.unwrap_or_else(|| self.get_current_supply())
+        self.total_supply
+            .unwrap_or_else(|| self.get_current_supply())
     }
 
     /**
@@ -1236,57 +1436,27 @@ impl SmartContract {
     }
 
     /**
-     * ERC-20: Obtiene el nombre del token
-     */
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /**
-     * ERC-20: Obtiene el símbolo del token
-     */
-    pub fn symbol(&self) -> Option<&str> {
-        self.symbol.as_deref()
-    }
-
-    /**
-     * ERC-20: Obtiene los decimales del token
-     */
-    pub fn decimals(&self) -> Option<u8> {
-        self.decimals
-    }
-
-    /**
      * Calcula el hash de integridad del contrato
      * Optimizado: solo serializa campos críticos, no metadata completa
+     * Esto mejora performance al evitar serializar eventos históricos
      */
     pub fn calculate_hash(&self) -> String {
-        eprintln!("[HASH] Iniciando calculate_hash()");
         use serde_json;
         let mut hasher = Sha256::new();
-        
+
         // Serializar solo campos críticos (balances, allowances, NFT data, no metadata completa)
-        // Esto mejora performance al evitar serializar eventos históricos
-        eprintln!("[HASH] Serializando balances...");
         let balances_json = serde_json::to_string(&self.state.balances).unwrap_or_default();
-        eprintln!("[HASH] Serializando allowances...");
         let allowances_json = serde_json::to_string(&self.state.allowances).unwrap_or_default();
-        eprintln!("[HASH] Serializando token_owners...");
         let token_owners_json = serde_json::to_string(&self.state.token_owners).unwrap_or_default();
-        eprintln!("[HASH] Serializando token_uris...");
         let token_uris_json = serde_json::to_string(&self.state.token_uris).unwrap_or_default();
-        eprintln!("[HASH] Serializando token_approvals...");
-        let token_approvals_json = serde_json::to_string(&self.state.token_approvals).unwrap_or_default();
-        eprintln!("[HASH] Serializando nft_balances...");
+        let token_approvals_json =
+            serde_json::to_string(&self.state.token_approvals).unwrap_or_default();
         let nft_balances_json = serde_json::to_string(&self.state.nft_balances).unwrap_or_default();
-        eprintln!("[HASH] Serializando nft_metadata...");
         let nft_metadata_json = serde_json::to_string(&self.state.nft_metadata).unwrap_or_default();
-        eprintln!("[HASH] Serializando owner_to_tokens...");
-        let owner_to_tokens_json = serde_json::to_string(&self.state.owner_to_tokens).unwrap_or_default();
-        eprintln!("[HASH] Serializando token_index...");
+        let owner_to_tokens_json =
+            serde_json::to_string(&self.state.owner_to_tokens).unwrap_or_default();
         let token_index_json = serde_json::to_string(&self.state.token_index).unwrap_or_default();
-        eprintln!("[HASH] Creando string de datos...");
-        
+
         let data = format!(
             "{}{}{}{}{:?}{:?}{:?}{}{}{}{}{}{}{}{}{}{}{}{}",
             self.address,
@@ -1309,11 +1479,9 @@ impl SmartContract {
             self.updated_at,
             self.update_sequence
         );
-        
-        eprintln!("[HASH] Calculando hash SHA256...");
+
         hasher.update(data.as_bytes());
         let hash = hasher.finalize();
-        eprintln!("[HASH] Hash calculado exitosamente");
         format!("{:x}", hash)
     }
 
@@ -1345,13 +1513,6 @@ impl SmartContract {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap();
         (now.as_secs(), now.subsec_nanos() as u64)
-    }
-
-    /**
-     * Valida que el owner del contrato no haya cambiado ilegalmente
-     */
-    pub fn validate_owner(&self, expected_owner: &str) -> bool {
-        self.owner == expected_owner
     }
 }
 
@@ -1418,26 +1579,6 @@ impl ContractManager {
     pub fn get_all_contracts(&self) -> Vec<&SmartContract> {
         self.contracts.values().collect()
     }
-
-    /**
-     * Obtiene contratos por owner
-     */
-    pub fn get_contracts_by_owner(&self, owner: &str) -> Vec<&SmartContract> {
-        self.contracts
-            .values()
-            .filter(|c| c.owner == owner)
-            .collect()
-    }
-
-    /**
-     * Obtiene contratos por tipo
-     */
-    pub fn get_contracts_by_type(&self, contract_type: &str) -> Vec<&SmartContract> {
-        self.contracts
-            .values()
-            .filter(|c| c.contract_type == contract_type)
-            .collect()
-    }
 }
 
 impl Default for ContractManager {
@@ -1445,4 +1586,3 @@ impl Default for ContractManager {
         Self::new()
     }
 }
-

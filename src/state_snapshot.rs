@@ -1,11 +1,11 @@
 use crate::blockchain::Block;
 use crate::smart_contracts::SmartContract;
-use crate::state_reconstructor::WalletState;
 use crate::staking::Validator;
+use crate::state_reconstructor::WalletState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Result as IoResult, ErrorKind};
+use std::io::{ErrorKind, Result as IoResult};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -30,7 +30,6 @@ pub struct StateSnapshot {
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletSnapshot {
-    pub address: String,
     pub balance: u64,
 }
 
@@ -62,10 +61,14 @@ impl StateSnapshotManager {
     pub fn save_snapshot(&self, snapshot: &StateSnapshot, block_index: u64) -> IoResult<()> {
         let filename = format!("snapshot_{:07}.json", block_index);
         let path = self.snapshots_dir.join(filename);
-        
-        let json = serde_json::to_string_pretty(snapshot)
-            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, format!("Error serializando snapshot: {}", e)))?;
-        
+
+        let json = serde_json::to_string_pretty(snapshot).map_err(|e| {
+            std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Error serializando snapshot: {}", e),
+            )
+        })?;
+
         fs::write(path, json)?;
         Ok(())
     }
@@ -113,31 +116,16 @@ impl StateSnapshotManager {
 
         if let Some(path) = latest_path {
             let json = fs::read_to_string(&path)?;
-            let snapshot = serde_json::from_str::<StateSnapshot>(&json)
-                .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, format!("Error deserializando snapshot: {}", e)))?;
+            let snapshot = serde_json::from_str::<StateSnapshot>(&json).map_err(|e| {
+                std::io::Error::new(
+                    ErrorKind::InvalidData,
+                    format!("Error deserializando snapshot: {}", e),
+                )
+            })?;
             Ok(Some(snapshot))
         } else {
             Ok(None)
         }
-    }
-
-    /**
-     * Carga un snapshot específico por índice de bloque
-     * @param block_index - Índice del bloque
-     * @returns Snapshot o None si no existe
-     */
-    pub fn load_snapshot(&self, block_index: u64) -> IoResult<Option<StateSnapshot>> {
-        let filename = format!("snapshot_{:07}.json", block_index);
-        let path = self.snapshots_dir.join(filename);
-        
-        if !path.exists() {
-            return Ok(None);
-        }
-
-        let json = fs::read_to_string(&path)?;
-        let snapshot = serde_json::from_str::<StateSnapshot>(&json)
-            .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, format!("Error deserializando snapshot: {}", e)))?;
-        Ok(Some(snapshot))
     }
 
     /**
@@ -146,7 +134,7 @@ impl StateSnapshotManager {
      */
     pub fn list_snapshots(&self) -> IoResult<Vec<u64>> {
         let mut snapshots = Vec::new();
-        
+
         if !self.snapshots_dir.exists() {
             return Ok(snapshots);
         }
@@ -180,7 +168,7 @@ impl StateSnapshotManager {
      */
     pub fn cleanup_old_snapshots(&self, keep_count: usize) -> IoResult<usize> {
         let snapshots = self.list_snapshots()?;
-        
+
         if snapshots.len() <= keep_count {
             return Ok(0);
         }
@@ -227,7 +215,6 @@ impl StateSnapshot {
                 (
                     addr.clone(),
                     WalletSnapshot {
-                        address: addr,
                         balance: state.balance,
                     },
                 )
@@ -247,4 +234,3 @@ impl StateSnapshot {
         }
     }
 }
-

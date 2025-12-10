@@ -1,6 +1,5 @@
 // use crate::database::BlockchainDB; // Eliminado - ya no usamos BD
 use crate::models::Transaction;
-use rusqlite::Result as SqlResult;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -142,9 +141,10 @@ impl AirdropManager {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        let entry = tracking.entry(node_address.to_string()).or_insert_with(|| {
-            NodeTracking {
+
+        let entry = tracking
+            .entry(node_address.to_string())
+            .or_insert_with(|| NodeTracking {
                 node_address: node_address.to_string(),
                 first_block_index: block_index,
                 first_block_timestamp: block_timestamp,
@@ -158,18 +158,17 @@ impl AirdropManager {
                 claim_verified: false,
                 uptime_seconds: 0,
                 eligibility_tier: 0,
-            }
-        });
+            });
 
         entry.blocks_validated += 1;
         entry.last_block_timestamp = block_timestamp;
-        
+
         // Calcular uptime real (tiempo desde primer bloque hasta ahora)
         entry.uptime_seconds = current_time.saturating_sub(entry.first_block_timestamp);
-        
+
         // Verificar elegibilidad con criterios robustos
         entry.is_eligible = self.check_eligibility_criteria(entry);
-        
+
         // Determinar tier de elegibilidad
         entry.eligibility_tier = self.determine_tier(entry.first_block_index);
     }
@@ -199,7 +198,8 @@ impl AirdropManager {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            let time_since_last_activity = current_time.saturating_sub(tracking.last_block_timestamp);
+            let time_since_last_activity =
+                current_time.saturating_sub(tracking.last_block_timestamp);
             // Considerar offline si no ha tenido actividad en 24 horas
             if time_since_last_activity > 24 * 3600 {
                 return false;
@@ -214,7 +214,9 @@ impl AirdropManager {
      */
     fn determine_tier(&self, first_block_index: u64) -> u8 {
         for tier in &self.tiers {
-            if first_block_index >= tier.min_block_index && first_block_index <= tier.max_block_index {
+            if first_block_index >= tier.min_block_index
+                && first_block_index <= tier.max_block_index
+            {
                 return tier.tier_id;
             }
         }
@@ -225,20 +227,22 @@ impl AirdropManager {
      * Calcula la cantidad de airdrop para un nodo basado en su tier y participación
      */
     pub fn calculate_airdrop_amount(&self, tracking: &NodeTracking) -> u64 {
-        let tier = self.tiers.iter()
+        let tier = self
+            .tiers
+            .iter()
             .find(|t| t.tier_id == tracking.eligibility_tier);
-        
+
         if let Some(t) = tier {
             let mut amount = t.base_amount;
-            
+
             // Bonus por bloques validados (máximo 100 bloques)
             let bonus_blocks = tracking.blocks_validated.min(100);
             amount += bonus_blocks * t.bonus_per_block;
-            
+
             // Bonus por uptime (máximo 30 días)
             let uptime_days = (tracking.uptime_seconds / (24 * 3600)).min(30);
             amount += uptime_days * t.bonus_per_uptime_day;
-            
+
             amount
         } else {
             0
@@ -289,7 +293,7 @@ impl AirdropManager {
      */
     pub fn mark_as_claimed(&self, node_address: &str, transaction_id: String) -> bool {
         let mut tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         if let Some(entry) = tracking.get_mut(node_address) {
             if entry.is_eligible && !entry.airdrop_claimed {
                 entry.airdrop_claimed = true;
@@ -321,7 +325,7 @@ impl AirdropManager {
         block_index: u64,
     ) -> bool {
         let mut tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         if let Some(entry) = tracking.get_mut(node_address) {
             if entry.claim_transaction_id.as_ref() == Some(&transaction_id.to_string()) {
                 entry.claim_verified = true;
@@ -338,9 +342,10 @@ impl AirdropManager {
      * @param transaction_id - ID de la transacción fallida
      * @returns true si se hizo rollback exitosamente
      */
+    #[allow(dead_code)]
     pub fn rollback_claim(&self, node_address: &str, transaction_id: &str) -> bool {
         let mut tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         if let Some(entry) = tracking.get_mut(node_address) {
             if entry.claim_transaction_id.as_ref() == Some(&transaction_id.to_string()) {
                 entry.airdrop_claimed = false;
@@ -348,11 +353,14 @@ impl AirdropManager {
                 entry.claim_transaction_id = None;
                 entry.claim_block_index = None;
                 entry.claim_verified = false;
-                
+
                 // Remover de pending claims
-                let mut pending = self.pending_claims.lock().unwrap_or_else(|e| e.into_inner());
+                let mut pending = self
+                    .pending_claims
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 pending.remove(node_address);
-                
+
                 return true;
             }
         }
@@ -365,7 +373,10 @@ impl AirdropManager {
      * @param transaction_id - ID de la transacción
      */
     pub fn add_pending_claim(&self, node_address: &str, transaction_id: String) {
-        let mut pending = self.pending_claims.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pending = self
+            .pending_claims
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -385,18 +396,17 @@ impl AirdropManager {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
-        let timestamps = rate_limits.entry(identifier.to_string())
-            .or_insert_with(Vec::new);
-        
+
+        let timestamps = rate_limits.entry(identifier.to_string()).or_default();
+
         // Limpiar timestamps antiguos (más de 1 minuto)
         timestamps.retain(|&t| now.saturating_sub(t) < 60);
-        
+
         // Verificar límite
         if timestamps.len() >= max_per_minute as usize {
             return false;
         }
-        
+
         // Agregar timestamp actual
         timestamps.push(now);
         true
@@ -428,13 +438,13 @@ impl AirdropManager {
      */
     pub fn get_statistics(&self) -> AirdropStatistics {
         let tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         let total_nodes = tracking.len() as u64;
         let eligible_nodes = tracking.values().filter(|n| n.is_eligible).count() as u64;
         let claimed_nodes = tracking.values().filter(|n| n.airdrop_claimed).count() as u64;
         let verified_claims = tracking.values().filter(|n| n.claim_verified).count() as u64;
         let pending_verification = claimed_nodes - verified_claims;
-        
+
         // Calcular total distribuido basado en claims verificados
         let mut total_distributed = 0u64;
         for node in tracking.values() {
@@ -442,7 +452,7 @@ impl AirdropManager {
                 total_distributed += self.calculate_airdrop_amount(node);
             }
         }
-        
+
         AirdropStatistics {
             total_nodes,
             eligible_nodes,
@@ -458,51 +468,27 @@ impl AirdropManager {
     }
 
     /**
-     * Carga tracking desde la base de datos
-     */
-    #[allow(dead_code)]
-    pub fn load_from_db(&self, _db: &dyn std::any::Any) -> SqlResult<()> {
-        // Base de datos eliminada - el tracking se reconstruye desde blockchain
-        Ok(())
-    }
-
-    /**
-     * Guarda tracking en la base de datos
-     */
-    #[allow(dead_code)]
-    pub fn save_to_db(&self, _db: &dyn std::any::Any, _node_address: &str) -> SqlResult<()> {
-        // Base de datos eliminada - el tracking se reconstruye desde blockchain
-        Ok(())
-    }
-
-    /**
-     * Guarda claim en la base de datos
-     */
-    #[allow(dead_code)]
-    pub fn save_claim_to_db(&self, _db: &dyn std::any::Any, _node_address: &str) -> SqlResult<()> {
-        // Base de datos eliminada - el tracking se reconstruye desde blockchain
-        Ok(())
-    }
-
-    /**
      * Obtiene información de elegibilidad para un nodo
      */
     pub fn get_eligibility_info(&self, node_address: &str) -> Option<EligibilityInfo> {
         if let Some(tracking) = self.get_node_tracking(node_address) {
             let uptime_days = tracking.uptime_seconds / (24 * 3600);
             let estimated_amount = self.calculate_airdrop_amount(&tracking);
-            
+
             let requirements = EligibilityRequirements {
                 min_blocks_validated: self.eligibility_config.min_blocks_validated,
                 min_uptime_days: self.eligibility_config.min_uptime_seconds / (24 * 3600),
                 max_eligible_nodes: self.eligibility_config.max_eligible_nodes,
                 current_blocks: tracking.blocks_validated,
                 current_uptime_days: uptime_days,
-                meets_blocks_requirement: tracking.blocks_validated >= self.eligibility_config.min_blocks_validated,
-                meets_uptime_requirement: tracking.uptime_seconds >= self.eligibility_config.min_uptime_seconds,
-                meets_position_requirement: tracking.first_block_index <= self.eligibility_config.max_eligible_nodes,
+                meets_blocks_requirement: tracking.blocks_validated
+                    >= self.eligibility_config.min_blocks_validated,
+                meets_uptime_requirement: tracking.uptime_seconds
+                    >= self.eligibility_config.min_uptime_seconds,
+                meets_position_requirement: tracking.first_block_index
+                    <= self.eligibility_config.max_eligible_nodes,
             };
-            
+
             Some(EligibilityInfo {
                 is_eligible: tracking.is_eligible && !tracking.airdrop_claimed,
                 node_address: tracking.node_address,
@@ -520,9 +506,14 @@ impl AirdropManager {
     /**
      * Obtiene historial completo de claims
      */
-    pub fn get_claim_history(&self, limit: Option<u64>, node_address: Option<&str>) -> Vec<ClaimRecord> {
+    pub fn get_claim_history(
+        &self,
+        limit: Option<u64>,
+        node_address: Option<&str>,
+    ) -> Vec<ClaimRecord> {
         let history = self.claim_history.lock().unwrap_or_else(|e| e.into_inner());
-        let mut records: Vec<ClaimRecord> = history.iter()
+        let mut records: Vec<ClaimRecord> = history
+            .iter()
             .filter(|r| {
                 if let Some(addr) = node_address {
                     r.node_address == addr
@@ -532,13 +523,13 @@ impl AirdropManager {
             })
             .cloned()
             .collect();
-        
+
         records.sort_by(|a, b| b.claim_timestamp.cmp(&a.claim_timestamp));
-        
+
         if let Some(l) = limit {
             records.truncate(l as usize);
         }
-        
+
         records
     }
 
@@ -560,21 +551,33 @@ impl AirdropManager {
     /**
      * Obtiene claims pendientes de verificación
      */
+    #[allow(dead_code)]
     pub fn get_pending_claims(&self) -> HashMap<String, (String, u64)> {
-        let pending = self.pending_claims.lock().unwrap_or_else(|e| e.into_inner());
+        let pending = self
+            .pending_claims
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         pending.clone()
     }
 
     /**
      * Verifica y actualiza claims pendientes basado en transacciones en un bloque
      */
-    pub fn verify_pending_claims_in_block(&self, transactions: &[Transaction], block_index: u64, airdrop_wallet: &str) {
+    pub fn verify_pending_claims_in_block(
+        &self,
+        transactions: &[Transaction],
+        block_index: u64,
+        airdrop_wallet: &str,
+    ) {
         let mut verified_nodes = Vec::new();
-        
+
         // Buscar transacciones de airdrop en el bloque
         for tx in transactions {
             if tx.from == airdrop_wallet {
-                let pending = self.pending_claims.lock().unwrap_or_else(|e| e.into_inner());
+                let pending = self
+                    .pending_claims
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 for (node_address, (pending_tx_id, _)) in pending.iter() {
                     if pending_tx_id == &tx.id {
                         verified_nodes.push((node_address.clone(), pending_tx_id.clone()));
@@ -583,7 +586,7 @@ impl AirdropManager {
                 }
             }
         }
-        
+
         // Verificar y actualizar tracking
         for (node_address, tx_id) in verified_nodes {
             self.verify_claim_transaction(&node_address, &tx_id, block_index);
@@ -651,4 +654,3 @@ pub struct EligibilityRequirements {
     pub meets_uptime_requirement: bool,
     pub meets_position_requirement: bool,
 }
-

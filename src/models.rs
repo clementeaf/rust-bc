@@ -1,8 +1,11 @@
-use ed25519_dalek::{Signer, Verifier, Signature, SignatureError, SigningKey, VerifyingKey};
+// Standard library
+use std::collections::HashMap;
+
+// External crates
+use ed25519_dalek::{Signature, SignatureError, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 /**
@@ -34,7 +37,13 @@ impl Transaction {
     /**
      * Crea una nueva transacción con fee
      */
-    pub fn new_with_fee(from: String, to: String, amount: u64, fee: u64, data: Option<String>) -> Transaction {
+    pub fn new_with_fee(
+        from: String,
+        to: String,
+        amount: u64,
+        fee: u64,
+        data: Option<String>,
+    ) -> Transaction {
         let id = Uuid::new_v4().to_string();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -59,8 +68,13 @@ impl Transaction {
     pub fn calculate_hash(&self) -> String {
         let data = format!(
             "{}{}{}{}{}{}{}",
-            self.id, self.from, self.to, self.amount, self.fee,
-            self.data.as_ref().unwrap_or(&String::new()), self.timestamp
+            self.id,
+            self.from,
+            self.to,
+            self.amount,
+            self.fee,
+            self.data.as_ref().unwrap_or(&String::new()),
+            self.timestamp
         );
         let mut hasher = Sha256::new();
         hasher.update(data.as_bytes());
@@ -88,12 +102,10 @@ impl Transaction {
 
         let mut pk_array = [0u8; 32];
         pk_array.copy_from_slice(public_key_bytes);
-        let public_key = VerifyingKey::from_bytes(&pk_array)
-            .map_err(|_| SignatureError::new())?;
+        let public_key = VerifyingKey::from_bytes(&pk_array).map_err(|_| SignatureError::new())?;
 
-        let signature_bytes = hex::decode(&self.signature)
-            .map_err(|_| SignatureError::new())?;
-        
+        let signature_bytes = hex::decode(&self.signature).map_err(|_| SignatureError::new())?;
+
         if signature_bytes.len() != 64 {
             return Err(SignatureError::new());
         }
@@ -103,7 +115,9 @@ impl Transaction {
         let signature = Signature::from_bytes(&sig_array);
 
         let message = self.calculate_hash();
-        public_key.verify(message.as_bytes(), &signature).map_err(|_| SignatureError::new())
+        public_key
+            .verify(message.as_bytes(), &signature)
+            .map_err(|_| SignatureError::new())
     }
 
     /**
@@ -123,6 +137,12 @@ pub struct Wallet {
     pub balance: u64,
     pub public_key: VerifyingKey,
     pub signing_key: SigningKey,
+}
+
+impl Default for Wallet {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Wallet {
@@ -152,8 +172,7 @@ impl Wallet {
         }
         let mut pk_array = [0u8; 32];
         pk_array.copy_from_slice(public_key_bytes);
-        let public_key = VerifyingKey::from_bytes(&pk_array)
-            .map_err(|_| SignatureError::new())?;
+        let public_key = VerifyingKey::from_bytes(&pk_array).map_err(|_| SignatureError::new())?;
         let address = hex::encode(public_key.as_bytes());
 
         Ok(Wallet {
@@ -234,17 +253,15 @@ impl<'de> Deserialize<'de> for Wallet {
         }
 
         let helper = WalletHelper::deserialize(deserializer)?;
-        let public_key_bytes = hex::decode(&helper.public_key)
-            .map_err(serde::de::Error::custom)?;
-        
+        let public_key_bytes = hex::decode(&helper.public_key).map_err(serde::de::Error::custom)?;
+
         if public_key_bytes.len() != 32 {
             return Err(serde::de::Error::custom("Invalid public key length"));
         }
 
         let mut pk_array = [0u8; 32];
         pk_array.copy_from_slice(&public_key_bytes);
-        let public_key = VerifyingKey::from_bytes(&pk_array)
-            .map_err(serde::de::Error::custom)?;
+        let public_key = VerifyingKey::from_bytes(&pk_array).map_err(serde::de::Error::custom)?;
 
         Ok(Wallet {
             address: helper.address,
@@ -305,14 +322,12 @@ impl Mempool {
      * @returns true si hay conflicto con transacciones pendientes
      */
     pub fn has_double_spend(&self, tx: &Transaction) -> bool {
-        self.transactions
-            .iter()
-            .any(|pending_tx| {
-                pending_tx.from == tx.from
-                    && pending_tx.id != tx.id
-                    && pending_tx.amount == tx.amount
-                    && pending_tx.timestamp == tx.timestamp
-            })
+        self.transactions.iter().any(|pending_tx| {
+            pending_tx.from == tx.from
+                && pending_tx.id != tx.id
+                && pending_tx.amount == tx.amount
+                && pending_tx.timestamp == tx.timestamp
+        })
     }
 
     /**
@@ -340,7 +355,7 @@ impl Mempool {
     pub fn get_transactions_for_block(&mut self, max: usize) -> Vec<Transaction> {
         // Ordenar por fee descendente (mayor fee primero)
         self.transactions.sort_by(|a, b| b.fee.cmp(&a.fee));
-        
+
         let count = max.min(self.transactions.len());
         self.transactions.drain(..count).collect()
     }
@@ -484,7 +499,8 @@ impl WalletManager {
      */
     #[allow(dead_code)]
     pub fn find_wallet_by_address(&self, address: &str) -> Option<&Wallet> {
-        self.wallets.get(address)
+        self.wallets
+            .get(address)
             .or_else(|| self.wallets.values().find(|w| w.address == address))
     }
 
@@ -496,16 +512,17 @@ impl WalletManager {
         if self.wallets.contains_key(address) {
             return self.wallets.get_mut(address);
         }
-        
-        let key_to_update = self.wallets
+
+        let key_to_update = self
+            .wallets
             .iter()
             .find(|(_, w)| w.address == address)
             .map(|(k, _)| k.clone());
-        
+
         if let Some(key) = key_to_update {
             return self.wallets.get_mut(&key);
         }
-        
+
         None
     }
 
@@ -518,17 +535,13 @@ impl WalletManager {
             return Err("Transacción inválida".to_string());
         }
 
-        let from_wallet = self.wallets.entry(tx.from.clone()).or_insert_with(|| {
-            Wallet::new()
-        });
+        let from_wallet = self.wallets.entry(tx.from.clone()).or_default();
 
         // Restar amount + fee del wallet origen
         let total = tx.amount + tx.fee;
         from_wallet.subtract_balance(total)?;
 
-        let to_wallet = self.wallets.entry(tx.to.clone()).or_insert_with(|| {
-            Wallet::new()
-        });
+        let to_wallet = self.wallets.entry(tx.to.clone()).or_default();
 
         // Solo agregar amount al destinatario (el fee va al minero)
         to_wallet.add_balance(tx.amount);
@@ -599,8 +612,10 @@ impl WalletManager {
                 if tx.from == "0" {
                     *balance_map.entry(tx.to.clone()).or_insert(0) += tx.amount;
                 } else {
-                    *balance_map.entry(tx.from.clone()).or_insert(0) = 
-                        balance_map.get(&tx.from).unwrap_or(&0).saturating_sub(tx.amount);
+                    *balance_map.entry(tx.from.clone()).or_insert(0) = balance_map
+                        .get(&tx.from)
+                        .unwrap_or(&0)
+                        .saturating_sub(tx.amount);
                     *balance_map.entry(tx.to.clone()).or_insert(0) += tx.amount;
                 }
             }
@@ -624,4 +639,3 @@ impl Default for WalletManager {
         Self::new()
     }
 }
-
