@@ -2,7 +2,8 @@
 /target/
 **/*.rs.bk
 *.pdb
-Cargo.lock
+# NOTA: Cargo.lock SÍ debe estar en el repo para aplicaciones/binarios
+# Solo se ignora para librerías (libraries)
 
 # Base de datos
 *.db
