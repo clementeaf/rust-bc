@@ -35,5 +35,19 @@ rust-bc.d
 # Backup files
 *.bak
 *.broken
-src/blockchain.rs.broken
+
+# Test results
+load_test_results_*.txt
+test_*_blocks/
+test_*_snapshots/
+test_*_checkpoints/
+
+# Node modules (subprojects)
+block-explorer/node_modules/
+sdk-js/node_modules/
+
+# Test database files
+test_*.db
+test_*.db-shm
+test_*.db-wal
 
