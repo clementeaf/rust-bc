@@ -2,9 +2,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-// External crates
-use rayon::prelude::*;
-
 // Crate modules
 use crate::airdrop::NodeTracking;
 use crate::blockchain::Block;
