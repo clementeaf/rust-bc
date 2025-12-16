@@ -525,7 +525,16 @@ async fn main() -> std::io::Result<()> {
     // Tarea periódica para crear snapshots cada 1000 bloques
     if pruning_manager.is_some() && snapshot_manager.is_some() {
         let blockchain_for_snapshot = blockchain_arc.clone();
-        let pruning_mgr_clone = pruning_manager.clone().unwrap();
+        let pruning_mgr_clone = match pruning_manager.clone() {
+            Some(pruning) => pruning,
+            None => {
+                eprintln!("⚠️  Pruning manager no disponible para tarea periódica");
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Pruning manager not available",
+                ));
+            }
+        };
 
         match StateSnapshotManager::new(&snapshots_dir) {
             Ok(snapshot_mgr_clone) => {
@@ -535,12 +544,20 @@ async fn main() -> std::io::Result<()> {
                         tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
 
                         let (current_block_index, should_create) = {
-                            let blockchain = blockchain_for_snapshot.lock().unwrap();
-                            let latest = blockchain.get_latest_block();
-                            let current = latest.index;
-                            let should = pruning_mgr_clone.should_create_snapshot(current)
-                                && current > last_snapshot_block;
-                            (current, should)
+                            let lock_result = blockchain_for_snapshot.lock();
+                            match lock_result {
+                                Ok(blockchain) => {
+                                    let latest = blockchain.get_latest_block();
+                                    let current = latest.index;
+                                    let should = pruning_mgr_clone.should_create_snapshot(current)
+                                        && current > last_snapshot_block;
+                                    (current, should)
+                                }
+                                Err(_e) => {
+                                    eprintln!("⚠️  Error al adquirir lock de blockchain en snapshot task");
+                                    continue;
+                                }
+                            }
                         };
 
                         if should_create {
@@ -550,16 +567,37 @@ async fn main() -> std::io::Result<()> {
                             );
 
                             // Reconstruir estado para el snapshot
-                            let blockchain = blockchain_for_snapshot.lock().unwrap();
-                            let latest_block = blockchain.get_latest_block().clone();
-                            drop(blockchain);
+                            let latest_block = {
+                                let lock_result = blockchain_for_snapshot.lock();
+                                match lock_result {
+                                    Ok(blockchain) => {
+                                        let block = blockchain.get_latest_block().clone();
+                                        drop(blockchain);
+                                        block
+                                    }
+                                    Err(_e) => {
+                                        eprintln!("⚠️  Error al adquirir lock de blockchain para snapshot");
+                                        continue;
+                                    }
+                                }
+                            };
 
                             // Reconstruir estado desde blockchain
                             let reconstructed = {
-                                let blockchain = blockchain_for_snapshot.lock().unwrap();
-                                crate::state_reconstructor::ReconstructedState::from_blockchain(
-                                    &blockchain.chain,
-                                )
+                                let lock_result = blockchain_for_snapshot.lock();
+                                match lock_result {
+                                    Ok(blockchain) => {
+                                        let reconstructed = crate::state_reconstructor::ReconstructedState::from_blockchain(
+                                            &blockchain.chain,
+                                        );
+                                        drop(blockchain);
+                                        reconstructed
+                                    }
+                                    Err(_e) => {
+                                        eprintln!("⚠️  Error al adquirir lock de blockchain para reconstrucción");
+                                        continue;
+                                    }
+                                }
                             };
 
                             let snapshot = StateSnapshot::from_state(

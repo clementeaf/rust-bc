@@ -747,9 +747,25 @@ pub async fn mine_block(
 
     // Checkpointing cada 2000 bloques (protección anti-51%)
     if let Some(ref checkpoint_mgr) = state.checkpoint_manager {
-        let mut checkpoint_manager = checkpoint_mgr.lock().unwrap();
+        let mut checkpoint_manager = match checkpoint_mgr.lock() {
+            Ok(manager) => manager,
+            Err(e) => {
+                eprintln!("⚠️  Error al adquirir lock de checkpoint manager: {}", e);
+                return Err(actix_web::error::ErrorInternalServerError(
+                    "Service temporarily unavailable",
+                ));
+            }
+        };
         if checkpoint_manager.should_create_checkpoint(latest.index) {
-            let blockchain = state.blockchain.lock().unwrap();
+            let blockchain = match state.blockchain.lock() {
+                Ok(bc) => bc,
+                Err(e) => {
+                    eprintln!("⚠️  Error al adquirir lock de blockchain: {}", e);
+                    return Err(actix_web::error::ErrorInternalServerError(
+                        "Service temporarily unavailable",
+                    ));
+                }
+            };
             let cumulative_difficulty =
                 blockchain.calculate_cumulative_difficulty(Some(latest.index));
             let block_hash = latest.hash.clone();
@@ -1737,8 +1753,13 @@ pub async fn execute_contract_function(
 
                     // Verificar peers antes de hacer broadcast
                     let peers_count = {
-                        let peers_guard = node_clone.peers.lock().unwrap();
-                        peers_guard.len()
+                        match node_clone.peers.lock() {
+                            Ok(peers_guard) => peers_guard.len(),
+                            Err(e) => {
+                                eprintln!("⚠️  Error al adquirir lock de peers: {}", e);
+                                0
+                            }
+                        }
                     };
 
                     if peers_count > 0 {
@@ -2471,7 +2492,7 @@ pub async fn claim_airdrop(
         node_address: node_address.clone(),
         claim_timestamp: SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("System time should always be after UNIX_EPOCH")
             .as_secs(),
         airdrop_amount,
         transaction_id: transaction_id.clone(),

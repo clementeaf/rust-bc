@@ -251,17 +251,9 @@ impl Blockchain {
         let previous_hash = "0".to_string();
         let merkle_root = Self::calculate_merkle_root_static(std::slice::from_ref(&genesis_tx));
 
-        let data = format!(
-            "{}{}{}{}{}{}",
-            0u64, timestamp, merkle_root, previous_hash, 0u64, 1usize
-        );
-        let mut hasher = Sha256::new();
-        hasher.update(data.as_bytes());
-        let hash = format!("{:x}", hasher.finalize());
-
         let target = "0".repeat(self.difficulty as usize);
         let mut nonce = 0u64;
-        let mut final_hash = hash.clone();
+        let mut final_hash = String::new();
 
         while !final_hash.starts_with(&target) {
             let data = format!(
