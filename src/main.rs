@@ -1,6 +1,7 @@
 mod airdrop;
 mod api;
 mod billing;
+mod metrics;
 mod block_storage;
 mod blockchain;
 mod cache;
@@ -22,6 +23,7 @@ use actix_web::middleware::Compress;
 use actix_web::{web, App, HttpServer};
 use airdrop::AirdropManager;
 use api::{config_routes, AppState};
+use metrics::MetricsCollector;
 use billing::BillingManager;
 use block_storage::BlockStorage;
 use blockchain::Blockchain;
@@ -516,6 +518,9 @@ async fn main() -> std::io::Result<()> {
         None
     };
 
+    // Inicializar MetricsCollector
+    let metrics_collector = Arc::new(MetricsCollector::new());
+
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
@@ -530,6 +535,7 @@ async fn main() -> std::io::Result<()> {
         pruning_manager: pruning_manager.clone(),
         checkpoint_manager: checkpoint_manager.clone(),
         transaction_validator: transaction_validator.clone(),
+        metrics: metrics_collector.clone(),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

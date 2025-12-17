@@ -61,3 +61,7 @@ path = "src/bin/mining_worker.rs"
 [[bin]]
 name = "test_mining_worker"
 path = "src/bin/test_mining_worker.rs"
+
+[[bin]]
+name = "test_metrics"
+path = "src/bin/test_metrics.rs"

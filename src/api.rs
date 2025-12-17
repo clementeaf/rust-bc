@@ -21,6 +21,7 @@ use crate::pruning::PruningManager;
 use crate::smart_contracts::{ContractFunction, ContractManager, NFTMetadata, SmartContract};
 use crate::staking::StakingManager;
 use crate::transaction_validation::TransactionValidator;
+use crate::metrics::MetricsCollector;
 
 /**
  * Estado compartido de la aplicación
@@ -40,6 +41,7 @@ pub struct AppState {
     pub pruning_manager: Option<Arc<PruningManager>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Arc<Mutex<TransactionValidator>>,
+    pub metrics: Arc<MetricsCollector>,
 }
 
 /**
@@ -869,6 +871,16 @@ pub async fn get_mempool(state: web::Data<AppState>) -> ActixResult<HttpResponse
 
     let response = ApiResponse::success(response_data);
     Ok(HttpResponse::Ok().json(response))
+}
+
+/**
+ * Prometheus metrics endpoint
+ */
+pub async fn get_metrics(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+    let metrics_text = state.metrics.collect_metrics();
+    Ok(HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4")
+        .body(metrics_text))
 }
 
 /**
@@ -2643,6 +2655,7 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
             .route("/sync", web::post().to(sync_blockchain))
             .route("/mine", web::post().to(mine_block))
             .route("/mempool", web::get().to(get_mempool))
+            .route("/metrics", web::get().to(get_metrics))
             .route("/stats", web::get().to(get_stats))
             .route("/health", web::get().to(health_check))
             // IMPORTANTE: Rutas exactas ANTES de rutas con parámetros
