@@ -7,3 +7,4 @@ pub mod transaction_validation;
 pub mod governance_contracts;
 pub mod staking_rewards;
 pub mod multisig_contracts;
+pub mod plugin_contracts;
