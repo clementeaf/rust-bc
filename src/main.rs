@@ -10,6 +10,7 @@ mod middleware;
 mod models;
 mod network;
 mod network_security;
+mod transaction_validation;
 mod pruning;
 mod smart_contracts;
 mod staking;

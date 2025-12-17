@@ -47,3 +47,7 @@ path = "src/bin/validate_chain.rs"
 name = "test_network_security"
 path = "src/bin/test_network_security.rs"
 
+[[bin]]
+name = "test_transaction_validation"
+path = "src/bin/test_transaction_validation.rs"
+
