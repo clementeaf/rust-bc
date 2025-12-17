@@ -20,6 +20,7 @@ use crate::network::Node;
 use crate::pruning::PruningManager;
 use crate::smart_contracts::{ContractFunction, ContractManager, NFTMetadata, SmartContract};
 use crate::staking::StakingManager;
+use crate::transaction_validation::TransactionValidator;
 
 /**
  * Estado compartido de la aplicación
@@ -38,6 +39,7 @@ pub struct AppState {
     pub airdrop_manager: Arc<AirdropManager>,
     pub pruning_manager: Option<Arc<PruningManager>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
+    pub transaction_validator: Arc<Mutex<TransactionValidator>>,
 }
 
 /**
@@ -333,6 +335,18 @@ pub async fn create_transaction(
 
         if let Err(e) = validation_result {
             let response: ApiResponse<Transaction> = ApiResponse::error(e);
+            return Ok(HttpResponse::BadRequest().json(response));
+        }
+
+        // Validate transaction using the validation gate
+        let validation_result = {
+            let mut validator = state.transaction_validator.lock().unwrap_or_else(|e| e.into_inner());
+            validator.validate(&tx)
+        };
+
+        if !validation_result.is_valid {
+            let error_msg = validation_result.errors.join("; ");
+            let response: ApiResponse<Transaction> = ApiResponse::error(error_msg);
             return Ok(HttpResponse::BadRequest().json(response));
         }
 

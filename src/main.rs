@@ -33,6 +33,7 @@ use pruning::PruningManager;
 use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
+use transaction_validation::TransactionValidator;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -371,6 +372,9 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    // Inicializar TransactionValidator
+    let transaction_validator = Arc::new(Mutex::new(TransactionValidator::with_defaults()));
+
     let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
     let mut node_arc = Node::new(
         node_address,
@@ -387,6 +391,7 @@ async fn main() -> std::io::Result<()> {
     if let Some(ref checkpoint_mgr) = checkpoint_manager {
         node_arc.set_checkpoint_manager(checkpoint_mgr.clone());
     }
+    node_arc.set_transaction_validator(transaction_validator.clone());
 
     // Clonar los recursos compartidos antes de crear el Arc
     let shared_peers = node_arc.peers.clone();
@@ -411,6 +416,7 @@ async fn main() -> std::io::Result<()> {
     if let Some(ref checkpoint_mgr) = checkpoint_manager {
         node_for_server.set_checkpoint_manager(checkpoint_mgr.clone());
     }
+    node_for_server.set_transaction_validator(transaction_validator.clone());
     // Compartir los mismos recursos compartidos
     node_for_server.peers = shared_peers;
     node_for_server.contract_sync_metrics = shared_contract_sync_metrics;
@@ -523,6 +529,7 @@ async fn main() -> std::io::Result<()> {
         airdrop_manager: airdrop_manager.clone(),
         pruning_manager: pruning_manager.clone(),
         checkpoint_manager: checkpoint_manager.clone(),
+        transaction_validator: transaction_validator.clone(),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

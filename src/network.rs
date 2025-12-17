@@ -14,6 +14,7 @@ use crate::blockchain::{Block, Blockchain};
 use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
 use crate::smart_contracts::{ContractManager, SmartContract};
+use crate::transaction_validation::TransactionValidator;
 
 /**
  * Tipos de mensajes en la red P2P
@@ -65,6 +66,7 @@ pub struct Node {
     pub block_storage: Option<Arc<BlockStorage>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
+    pub transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
     pub listening: bool,
     pub contract_sync_metrics: Arc<Mutex<HashMap<String, ContractSyncMetrics>>>,
     pub pending_contract_broadcasts: Arc<Mutex<Vec<(String, SmartContract)>>>,
@@ -106,6 +108,7 @@ impl Node {
             block_storage: None,
             contract_manager: None,
             checkpoint_manager: None,
+            transaction_validator: None,
             listening: false,
             contract_sync_metrics: Arc::new(Mutex::new(HashMap::new())),
             pending_contract_broadcasts: Arc::new(Mutex::new(Vec::new())),
@@ -147,6 +150,13 @@ impl Node {
     }
 
     /**
+     * Configura el transaction validator para el nodo
+     */
+    pub fn set_transaction_validator(&mut self, transaction_validator: Arc<Mutex<TransactionValidator>>) {
+        self.transaction_validator = Some(transaction_validator);
+    }
+
+    /**
      * Inicia el servidor P2P
      */
     pub async fn start_server(&mut self, port: u16) -> Result<(), Box<dyn std::error::Error>> {
@@ -163,6 +173,7 @@ impl Node {
         let block_storage = self.block_storage.clone();
         let contract_manager = self.contract_manager.clone();
         let checkpoint_manager = self.checkpoint_manager.clone();
+        let transaction_validator = self.transaction_validator.clone();
         let my_p2p_address = format!("{}:{}", self.address.ip(), self.address.port());
         let recent_receipts = self.recent_contract_receipts.clone();
         let rate_limits = self.contract_rate_limits.clone();
@@ -179,6 +190,7 @@ impl Node {
                     let block_storage_clone = block_storage.clone();
                     let contract_manager_clone = contract_manager.clone();
                     let checkpoint_manager_clone = checkpoint_manager.clone();
+                    let transaction_validator_clone = transaction_validator.clone();
                     let my_p2p_address_clone = my_p2p_address.clone();
                     let recent_receipts_clone = recent_receipts.clone();
                     let rate_limits_clone = rate_limits.clone();
@@ -194,6 +206,7 @@ impl Node {
                             block_storage_clone,
                             contract_manager_clone,
                             checkpoint_manager_clone,
+                            transaction_validator_clone,
                             Some(my_p2p_address_clone),
                             recent_receipts_clone,
                             rate_limits_clone,
@@ -225,6 +238,7 @@ impl Node {
         block_storage: Option<Arc<BlockStorage>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
+        transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
         my_p2p_address: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
@@ -313,6 +327,7 @@ impl Node {
                     block_storage.clone(),
                     contract_manager.clone(),
                     checkpoint_manager.clone(),
+                    transaction_validator.clone(),
                     my_p2p_address.clone(),
                     Some(peer_addr_str.clone()),
                     recent_receipts.clone(),
@@ -343,6 +358,7 @@ impl Node {
         block_storage: Option<Arc<BlockStorage>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
+        transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
         my_p2p_address: Option<String>,
         source_peer: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -533,6 +549,19 @@ impl Node {
                     "📨 Nueva transacción recibida: {} -> {} ({} unidades)",
                     tx.from, tx.to, tx.amount
                 );
+
+                // Validate transaction using the validation gate
+                if let Some(tv) = &transaction_validator {
+                    let mut validator = tv.lock().unwrap();
+                    let validation_result = validator.validate(&tx);
+                    
+                    if !validation_result.is_valid {
+                        let error_msg = validation_result.errors.join("; ");
+                        println!("🚫 Transacción rechazada por validador: {}", error_msg);
+                        return Ok(None);
+                    }
+                }
+
                 Ok(None)
             }
 
