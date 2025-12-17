@@ -4,6 +4,7 @@ mod billing;
 mod block_storage;
 mod blockchain;
 mod cache;
+mod chain_validation;
 mod checkpoint;
 mod middleware;
 mod models;

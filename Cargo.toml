@@ -22,6 +22,7 @@ ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 rand = "0.8"
 rand_core = { version = "0.6", features = ["getrandom"] }
 rayon = "1.8"
+num_cpus = "1.16"
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -29,4 +30,16 @@ tempfile = "3.8"
 [[bin]]
 name = "test_mining"
 path = "src/bin/test_mining.rs"
+
+[[bin]]
+name = "benchmark_mining"
+path = "src/bin/benchmark_mining.rs"
+
+[[bin]]
+name = "compare_mining"
+path = "src/bin/compare_mining.rs"
+
+[[bin]]
+name = "validate_chain"
+path = "src/bin/validate_chain.rs"
 
