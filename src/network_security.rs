@@ -249,7 +249,8 @@ impl NetworkSecurityManager {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            score.score = (score.score + 1).min(100); // Cap at 100
+            // Reward good behavior - increase score up to 150 max
+            score.score = (score.score + 5).min(150);
         }
     }
 

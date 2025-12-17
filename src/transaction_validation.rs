@@ -36,7 +36,7 @@ impl Default for ValidationConfig {
             min_fee: 0,
             min_amount: 0,
             max_amount: u64::MAX,
-            min_address_length: 32,
+            min_address_length: 5,  // Minimum 5 chars (e.g., "addr1")
             max_address_length: 256,
             fee_multiplier: 1.0,
             enable_sequence_tracking: true,
@@ -212,6 +212,11 @@ impl TransactionValidator {
             .unwrap_or_default()
             .as_secs();
         self.seen_transaction_ids.insert(tx.id.clone(), now);
+        
+        // Initialize sender state if needed
+        if !self.sender_states.contains_key(&tx.from) {
+            self.sender_states.insert(tx.from.clone(), SenderState::new(tx.from.clone()));
+        }
 
         // Update sender state
         if self.config.enable_sequence_tracking {
@@ -508,12 +513,16 @@ mod tests {
         let tx1 = create_test_tx("addr1", "addr2", 100, 1);
         let mut tx2 = create_test_tx("addr1", "addr3", 50, 1);
         tx2.timestamp = 50; // Earlier timestamp
+        tx2.id = "tx_different".to_string(); // Different ID to avoid duplicate check
 
         let result1 = validator.validate(&tx1);
         assert!(result1.is_valid);
 
+        // Confirm the first transaction to update last_confirmed_sequence
+        validator.confirm_transaction(&tx1);
+
         let result2 = validator.validate(&tx2);
-        assert!(!result2.is_valid); // Should fail because timestamp < last
+        assert!(!result2.is_valid); // Should fail because timestamp 50 < last_confirmed 100
     }
 
     #[test]
@@ -521,7 +530,7 @@ mod tests {
         let mut validator = TransactionValidator::with_defaults();
         let tx = Transaction {
             id: "tx1".to_string(),
-            from: "short".to_string(), // Too short
+            from: "tiny".to_string(), // Too short (4 chars < 5)
             to: "addr2_with_valid_length_____".to_string(),
             amount: 100,
             fee: 1,
