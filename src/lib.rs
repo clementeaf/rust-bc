@@ -4,3 +4,4 @@ pub mod models;
 pub mod chain_validation;
 pub mod network_security;
 pub mod transaction_validation;
+pub mod governance_contracts;
