@@ -31,9 +31,9 @@ fn main() {
     let test_cases = vec![
         (
             Transaction {
-                id: "tx1".to_string(),
-                from: "sender_address_1234567890".to_string(),
-                to: "receiver_address_1234567890".to_string(),
+                id: "tx_valid_format_test_001".to_string(),
+                from: "sender_addr_valid_minlength32char".to_string(),
+                to: "receiver_addr_valid_minlength32ch".to_string(),
                 amount: 100,
                 fee: 1,
                 timestamp: 1000,
@@ -46,8 +46,8 @@ fn main() {
         (
             Transaction {
                 id: "".to_string(),
-                from: "sender".to_string(),
-                to: "receiver".to_string(),
+                from: "sender_addr_valid_minlength32char".to_string(),
+                to: "receiver_addr_valid_minlength32ch".to_string(),
                 amount: 100,
                 fee: 1,
                 timestamp: 1000,
@@ -59,9 +59,9 @@ fn main() {
         ),
         (
             Transaction {
-                id: "tx2".to_string(),
-                from: "addr1234567890".to_string(),
-                to: "addr1234567890".to_string(),
+                id: "tx_same_sender_receiver_test_002".to_string(),
+                from: "same_addr_valid_minlength32chrs".to_string(),
+                to: "same_addr_valid_minlength32chrs".to_string(),
                 amount: 100,
                 fee: 1,
                 timestamp: 1000,
@@ -100,9 +100,9 @@ fn main() {
 
     for (amount, fee, desc, should_pass) in amount_tests {
         let tx = Transaction {
-            id: format!("tx_{}_{}", amount, fee),
-            from: "sender_address_1234567890".to_string(),
-            to: "receiver_address_1234567890".to_string(),
+            id: format!("tx_amount_{}_{}_valid_test", amount, fee),
+            from: "sender_addr_valid_minlength32char".to_string(),
+            to: "receiver_addr_valid_minlength32ch".to_string(),
             amount,
             fee,
             timestamp: 2000 + amount as u64,
@@ -131,14 +131,14 @@ fn main() {
     println!();
 
     let addr_tests = vec![
-        ("valid_sender_12345678901234567890", "valid_receiver_12345678901234567890", "Valid addresses", true),
-        ("short", "valid_receiver_12345678901234567890", "Sender too short", false),
-        ("valid_sender_12345678901234567890", "rec", "Receiver too short", false),
+        ("valid_sender_minlength_32chars_ok", "valid_receiver_minlength32chars_ok", "Valid addresses", true),
+        ("short", "valid_receiver_minlength32chars_ok", "Sender too short", false),
+        ("valid_sender_minlength_32chars_ok", "rec", "Receiver too short", false),
     ];
 
     for (sender, receiver, desc, should_pass) in addr_tests {
         let tx = Transaction {
-            id: format!("tx_{}", desc),
+            id: format!("tx_addr_{}", desc),
             from: sender.to_string(),
             to: receiver.to_string(),
             amount: 100,
@@ -163,9 +163,9 @@ fn main() {
     validator = TransactionValidator::with_defaults();
 
     let tx1 = Transaction {
-        id: "tx_seq_1".to_string(),
-        from: "sender_seq_test_1234567890".to_string(),
-        to: "receiver_seq_test_1234567890".to_string(),
+        id: "tx_seq_test_001".to_string(),
+        from: "sender_seq_minlength_32chars_okay".to_string(),
+        to: "receiver_seq_minlength32chars_okay".to_string(),
         amount: 100,
         fee: 1,
         timestamp: 100,
@@ -177,9 +177,9 @@ fn main() {
     println!("✅ First transaction (sequence=100): {}", result1.is_valid);
 
     let tx2 = Transaction {
-        id: "tx_seq_2".to_string(),
-        from: "sender_seq_test_1234567890".to_string(),
-        to: "receiver_seq_test_1234567890".to_string(),
+        id: "tx_seq_test_002".to_string(),
+        from: "sender_seq_minlength_32chars_okay".to_string(),
+        to: "receiver_seq_minlength32chars_okay".to_string(),
         amount: 50,
         fee: 1,
         timestamp: 200,
@@ -191,9 +191,9 @@ fn main() {
     println!("✅ Second transaction (sequence=200): {}", result2.is_valid);
 
     let tx3_replay = Transaction {
-        id: "tx_seq_3_replay".to_string(),
-        from: "sender_seq_test_1234567890".to_string(),
-        to: "receiver_seq_test_1234567890".to_string(),
+        id: "tx_seq_replay_attack_test_003".to_string(),
+        from: "sender_seq_minlength_32chars_okay".to_string(),
+        to: "receiver_seq_minlength32chars_okay".to_string(),
         amount: 75,
         fee: 1,
         timestamp: 50, // Lower than previous - REPLAY ATTEMPT
@@ -202,7 +202,8 @@ fn main() {
     };
 
     let result3 = validator.validate(&tx3_replay);
-    println!("🛡️  Replay attack (sequence=50): {} (BLOCKED)", !result3.is_valid);
+    let replay_blocked = !result3.is_valid;
+    println!("🛡️  Replay attack (sequence=50): {} (BLOCKED)", replay_blocked);
     if !result3.is_valid {
         println!("   Error: {}", result3.errors[0]);
     }
@@ -217,9 +218,9 @@ fn main() {
     validator = TransactionValidator::with_defaults();
 
     let tx_dup = Transaction {
-        id: "tx_duplicate_test".to_string(),
-        from: "sender_dup_1234567890".to_string(),
-        to: "receiver_dup_1234567890".to_string(),
+        id: "tx_duplicate_test_unique_id_004".to_string(),
+        from: "sender_dup_minlength_32chars_okay".to_string(),
+        to: "receiver_dup_minlength32chars_okay".to_string(),
         amount: 200,
         fee: 2,
         timestamp: 5000,
@@ -231,7 +232,8 @@ fn main() {
     println!("✅ First submission: {}", result_first.is_valid);
 
     let result_second = validator.validate(&tx_dup);
-    println!("🛡️  Duplicate submission: {} (BLOCKED)", !result_second.is_valid);
+    let duplicate_blocked = !result_second.is_valid;
+    println!("🛡️  Duplicate submission: {} (BLOCKED)", duplicate_blocked);
     if !result_second.is_valid {
         println!("   Error: {}", result_second.errors[0]);
     }
@@ -249,9 +251,9 @@ fn main() {
     for i in 1..=3 {
         for j in 1..=2 {
             let tx = Transaction {
-                id: format!("tx_stats_{}_{}", i, j),
-                from: format!("sender_{}_addr_1234567890", i),
-                to: format!("receiver_{}_addr_1234567890", j),
+                id: format!("tx_stats_{}_{}_valid_test", i, j),
+                from: format!("sender_{}_valid_minlength32chr", i),
+                to: format!("receiver_{}_valid_minlength32c", j),
                 amount: 100 * i as u64,
                 fee: 1,
                 timestamp: 1000 + (i as u64 * 100) + j as u64,
@@ -289,5 +291,12 @@ fn main() {
     println!("  5. Address validation (length/format check)");
     println!("  6. Sequence tracking (replay prevention)");
     println!("  7. Double-spend check (pending transaction limits)");
+    println!();
+    
+    // Final verification
+    let all_critical_pass = result1.is_valid && result2.is_valid && replay_blocked && duplicate_blocked;
+    if all_critical_pass {
+        println!("🎯 ALL CRITICAL PROTECTIONS VERIFIED ✅");
+    }
     println!();
 }
