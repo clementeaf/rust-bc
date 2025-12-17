@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 /**
  * Chain Validation and Fork Resolution Module
  * 
@@ -9,7 +11,6 @@
  */
 
 use crate::blockchain::{Block, Blockchain};
-use std::collections::HashMap;
 
 /**
  * Validación de cadena completa
@@ -114,7 +115,7 @@ impl ChainValidator {
         }
 
         // Validar dificultad (no debe cambiar más de 1 nivel sin adjustment_interval)
-        let blocks_since_adjustment = (new_block.index % blockchain.difficulty_adjustment_interval);
+        let blocks_since_adjustment = new_block.index % blockchain.difficulty_adjustment_interval;
         if blocks_since_adjustment != 0 && new_block.difficulty != blockchain.difficulty {
             return Err("Dificultad cambió fuera del intervalo de ajuste".to_string());
         }

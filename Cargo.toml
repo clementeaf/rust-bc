@@ -43,3 +43,7 @@ path = "src/bin/compare_mining.rs"
 name = "validate_chain"
 path = "src/bin/validate_chain.rs"
 
+[[bin]]
+name = "test_network_security"
+path = "src/bin/test_network_security.rs"
+

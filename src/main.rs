@@ -9,6 +9,7 @@ mod checkpoint;
 mod middleware;
 mod models;
 mod network;
+mod network_security;
 mod pruning;
 mod smart_contracts;
 mod staking;

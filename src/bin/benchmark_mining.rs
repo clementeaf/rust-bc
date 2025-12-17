@@ -14,7 +14,6 @@
 use rust_bc::blockchain::{Blockchain, Block};
 use rust_bc::models::WalletManager;
 use std::time::Instant;
-use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

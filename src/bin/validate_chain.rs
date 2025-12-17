@@ -7,7 +7,6 @@
  */
 use rust_bc::blockchain::Blockchain;
 use rust_bc::chain_validation::{ChainValidator, ForkResolver, AttackProtection};
-use rust_bc::models::WalletManager;
 
 fn main() {
     println!("╔════════════════════════════════════════════════════════╗");
