@@ -11,3 +11,4 @@ pub mod plugin_contracts;
 pub mod contract_validation;
 pub mod oracle_system;
 pub mod oracle_collateral;
+pub mod smart_contract;
