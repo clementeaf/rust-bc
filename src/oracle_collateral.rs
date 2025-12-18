@@ -935,7 +935,7 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         // First challenge
-        let c1 = registry
+        let _c1 = registry
             .challenge_oracle("oracle1", "challenger1", "hash1".to_string(), "evidence1".to_string(), 2000)
             .unwrap();
 
