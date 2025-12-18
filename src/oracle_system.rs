@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use tracing::{debug, warn, error, info};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -185,7 +186,13 @@ impl OracleRegistry {
         let computed = mac.finalize();
         let computed_bytes = computed.into_bytes();
         // Constant-time comparison to prevent timing attacks
-        computed_bytes.as_slice() == provided_signature
+        let is_valid = computed_bytes.as_slice() == provided_signature;
+        if !is_valid {
+            warn!("HMAC signature verification failed");
+        } else {
+            debug!("HMAC signature verified successfully");
+        }
+        is_valid
     }
 
     /// Validate timestamp is within acceptable range
@@ -194,6 +201,7 @@ impl OracleRegistry {
         if timestamp > current_time {
             let drift = timestamp - current_time;
             if drift > Self::MAX_FUTURE_DRIFT_MS {
+                warn!(drift_ms = drift, max_allowed = Self::MAX_FUTURE_DRIFT_MS, "Timestamp too far in future");
                 return Err(format!(
                     "Timestamp too far in future: {} > {} ms drift allowed",
                     drift, Self::MAX_FUTURE_DRIFT_MS
@@ -204,12 +212,14 @@ impl OracleRegistry {
         if current_time > timestamp {
             let drift = current_time - timestamp;
             if drift > Self::MAX_PAST_DRIFT_MS {
+                warn!(drift_ms = drift, max_allowed = Self::MAX_PAST_DRIFT_MS, "Timestamp too old");
                 return Err(format!(
                     "Timestamp too old: {} > {} ms allowed",
                     drift, Self::MAX_PAST_DRIFT_MS
                 ));
             }
         }
+        debug!(timestamp, current_time, "Timestamp validation passed");
         Ok(())
     }
 
@@ -225,8 +235,10 @@ impl OracleRegistry {
     ) -> Result<(), String> {
         // Verify oracle is registered
         if !self.nodes.contains_key(oracle_id) {
+            warn!(oracle_id, "Oracle not registered when submitting price report");
             return Err("Oracle not registered".to_string());
         }
+        debug!(oracle_id, price, confidence, "Processing price report");
 
         // Validate timestamp is within acceptable range
         let current_time = std::time::SystemTime::now()
@@ -256,9 +268,11 @@ impl OracleRegistry {
             data.extend_from_slice(&price.to_le_bytes());
             data.extend_from_slice(&timestamp.to_le_bytes());
 
-            if !Self::verify_signature(&data, &signature) {
-                return Err("Invalid signature - verification failed".to_string());
-            }
+        if !Self::verify_signature(&data, &signature) {
+            warn!(oracle_id, "Signature verification failed for price report");
+            return Err("Invalid signature - verification failed".to_string());
+        }
+        info!(oracle_id, price, "Price report accepted with valid signature");
         }
 
         // Add to pending reports

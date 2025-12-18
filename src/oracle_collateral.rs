@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::{debug, warn, error, info};
 
 /// Status of a bonding request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -255,7 +256,7 @@ impl BondingRegistry {
         Ok(())
     }
 
-    /// Create a challenge to oracle's report
+    /// Challenge to oracle's report
     pub fn challenge_oracle(
         &mut self,
         oracle_id: &str,
@@ -269,8 +270,11 @@ impl BondingRegistry {
 
         // Check oracle has active bond
         if !self.has_active_bond(oracle_id) {
+            warn!(oracle_id, "Challenge attempted on non-bonded oracle");
             return Err("Oracle not bonded".to_string());
         }
+        
+        info!(oracle_id, challenger_id, "Challenge initiated against oracle");
 
         // Check oracle doesn't already have an active challenge
         if self.challenges.iter().any(|c| c.oracle_id == oracle_id && c.status == ChallengeStatus::Voting) {
@@ -334,6 +338,7 @@ impl BondingRegistry {
 
         // Calculate reputation-based weight (this doesn't hold references to challenges)
         let weight = self.calculate_vote_weight(voter_id);
+        debug!(voter_id, weight, "Voting weight calculated");
 
         // Now update the challenge
         let challenge = self
@@ -344,8 +349,10 @@ impl BondingRegistry {
 
         if vote_yes {
             challenge.votes_for += weight;
+            info!(challenge_id, voter_id, weight, "Vote cast in favor");
         } else {
             challenge.votes_against += weight;
+            info!(challenge_id, voter_id, weight, "Vote cast against");
         }
 
         Ok(())
@@ -390,9 +397,11 @@ impl BondingRegistry {
 
         // Execute slashing if challenge accepted
         if outcome == ChallengeOutcome::ChallengeAccepted {
+            warn!(oracle_id, votes_for, votes_against, "Challenge accepted - executing slash");
             self.execute_slashing(&oracle_id, &challenger_id)?
         } else {
             // Restore collateral if challenge rejected
+            info!(oracle_id, votes_for, votes_against, "Challenge rejected - restoring collateral");
             if let Some(pool) = self.pools.get_mut(&oracle_id) {
                 pool.restore_collateral(pool.in_dispute_balance)?
             }
