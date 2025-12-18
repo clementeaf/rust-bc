@@ -222,6 +222,12 @@ pub struct AccessControl {
     pub permissions: HashMap<String, Vec<String>>, // address -> list of permissions
 }
 
+impl Default for AccessControl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AccessControl {
     pub fn new() -> Self {
         AccessControl {
@@ -234,7 +240,7 @@ impl AccessControl {
     pub fn grant_role(&mut self, role: String, address: String) {
         self.roles
             .entry(role)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(address);
     }
 
@@ -400,6 +406,12 @@ pub struct DependencyGraph {
     pub edges: HashMap<String, Vec<String>>, // from -> [to]
 }
 
+impl Default for DependencyGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DependencyGraph {
     pub fn new() -> Self {
         DependencyGraph {
@@ -409,7 +421,7 @@ impl DependencyGraph {
 
     /// Add edge from -> to
     pub fn add_edge(&mut self, from: String, to: String) {
-        self.edges.entry(from).or_insert_with(Vec::new).push(to);
+        self.edges.entry(from).or_default().push(to);
     }
 
     /// Detect if adding edge would create cycle

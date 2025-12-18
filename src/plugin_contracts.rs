@@ -209,7 +209,7 @@ impl PluginRegistry {
         for hook in &plugin.hooks {
             self.hooks
                 .entry(*hook)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(plugin_id.to_string());
         }
 
@@ -347,7 +347,7 @@ impl PluginRegistry {
         if plugin.enabled {
             self.hooks
                 .entry(hook)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(plugin_id.to_string());
         }
 

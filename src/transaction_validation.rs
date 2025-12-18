@@ -348,8 +348,7 @@ impl TransactionValidator {
     fn validate_sequence(&self, tx: &Transaction) -> Result<(), String> {
         let sender_state = self
             .sender_states
-            .get(&tx.from)
-            .map(|s| s.clone())
+            .get(&tx.from).cloned()
             .unwrap_or_else(|| SenderState::new(tx.from.clone()));
 
         if !sender_state.is_valid_sequence(tx.timestamp) {

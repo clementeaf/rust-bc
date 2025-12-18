@@ -208,11 +208,7 @@ impl OracleRegistry {
 
     /// Check if price deviates too much from median
     fn is_outlier(&self, price: u64, median: u64) -> bool {
-        let deviation = if price > median {
-            price - median
-        } else {
-            median - price
-        };
+        let deviation = price.abs_diff(median);
         let threshold = (median * self.outlier_threshold_percent) / 100;
         deviation > threshold
     }
