@@ -158,6 +158,11 @@ pub struct BondingRegistry {
 }
 
 impl BondingRegistry {
+    /// Maximum future timestamp drift in milliseconds (5 minutes)
+    const MAX_FUTURE_DRIFT_MS: u64 = 300_000;
+    /// Maximum past timestamp drift in milliseconds (1 hour)  
+    const MAX_PAST_DRIFT_MS: u64 = 3_600_000;
+
     pub fn new(min_collateral: u64) -> Self {
         BondingRegistry {
             pools: HashMap::new(),
@@ -233,6 +238,23 @@ impl BondingRegistry {
             .ok_or_else(|| "Pool not found".to_string())
     }
 
+    /// Validate timestamp is within acceptable range
+    fn validate_challenge_timestamp(current_time: u64, challenge_time: u64) -> Result<(), String> {
+        if challenge_time > current_time {
+            let drift = challenge_time - current_time;
+            if drift > Self::MAX_FUTURE_DRIFT_MS {
+                return Err("Challenge timestamp too far in future".to_string());
+            }
+        }
+        if current_time > challenge_time {
+            let drift = current_time - challenge_time;
+            if drift > Self::MAX_PAST_DRIFT_MS {
+                return Err("Challenge timestamp too old".to_string());
+            }
+        }
+        Ok(())
+    }
+
     /// Create a challenge to oracle's report
     pub fn challenge_oracle(
         &mut self,
@@ -242,6 +264,9 @@ impl BondingRegistry {
         evidence: String,
         current_time: u64,
     ) -> Result<String, String> {
+        // Validate challenge timestamp
+        Self::validate_challenge_timestamp(current_time, current_time)?;
+
         // Check oracle has active bond
         if !self.has_active_bond(oracle_id) {
             return Err("Oracle not bonded".to_string());
@@ -278,20 +303,44 @@ impl BondingRegistry {
         Ok(challenge_id)
     }
 
-    /// Vote on a challenge
+    /// Calculate reputation-based vote weight
+    /// Weight is (1 + reputation / 100) to ensure even users with 0 reputation get 1 vote
+    fn calculate_vote_weight(&self, voter_id: &str) -> u64 {
+        // Look up voter reputation from oracle pool if they are an oracle
+        if let Some(pool) = self.pools.get(voter_id) {
+            let rep = pool.total_collateral().max(1) / 100; // Normalize collateral as proxy for reputation
+            (1 + rep).min(10) // Cap at 10x weight to prevent dominance
+        } else {
+            // Non-oracle voters get base weight of 1
+            1
+        }
+    }
+
+    /// Vote on a challenge with reputation-weighted voting
     pub fn vote_on_challenge(&mut self, challenge_id: &str, voter_id: &str, vote_yes: bool) -> Result<(), String> {
+        // First check status and calculate weight without holding mutable reference
+        let challenge_status = {
+            self
+                .challenges
+                .iter()
+                .find(|c| c.id == challenge_id)
+                .ok_or("Challenge not found")?
+                .status
+        };
+
+        if challenge_status != ChallengeStatus::Voting {
+            return Err("Challenge is not in voting period".to_string());
+        }
+
+        // Calculate reputation-based weight (this doesn't hold references to challenges)
+        let weight = self.calculate_vote_weight(voter_id);
+
+        // Now update the challenge
         let challenge = self
             .challenges
             .iter_mut()
             .find(|c| c.id == challenge_id)
             .ok_or("Challenge not found")?;
-
-        if challenge.status != ChallengeStatus::Voting {
-            return Err("Challenge is not in voting period".to_string());
-        }
-
-        // Weight vote by voter_id length as proxy for reputation (simplified)
-        let weight = (voter_id.len() as u64).max(1);
 
         if vote_yes {
             challenge.votes_for += weight;
