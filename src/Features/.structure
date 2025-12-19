@@ -1,0 +1,27 @@
+Layer 1: Persistence/
+  └─ LocalDatabase.cs (SQLite + AES-256-GCM encryption)
+  └─ Migrations/ (schema versioning)
+  └─ Repositories/ (data access layer)
+
+Layer 2: Domain/
+  └─ Models/ (Identity, Account, Transaction, Credential)
+  └─ ValueObjects/ (Amount, PublicKey, Signature)
+  └─ Validators/ (business rules)
+
+Layer 3: Services/
+  └─ IdentityService.cs (DID management)
+  └─ TransactionService.cs (broadcast + signing)
+  └─ SyncService.cs (multi-device sync)
+  └─ CredentialService.cs (issuance + verification)
+
+Layer 4: ViewModels/
+  └─ OnboardingViewModel.cs
+  └─ TransactionViewModel.cs
+  └─ CredentialViewModel.cs
+
+Layer 5: Views/
+  └─ OnboardingPage.xaml
+  └─ TransactionPage.xaml
+  └─ CredentialPage.xaml
+
+STRUCTURE CREATED FOR WEEK 1-2 INITIALIZATION

@@ -1,3 +1,5 @@
+#![feature(unsigned_is_multiple_of)]
+
 // Librería para tests de integración
 pub mod blockchain;
 pub mod models;

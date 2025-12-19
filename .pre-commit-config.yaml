@@ -1,0 +1,121 @@
+# Pre-commit hooks configuration for rust-bc Digital ID System
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Rust formatting check
+  - repo: local
+    hooks:
+      - id: rustfmt
+        name: rustfmt
+        entry: cargo fmt
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
+
+  # Rust linting (clippy)
+  - repo: local
+    hooks:
+      - id: clippy
+        name: clippy
+        entry: cargo clippy --all -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+        always_run: true
+
+  # Secrets detection
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+            \.github/|
+            docs/|
+            README\.md
+          )$
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        exclude: |
+          (?x)^(
+            \.md$|
+            Cargo\.lock$
+          )$
+      - id: end-of-file-fixer
+        name: Fix end of file
+      - id: check-yaml
+        name: Check YAML
+      - id: check-json
+        name: Check JSON
+      - id: check-toml
+        name: Check TOML
+      - id: check-merge-conflict
+        name: Check merge conflicts
+      - id: no-commit-to-branch
+        name: Prevent commits to protected branches
+        args: [--branch, main, --branch, develop]
+      - id: mixed-line-ending
+        name: Fix mixed line endings
+        args: [--fix=lf]
+
+  # C# code style (if available)
+  - repo: local
+    hooks:
+      - id: dotnet-format
+        name: dotnet format
+        entry: bash -c 'dotnet format --verify-no-changes || dotnet format'
+        language: system
+        types: [csharp]
+        pass_filenames: false
+        always_run: true
+        stages: [commit]
+
+  # Branch name validation
+  - repo: local
+    hooks:
+      - id: branch-name-check
+        name: Check branch naming convention
+        entry: bash -c 'branch=$(git rev-parse --abbrev-ref HEAD); if [[ ! $branch =~ ^(main|develop|feature/|bugfix/|hotfix/|release/|docs/|spike/|chore/) ]]; then echo "❌ Branch name does not match convention: $branch"; exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [commit]
+
+  # Commit message validation
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.12.0
+    hooks:
+      - id: commitizen
+        name: commitizen check
+        stages: [commit-msg]
+        exclude: |
+          (?x)^(
+            Merge|
+            Revert
+          )
+
+# Minimum pre-commit version
+minimum_pre_commit_version: '1.16.0'
+
+# Files to exclude globally
+exclude: |
+  (?x)^(
+    target/|
+    bin/obj|
+    \.git/|
+    \.venv/|
+    node_modules/|
+    coverage/|
+    dist/
+  )$
+
+# Fail fast on first issue
+fail_fast: false

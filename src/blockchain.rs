@@ -153,6 +153,7 @@ impl Block {
      * - En 4 cores: ~3.5x más rápido que secuencial
      * - En 8 cores: ~6.5x más rápido que secuencial
      */
+    #[allow(dead_code)]
     pub fn mine_parallel(&mut self) -> String {
         let target = "0".repeat(self.difficulty as usize);
         let num_threads = num_cpus::get();

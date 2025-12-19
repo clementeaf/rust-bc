@@ -11,7 +11,6 @@
 /// - ContractError: Custom error types for contract operations
 
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use tracing::{debug, warn, info};
 
 /// Type alias for Ethereum addresses as strings
@@ -129,19 +128,31 @@ impl SmartContractConfig {
 
     /// Validate an Ethereum address format (0x followed by 40 hex chars)
     fn validate_address(address: &str) -> Result<(), ContractError> {
-        if !address.starts_with("0x") || address.len() != 42 {
+        // Ensure address starts with 0x and is 42 chars (0x + 40 hex)
+        if !address.starts_with("0x") {
             return Err(ContractError::InvalidAddress(format!(
-                "Invalid address format: {}",
+                "Address must start with 0x: {}",
                 address
             )));
         }
         
-        // Check if hex
-        if i64::from_str_radix(&address[2..], 16).is_err() {
+        if address.len() != 42 {
             return Err(ContractError::InvalidAddress(format!(
-                "Address contains invalid hex characters: {}",
+                "Invalid address length {} (expected 42): {}",
+                address.len(),
                 address
             )));
+        }
+        
+        // Check if hex (allow uppercase and lowercase)
+        let hex_part = &address[2..];
+        for c in hex_part.chars() {
+            if !c.is_ascii_hexdigit() {
+                return Err(ContractError::InvalidAddress(format!(
+                    "Address contains invalid hex character '{}': {}",
+                    c, address
+                )));
+            }
         }
         
         Ok(())

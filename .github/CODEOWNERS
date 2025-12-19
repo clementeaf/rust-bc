@@ -1,0 +1,86 @@
+# CODEOWNERS for rust-bc Digital ID System
+# Defines ownership, review requirements, and escalation paths per tier/layer
+
+# Backend Tier 1: Storage (RocksDB) — WS1
+src/storage/                          @backend-storage-owner @tech-lead
+src/storage/rocksdb/                  @backend-storage-owner
+src/storage/ledger/                   @backend-storage-owner
+src/storage/index/                    @backend-storage-owner
+tests/storage/                        @backend-storage-owner
+
+# Backend Tier 2: Consensus (DAG) — WS1
+src/consensus/                        @backend-consensus-owner @tech-lead
+src/consensus/dag/                    @backend-consensus-owner
+src/consensus/slots/                  @backend-consensus-owner
+src/consensus/fork_resolution/        @backend-consensus-owner
+tests/consensus/                      @backend-consensus-owner
+
+# Backend Tier 3: Identity (DID/Credentials) — WS2
+src/identity/                         @backend-identity-owner @tech-lead
+src/identity/did/                     @backend-identity-owner
+src/identity/credentials/             @backend-identity-owner
+src/identity/keys/                    @backend-identity-owner
+tests/identity/                       @backend-identity-owner
+
+# Backend Tier 4: API (REST Gateway) — WS2
+src/api/                              @backend-api-owner @tech-lead
+src/api/rest/                         @backend-api-owner
+src/api/handlers/                     @backend-api-owner
+src/api/serialization/                @backend-api-owner
+tests/api/                            @backend-api-owner
+
+# Frontend Layer 1: Persistence (SQLite) — WS3
+src/Features/Persistence/             @frontend-persistence-owner @tech-lead
+src/Features/Persistence/**           @frontend-persistence-owner
+tests/Features/Persistence/           @frontend-persistence-owner
+
+# Frontend Layer 2: Models (Domain Objects) — WS3
+src/Features/Domain/                  @frontend-models-owner @tech-lead
+src/Features/Domain/**                @frontend-models-owner
+tests/Features/Domain/                @frontend-models-owner
+
+# Frontend Layer 3: Services (Business Logic) — WS3
+src/Features/Services/                @frontend-services-owner @tech-lead
+src/Features/Services/**              @frontend-services-owner
+tests/Features/Services/              @frontend-services-owner
+
+# Frontend Layer 4: ViewModel (UI State) — WS3
+src/Features/UI/ViewModels/           @frontend-viewmodel-owner @tech-lead
+src/Features/UI/ViewModels/**         @frontend-viewmodel-owner
+tests/Features/UI/ViewModels/         @frontend-viewmodel-owner
+
+# Frontend Layer 5: Views (XAML/Layout) — WS3
+src/Features/UI/Views/                @frontend-ui-owner @tech-lead
+src/Features/UI/Views/**              @frontend-ui-owner
+resources/                            @frontend-ui-owner
+
+# CI/CD & DevOps — WS4
+.github/workflows/                    @devex-lead @tech-lead
+.pre-commit-config.yaml               @devex-lead
+rust-toolchain.toml                   @devex-lead
+global.json                           @devex-lead
+Cargo.toml                            @devex-lead
+Cargo.lock                            @devex-lead
+*.csproj                              @devex-lead
+
+# Security & Compliance — WS5
+SECURITY.md                           @compliance-officer @tech-lead
+compliance/                           @compliance-officer @tech-lead
+docs/GDPR.md                          @compliance-officer
+docs/eIDAS_ROADMAP.md                 @compliance-officer
+audit/                                @compliance-officer
+
+# Documentation & Standards
+README.md                             @tech-lead
+BRANCHING_STRATEGY.md                 @tech-lead
+CONTRIBUTING.md                       @tech-lead
+docs/ARCHITECTURE.md                  @tech-lead
+docs/API_CONTRACT.md                  @tech-lead @backend-api-owner
+
+# Root configuration files (require tech lead approval)
+.gitignore                            @tech-lead
+.editorconfig                         @tech-lead
+Makefile                              @tech-lead
+
+# Default fallback (any unmatched paths)
+*                                     @tech-lead

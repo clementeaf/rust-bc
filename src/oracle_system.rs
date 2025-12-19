@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use tracing::{debug, warn, error, info};
+use tracing::{debug, warn, info};
 
 type HmacSha256 = Hmac<Sha256>;
 

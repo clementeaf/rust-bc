@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, warn, error, info};
+use tracing::{debug, warn, info};
 
 /// Status of a bonding request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

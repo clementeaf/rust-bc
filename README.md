@@ -1,125 +1,475 @@
-# Rust Blockchain
+# rust-bc Digital ID System
 
-Una implementación completa de blockchain en Rust con características avanzadas de seguridad, consenso distribuido y red P2P.
+[![Build](https://github.com/your-org/rust-bc/workflows/Build/badge.svg)](https://github.com/your-org/rust-bc/actions/workflows/build.yml)
+[![Test](https://github.com/your-org/rust-bc/workflows/Test/badge.svg)](https://github.com/your-org/rust-bc/actions/workflows/test.yml)
+[![Lint](https://github.com/your-org/rust-bc/workflows/Lint/badge.svg)](https://github.com/your-org/rust-bc/actions/workflows/lint.yml)
+[![Security](https://github.com/your-org/rust-bc/workflows/Security/badge.svg)](https://github.com/your-org/rust-bc/actions/workflows/security.yml)
 
-## 🚀 Características
+**Digital ID System for rust-bc Blockchain** — A comprehensive platform integrating blockchain-based identity management with GDPR/eIDAS compliance.
 
-- ✅ **Blockchain Completa**: Proof of Work (PoW), validación de bloques, Merkle Root
-- ✅ **Firmas Digitales**: Ed25519 para transacciones seguras
-- ✅ **Red P2P**: Comunicación entre nodos, sincronización, broadcast
-- ✅ **Consenso Distribuido**: Resolución de forks, cadena más larga
-- ✅ **Sistema de Recompensas**: Mining rewards con halving, coinbase transactions
-- ✅ **Mempool**: Gestión de transacciones pendientes
-- ✅ **API REST**: Endpoints completos para interacción
-- ✅ **Persistencia**: SQLite con optimizaciones (WAL mode, índices)
-- ✅ **Seguridad**: Rate limiting, validación de transacciones, protección contra doble gasto
-- ✅ **Performance**: Caché de balances, compresión HTTP, optimizaciones de base de datos
+**Status:** Phase 2 Implementation (Weeks 1-20)  
+**Technology:** Rust (backend), C# MAUI (frontend)  
+**Target Launch:** Q2 2026
 
-## 📋 Requisitos
+---
 
-- Rust 1.70+ ([Instalación](https://www.rust-lang.org/tools/install))
-- SQLite3
+## Quick Start
 
-## 🔧 Instalación
+### Prerequisites
 
-### Opción 1: Docker (Recomendado) 🐳
+- **Rust 1.75.0+** (automatically enforced via `rust-toolchain.toml`)
+- **.NET SDK 8.0.0+** (automatically enforced via `global.json`)
+- **Git** with pre-commit hooks
+- **macOS** / **Linux** (Windows support via WSL2)
 
-```bash
-# Clonar el repositorio
-git clone https://github.com/clementeaf/rust-bc.git
-cd rust-bc
+### Development Environment Setup
 
-# Construir imagen
-docker build -t rust-bc:latest .
+1. **Clone repository:**
+   ```bash
+   git clone https://github.com/your-org/rust-bc.git
+   cd rust-bc
+   ```
 
-# Ejecutar nodo
-docker run -d \
-  --name rust-bc-node \
-  -p 8080:8080 \
-  -p 8081:8081 \
-  -v blockchain-data:/app/data \
-  rust-bc:latest
+2. **Install dependencies:**
+   ```bash
+   # macOS
+   brew install rustup pre-commit
+   rustup update
 
-# O usar docker-compose para múltiples nodos
-docker-compose up -d
+   # Linux
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   pip install pre-commit
+   ```
+
+3. **Setup pre-commit hooks:**
+   ```bash
+   pre-commit install
+   pre-commit run --all-files  # Run all checks once
+   ```
+
+4. **Verify toolchain:**
+   ```bash
+   rustc --version  # Should be 1.75.0
+   dotnet --version # Should be 8.0.0+
+   cargo --version
+   ```
+
+5. **Build & test locally:**
+   ```bash
+   # Backend
+   cargo build --release
+   cargo test --all
+
+   # Frontend
+   dotnet build --configuration Release
+   dotnet test --configuration Release
+   ```
+
+---
+
+## Project Structure
+
+```
+rust-bc/
+├── src/
+│   ├── storage/               # Tier 1: RocksDB persistence
+│   ├── consensus/             # Tier 2: DAG consensus engine
+│   ├── identity/              # Tier 3: DID & credentials
+│   ├── api/                   # Tier 4: REST gateway
+│   └── lib.rs
+├── tests/
+│   ├── storage/
+│   ├── consensus/
+│   ├── identity/
+│   └── api/
+├── src/Features/              # Frontend (C# MAUI)
+│   ├── Persistence/           # Layer 1: SQLite
+│   ├── Domain/                # Layer 2: Models
+│   ├── Services/              # Layer 3: Business logic
+│   ├── UI/ViewModels/         # Layer 4: MVVM state
+│   └── UI/Views/              # Layer 5: XAML
+├── .github/
+│   ├── workflows/             # CI/CD pipelines
+│   └── CODEOWNERS            # Ownership matrix
+├── rust-toolchain.toml        # Rust version pinning
+├── global.json                # .NET version pinning
+├── Cargo.toml                 # Backend dependencies
+├── *.csproj                   # Frontend projects
+├── BRANCHING_STRATEGY.md      # Git workflow
+├── CONTRIBUTING.md            # Contribution guidelines
+└── README.md                  # This file
 ```
 
-Ver [DOCKER.md](DOCKER.md) para documentación completa de Docker.
+---
 
-### Opción 2: Compilación Local
+## Architecture
 
-```bash
-# Clonar el repositorio
-git clone https://github.com/clementeaf/rust-bc.git
-cd rust-bc
+### Backend (Rust) — 4 Tiers
 
-# Compilar
-cargo build --release
+| Tier | Component | Responsibility | Tech |
+|------|-----------|-----------------|------|
+| 1 | **Storage** | Block persistence, indexing | RocksDB |
+| 2 | **Consensus** | DAG mining, fork resolution | Custom DAG |
+| 3 | **Identity** | DID, credentials, verification | Did-key |
+| 4 | **API** | REST gateway, serialization | Actix-web |
 
-# Ejecutar
-DIFFICULTY=1 cargo run --release 8080 8081 blockchain
-```
+### Frontend (C#) — 5 Layers
 
-## 📚 Documentación
+| Layer | Component | Responsibility | Tech |
+|-------|-----------|-----------------|------|
+| 1 | **Persistence** | SQLite, encryption | SQLite-net |
+| 2 | **Models** | Domain objects, validation | C# records |
+| 3 | **Services** | Business logic, HTTP | HttpClient |
+| 4 | **ViewModel** | UI state, commands | MVVM Community Toolkit |
+| 5 | **Views** | Layout, binding | MAUI/XAML |
 
-La documentación completa está en la carpeta `Documents/`:
+### Integration
 
-- `README_COMPLETO.md` - Documentación general
-- `API_DOCUMENTATION.md` - Endpoints de la API
-- `GUIA_USUARIO.md` - Guía de uso
-- `INDICE_DOCUMENTACION.md` - Índice completo
+- **Protocol:** REST/HTTPS + TLS 1.3
+- **Auth:** JWT + refresh tokens
+- **Versioning:** Semantic versioning (`v1.2.3`)
+- **Error Handling:** Standardized error codes
 
-## 🌐 API Endpoints
+---
 
-- `GET /api/v1/health` - Health check
-- `GET /api/v1/blocks` - Listar bloques
-- `GET /api/v1/blocks/{hash}` - Obtener bloque por hash
-- `POST /api/v1/transactions` - Crear transacción
-- `POST /api/v1/mine` - Minar bloque
-- `GET /api/v1/mempool` - Ver transacciones pendientes
-- `GET /api/v1/stats` - Estadísticas del sistema
-- `GET /api/v1/chain/verify` - Verificar cadena
+## Development Workflow
 
-Ver `Documents/API_DOCUMENTATION.md` para la lista completa.
-
-## 🧪 Pruebas
+### 1. Create Feature Branch
 
 ```bash
-# Pruebas de seguridad
-./scripts/test_security_attacks.sh
-
-# Pruebas de estrés
-./scripts/test_stress.sh
-
-# Pruebas completas
-./scripts/run_all_stress_tests.sh
+git checkout -b feature/ws1-storage-rocksdb-adapters develop
 ```
 
-## 📊 Estado del Proyecto
+**Branch naming:** `<type>/<component>-<description>`
+- Types: `feature`, `bugfix`, `hotfix`, `release`, `docs`, `spike`
+- Components: `storage`, `consensus`, `identity`, `api`, `persistence`, etc.
 
-- ✅ Fase 1: Persistencia + API REST
-- ✅ Fase 2: Firmas Digitales
-- ✅ Fase 3: Red P2P
-- ✅ Fase 4: Consenso Distribuido
-- ✅ Fase 5: Sistema de Recompensas
-- ✅ Optimizaciones de Performance y Seguridad
+### 2. Make Changes & Commit
 
-## 🔒 Seguridad
+```bash
+# Pre-commit hooks run automatically
+git add .
+git commit -m "feat(storage): add RocksDB persistence adapter
 
-- Validación de firmas Ed25519
-- Protección contra doble gasto
-- Rate limiting
-- Validación de cadena completa
-- Límites de tamaño de bloque y transacciones
+Implement storage tier abstraction with RocksDB backend.
+Supports block append, proof generation, index queries.
 
-## 📝 Licencia
+- Factory pattern for adapter instantiation
+- Error handling with exponential backoff
+- Audit logging per operation
 
-Este proyecto es de código abierto.
+Fixes #42
+Co-Authored-By: Warp <agent@warp.dev>"
+```
 
-## 👤 Autor
+**Commit format:**
+```
+<type>(<scope>): <subject>
 
-Clemente Falcone
+<body>
 
-## 🙏 Contribuciones
+<footer>
+```
 
-Las contribuciones son bienvenidas. Por favor, abre un issue o pull request.
+### 3. Push & Create Pull Request
+
+```bash
+git push origin feature/ws1-storage-rocksdb-adapters
+# Create PR on GitHub
+```
+
+**PR Requirements:**
+- ✅ All CI checks passing (build, test, lint, security)
+- ✅ Test coverage ≥80% (delta)
+- ✅ ≥1 code review approval
+- ✅ CODEOWNERS approval for critical paths
+- ✅ Linked to GitHub issue
+
+### 4. Merge to Develop
+
+After approval:
+```bash
+# GitHub merges (squash or rebase)
+# CI/CD deploys to staging
+# Branch auto-deleted
+```
+
+### 5. Release Cycle (Every 2 Weeks)
+
+```bash
+# Create release branch
+git checkout -b release/v1.0.0 develop
+
+# Update versions
+# - Cargo.toml: version = "1.0.0"
+# - *.csproj: <Version>1.0.0</Version>
+
+# Update CHANGELOG.md
+
+# Create PR: release/v1.0.0 → main
+# After merge:
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# GitHub Actions deploys to production (canary 5%)
+```
+
+---
+
+## Testing
+
+### Unit Tests
+
+```bash
+# Backend
+cargo test --lib --all
+
+# Frontend
+dotnet test --configuration Release
+```
+
+**Target Coverage:** 80%+ overall (unit: 75%, service: 20%, integration: 5%)
+
+### Integration Tests
+
+```bash
+# Full stack
+cargo test --all
+dotnet test --configuration Release
+```
+
+### Load Testing
+
+```bash
+# 1000 TPS sustained (Week 15)
+# Run via GitHub Actions: .github/workflows/test.yml
+```
+
+### Pre-commit Local Testing
+
+```bash
+pre-commit run --all-files
+```
+
+---
+
+## Code Quality
+
+### Linting
+
+**Rust:**
+```bash
+cargo fmt --all
+cargo clippy --all -- -D warnings
+```
+
+**C#:**
+```bash
+dotnet format --verify-no-changes
+dotnet build /p:EnforceCodeStyleInBuild=true
+```
+
+### Security Scanning
+
+```bash
+# Secrets detection
+cargo install cargo-audit
+cargo audit
+
+# Dependency scan
+dotnet list package --outdated
+```
+
+### Pre-commit Automation
+
+```bash
+# All checks run automatically on commit:
+# - Format check (rustfmt, dotnet format)
+# - Lint (clippy, StyleCop)
+# - Secrets scan
+# - Branch name validation
+# - Commit message validation
+```
+
+---
+
+## CI/CD Pipeline
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| **Build** | Push/PR | Compile Rust + C# |
+| **Test** | Push/PR | Run unit tests, coverage |
+| **Lint** | Push/PR | Code style checks |
+| **Security** | Push/PR + daily | Vulnerability scanning |
+
+### Branch Protection Rules
+
+| Branch | Reviews | Status Checks | CODEOWNERS | Up-to-date |
+|--------|---------|---------------|-----------|-----------|
+| `main` | ≥2 | Yes | Yes | Yes |
+| `develop` | ≥1 | Yes | Selective | Yes |
+| `feature/*` | ≥1 | Yes | No | Yes |
+
+### Deployment Pipeline
+
+```
+feature/* → PR → develop → staging → main → production (canary 5% → 100%)
+```
+
+---
+
+## Documentation
+
+- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **API Contract:** [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
+- **GDPR Compliance:** [docs/GDPR.md](docs/GDPR.md)
+- **eIDAS Roadmap:** [docs/eIDAS_ROADMAP.md](docs/eIDAS_ROADMAP.md)
+- **Branching Strategy:** [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
+
+## Team & Ownership
+
+See [.github/CODEOWNERS](.github/CODEOWNERS) for tier/layer ownership and review requirements.
+
+**Workstreams:**
+- **WS1:** Backend Storage & Consensus (2 engineers)
+- **WS2:** Backend Identity & API (1-2 engineers)
+- **WS3:** Frontend MAUI App (2 engineers)
+- **WS4:** DevEx — CI/CD, Tooling (1 engineer)
+- **WS5:** Compliance & Security (1 officer, shared)
+
+---
+
+## Common Tasks
+
+### Add a New Dependency
+
+**Rust:**
+```bash
+cargo add serde --features derive
+cargo update
+```
+
+**C#:**
+```bash
+dotnet add package Newtonsoft.Json
+```
+
+### Run Specific Tests
+
+```bash
+# Backend
+cargo test storage:: -- --nocapture
+cargo test consensus::fork_resolution
+
+# Frontend
+dotnet test --filter "DisplayName~Persistence" --configuration Release
+```
+
+### Debug Build
+
+```bash
+# Rust
+cargo build --debug
+RUST_LOG=debug cargo run
+
+# C#
+dotnet build --configuration Debug
+```
+
+### Update Toolchain
+
+```bash
+# Rust
+rustup update 1.75.0
+rustup component add rustfmt clippy
+
+# .NET
+dotnet sdk check
+# Edit global.json manually for version bump
+```
+
+---
+
+## Troubleshooting
+
+### Build Fails: "Incompatible Rust Version"
+
+```bash
+# Verify toolchain
+rustc --version  # Should be 1.75.0
+
+# Force update
+rustup update 1.75.0
+```
+
+### Pre-commit Hooks Slow
+
+```bash
+# Install optional tools
+cargo install cargo-audit --locked
+```
+
+### CI Pipeline Blocked
+
+1. Check GitHub Actions logs: **Actions** tab
+2. Common issues:
+   - Missing secrets (set in GitHub → Settings → Secrets)
+   - Flaky tests (check logs, add retry logic)
+   - Dependency conflict (update Cargo.lock / packages.lock)
+
+### Secrets Accidentally Committed
+
+```bash
+# If local commit only
+git reset HEAD~1  # Undo commit
+git add .gitignore
+git commit -m "Remove secrets"
+
+# If pushed to remote
+# Contact maintainers immediately for emergency remediation
+```
+
+---
+
+## Phase 2 Timeline
+
+| Weeks | Focus | Deliverables |
+|-------|-------|--------------|
+| 1-2 | **Foundation** | CI/CD, Storage tests | 45% coverage |
+| 3-6 | **Expansion** | Consensus, Identity | 70% coverage |
+| 7-10 | **Integration** | Full stack tests, Load testing | 78% coverage |
+| 11-18 | **Refinement** | Edge cases, GDPR/eIDAS | 82% coverage |
+| 19-20 | **Release** | Staging soak, Production launch | 85% coverage |
+
+**Success Criteria:**
+- ✅ 80%+ code coverage
+- ✅ 1000 TPS throughput
+- ✅ <100ms p99 latency
+- ✅ Zero CRITICAL vulnerabilities
+- ✅ GDPR/eIDAS compliance verified
+
+---
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/your-org/rust-bc/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/your-org/rust-bc/discussions)
+- **Slack:** #rust-bc channel
+- **Docs:** See links above
+
+---
+
+## License
+
+[Your License Here]
+
+---
+
+**Last Updated:** December 19, 2025  
+**Phase:** 2 Implementation  
+**Maintained By:** DevEx + Tech Lead

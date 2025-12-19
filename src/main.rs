@@ -1,3 +1,5 @@
+#![feature(unsigned_is_multiple_of)]
+
 mod airdrop;
 mod api;
 mod billing;
