@@ -73,7 +73,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.0.0'
+          dotnet-version: '8.x'
           global-json-file: global.json
 
       - name: Verify project files exist
@@ -102,7 +102,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: '8.0.0'
+          dotnet-version: '8.x'
 
       - name: Cargo check
         run: cargo check --all 2>&1 | head -20
