@@ -8,6 +8,8 @@ use std::path::Path;
 
 /// RocksDB-backed block store
 pub struct RocksDbBlockStore {
+    /// Path to RocksDB database (reserved for future real DB integration)
+    #[allow(dead_code)]
     db_path: String,
 }
 
