@@ -17,6 +17,8 @@ pub mod openapi;
 pub mod handlers;
 pub mod metrics;
 pub mod rate_limit;
+pub mod cors;
+pub mod versioning;
 
 pub use errors::{ApiError, ApiResult, ApiResponse};
 pub use routes::ApiRoutes;
