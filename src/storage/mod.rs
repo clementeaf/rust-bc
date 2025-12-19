@@ -7,14 +7,10 @@
 //! - Ledger state management
 //! - Error handling with exponential backoff
 
-use std::sync::Arc;
-use thiserror::Error;
-
 pub mod adapters;
-pub mod index;
-pub mod ledger;
 pub mod errors;
 pub mod traits;
+pub mod comprehensive_tests;
 
 pub use adapters::RocksDbBlockStore;
 pub use errors::{StorageError, StorageResult};

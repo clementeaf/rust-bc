@@ -14,3 +14,7 @@ pub mod contract_validation;
 pub mod oracle_system;
 pub mod oracle_collateral;
 pub mod smart_contract;
+
+// Phase 2 Week 2-3: Storage & Consensus Layers
+pub mod storage;
+pub mod consensus;

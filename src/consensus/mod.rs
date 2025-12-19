@@ -7,19 +7,13 @@
 //! - Byzantine fault tolerance
 //! - Thread-safe parallel mining
 
-use thiserror::Error;
-
 pub mod dag;
-pub mod slots;
-pub mod fork_resolution;
-pub mod mining;
-pub mod errors;
-pub mod traits;
+pub mod scheduler;
+pub mod validator;
 
-pub use dag::DagVertex;
-pub use errors::{ConsensusError, ConsensusResult};
-pub use slots::SlotScheduler;
-pub use traits::ConsensusEngine;
+pub use dag::{DagBlock, DagVertex, DagEdge, Dag};
+pub use scheduler::SlotScheduler;
+pub use validator::{BlockValidator, ValidityResult};
 
 /// Consensus configuration
 #[derive(Clone, Debug)]

@@ -3,11 +3,10 @@
 //! Implements the core DAG data structures for the consensus layer.
 //! Supports block representation, slot-based ordering, and DAG traversal.
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Block in the DAG consensus
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DagBlock {
     /// Unique block hash (SHA256)
     pub hash: [u8; 32],

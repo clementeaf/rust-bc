@@ -220,6 +220,7 @@ mod tests {
         let mut scheduler = create_test_scheduler();
         let slot = scheduler.get_slot(5);
         assert_eq!(slot.number, 5);
-        assert_eq!(slot.proposer, "validator2");
+        // slot 5 % 3 validators = index 2 = validator3
+        assert_eq!(slot.proposer, "validator3");
     }
 }
