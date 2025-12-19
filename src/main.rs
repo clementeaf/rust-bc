@@ -24,7 +24,7 @@ use actix_cors::Cors;
 use actix_web::middleware::Compress;
 use actix_web::{web, App, HttpServer};
 use airdrop::AirdropManager;
-use api::{config_routes, AppState};
+// use api::{config_routes, AppState};  // Old API code - using new api module instead
 use metrics::MetricsCollector;
 use billing::BillingManager;
 use block_storage::BlockStorage;

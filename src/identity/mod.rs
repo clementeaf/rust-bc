@@ -2,26 +2,14 @@
 //!
 //! Responsibilities:
 //! - DID document generation and management
-//! - Credential issuance, verification, revocation
 //! - Key derivation and rotation
 //! - Signature generation and verification
-//! - eIDAS attribute mapping
-
-use thiserror::Error;
 
 pub mod did;
-pub mod credentials;
 pub mod keys;
-pub mod signatures;
-pub mod errors;
-pub mod traits;
-pub mod eidas;
 
-pub use did::DidDocument;
-pub use credentials::{Credential, CredentialStatus};
-pub use errors::{IdentityError, IdentityResult};
-pub use keys::KeyManager;
-pub use traits::IdentityService;
+pub use did::{DidDocument, DidStatus, DidMetadata};
+pub use keys::{KeyManager, PublicKeyInfo, KeyPair};
 
 /// Identity configuration
 #[derive(Clone, Debug)]
@@ -51,10 +39,3 @@ mod tests {
         assert_eq!(cfg.credential_ttl_days, 365);
     }
 }
-
-// Week 4 Identity Modules
-pub mod did;
-pub mod keys;
-
-pub use did::{DidDocument, DidStatus, DidMetadata};
-pub use keys::{KeyManager, PublicKeyInfo, KeyPair};

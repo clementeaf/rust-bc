@@ -1,0 +1,202 @@
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
+
+/// Identity creation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateIdentityRequest {
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Identity response with public key
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityResponse {
+    pub did: String,
+    pub public_key: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Key rotation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotateKeyRequest {
+    pub old_key_index: usize,
+}
+
+/// Key rotation response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RotateKeyResponse {
+    pub did: String,
+    pub new_key_index: usize,
+    pub rotated_at: DateTime<Utc>,
+}
+
+/// Signature verification request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifySignatureRequest {
+    pub message: String,
+    pub signature: String, // base64 encoded
+}
+
+/// Signature verification response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifySignatureResponse {
+    pub valid: bool,
+    pub key_index: usize,
+    pub verified_at: DateTime<Utc>,
+}
+
+/// Block proposal request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProposBlockRequest {
+    pub parent_hash: String,
+    pub timestamp: DateTime<Utc>,
+    pub transactions: Vec<serde_json::Value>,
+    pub proposer_did: String,
+    pub signature: String,
+}
+
+/// Block proposal response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProposeBlockResponse {
+    pub block_hash: String,
+    pub accepted: bool,
+    pub reason: String,
+}
+
+/// Block detail response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockResponse {
+    pub hash: String,
+    pub parent_hash: String,
+    pub timestamp: DateTime<Utc>,
+    pub proposer_did: String,
+    pub transaction_count: usize,
+    pub slot_number: u64,
+}
+
+/// Consensus state response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsensusStateResponse {
+    pub validators: Vec<String>,
+    pub total_slots: u64,
+    pub canonical_head: String,
+    pub blockchain_height: u64,
+    pub active_forks: usize,
+}
+
+/// Credential issuance request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueCredentialRequest {
+    pub issuer_did: String,
+    pub subject_did: String,
+    pub claims: serde_json::Value,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Credential issuance response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueCredentialResponse {
+    pub credential_id: String,
+    pub issuer_did: String,
+    pub subject_did: String,
+    pub issued_at: DateTime<Utc>,
+    pub proof: ProofResponse,
+}
+
+/// Proof response (Ed25519 signature)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProofResponse {
+    pub verification_method: String,
+    pub signature_value: String,
+    pub created: DateTime<Utc>,
+}
+
+/// Credential response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialResponse {
+    pub id: String,
+    pub issuer_did: String,
+    pub subject_did: String,
+    pub claims: serde_json::Value,
+    pub issued_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub proof: ProofResponse,
+}
+
+/// Credential verification request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifyCredentialRequest {
+    // Empty - credential ID is in path
+}
+
+/// Credential verification response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifyCredentialResponse {
+    pub valid: bool,
+    pub issuer_did: String,
+    pub subject_did: String,
+    pub verified_at: DateTime<Utc>,
+}
+
+/// Credential revocation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevokeCredentialRequest {
+    pub reason: String,
+}
+
+/// Credential revocation response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RevokeCredentialResponse {
+    pub credential_id: String,
+    pub revoked: bool,
+    pub revoked_at: DateTime<Utc>,
+}
+
+/// Health check response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthResponse {
+    pub status: String,
+    pub uptime_seconds: u64,
+    pub blockchain: BlockchainHealthResponse,
+}
+
+/// Blockchain health response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockchainHealthResponse {
+    pub height: u64,
+    pub last_block_hash: String,
+    pub validators_count: usize,
+}
+
+/// Version response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionResponse {
+    pub api_version: String,
+    pub rust_bc_version: String,
+    pub blockchain_height: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_identity_request_serialization() {
+        let req = CreateIdentityRequest {
+            metadata: Some(serde_json::json!({"key": "value"})),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let deserialized: CreateIdentityRequest = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.metadata.is_some());
+    }
+
+    #[test]
+    fn test_identity_response_serialization() {
+        let resp = IdentityResponse {
+            did: "did:bc:test".to_string(),
+            public_key: "test_key".to_string(),
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("did:bc:test"));
+    }
+}

@@ -18,3 +18,7 @@ pub mod smart_contract;
 // Phase 2 Week 2-3: Storage & Consensus Layers
 pub mod storage;
 pub mod consensus;
+pub mod identity;
+
+// Phase 3 Week 5: REST API Gateway
+pub mod api;

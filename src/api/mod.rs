@@ -7,17 +7,16 @@
 //! - JWT authentication and rate limiting
 //! - API versioning and backward compatibility
 
-use thiserror::Error;
 
-pub mod handlers;
-pub mod models;
 pub mod errors;
+pub mod models;
 pub mod middleware;
 pub mod routes;
 pub mod traits;
 pub mod openapi;
+pub mod handlers;
 
-pub use errors::{ApiError, ApiResult};
+pub use errors::{ApiError, ApiResult, ApiResponse};
 pub use routes::ApiRoutes;
 pub use traits::ApiGateway;
 
