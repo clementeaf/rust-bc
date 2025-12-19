@@ -51,3 +51,10 @@ mod tests {
         assert_eq!(cfg.credential_ttl_days, 365);
     }
 }
+
+// Week 4 Identity Modules
+pub mod did;
+pub mod keys;
+
+pub use did::{DidDocument, DidStatus, DidMetadata};
+pub use keys::{KeyManager, PublicKeyInfo, KeyPair};
