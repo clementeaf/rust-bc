@@ -4,9 +4,11 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
 
 // External crates
+use rustls::pki_types::ServerName;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 // Crate modules
 use crate::block_storage::BlockStorage;
@@ -15,6 +17,10 @@ use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
 use crate::smart_contracts::{ContractManager, SmartContract};
 use crate::transaction_validation::TransactionValidator;
+
+/// Abstracts over plain TCP and TLS peer streams.
+trait AsyncStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static {}
+impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> AsyncStream for T {}
 
 /**
  * Tipos de mensajes en la red P2P
@@ -84,6 +90,8 @@ pub struct Node {
     pub failed_peers: Arc<Mutex<HashMap<String, (u64, u32)>>>, // (peer_address, (timestamp, attempt_count))
     /// Si está definido, solo se aceptan conexiones entrantes cuya dirección remota esté en el conjunto (`PEER_ALLOWLIST`).
     pub peer_allowlist: Option<Arc<HashSet<String>>>,
+    pub tls_acceptor: Option<Arc<TlsAcceptor>>,
+    pub tls_connector: Option<Arc<TlsConnector>>,
 }
 
 /// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
@@ -112,6 +120,17 @@ pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
     } else {
         Some(set)
     }
+}
+
+fn parse_server_name(
+    address: &str,
+) -> Result<ServerName<'static>, Box<dyn std::error::Error + Send + Sync>> {
+    let host = address.rsplit_once(':').map(|(h, _)| h).unwrap_or(address);
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Ok(ServerName::IpAddress(ip.into()));
+    }
+    ServerName::try_from(host.to_string())
+        .map_err(|e| format!("invalid server name '{host}': {e}").into())
 }
 
 impl Node {
@@ -150,6 +169,8 @@ impl Node {
             seed_nodes: seed_nodes.unwrap_or_default(),
             failed_peers: Arc::new(Mutex::new(HashMap::new())),
             peer_allowlist,
+            tls_acceptor: None,
+            tls_connector: None,
         }
     }
 
@@ -188,6 +209,30 @@ impl Node {
         self.transaction_validator = Some(transaction_validator);
     }
 
+    pub fn set_tls_acceptor(&mut self, acceptor: TlsAcceptor) {
+        self.tls_acceptor = Some(Arc::new(acceptor));
+    }
+
+    pub fn set_tls_connector(&mut self, connector: TlsConnector) {
+        self.tls_connector = Some(Arc::new(connector));
+    }
+
+    /// Opens a TCP connection and optionally wraps it in TLS.
+    async fn open_stream(
+        &self,
+        address: &str,
+    ) -> Result<Box<dyn AsyncStream>, Box<dyn std::error::Error + Send + Sync>> {
+        let tcp = TcpStream::connect(address).await?;
+        match &self.tls_connector {
+            Some(connector) => {
+                let name = parse_server_name(address)?;
+                let tls = connector.connect(name, tcp).await?;
+                Ok(Box::new(tls))
+            }
+            None => Ok(Box::new(tcp)),
+        }
+    }
+
     /**
      * Inicia el servidor P2P
      */
@@ -212,6 +257,7 @@ impl Node {
         let pending_broadcasts = self.pending_contract_broadcasts.clone();
         let network_id = self.network_id.clone();
         let peer_allowlist = self.peer_allowlist.clone();
+        let tls_acceptor = self.tls_acceptor.clone();
 
         loop {
             match listener.accept().await {
@@ -240,10 +286,23 @@ impl Node {
                     let rate_limits_clone = rate_limits.clone();
                     let pending_broadcasts_clone = pending_broadcasts.clone();
                     let network_id_clone = network_id.clone();
+                    let tls_acceptor_clone = tls_acceptor.clone();
 
                     tokio::spawn(async move {
+                        let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone {
+                            match acceptor.accept(stream).await {
+                                Ok(tls) => Box::new(tls),
+                                Err(e) => {
+                                    eprintln!("TLS handshake error from {}: {}", peer_addr, e);
+                                    return;
+                                }
+                            }
+                        } else {
+                            Box::new(stream)
+                        };
                         if let Err(e) = Self::handle_connection(
-                            stream,
+                            boxed,
+                            peer_addr,
                             peers_clone,
                             blockchain_clone,
                             wallet_manager_clone,
@@ -275,7 +334,8 @@ impl Node {
      */
     #[allow(clippy::too_many_arguments)]
     async fn handle_connection(
-        mut stream: TcpStream,
+        mut stream: Box<dyn AsyncStream>,
+        peer_addr: SocketAddr,
         peers: Arc<Mutex<HashSet<String>>>,
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
@@ -289,7 +349,6 @@ impl Node {
         pending_broadcasts: Arc<Mutex<Vec<(String, SmartContract)>>>,
         network_id: Option<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let peer_addr = stream.peer_addr()?;
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
         let mut buffer = [0; 8192]; // Aumentado a 8KB para contratos más grandes
         let mut first_message = true;
@@ -994,7 +1053,7 @@ impl Node {
      * Conecta a un peer
      */
     pub async fn connect_to_peer(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         let version_msg = {
             let blockchain = self.blockchain.lock().unwrap();
@@ -1146,7 +1205,7 @@ impl Node {
      * Verifica si un peer está conectado enviando un ping
      */
     async fn ping_peer(&self, address: &str) -> bool {
-        if let Ok(mut stream) = TcpStream::connect(address).await {
+        if let Ok(mut stream) = self.open_stream(address).await {
             let ping_msg = Message::Ping;
             if let Ok(msg_json) = serde_json::to_string(&ping_msg) {
                 if stream.write_all(msg_json.as_bytes()).await.is_ok() {
@@ -1227,7 +1286,7 @@ impl Node {
         &self,
         address: &str,
     ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         let get_peers_msg = Message::GetPeers;
         let msg_json = serde_json::to_string(&get_peers_msg)?;
@@ -1571,7 +1630,7 @@ impl Node {
             (blockchain.chain.len(), latest.hash.clone())
         };
 
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         // Enviar mensaje de versión para comparar
         let p2p_addr = format!("{}:{}", self.address.ip(), self.address.port());
@@ -1635,7 +1694,7 @@ impl Node {
      * Solicita bloques a un peer
      */
     pub async fn request_blocks(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         let get_blocks_msg = Message::GetBlocks;
         let msg_json = serde_json::to_string(&get_blocks_msg)?;
@@ -1767,7 +1826,7 @@ impl Node {
         address: &str,
         block: &Block,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
         let msg = Message::NewBlock(block.clone());
         let msg_json = serde_json::to_string(&msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
@@ -1802,7 +1861,7 @@ impl Node {
         address: &str,
         tx: &Transaction,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
         let msg = Message::NewTransaction(tx.clone());
         let msg_json = serde_json::to_string(&msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
@@ -1814,7 +1873,7 @@ impl Node {
      */
     pub async fn request_contracts(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
-        let mut stream = TcpStream::connect(address).await?;
+        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         // Intentar sincronización incremental primero
         let last_sync = {
@@ -1983,7 +2042,7 @@ impl Node {
         address: &str,
         contract: &SmartContract,
     ) -> Result<(), String> {
-        let mut stream = TcpStream::connect(address)
+        let mut stream = self.open_stream(address)
             .await
             .map_err(|e| format!("Error conectando: {}", e))?;
         let msg = Message::NewContract(contract.clone());
@@ -2084,7 +2143,7 @@ impl Node {
             "📤 Conectando a {} para enviar UpdateContract de {}",
             address, contract.address
         );
-        let mut stream = TcpStream::connect(address)
+        let mut stream = self.open_stream(address)
             .await
             .map_err(|e| format!("Error conectando a {}: {}", address, e))?;
         let msg = Message::UpdateContract(contract.clone());
@@ -2125,5 +2184,73 @@ mod peer_allowlist_tests {
     fn parse_peer_allowlist_empty_returns_none() {
         assert!(parse_peer_allowlist("").is_none());
         assert!(parse_peer_allowlist("   , , ").is_none());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    const TEST_CERT_PEM: &str = include_str!("../tests/fixtures/test_cert.pem");
+    const TEST_KEY_PEM: &str = include_str!("../tests/fixtures/test_key.pem");
+
+    fn write_temp(content: &str) -> NamedTempFile {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn parse_peer_allowlist_valid_addresses() {
+        let result = parse_peer_allowlist("127.0.0.1:8000,127.0.0.1:8001");
+        assert!(result.is_some());
+        let set = result.unwrap();
+        assert!(set.contains("127.0.0.1:8000"));
+        assert!(set.contains("127.0.0.1:8001"));
+    }
+
+    #[test]
+    fn parse_peer_allowlist_empty_returns_none() {
+        assert!(parse_peer_allowlist("").is_none());
+        assert!(parse_peer_allowlist("   ").is_none());
+    }
+
+    #[test]
+    fn parse_peer_allowlist_invalid_entries_skipped() {
+        let result = parse_peer_allowlist("127.0.0.1:8000,not-an-addr,127.0.0.1:8001");
+        let set = result.unwrap();
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn set_tls_acceptor_stores_acceptor() {
+        use crate::tls::build_server_config;
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let server_config = build_server_config(cert.path(), key.path()).unwrap();
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+        let blockchain = Arc::new(Mutex::new(crate::blockchain::Blockchain::new(4)));
+        let mut node = Node::new(
+            "127.0.0.1:9999".parse().unwrap(),
+            blockchain,
+            None, None, None, None,
+        );
+        node.set_tls_acceptor(acceptor);
+        assert!(node.tls_acceptor.is_some());
+    }
+
+    #[test]
+    fn parse_server_name_ip() {
+        let name = parse_server_name("127.0.0.1:8000").unwrap();
+        assert!(matches!(name, ServerName::IpAddress(_)));
+    }
+
+    #[test]
+    fn parse_server_name_dns() {
+        let name = parse_server_name("localhost:8000").unwrap();
+        assert!(matches!(name, ServerName::DnsName(_)));
     }
 }

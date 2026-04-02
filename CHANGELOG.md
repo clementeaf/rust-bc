@@ -10,9 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **TLS module** (`src/tls.rs`): load PEM cert+key from `TLS_CERT_PATH` / `TLS_KEY_PATH` env vars, build `rustls::ServerConfig`
 - Dependencies: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`
-- `actix-web` feature `rustls-0_23` for HTTPS binding (wiring in next task)
+- `actix-web` feature `rustls-0_23` enabled; `HttpServer` binds via `bind_rustls_0_23` when both env vars are set, plain TCP otherwise
+- **P2P TLS** (`src/network.rs`): `TlsAcceptor`/`TlsConnector` wiring for peer-to-peer connections
+  - `AsyncStream` supertrait abstracts over plain and TLS streams
+  - `Node::set_tls_acceptor` / `set_tls_connector` for runtime configuration
+  - `open_stream` helper wraps outgoing TCP in TLS when a connector is configured
+  - `start_server` performs TLS handshake on accepted connections when an acceptor is configured
+  - `parse_server_name` derives `ServerName` (IP or DNS) from peer address
+  - All 10 outgoing connection sites updated to use `open_stream`
 - Test fixtures: self-signed EC cert+key under `tests/fixtures/`
-- 5 unit tests for TLS config loading (valid cert, missing cert, missing key, invalid key, no env vars)
+- 5 unit tests in `src/tls.rs` (valid cert, missing cert, missing key, invalid key, no env vars)
+- 6 unit tests in `src/network.rs` (allowlist parsing, TLS acceptor setup, server name parsing)
 - `docs/README.md` index for documentation layout
 
 ### Changed
