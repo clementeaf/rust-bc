@@ -1,12 +1,14 @@
 #![feature(unsigned_is_multiple_of)]
 
 mod airdrop;
+mod app_state;
 mod api;
 mod api_legacy;
 mod billing;
 mod metrics;
 mod block_storage;
 mod blockchain;
+mod block_creation;
 mod cache;
 mod chain_validation;
 mod checkpoint;
@@ -20,12 +22,15 @@ mod smart_contracts;
 mod staking;
 mod state_reconstructor;
 mod state_snapshot;
+mod tls;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
 use actix_web::{web, App, HttpServer};
 use airdrop::AirdropManager;
-use api_legacy::{config_routes, AppState};
+use api::routes::ApiRoutes;
+use api_legacy::config_routes;
+use app_state::AppState;
 use metrics::MetricsCollector;
 use billing::BillingManager;
 use block_storage::BlockStorage;
@@ -33,7 +38,7 @@ use blockchain::Blockchain;
 use cache::BalanceCache;
 use middleware::RateLimitMiddleware;
 use models::{Mempool, WalletManager};
-use network::Node;
+use network::{parse_peer_allowlist, Node};
 use pruning::PruningManager;
 use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
@@ -107,6 +112,12 @@ async fn main() -> std::io::Result<()> {
             .collect()
     };
 
+    let peer_allowlist = env::var("PEER_ALLOWLIST")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .and_then(|s| parse_peer_allowlist(&s))
+        .map(Arc::new);
+
     // Auto-discovery: intervalo en segundos (default: 120 = 2 minutos)
     let auto_discovery_interval = env::var("AUTO_DISCOVERY_INTERVAL")
         .ok()
@@ -143,6 +154,12 @@ async fn main() -> std::io::Result<()> {
     }
     if !seed_nodes.is_empty() {
         println!("🌱 Seed nodes: {}", seed_nodes.join(", "));
+    }
+    if let Some(ref allow) = peer_allowlist {
+        println!(
+            "🔒 PEER_ALLOWLIST activo ({} dirección/es P2P entrantes permitidas)",
+            allow.len()
+        );
     }
     println!(
         "🔍 Auto-discovery: intervalo {}s, max conexiones {}, delay inicial {}s",
@@ -387,6 +404,7 @@ async fn main() -> std::io::Result<()> {
         Some(network_id.clone()),
         Some(bootstrap_nodes.clone()),
         Some(seed_nodes.clone()),
+        peer_allowlist.clone(),
     );
     node_arc.set_resources(wallet_manager_arc.clone());
     if let Some(storage) = block_storage_arc.as_ref() {
@@ -415,6 +433,7 @@ async fn main() -> std::io::Result<()> {
         Some(network_id.clone()),
         Some(bootstrap_nodes.clone()),
         Some(seed_nodes.clone()),
+        peer_allowlist.clone(),
     );
     node_for_server.set_resources(wallet_manager_arc.clone());
     node_for_server.set_contract_manager(contract_manager.clone());
@@ -660,13 +679,18 @@ async fn main() -> std::io::Result<()> {
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);
     println!("📡 Servidor P2P iniciado en 127.0.0.1:{}", p2p_port);
     println!("📚 Documentación de API:");
-    println!("   GET  /api/v1/blocks");
+    println!("   GET  /api/v1/blocks (gateway envelope)");
+    println!("   GET  /api/v1/blocks/index/{{index}}");
     println!("   GET  /api/v1/blocks/{{hash}}");
-    println!("   POST /api/v1/blocks");
-    println!("   POST /api/v1/transactions");
+    println!("   POST /api/v1/blocks (gateway envelope)");
+    println!("   POST /api/v1/transactions (gateway envelope)");
+    println!("   GET  /api/v1/mempool (gateway envelope)");
     println!("   GET  /api/v1/wallets/{{address}}");
-    println!("   GET  /api/v1/chain/verify");
-    println!("   GET  /api/v1/chain/info");
+    println!("   GET  /api/v1/chain/verify (gateway envelope)");
+    println!("   GET  /api/v1/chain/info (gateway envelope)");
+    println!("   GET  /api/v1/health   (gateway envelope)");
+    println!("   GET  /api/v1/version (gateway envelope)");
+    println!("   GET  /api/v1/openapi.json");
     println!("\n💡 Presiona Ctrl+C para detener el servidor\n");
 
     // Clonar node_arc para conectar a bootstrap nodes después de iniciar
@@ -723,6 +747,7 @@ async fn main() -> std::io::Result<()> {
                 actix_web::error::ErrorBadRequest(format!("JSON error: {}", err))
             }))
             .configure(config_routes)
+            .configure(ApiRoutes::configure)
     })
     .workers(8)
     .bind(&api_bind)?

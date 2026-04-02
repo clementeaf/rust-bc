@@ -21,8 +21,8 @@ async function main() {
     // Mine some blocks to get funds for wallet1
     console.log('\nMining blocks for wallet1...');
     for (let i = 0; i < 3; i++) {
-      const block = await client.mineBlock(wallet1.address, 1);
-      console.log(`Mined block ${i + 1}:`, block.hash.substring(0, 20) + '...');
+      const mined = await client.mineBlock(wallet1.address, 1);
+      console.log(`Mined block ${i + 1}:`, mined.hash.substring(0, 20) + '...');
     }
 
     // Get updated balance
@@ -48,8 +48,8 @@ async function main() {
 
     // Mine a block to include the transaction
     console.log('\nMining block to include transaction...');
-    const block = await client.mineBlock(wallet1.address, 10);
-    console.log('Block mined:', block.hash);
+    const mined = await client.mineBlock(wallet1.address, 10);
+    console.log('Block mined:', mined.hash);
 
     // Check balances after transaction
     console.log('\nChecking balances after transaction...');

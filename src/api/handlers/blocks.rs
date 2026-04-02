@@ -1,98 +1,90 @@
-use actix_web::{web, HttpRequest, HttpResponse, post, get};
-use crate::api::errors::ApiResult;
-use crate::api::models::*;
-use chrono::Utc;
+use actix_web::{get, post, web, HttpResponse};
 
-/// POST /blocks/propose - Propose a new block
-#[post("/blocks/propose")]
-async fn propose_block(
-    _req: HttpRequest,
-    _body: web::Json<ProposBlockRequest>,
+use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::models::CreateBlockRequest;
+use crate::app_state::AppState;
+use crate::block_creation;
+
+/// POST /api/v1/blocks — crea un bloque (lógica en `block_creation::try_create_block`).
+#[post("")]
+pub async fn create_block(
+    state: web::Data<AppState>,
+    req: web::Json<CreateBlockRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
-    // TODO: Validate block
-    // TODO: Add to mempool
-    
-    let response = ProposeBlockResponse {
-        block_hash: "hash_placeholder".to_string(),
-        accepted: true,
-        reason: "Block accepted".to_string(),
-    };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
+    match block_creation::try_create_block(state.get_ref(), &*req) {
+        Ok(hash) => {
+            let body = ApiResponse::success(hash, trace_id);
+            Ok(HttpResponse::Created().json(body))
+        }
+        Err(reason) => Err(ApiError::ValidationError {
+            field: "block".to_string(),
+            reason,
+        }),
+    }
 }
 
-/// GET /blocks/{hash} - Get block by hash
-#[get("/blocks/{hash}")]
-async fn get_block(
-    _req: HttpRequest,
+/// GET /api/v1/blocks — lista la cadena completa.
+#[get("")]
+pub async fn list_blocks(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let chain = blockchain.chain.clone();
+    drop(blockchain);
+    let body = ApiResponse::success(chain, trace_id);
+    Ok(HttpResponse::Ok().json(body))
+}
+
+/// GET /api/v1/blocks/index/{index} — bloque por altura (antes de `/{hash}`).
+#[get("/index/{index}")]
+pub async fn get_block_by_index(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let idx = *path;
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let result = blockchain.get_block_by_index(idx).cloned();
+    drop(blockchain);
+    match result {
+        Some(block) => {
+            let body = ApiResponse::success(block, trace_id);
+            Ok(HttpResponse::Ok().json(body))
+        }
+        None => Err(ApiError::NotFound {
+            resource: format!("block index {}", idx),
+        }),
+    }
+}
+
+/// GET /api/v1/blocks/{hash} — bloque por hash.
+#[get("/{hash}")]
+pub async fn get_block_by_hash(
+    state: web::Data<AppState>,
     path: web::Path<String>,
 ) -> ApiResult<HttpResponse> {
     let hash = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
-    // TODO: Query storage for block
-    
-    let response = BlockResponse {
-        hash,
-        parent_hash: "parent_hash".to_string(),
-        timestamp: Utc::now(),
-        proposer_did: "did:bc:proposer".to_string(),
-        transaction_count: 0,
-        slot_number: 1,
-    };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
-}
-
-/// GET /blocks/latest - Get latest block
-#[get("/blocks/latest")]
-async fn get_latest_block(_req: HttpRequest) -> ApiResult<HttpResponse> {
-    let trace_id = uuid::Uuid::new_v4().to_string();
-    
-    // TODO: Query canonical head
-    
-    let response = BlockResponse {
-        hash: "latest_hash".to_string(),
-        parent_hash: "parent_hash".to_string(),
-        timestamp: Utc::now(),
-        proposer_did: "did:bc:proposer".to_string(),
-        transaction_count: 0,
-        slot_number: 1,
-    };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
-}
-
-/// GET /consensus/state - Get consensus state
-#[get("/consensus/state")]
-async fn get_consensus_state(_req: HttpRequest) -> ApiResult<HttpResponse> {
-    let trace_id = uuid::Uuid::new_v4().to_string();
-    
-    // TODO: Query DAG state
-    
-    let response = ConsensusStateResponse {
-        validators: vec!["validator1".to_string()],
-        total_slots: 100,
-        canonical_head: "head_hash".to_string(),
-        blockchain_height: 50,
-        active_forks: 0,
-    };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let result = blockchain.get_block_by_hash(&hash).cloned();
+    drop(blockchain);
+    match result {
+        Some(block) => {
+            let body = ApiResponse::success(block, trace_id);
+            Ok(HttpResponse::Ok().json(body))
+        }
+        None => Err(ApiError::NotFound {
+            resource: format!("block {}", hash),
+        }),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{create_block, get_block_by_hash, get_block_by_index, list_blocks};
 
     #[test]
-    fn test_blocks_handlers_module_compiles() {
-        assert!(true);
+    fn blocks_gateway_handlers_are_public() {
+        let _ = (create_block, list_blocks, get_block_by_index, get_block_by_hash);
     }
 }

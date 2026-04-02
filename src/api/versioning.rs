@@ -38,11 +38,6 @@ impl ApiVersion {
         Ok(Self { major, minor, patch })
     }
 
-    /// Format version as string
-    pub fn to_string(&self) -> String {
-        format!("{}.{}.{}", self.major, self.minor, self.patch)
-    }
-
     /// Check if this version is compatible with a minimum required version
     pub fn is_compatible_with(&self, minimum: ApiVersion) -> bool {
         if self.major != minimum.major {

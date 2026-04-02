@@ -276,7 +276,7 @@ CHAIN_RESPONSE=$(curl -s --max-time $TIMEOUT "$API_URL/chain/verify" 2>/dev/null
 if [ -z "$CHAIN_RESPONSE" ] || [ "$CHAIN_RESPONSE" = "null" ] || echo "$CHAIN_RESPONSE" | grep -qi "rate limit\|error"; then
     CHAIN_VALID="false"
     CHAIN_COUNT="0"
-elif echo "$CHAIN_RESPONSE" | jq -e .success >/dev/null 2>&1; then
+elif echo "$CHAIN_RESPONSE" | jq -e '(.success == true) or (.status == "Success")' >/dev/null 2>&1; then
     CHAIN_VALID=$(echo "$CHAIN_RESPONSE" | jq -r '.data.valid // "false"' 2>/dev/null || echo "false")
     CHAIN_COUNT=$(echo "$CHAIN_RESPONSE" | jq -r '.data.block_count // 0' 2>/dev/null || echo "0")
 else

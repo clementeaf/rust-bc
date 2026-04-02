@@ -1,0 +1,519 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "rust-bc REST API",
+    "version": "1.0.0",
+    "description": "REST API for rust-bc. **Gateway** routes wrap payloads in a common envelope (`status`, `status_code`, `message`, `data`, `error`, `timestamp`, `trace_id`). **Legacy** routes (wallets, contracts, billing, mining, etc.) still use `{ success, data?, message? }` until migrated."
+  },
+  "servers": [{ "url": "/api/v1", "description": "API v1" }],
+  "tags": [
+    { "name": "Gateway", "description": "NeuroAccess-style envelope responses" },
+    { "name": "Legacy", "description": "Legacy JSON shape until migration" },
+    { "name": "Utilities", "description": "Health, version, OpenAPI document" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Optional billing / rate-limit API key"
+      }
+    },
+    "schemas": {
+      "ErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "field": { "type": "string", "nullable": true }
+        },
+        "required": ["code", "message"]
+      },
+      "GatewayEnvelope": {
+        "type": "object",
+        "description": "Successful gateway response",
+        "properties": {
+          "status": { "type": "string", "enum": ["Success"] },
+          "status_code": { "type": "integer", "example": 200 },
+          "message": { "type": "string", "example": "OK" },
+          "data": {},
+          "error": { "type": "null" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "trace_id": { "type": "string", "format": "uuid" }
+        },
+        "required": ["status", "status_code", "message", "timestamp", "trace_id"]
+      },
+      "GatewayErrorEnvelope": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["Failure"] },
+          "status_code": { "type": "integer" },
+          "message": { "type": "string" },
+          "data": { "type": "null" },
+          "error": { "$ref": "#/components/schemas/ErrorDto" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "trace_id": { "type": "string" }
+        }
+      },
+      "LegacyEnvelope": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {},
+          "message": { "type": "string", "nullable": true }
+        },
+        "required": ["success"]
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "amount": { "type": "integer", "format": "uint64" },
+          "fee": { "type": "integer", "format": "uint64" },
+          "data": { "type": "string", "nullable": true },
+          "timestamp": { "type": "integer", "format": "uint64" },
+          "signature": { "type": "string" }
+        }
+      },
+      "Block": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Block record (index, hash, transactions, merkle_root, ...)"
+      },
+      "CreateTransactionRequest": {
+        "type": "object",
+        "required": ["from", "to", "amount"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "amount": { "type": "integer", "format": "uint64" },
+          "fee": { "type": "integer", "format": "uint64" },
+          "data": { "type": "string" },
+          "signature": { "type": "string" }
+        }
+      },
+      "CreateBlockRequest": {
+        "type": "object",
+        "required": ["transactions"],
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CreateTransactionRequest" }
+          }
+        }
+      },
+      "HealthPayload": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "example": "healthy" },
+          "uptime_seconds": { "type": "integer", "format": "uint64" },
+          "blockchain": {
+            "type": "object",
+            "properties": {
+              "height": { "type": "integer", "format": "uint64" },
+              "last_block_hash": { "type": "string" },
+              "validators_count": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "VersionPayload": {
+        "type": "object",
+        "properties": {
+          "api_version": { "type": "string" },
+          "rust_bc_version": { "type": "string" },
+          "blockchain_height": { "type": "integer", "format": "uint64" }
+        }
+      },
+      "ChainVerifyPayload": {
+        "type": "object",
+        "properties": {
+          "valid": { "type": "boolean" },
+          "block_count": { "type": "integer" }
+        }
+      },
+      "ChainInfoPayload": {
+        "type": "object",
+        "properties": {
+          "block_count": { "type": "integer" },
+          "difficulty": { "type": "integer" },
+          "latest_block_hash": { "type": "string" },
+          "is_valid": { "type": "boolean" }
+        }
+      },
+      "MempoolPayload": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "transactions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Transaction" }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Gateway", "Utilities"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope with HealthPayload in `data`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/HealthPayload" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": ["Gateway", "Utilities"],
+        "summary": "API and crate version",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope with VersionPayload in `data`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/VersionPayload" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["Utilities"],
+        "summary": "OpenAPI 3 document (raw JSON, not gateway-wrapped)",
+        "responses": {
+          "200": {
+            "description": "OpenAPI specification object",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": true }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blocks": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "List full chain",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is Block[]",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/Block" }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Gateway"],
+        "summary": "Create / mine block from transaction list",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateBlockRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gateway envelope; `data` is new block hash (string)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "type": "string", "description": "Block hash" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blocks/index/{index}": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "Block by height",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "uint64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is Block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Block" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blocks/{hash}": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "Block by hash",
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is Block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Block" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chain/verify": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "Verify local chain integrity",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is ChainVerifyPayload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/ChainVerifyPayload" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chain/info": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "Chain metadata",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is ChainInfoPayload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/ChainInfoPayload" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "post": {
+        "tags": ["Gateway"],
+        "summary": "Submit transaction to mempool",
+        "security": [{ "ApiKeyAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTransactionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gateway envelope; `data` is Transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/Transaction" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized (billing)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment required (billing limit)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mempool": {
+      "get": {
+        "tags": ["Gateway"],
+        "summary": "Pending mempool transactions",
+        "responses": {
+          "200": {
+            "description": "Gateway envelope; `data` is MempoolPayload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/GatewayEnvelope" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": { "$ref": "#/components/schemas/MempoolPayload" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

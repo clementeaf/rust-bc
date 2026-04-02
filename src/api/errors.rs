@@ -41,6 +41,12 @@ pub enum ApiError {
     #[error("Unauthorized")]
     Unauthorized,
 
+    #[error("{message}")]
+    UnauthorizedWithMessage { message: String },
+
+    #[error("{message}")]
+    PaymentRequired { message: String },
+
     #[error("Rate limited")]
     RateLimited,
 }
@@ -61,6 +67,8 @@ impl ApiError {
             ApiError::CredentialRevoked => "CREDENTIAL_REVOKED".to_string(),
             ApiError::InternalError { .. } => "INTERNAL_ERROR".to_string(),
             ApiError::Unauthorized => "UNAUTHORIZED".to_string(),
+            ApiError::UnauthorizedWithMessage { .. } => "UNAUTHORIZED".to_string(),
+            ApiError::PaymentRequired { .. } => "PAYMENT_REQUIRED".to_string(),
             ApiError::RateLimited => "RATE_LIMITED".to_string(),
         }
     }
@@ -79,7 +87,10 @@ impl ApiError {
             ApiError::NotFound { .. } => StatusCode::NOT_FOUND,
             ApiError::ValidationError { .. } => StatusCode::BAD_REQUEST,
             ApiError::InvalidDid | ApiError::InvalidSignature => StatusCode::BAD_REQUEST,
-            ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
+            ApiError::Unauthorized | ApiError::UnauthorizedWithMessage { .. } => {
+                StatusCode::UNAUTHORIZED
+            }
+            ApiError::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
             ApiError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             ApiError::Conflict { .. } => StatusCode::CONFLICT,
             ApiError::CredentialExpired | ApiError::CredentialRevoked => StatusCode::BAD_REQUEST,

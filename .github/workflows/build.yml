@@ -17,7 +17,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        rust: [1.75.0]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,7 +24,6 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
       - name: Cache Cargo registry
@@ -72,8 +70,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.75.0
 
       - name: Cargo check
         run: cargo check --all 2>&1 | head -20

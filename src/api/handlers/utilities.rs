@@ -1,23 +1,35 @@
-use actix_web::{HttpRequest, HttpResponse, get};
+use actix_web::{get, web, HttpRequest, HttpResponse};
+
+use crate::app_state::AppState;
 use crate::api::errors::ApiResult;
-use crate::api::models::*;
+use crate::api::models::{BlockchainHealthResponse, HealthResponse, VersionResponse};
 use crate::api::openapi::OpenApi;
 
-/// GET /health - Health check
+lazy_static::lazy_static! {
+    static ref SCAFFOLD_HTTP_SINCE: std::time::Instant = std::time::Instant::now();
+}
+
+/// GET /api/v1/health — health check (NeuroAccess-style envelope + live chain/staking).
 #[get("/health")]
-async fn health_check(_req: HttpRequest) -> ApiResult<HttpResponse> {
+pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
-    // TODO: Check storage connectivity
-    // TODO: Check consensus state availability
-    
+    let uptime_seconds = SCAFFOLD_HTTP_SINCE.elapsed().as_secs();
+
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let latest = blockchain.get_latest_block().clone();
+    let height = latest.index;
+    let last_block_hash = latest.hash;
+    drop(blockchain);
+
+    let validators_count = state.staking_manager.get_active_validators().len();
+
     let response = HealthResponse {
         status: "healthy".to_string(),
-        uptime_seconds: 3600,
+        uptime_seconds,
         blockchain: BlockchainHealthResponse {
-            height: 1000,
-            last_block_hash: "hash_placeholder".to_string(),
-            validators_count: 1,
+            height,
+            last_block_hash,
+            validators_count,
         },
     };
 
@@ -25,34 +37,37 @@ async fn health_check(_req: HttpRequest) -> ApiResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(api_response))
 }
 
-/// GET /version - Get API version
+/// GET /api/v1/version — API and crate version metadata with live chain height.
 #[get("/version")]
-async fn get_version(_req: HttpRequest) -> ApiResult<HttpResponse> {
+pub async fn get_version(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let blockchain_height = blockchain.get_latest_block().index;
+    drop(blockchain);
+
     let response = VersionResponse {
         api_version: "1.0.0".to_string(),
-        rust_bc_version: "0.1.0".to_string(),
-        blockchain_height: 1000,
+        rust_bc_version: env!("CARGO_PKG_VERSION").to_string(),
+        blockchain_height,
     };
 
     let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
     Ok(HttpResponse::Ok().json(api_response))
 }
 
-/// GET /openapi.json - OpenAPI specification
+/// GET /api/v1/openapi.json — OpenAPI specification.
 #[get("/openapi.json")]
-async fn get_openapi(_req: HttpRequest) -> ApiResult<HttpResponse> {
+pub async fn get_openapi(_req: HttpRequest) -> ApiResult<HttpResponse> {
     let spec = OpenApi::spec();
     Ok(HttpResponse::Ok().json(spec))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::SCAFFOLD_HTTP_SINCE;
 
     #[test]
-    fn test_utilities_handlers_module_compiles() {
-        assert!(true);
+    fn test_scaffold_uptime_clock_started() {
+        assert!(SCAFFOLD_HTTP_SINCE.elapsed().as_secs() < 60);
     }
 }

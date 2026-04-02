@@ -48,6 +48,12 @@ const block = await client.getBlockByHash(blocks[0].hash);
 console.log('Block transactions:', block.transactions.length);
 ```
 
+## Response formats
+
+Migrated **gateway** routes (`/health`, `/version`, `/blocks`, `/chain/*`, `/transactions`, `/mempool`) return JSON with `status`, `status_code`, `message`, `data`, `error`, `timestamp`, and `trace_id`. The SDK unwraps `data` automatically via `unwrapGatewayData` (also exported for custom clients).
+
+Handlers not yet migrated (wallets, contracts, billing, mining, etc.) still use `{ success, data?, message? }`; the same helper accepts both shapes.
+
 ## API Reference
 
 ### Initialization
@@ -99,8 +105,8 @@ const block = await client.getBlockByHash(hash);
 // Get block by index
 const block = await client.getBlockByIndex(index);
 
-// Create a new block
-const block = await client.createBlock({
+// Create a new block (returns new block hash string)
+const blockHash = await client.createBlock({
   transactions: CreateTransactionRequest[];
 });
 ```
@@ -121,8 +127,8 @@ const stats = await client.getStats();
 ### Mining Operations
 
 ```typescript
-// Mine a block
-const block = await client.mineBlock(minerAddress, maxTransactions?);
+// Mine a block (legacy envelope; returns hash, reward, transactions_count, …)
+const mined = await client.mineBlock(minerAddress, maxTransactions?);
 ```
 
 ### Network Operations

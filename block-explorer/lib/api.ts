@@ -6,6 +6,38 @@ import axios from 'axios';
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8080/api/v1';
 
+/** Gateway or legacy envelope. */
+function unwrapData<T>(body: unknown): T {
+  if (body === null || typeof body !== 'object') {
+    throw new Error('Invalid API response body');
+  }
+  const record = body as Record<string, unknown>;
+  if (
+    record.status === 'Success' &&
+    'data' in record &&
+    record.data !== undefined &&
+    record.data !== null
+  ) {
+    return record.data as T;
+  }
+  if (record.success === true && 'data' in record && record.data !== undefined) {
+    return record.data as T;
+  }
+  let message = 'Request failed';
+  if (typeof record.message === 'string' && record.message.length > 0) {
+    message = record.message;
+  } else if (
+    record.error &&
+    typeof record.error === 'object' &&
+    record.error !== null &&
+    'message' in record.error &&
+    typeof (record.error as { message: unknown }).message === 'string'
+  ) {
+    message = (record.error as { message: string }).message;
+  }
+  throw new Error(message);
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -39,6 +71,11 @@ export interface Wallet {
   public_key: string;
 }
 
+export interface MempoolGatewayPayload {
+  count: number;
+  transactions: Transaction[];
+}
+
 export interface Stats {
   blockchain: {
     block_count: number;
@@ -64,27 +101,18 @@ const client = axios.create({
 });
 
 export async function getBlocks(): Promise<Block[]> {
-  const response = await client.get<ApiResponse<Block[]>>('/blocks');
-  if (response.data.success && response.data.data) {
-    return response.data.data;
-  }
-  throw new Error(response.data.message || 'Failed to get blocks');
+  const response = await client.get<unknown>('/blocks');
+  return unwrapData<Block[]>(response.data);
 }
 
 export async function getBlockByHash(hash: string): Promise<Block> {
-  const response = await client.get<ApiResponse<Block>>(`/blocks/${hash}`);
-  if (response.data.success && response.data.data) {
-    return response.data.data;
-  }
-  throw new Error(response.data.message || 'Block not found');
+  const response = await client.get<unknown>(`/blocks/${hash}`);
+  return unwrapData<Block>(response.data);
 }
 
 export async function getBlockByIndex(index: number): Promise<Block> {
-  const response = await client.get<ApiResponse<Block>>(`/blocks/index/${index}`);
-  if (response.data.success && response.data.data) {
-    return response.data.data;
-  }
-  throw new Error(response.data.message || 'Block not found');
+  const response = await client.get<unknown>(`/blocks/index/${index}`);
+  return unwrapData<Block>(response.data);
 }
 
 export async function getWallet(address: string): Promise<Wallet> {
@@ -112,11 +140,12 @@ export async function getStats(): Promise<Stats> {
 }
 
 export async function getMempool(): Promise<Transaction[]> {
-  const response = await client.get<ApiResponse<Transaction[]>>('/mempool');
-  if (response.data.success && response.data.data) {
-    return response.data.data;
+  const response = await client.get<unknown>('/mempool');
+  const data = unwrapData<MempoolGatewayPayload | Transaction[]>(response.data);
+  if (Array.isArray(data)) {
+    return data;
   }
-  throw new Error(response.data.message || 'Failed to get mempool');
+  return data.transactions;
 }
 
 export interface Validator {

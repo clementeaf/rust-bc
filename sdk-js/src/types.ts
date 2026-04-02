@@ -2,11 +2,32 @@
  * TypeScript types for Rust Blockchain SDK
  */
 
-export interface ApiResponse<T> {
+/** Gateway envelope (`/api/v1` handlers: blocks, chain, transactions, mempool, health, version). */
+export interface GatewayApiResponse<T> {
+  status: string;
+  status_code: number;
+  message: string;
+  data?: T | null;
+  error?: ErrorDto | null;
+  timestamp: string;
+  trace_id: string;
+}
+
+export interface ErrorDto {
+  code: string;
+  message: string;
+  field?: string | null;
+}
+
+/** Legacy envelope (handlers not yet migrated to the gateway). */
+export interface LegacyApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string | null;
 }
+
+/** @deprecated Use `GatewayApiResponse<T>` or `LegacyApiResponse<T>`. */
+export type ApiResponse<T> = LegacyApiResponse<T>;
 
 export interface Block {
   index: number;
@@ -42,9 +63,10 @@ export interface BlockchainInfo {
   is_valid: boolean;
 }
 
+/** GET /chain/verify (gateway). */
 export interface ChainVerification {
-  is_valid: boolean;
-  errors: string[];
+  valid: boolean;
+  block_count: number;
 }
 
 export interface Peer {
@@ -79,20 +101,14 @@ export interface Stats {
   };
 }
 
+/** GET /health (gateway). */
 export interface HealthCheck {
   status: string;
-  version: string;
+  uptime_seconds: number;
   blockchain: {
-    block_count: number;
-    latest_block_index: number;
-    mempool_size: number;
-  };
-  cache: {
-    size: number;
-    last_block_index: number;
-  };
-  network: {
-    connected_peers: number;
+    height: number;
+    last_block_hash: string;
+    validators_count: number;
   };
 }
 
@@ -107,6 +123,21 @@ export interface CreateTransactionRequest {
 
 export interface CreateBlockRequest {
   transactions: CreateTransactionRequest[];
+}
+
+/** GET /mempool (gateway) — `data` payload. */
+export interface MempoolListResponse {
+  count: number;
+  transactions: Transaction[];
+}
+
+/** POST /mine (legacy) — `data` payload. */
+export interface MineBlockResponse {
+  hash: string;
+  reward: number;
+  transactions_count: number;
+  validator?: string | null;
+  consensus: string;
 }
 
 export interface CreateAPIKeyRequest {

@@ -82,6 +82,36 @@ pub struct Node {
     pub seed_nodes: Vec<String>,
     // Peers fallidos con timestamp para retry
     pub failed_peers: Arc<Mutex<HashMap<String, (u64, u32)>>>, // (peer_address, (timestamp, attempt_count))
+    /// Si está definido, solo se aceptan conexiones entrantes cuya dirección remota esté en el conjunto (`PEER_ALLOWLIST`).
+    pub peer_allowlist: Option<Arc<HashSet<String>>>,
+}
+
+/// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
+/// Devuelve `None` si no hay ninguna dirección válida (lista deshabilitada o vacía tras parseo).
+pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
+    let mut set = HashSet::new();
+    for token in env_value.split(',') {
+        let t = token.trim();
+        if t.is_empty() {
+            continue;
+        }
+        match t.parse::<SocketAddr>() {
+            Ok(addr) => {
+                set.insert(addr.to_string());
+            }
+            Err(_) => {
+                eprintln!(
+                    "⚠️  PEER_ALLOWLIST: entrada ignorada (no es dirección válida): {:?}",
+                    t
+                );
+            }
+        }
+    }
+    if set.is_empty() {
+        None
+    } else {
+        Some(set)
+    }
 }
 
 impl Node {
@@ -99,6 +129,7 @@ impl Node {
         network_id: Option<String>,
         bootstrap_nodes: Option<Vec<String>>,
         seed_nodes: Option<Vec<String>>,
+        peer_allowlist: Option<Arc<HashSet<String>>>,
     ) -> Node {
         Node {
             address,
@@ -118,6 +149,7 @@ impl Node {
             bootstrap_nodes: bootstrap_nodes.unwrap_or_default(),
             seed_nodes: seed_nodes.unwrap_or_default(),
             failed_peers: Arc::new(Mutex::new(HashMap::new())),
+            peer_allowlist,
         }
     }
 
@@ -179,10 +211,22 @@ impl Node {
         let rate_limits = self.contract_rate_limits.clone();
         let pending_broadcasts = self.pending_contract_broadcasts.clone();
         let network_id = self.network_id.clone();
+        let peer_allowlist = self.peer_allowlist.clone();
 
         loop {
             match listener.accept().await {
                 Ok((stream, peer_addr)) => {
+                    let peer_key = peer_addr.to_string();
+                    if let Some(ref allowed) = peer_allowlist {
+                        if !allowed.contains(&peer_key) {
+                            eprintln!(
+                                "🚫 Conexión P2P rechazada (no está en PEER_ALLOWLIST): {}",
+                                peer_key
+                            );
+                            drop(stream);
+                            continue;
+                        }
+                    }
                     println!("📡 Nueva conexión desde: {}", peer_addr);
                     let peers_clone = peers.clone();
                     let blockchain_clone = blockchain.clone();
@@ -2062,5 +2106,24 @@ impl Node {
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod peer_allowlist_tests {
+    use super::parse_peer_allowlist;
+
+    #[test]
+    fn parse_peer_allowlist_accepts_comma_separated_addrs() {
+        let s = "127.0.0.1:8081, 192.168.1.1:9090";
+        let set = parse_peer_allowlist(s).expect("valid");
+        assert!(set.contains("127.0.0.1:8081"));
+        assert!(set.contains("192.168.1.1:9090"));
+    }
+
+    #[test]
+    fn parse_peer_allowlist_empty_returns_none() {
+        assert!(parse_peer_allowlist("").is_none());
+        assert!(parse_peer_allowlist("   , , ").is_none());
     }
 }

@@ -1,6 +1,34 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
+use crate::models::Transaction;
+
+/// Request body for creating a transaction (shared with legacy handlers).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTransactionRequest {
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+    #[serde(default)]
+    pub fee: Option<u64>,
+    pub data: Option<String>,
+    #[serde(default)]
+    pub signature: Option<String>,
+}
+
+/// Request body for `POST /api/v1/blocks`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateBlockRequest {
+    pub transactions: Vec<CreateTransactionRequest>,
+}
+
+/// Pending mempool listing (`GET /api/v1/mempool`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MempoolResponse {
+    pub count: usize,
+    pub transactions: Vec<Transaction>,
+}
+
 /// Identity creation request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateIdentityRequest {
@@ -81,6 +109,22 @@ pub struct ConsensusStateResponse {
     pub canonical_head: String,
     pub blockchain_height: u64,
     pub active_forks: usize,
+}
+
+/// Chain verification summary (GET /chain/verify)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainVerifyResponse {
+    pub valid: bool,
+    pub block_count: usize,
+}
+
+/// Chain metadata (GET /chain/info)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainInfoResponse {
+    pub block_count: usize,
+    pub difficulty: u8,
+    pub latest_block_hash: String,
+    pub is_valid: bool,
 }
 
 /// Credential issuance request

@@ -20,5 +20,24 @@ pub mod storage;
 pub mod consensus;
 pub mod identity;
 
+// Runtime stack (shared with binary for AppState and scaffold handlers)
+pub mod block_storage;
+pub mod cache;
+pub mod checkpoint;
+pub mod smart_contracts;
+pub mod staking;
+pub mod airdrop;
+pub mod state_reconstructor;
+pub mod state_snapshot;
+pub mod pruning;
+pub mod network;
+pub mod billing;
+pub mod metrics;
+
 // Phase 3 Week 5: REST API Gateway
+pub mod app_state;
 pub mod api;
+pub mod block_creation;
+pub mod tls;
+
+pub use app_state::AppState;

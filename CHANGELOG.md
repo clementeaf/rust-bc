@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **TLS module** (`src/tls.rs`): load PEM cert+key from `TLS_CERT_PATH` / `TLS_KEY_PATH` env vars, build `rustls::ServerConfig`
+- Dependencies: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`
+- `actix-web` feature `rustls-0_23` for HTTPS binding (wiring in next task)
+- Test fixtures: self-signed EC cert+key under `tests/fixtures/`
+- 5 unit tests for TLS config loading (valid cert, missing cert, missing key, invalid key, no env vars)
 - `docs/README.md` index for documentation layout
 
 ### Changed
@@ -15,18 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grouped root markdown into `docs/dev/`, `docs/commercial/`, and `docs/technical/`
 - README and contributor links updated to new paths
 - Stop tracking local `blockchain_blocks/` sample data; ignore runtime blockchain data directories
-
-### Deprecated
-- (Features deprecated in development)
-
-### Removed
-- (Features removed in development)
-
-### Fixed
-- (Bug fixes in development)
-
-### Security
-- (Security patches in development)
 
 ---
 
@@ -187,6 +180,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** December 19, 2025  
+**Last Updated:** April 2, 2026
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

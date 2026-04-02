@@ -15,7 +15,7 @@ async function main() {
     console.log('Checking health...');
     const health = await client.health();
     console.log('Health status:', health.status);
-    console.log('Block count:', health.blockchain.block_count);
+    console.log('Chain height:', health.blockchain.height);
 
     // Create a wallet
     console.log('\nCreating wallet...');
@@ -33,7 +33,7 @@ async function main() {
     // Get blockchain info
     console.log('\nGetting blockchain info...');
     const info = await client.getBlockchainInfo();
-    console.log('Blockchain length:', info.length);
+    console.log('Blockchain block count:', info.block_count);
     console.log('Difficulty:', info.difficulty);
     console.log('Latest block hash:', info.latest_block_hash);
 
@@ -61,10 +61,8 @@ async function main() {
     // Verify chain
     console.log('\nVerifying chain...');
     const verification = await client.verifyChain();
-    console.log('Chain valid:', verification.is_valid);
-    if (verification.errors.length > 0) {
-      console.log('Errors:', verification.errors);
-    }
+    console.log('Chain valid:', verification.valid);
+    console.log('Blocks checked:', verification.block_count);
 
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error);

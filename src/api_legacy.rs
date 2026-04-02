@@ -1,6 +1,4 @@
 // Standard library
-use std::env;
-use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
 // External crates
@@ -9,63 +7,10 @@ use actix_web::{web, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 
 // Crate modules
-use crate::airdrop::AirdropManager;
-use crate::billing::{BillingManager, BillingTier, UsageStats};
-use crate::block_storage::BlockStorage;
-use crate::blockchain::{Block, Blockchain};
-use crate::cache::BalanceCache;
-use crate::checkpoint::CheckpointManager;
-use crate::models::{Mempool, Transaction, Wallet, WalletManager};
-use crate::network::Node;
-use crate::pruning::PruningManager;
-use crate::smart_contracts::{ContractFunction, ContractManager, NFTMetadata, SmartContract};
-use crate::staking::StakingManager;
-use crate::transaction_validation::TransactionValidator;
-use crate::metrics::MetricsCollector;
-
-/**
- * Estado compartido de la aplicación
- */
-#[derive(Clone)]
-pub struct AppState {
-    pub blockchain: Arc<Mutex<Blockchain>>,
-    pub wallet_manager: Arc<Mutex<WalletManager>>,
-    pub block_storage: Option<Arc<BlockStorage>>,
-    pub node: Option<Arc<Node>>,
-    pub mempool: Arc<Mutex<Mempool>>,
-    pub balance_cache: Arc<BalanceCache>,
-    pub billing_manager: Arc<BillingManager>,
-    pub contract_manager: Arc<RwLock<ContractManager>>,
-    pub staking_manager: Arc<StakingManager>,
-    pub airdrop_manager: Arc<AirdropManager>,
-    pub pruning_manager: Option<Arc<PruningManager>>,
-    pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
-    pub transaction_validator: Arc<Mutex<TransactionValidator>>,
-    pub metrics: Arc<MetricsCollector>,
-}
-
-/**
- * Request para crear una transacción
- */
-#[derive(Deserialize)]
-pub struct CreateTransactionRequest {
-    pub from: String,
-    pub to: String,
-    pub amount: u64,
-    #[serde(default)]
-    pub fee: Option<u64>, // Fee opcional (default: 0)
-    pub data: Option<String>,
-    #[serde(default)]
-    pub signature: Option<String>, // Firma opcional (si se proporciona, se usa en lugar de firmar automáticamente)
-}
-
-/**
- * Request para crear un bloque
- */
-#[derive(Deserialize)]
-pub struct CreateBlockRequest {
-    pub transactions: Vec<CreateTransactionRequest>,
-}
+use crate::app_state::AppState;
+use crate::billing::{BillingTier, UsageStats};
+use crate::models::{Transaction, Wallet};
+use crate::smart_contracts::{ContractFunction, NFTMetadata, SmartContract};
 
 /**
  * Response estándar de la API
@@ -93,327 +38,6 @@ impl<T> ApiResponse<T> {
             message: Some(message),
         }
     }
-}
-
-/**
- * Obtiene todos los bloques
- */
-pub async fn get_blocks(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let response = ApiResponse::success(blockchain.chain.clone());
-    Ok(HttpResponse::Ok().json(response))
-}
-
-/**
- * Obtiene un bloque por hash
- */
-pub async fn get_block_by_hash(
-    state: web::Data<AppState>,
-    hash: web::Path<String>,
-) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    match blockchain.get_block_by_hash(&hash) {
-        Some(block) => {
-            let response = ApiResponse::success(block.clone());
-            Ok(HttpResponse::Ok().json(response))
-        }
-        None => {
-            let response: ApiResponse<Block> =
-                ApiResponse::error("Bloque no encontrado".to_string());
-            Ok(HttpResponse::NotFound().json(response))
-        }
-    }
-}
-
-/**
- * Obtiene un bloque por índice
- */
-pub async fn get_block_by_index(
-    state: web::Data<AppState>,
-    index: web::Path<u64>,
-) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    match blockchain.get_block_by_index(*index) {
-        Some(block) => {
-            let response = ApiResponse::success(block.clone());
-            Ok(HttpResponse::Ok().json(response))
-        }
-        None => {
-            let response: ApiResponse<Block> =
-                ApiResponse::error("Bloque no encontrado".to_string());
-            Ok(HttpResponse::NotFound().json(response))
-        }
-    }
-}
-
-/**
- * Crea un nuevo bloque con transacciones
- */
-pub async fn create_block(
-    state: web::Data<AppState>,
-    req: web::Json<CreateBlockRequest>,
-) -> ActixResult<HttpResponse> {
-    let mut blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let mut wallet_manager = state
-        .wallet_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-
-    let transactions: Result<Vec<Transaction>, String> = req
-        .transactions
-        .iter()
-        .map(|tx_req| {
-            let fee = tx_req.fee.unwrap_or(0);
-            let mut tx = Transaction::new_with_fee(
-                tx_req.from.clone(),
-                tx_req.to.clone(),
-                tx_req.amount,
-                fee,
-                tx_req.data.clone(),
-            );
-
-            if tx_req.from != "0" {
-                let wallet = wallet_manager
-                    .get_wallet_for_signing(&tx_req.from)
-                    .ok_or_else(|| "Wallet no encontrado para firmar".to_string())?;
-                wallet.sign_transaction(&mut tx);
-            }
-
-            Ok(tx)
-        })
-        .collect();
-
-    match transactions {
-        Ok(txs) => {
-            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-            for tx in &txs {
-                if tx.from != "0" {
-                    mempool.remove_transaction(&tx.id);
-                }
-            }
-            drop(mempool);
-
-            match blockchain.add_block(txs.clone(), &wallet_manager) {
-                Ok(hash) => {
-                    for tx in &txs {
-                        if tx.from == "0" {
-                            let _ = wallet_manager.process_coinbase_transaction(tx);
-                        } else {
-                            let _ = wallet_manager.process_transaction(tx);
-                        }
-                    }
-
-                    let latest = blockchain.get_latest_block();
-                    let latest_index = latest.index;
-                    let latest_block_clone = latest.clone();
-
-                    // Guardar en BlockStorage (nuevo sistema)
-                    if let Some(ref storage) = state.block_storage {
-                        if let Err(e) = storage.save_block(&latest_block_clone) {
-                            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
-                        }
-                    }
-
-                    if let Some(node) = &state.node {
-                        let node_clone = node.clone();
-                        tokio::spawn(async move {
-                            node_clone.broadcast_block(&latest_block_clone).await;
-                        });
-                    }
-
-                    drop(blockchain);
-                    state.balance_cache.invalidate(latest_index);
-
-                    let response = ApiResponse::success(hash);
-                    Ok(HttpResponse::Created().json(response))
-                }
-                Err(e) => {
-                    let response: ApiResponse<String> = ApiResponse::error(e);
-                    Ok(HttpResponse::BadRequest().json(response))
-                }
-            }
-        }
-        Err(e) => {
-            let response: ApiResponse<String> = ApiResponse::error(e);
-            Ok(HttpResponse::BadRequest().json(response))
-        }
-    }
-}
-
-/**
- * Crea una transacción (se agrega al próximo bloque)
- */
-pub async fn create_transaction(
-    state: web::Data<AppState>,
-    req: web::Json<CreateTransactionRequest>,
-    http_req: actix_web::HttpRequest,
-) -> ActixResult<HttpResponse> {
-    let api_key = http_req
-        .headers()
-        .get("X-API-Key")
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    // Verificar límite de billing LO MÁS TEMPRANO POSIBLE
-    // Esto previene procesamiento innecesario si el límite ya se alcanzó
-    // Las transacciones coinbase (from == "0") son del sistema y no deben contarse
-    if req.from != "0" {
-        if let Some(key) = &api_key {
-            match state.billing_manager.check_transaction_limit(key) {
-                Ok(()) => {}
-                Err(e) => {
-                    // Si falla por límite, retornar error de pago requerido inmediatamente
-                    if e.contains("Límite de transacciones alcanzado") {
-                        let response: ApiResponse<Transaction> = ApiResponse::error(e);
-                        return Ok(HttpResponse::PaymentRequired().json(response));
-                    }
-                    // Otros errores (key inválida, etc.)
-                    let response: ApiResponse<Transaction> = ApiResponse::error(e);
-                    return Ok(HttpResponse::Unauthorized().json(response));
-                }
-            }
-        }
-    }
-
-    // Fee-only-token: todas las transacciones deben tener fee > 0 (excepto coinbase)
-    let fee = req.fee.unwrap_or(0);
-    if req.from != "0" && fee == 0 {
-        let response: ApiResponse<Transaction> = ApiResponse::error(
-            "Fee requerido: todas las transacciones deben incluir un fee > 0".to_string(),
-        );
-        return Ok(HttpResponse::BadRequest().json(response));
-    }
-
-    let mut tx = Transaction::new_with_fee(
-        req.from.clone(),
-        req.to.clone(),
-        req.amount,
-        fee,
-        req.data.clone(),
-    );
-
-    if !tx.is_valid() {
-        let response: ApiResponse<Transaction> =
-            ApiResponse::error("Transacción inválida".to_string());
-        return Ok(HttpResponse::BadRequest().json(response));
-    }
-
-    if req.from != "0" {
-        let wallet_manager = state
-            .wallet_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let wallet = match wallet_manager.get_wallet_for_signing(&req.from) {
-            Some(w) => w,
-            None => {
-                let response: ApiResponse<Transaction> =
-                    ApiResponse::error("Wallet no encontrado para firmar".to_string());
-                return Ok(HttpResponse::BadRequest().json(response));
-            }
-        };
-
-        if let Some(sig) = &req.signature {
-            if !sig.is_empty() {
-                tx.signature = sig.clone();
-            } else {
-                wallet.sign_transaction(&mut tx);
-            }
-        } else {
-            wallet.sign_transaction(&mut tx);
-        }
-        drop(wallet_manager);
-
-        // Validar transacción (incluye validación de fee con token nativo)
-        let (balance, validation_result) = {
-            let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-            let wallet_manager = state
-                .wallet_manager
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            let bal = blockchain.calculate_balance(&req.from);
-            let validation = blockchain.validate_transaction(&tx, &wallet_manager);
-            (bal, validation)
-        };
-
-        if let Err(e) = validation_result {
-            let response: ApiResponse<Transaction> = ApiResponse::error(e);
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-
-        // Validate transaction using the validation gate
-        let validation_result = {
-            let mut validator = state.transaction_validator.lock().unwrap_or_else(|e| e.into_inner());
-            validator.validate(&tx)
-        };
-
-        if !validation_result.is_valid {
-            let error_msg = validation_result.errors.join("; ");
-            let response: ApiResponse<Transaction> = ApiResponse::error(error_msg);
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-
-        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-
-        if mempool.has_double_spend(&tx) {
-            let response: ApiResponse<Transaction> =
-                ApiResponse::error("Doble gasto detectado en mempool".to_string());
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-
-        // Validar balance disponible considerando transacciones pendientes en mempool
-        // IMPORTANTE: El balance es del token nativo, los fees solo se pueden pagar con token nativo
-        let pending_spent = mempool.calculate_pending_spent(&req.from);
-        let total_required = tx.amount + tx.fee;
-        let available_balance = balance.saturating_sub(pending_spent);
-
-        if available_balance < total_required {
-            let response: ApiResponse<Transaction> = ApiResponse::error(format!(
-                "Saldo insuficiente de token nativo. Disponible: {}, Requerido: {} (amount: {} + fee: {}). Pendiente en mempool: {}. Los fees solo se pueden pagar con el token nativo.",
-                available_balance, total_required, tx.amount, tx.fee, pending_spent
-            ));
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-
-        // Agregar al mempool
-        if let Err(e) = mempool.add_transaction(tx.clone()) {
-            drop(mempool);
-            let response: ApiResponse<Transaction> = ApiResponse::error(e);
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-        drop(mempool);
-
-        // Registrar en billing SOLO si se agregó exitosamente al mempool
-        // Ya verificamos el límite al inicio, así que solo incrementamos el contador
-        // Usar try_record_transaction para verificación atómica final (por si hubo race condition)
-        if let Some(key) = &api_key {
-            match state.billing_manager.try_record_transaction(key) {
-                Ok(()) => {}
-                Err(e) => {
-                    // Si falla por límite aquí, significa que hubo una race condition
-                    // La transacción ya está en el mempool, pero el límite se aplicó correctamente
-                    if e.contains("Límite de transacciones alcanzado") {
-                        let response: ApiResponse<Transaction> = ApiResponse::error(e);
-                        return Ok(HttpResponse::PaymentRequired().json(response));
-                    }
-                    // Otros errores (key inválida, etc.)
-                    let response: ApiResponse<Transaction> = ApiResponse::error(e);
-                    return Ok(HttpResponse::Unauthorized().json(response));
-                }
-            }
-        }
-    }
-    // Las transacciones coinbase (from == "0") no se registran en billing
-
-    if let Some(node) = &state.node {
-        let tx_clone = tx.clone();
-        let node_clone = node.clone();
-        tokio::spawn(async move {
-            node_clone.broadcast_transaction(&tx_clone).await;
-        });
-    }
-
-    let response = ApiResponse::success(tx.clone());
-    Ok(HttpResponse::Created().json(response))
 }
 
 /**
@@ -515,54 +139,6 @@ pub async fn get_wallet_transactions(
     let transactions = blockchain.get_transactions_for_wallet(&address);
 
     let response = ApiResponse::success(transactions);
-    Ok(HttpResponse::Ok().json(response))
-}
-
-/**
- * Verifica la validez de la cadena
- */
-pub async fn verify_chain(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let is_valid = blockchain.is_chain_valid();
-
-    #[derive(Serialize)]
-    struct VerifyResponse {
-        valid: bool,
-        block_count: usize,
-    }
-
-    let response_data = VerifyResponse {
-        valid: is_valid,
-        block_count: blockchain.chain.len(),
-    };
-
-    let response = ApiResponse::success(response_data);
-    Ok(HttpResponse::Ok().json(response))
-}
-
-/**
- * Obtiene información de la blockchain
- */
-pub async fn get_blockchain_info(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-
-    #[derive(Serialize)]
-    struct InfoResponse {
-        block_count: usize,
-        difficulty: u8,
-        latest_block_hash: String,
-        is_valid: bool,
-    }
-
-    let latest_hash = blockchain.get_latest_block().hash.clone();
-    let response_data = InfoResponse {
-        block_count: blockchain.chain.len(),
-        difficulty: blockchain.difficulty,
-        latest_block_hash: latest_hash,
-        is_valid: blockchain.is_chain_valid(),
-    };
-
-    let response = ApiResponse::success(response_data);
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -852,28 +428,6 @@ pub async fn mine_block(
 }
 
 /**
- * Obtiene todas las transacciones del mempool
- */
-pub async fn get_mempool(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    let mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-    let transactions = mempool.get_all_transactions().to_vec();
-
-    #[derive(Serialize)]
-    struct MempoolResponse {
-        count: usize,
-        transactions: Vec<Transaction>,
-    }
-
-    let response_data = MempoolResponse {
-        count: transactions.len(),
-        transactions,
-    };
-
-    let response = ApiResponse::success(response_data);
-    Ok(HttpResponse::Ok().json(response))
-}
-
-/**
  * Prometheus metrics endpoint
  */
 pub async fn get_metrics(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
@@ -881,86 +435,6 @@ pub async fn get_metrics(state: web::Data<AppState>) -> ActixResult<HttpResponse
     Ok(HttpResponse::Ok()
         .content_type("text/plain; version=0.0.4")
         .body(metrics_text))
-}
-
-/**
- * Health check endpoint para monitoreo del sistema
- */
-pub async fn health_check(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    let mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-    let (cache_size, cache_block_index) = state.balance_cache.stats();
-
-    // Obtener block count desde blockchain en lugar de BD
-    let _block_count = {
-        let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-        blockchain.chain.len() as u64
-    };
-
-    let peers_count = if let Some(node) = &state.node {
-        let peers = node.peers.lock().unwrap_or_else(|e| e.into_inner());
-        peers.len()
-    } else {
-        0
-    };
-
-    let (block_count, latest_block_index, mempool_size) = {
-        let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-        let count = blockchain.chain.len();
-        let latest_idx = if count > 0 {
-            blockchain.get_latest_block().index
-        } else {
-            0
-        };
-        let mempool_size = mempool.len();
-        (count, latest_idx, mempool_size)
-    };
-
-    #[derive(Serialize)]
-    struct HealthResponse {
-        status: String,
-        version: String,
-        blockchain: HealthBlockchain,
-        cache: HealthCache,
-        network: HealthNetwork,
-    }
-
-    #[derive(Serialize)]
-    struct HealthBlockchain {
-        block_count: usize,
-        latest_block_index: u64,
-        mempool_size: usize,
-    }
-
-    #[derive(Serialize)]
-    struct HealthCache {
-        size: usize,
-        last_block_index: u64,
-    }
-
-    #[derive(Serialize)]
-    struct HealthNetwork {
-        connected_peers: usize,
-    }
-
-    let response_data = HealthResponse {
-        status: "healthy".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        blockchain: HealthBlockchain {
-            block_count,
-            latest_block_index,
-            mempool_size,
-        },
-        cache: HealthCache {
-            size: cache_size,
-            last_block_index: cache_block_index,
-        },
-        network: HealthNetwork {
-            connected_peers: peers_count,
-        },
-    };
-
-    let response = ApiResponse::success(response_data);
-    Ok(HttpResponse::Ok().json(response))
 }
 
 /**
@@ -2637,27 +2111,22 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
                 web::post().to(deactivate_api_key),
             )
             .route("/billing/usage", web::get().to(get_billing_usage))
-            .route("/blocks", web::get().to(get_blocks))
-            .route("/blocks/{hash}", web::get().to(get_block_by_hash))
-            .route("/blocks/index/{index}", web::get().to(get_block_by_index))
-            .route("/blocks", web::post().to(create_block))
-            .route("/transactions", web::post().to(create_transaction))
+            // GET/POST /api/v1/blocks — api::handlers::blocks (gateway)
+            // POST /api/v1/transactions, GET /api/v1/mempool — api::handlers::transactions (gateway)
             .route("/wallets/{address}", web::get().to(get_wallet_balance))
             .route("/wallets/create", web::post().to(create_wallet))
             .route(
                 "/wallets/{address}/transactions",
                 web::get().to(get_wallet_transactions),
             )
-            .route("/chain/verify", web::get().to(verify_chain))
-            .route("/chain/info", web::get().to(get_blockchain_info))
+            // GET /api/v1/chain/verify, /chain/info — api::handlers::chain
             .route("/peers", web::get().to(get_peers))
             .route("/peers/{address}/connect", web::post().to(connect_peer))
             .route("/sync", web::post().to(sync_blockchain))
             .route("/mine", web::post().to(mine_block))
-            .route("/mempool", web::get().to(get_mempool))
             .route("/metrics", web::get().to(get_metrics))
             .route("/stats", web::get().to(get_stats))
-            .route("/health", web::get().to(health_check))
+            // GET /api/v1/health — served by `api::handlers::utilities` (scaffold)
             // IMPORTANTE: Rutas exactas ANTES de rutas con parámetros
             .route("/contracts/debug", web::post().to(deploy_contract_debug))
             .route("/contracts", web::get().to(get_all_contracts))
