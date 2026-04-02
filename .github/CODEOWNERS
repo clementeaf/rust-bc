@@ -45,8 +45,8 @@ audit/                                @compliance-officer
 
 # Documentation & Standards
 README.md                             @tech-lead
-BRANCHING_STRATEGY.md                 @tech-lead
 CONTRIBUTING.md                       @tech-lead
+docs/                                 @tech-lead
 docs/ARCHITECTURE.md                  @tech-lead
 docs/API_CONTRACT.md                  @tech-lead @backend-api-owner
 

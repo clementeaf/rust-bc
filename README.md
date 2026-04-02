@@ -78,9 +78,9 @@ rust-bc/
 ├── .github/
 │   ├── workflows/             # CI/CD pipelines
 │   └── CODEOWNERS            # Ownership matrix
+├── docs/                      # All extended docs (analysis, archive, commercial, dev, technical)
 ├── rust-toolchain.toml        # Rust version pinning
 ├── Cargo.toml                 # Rust dependencies
-├── BRANCHING_STRATEGY.md      # Git workflow
 ├── CONTRIBUTING.md            # Contribution guidelines
 └── README.md                  # This file
 ```
@@ -281,12 +281,13 @@ feature/* → PR → develop → staging → main → production (canary 5% → 
 
 ## Documentation
 
-- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **API Contract:** [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
-- **GDPR Compliance:** [docs/GDPR.md](docs/GDPR.md)
-- **eIDAS Roadmap:** [docs/eIDAS_ROADMAP.md](docs/eIDAS_ROADMAP.md)
-- **Branching Strategy:** [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
+- **Index:** [docs/README.md](docs/README.md)
+- **Architecture studies:** [docs/analysis/](docs/analysis/)
+- **Branching strategy:** [docs/dev/BRANCHING_STRATEGY.md](docs/dev/BRANCHING_STRATEGY.md)
+- **Onboarding:** [docs/dev/ONBOARDING.md](docs/dev/ONBOARDING.md)
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Optional references (if present in tree): `docs/ARCHITECTURE.md`, `docs/API_CONTRACT.md`, `docs/GDPR.md`, `docs/eIDAS_ROADMAP.md`.
 
 ---
 

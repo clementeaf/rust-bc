@@ -277,11 +277,11 @@ git branch -r
 
 ## 7. Resources
 
-- **Architecture:** [05_TARGET_ARCHITECTURE_BACKEND.md](05_TARGET_ARCHITECTURE_BACKEND.md), etc.
-- **Branching:** [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
-- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Testing:** [08_TESTING_STRATEGY_PHASE2.md](ANALYSIS/08_TESTING_STRATEGY_PHASE2.md)
-- **API Contract:** [05_TARGET_ARCHITECTURE_INTEGRATION.md](05_TARGET_ARCHITECTURE_INTEGRATION.md)
+- **Architecture:** [05_TARGET_ARCHITECTURE_BACKEND.md](../analysis/05_TARGET_ARCHITECTURE_BACKEND.md), etc.
+- **Branching:** [BRANCHING_STRATEGY.md](./BRANCHING_STRATEGY.md)
+- **Contributing:** [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- **Testing:** [08_TESTING_STRATEGY_PHASE2.md](../analysis/08_TESTING_STRATEGY_PHASE2.md)
+- **API Contract:** [05_TARGET_ARCHITECTURE_INTEGRATION.md](../analysis/05_TARGET_ARCHITECTURE_INTEGRATION.md)
 
 ---
 
@@ -315,7 +315,7 @@ You're ready if you can:
 **By Friday EOD:**
 - [ ] Complete setup (today/tomorrow)
 - [ ] Assign to a workstream (WS1-5)
-- [ ] Pick a Week 1 issue from [GITHUB_ISSUES_BULK.md](GITHUB_ISSUES_BULK.md)
+- [ ] Pick a Week 1 issue from [GITHUB_ISSUES_BULK.md](./GITHUB_ISSUES_BULK.md)
 - [ ] Submit first PR (target: WK1-5)
 - [ ] Merged to develop (all checks green)
 
@@ -370,6 +370,6 @@ Fix errors, commit, push — CI will re-run automatically.
 
 **Status: Ready to Onboard** ✅
 
-Start here → [README.md](README.md)
+Start here → [README.md](../../README.md)
 
 **Good luck, and welcome to the team!** 🎉

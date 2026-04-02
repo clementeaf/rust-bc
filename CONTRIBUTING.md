@@ -352,7 +352,7 @@ RUST_BACKTRACE=1 cargo build 2>&1 | head -50
 
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **API Contract:** [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
-- **Branching Strategy:** [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
+- **Branching Strategy:** [docs/dev/BRANCHING_STRATEGY.md](docs/dev/BRANCHING_STRATEGY.md)
 - **GitHub Issues:** [issues](https://github.com/your-org/rust-bc/issues)
 - **Discussions:** [discussions](https://github.com/your-org/rust-bc/discussions)
 

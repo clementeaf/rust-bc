@@ -23,7 +23,7 @@ Repository `rust-bc` has been fully prepared for Phase 2 implementation. All cri
 | Step | File | Purpose | Status |
 |------|------|---------|--------|
 | 1 | `.github/CODEOWNERS` | Ownership matrix (8 tiers/layers) | ✅ |
-| 2 | `BRANCHING_STRATEGY.md` | Git workflow (main/develop/feature/hotfix/release) | ✅ |
+| 2 | `docs/dev/BRANCHING_STRATEGY.md` | Git workflow (main/develop/feature/hotfix/release) | ✅ |
 | 3 | `rust-toolchain.toml` | Rust 1.75.0 pinning | ✅ |
 | 4 | `.github/workflows/build.yml` | Build pipeline (Rust) | ✅ |
 | 5 | `.github/workflows/test.yml` | Test pipeline (coverage + artifacts) | ✅ |
@@ -72,14 +72,14 @@ rust-bc/
 │   ├── consensus/lib.rs                    # Tier 2 scaffold
 │   ├── identity/lib.rs                     # Tier 3 scaffold
 │   ├── api/lib.rs                          # Tier 4 scaffold
-├── BRANCHING_STRATEGY.md                   # Git workflow
+├── docs/dev/BRANCHING_STRATEGY.md           # Git workflow
 ├── CONTRIBUTING.md                         # Contribution guidelines
 ├── README.md                               # Setup guide
 ├── rust-toolchain.toml                     # Rust pinning
 ├── .pre-commit-config.yaml                 # Local checks
 ├── .gitignore                              # Build artifacts
 ├── Cargo.toml                              # Workspace config
-└── REPOSITORY_SETUP_COMPLETE.md            # This file
+└── docs/dev/REPOSITORY_SETUP_COMPLETE.md   # This file
 ```
 
 ---
@@ -242,12 +242,12 @@ git push origin feature/ws1-storage-rocksdb
 
 ## Reference Documentation
 
-- **Development Workflow:** [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
-- **Contribution Guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **Setup Instructions:** [README.md](README.md)
-- **Architecture:** [ANALYSIS/05_TARGET_ARCHITECTURE_*.md](ANALYSIS/)
-- **Testing Strategy:** [ANALYSIS/08_TESTING_STRATEGY_PHASE2.md](ANALYSIS/)
-- **Phase 2 Roadmap:** [ANALYSIS/09_PHASE2_KICKOFF_ROADMAP.md](ANALYSIS/)
+- **Development Workflow:** [BRANCHING_STRATEGY.md](./BRANCHING_STRATEGY.md)
+- **Contribution Guide:** [CONTRIBUTING.md](../../CONTRIBUTING.md)
+- **Setup Instructions:** [README.md](../../README.md)
+- **Architecture:** [docs/analysis/05_TARGET_ARCHITECTURE_*.md](../analysis/)
+- **Testing Strategy:** [08_TESTING_STRATEGY_PHASE2.md](../analysis/08_TESTING_STRATEGY_PHASE2.md)
+- **Phase 2 Roadmap:** [09_PHASE2_KICKOFF_ROADMAP.md](../analysis/09_PHASE2_KICKOFF_ROADMAP.md)
 
 ---
 

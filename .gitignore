@@ -52,3 +52,8 @@ test_*.db
 test_*.db-shm
 test_*.db-wal
 
+# Local blockchain runtime data (do not commit)
+blockchain_blocks/
+blockchain_checkpoints/
+blockchain_snapshots/
+

@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- (Pending features for next release)
+- `docs/README.md` index for documentation layout
 
 ### Changed
-- (Pending changes for next release)
+- Reorganized documentation: `ANALYSIS/` → `docs/analysis/`, former `Documents/` → `docs/archive/`
+- Grouped root markdown into `docs/dev/`, `docs/commercial/`, and `docs/technical/`
+- README and contributor links updated to new paths
+- Stop tracking local `blockchain_blocks/` sample data; ignore runtime blockchain data directories
 
 ### Deprecated
 - (Features deprecated in development)
