@@ -44,6 +44,7 @@ use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use transaction_validation::TransactionValidator;
+use tls::load_tls_config_from_env;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -727,7 +728,7 @@ async fn main() -> std::io::Result<()> {
             actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {}", err))
         });
 
-    let api_handle = HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
             .allow_any_method()
@@ -748,9 +749,23 @@ async fn main() -> std::io::Result<()> {
             }))
             .configure(config_routes)
             .configure(ApiRoutes::configure)
-    })
+    });
+
+    let api_handle = match load_tls_config_from_env() {
+        Ok(Some(tls_config)) => {
+            println!("🔐 TLS habilitado en {}", api_bind);
+            server.bind_rustls_0_23(&api_bind, tls_config)?
+        },
+        Ok(None) => {
+            println!("⚠️  TLS no configurado — API en texto plano en {}", api_bind);
+            server.bind(&api_bind)?
+        }
+        Err(e) => {
+            eprintln!("❌ Error al cargar configuración TLS: {}", e);
+            return Err(std::io::Error::other(e.to_string()));
+        }
+    }
     .workers(8)
-    .bind(&api_bind)?
     .run();
 
     // Tarea periódica para limpiar peers desconectados (cada 60 segundos)
