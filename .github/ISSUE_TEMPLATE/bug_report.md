@@ -24,8 +24,7 @@ What actually happened?
 ## Environment
 - **OS:** macOS / Linux / Windows
 - **Rust version:** `rustc --version`
-- **.NET version:** `dotnet --version`
-- **Component:** storage/consensus/identity/api/persistence/services/viewmodels/ui
+- **Component:** storage/consensus/identity/api/network
 - **Branch:** develop / main / feature/xxx
 
 ## Logs & Errors

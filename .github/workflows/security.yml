@@ -54,32 +54,6 @@ jobs:
         run: cargo update --dry-run 2>&1 | head -20
         continue-on-error: true
 
-  dotnet-security:
-    name: .NET Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '8.0.0'
-
-      - name: Restore packages
-        run: dotnet restore
-        continue-on-error: true
-
-      - name: Run dotnet list package (check for updates)
-        run: dotnet list package --outdated 2>&1 | head -30
-        continue-on-error: true
-
-      - name: OWASP Dependency Check
-        run: |
-          dotnet tool install --global CycloneDX 2>/dev/null || true
-          dotnet CycloneDX . -o ./sbom/ 2>&1 | head -20
-        continue-on-error: true
-
   sast-rust:
     name: SAST — Rust Code Analysis
     runs-on: ubuntu-latest
@@ -106,26 +80,25 @@ jobs:
   security-summary:
     name: Security Scan Summary
     runs-on: ubuntu-latest
-    needs: [secrets-scan, cargo-audit, dotnet-security, sast-rust]
+    needs: [secrets-scan, cargo-audit, sast-rust]
     if: always()
     steps:
       - name: Check security scan results
         run: |
           echo "Secrets Scan: ${{ needs.secrets-scan.result }}"
           echo "Cargo Audit: ${{ needs.cargo-audit.result }}"
-          echo ".NET Security: ${{ needs.dotnet-security.result }}"
           echo "SAST (Rust): ${{ needs.sast-rust.result }}"
-          
+
           FAILED=0
           if [ "${{ needs.secrets-scan.result }}" = "failure" ]; then
-            echo "❌ SECRETS FOUND — DO NOT COMMIT"
+            echo "SECRETS FOUND — DO NOT COMMIT"
             FAILED=1
           fi
           if [ "${{ needs.cargo-audit.result }}" = "failure" ]; then
-            echo "⚠️ Cargo audit issues — review dependencies"
+            echo "Cargo audit issues — review dependencies"
           fi
-          
+
           if [ $FAILED -eq 1 ]; then
             exit 1
           fi
-          echo "✅ Security scans complete"
+          echo "Security scans complete"

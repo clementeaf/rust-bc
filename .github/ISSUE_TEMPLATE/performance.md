@@ -21,9 +21,6 @@ What metric degraded?
 - [ ] consensus
 - [ ] identity
 - [ ] api
-- [ ] persistence
-- [ ] services
-
 ## Current Performance
 ```
 Metric: X
@@ -52,7 +49,6 @@ Attach profiling results (flamegraph, perf output, etc.)
 - **CPU:** (cores, type)
 - **Memory:** (GB)
 - **Rust version:** 1.75.0
-- **.NET version:** 8.0.0
 
 ## Reproduction Steps
 1. Setup: ...

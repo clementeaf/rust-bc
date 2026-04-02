@@ -53,7 +53,7 @@ Milestone: Week 1
 Body:
 All team members can:
 - Clone and setup locally
-- Build both backend & frontend
+- Build the Rust project
 - Run tests locally
 - Submit first PR
 
@@ -74,11 +74,10 @@ Milestone: Week 1
 Body:
 Create local dev environment guide:
 - Rust 1.83.0+ setup (nightly support)
-- .NET 8.0.0 setup
 - Pre-commit hooks installation
 - First build validation
 
-Links: README.md, rust-toolchain.toml, global.json
+Links: README.md, rust-toolchain.toml
 Assignee: @devex-lead
 Acceptance Criteria:
 - [ ] ONBOARDING.md created

@@ -180,9 +180,9 @@ This document defines the comprehensive testing strategy for Phase 2 (20-week im
 
 #### Code Style & Quality
 ```
-✓ Linting (clippy for Rust, StyleCop for C#)
+✓ Linting (clippy for Rust)
 ✓ Type checking (Rust compiler, C# strict null)
-✓ Formatting (rustfmt, dotnet format)
+✓ Formatting (rustfmt)
 ✓ Cyclomatic complexity (max 10 per function)
 ✓ Code duplication detection (max 3% cross-repo)
 ```
@@ -219,8 +219,8 @@ This document defines the comprehensive testing strategy for Phase 2 (20-week im
 ### Stage 1: Pre-commit (Local Developer Machine)
 ```
 Pre-commit Hook:
-├─ Format check (rustfmt, dotnet format)
-├─ Lint (clippy, StyleCop)
+├─ Format check (rustfmt)
+├─ Lint (clippy)
 ├─ Unit tests (affected modules only)
 └─ Secrets scan
 ```
@@ -236,7 +236,7 @@ Build Job:
 ├─ Restore dependencies (Cargo + NuGet)
 ├─ Build backend (release profile)
 ├─ Build frontend (release profile)
-├─ Run static analysis (clippy, StyleCop)
+├─ Run static analysis (clippy)
 ├─ Run security scanning (cargo audit, dependency check)
 └─ Upload artifacts
 

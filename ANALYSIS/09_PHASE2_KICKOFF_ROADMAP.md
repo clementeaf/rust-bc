@@ -12,7 +12,7 @@ This roadmap breaks Phase 2 into 20 weeks, aligning with the Hybrid (Option D) s
 ### Workstreams
 - WS1: Backend — Storage & Consensus (Rust)
 - WS2: Backend — Identity & API (Rust)
-- WS3: Frontend — MAUI App (C#)
+- WS3: Client applications (outside this repository; stack TBD)
 - WS4: DevEx — CI/CD, Tooling, Observability
 - WS5: Compliance & Security — GDPR/eIDAS
 

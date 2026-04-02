@@ -10,13 +10,13 @@
 ## 1. Integration Architecture Overview
 
 ### Problem Statement
-**Backend** (Rust consensus engine) + **Frontend** (C# MAUI client) = Need protocol bridge
+**Backend** (Rust consensus engine) + **clients** (separate repositories) = Need a clear API contract (REST, auth, versioning)
 
 **Solution**: REST/HTTP API with strict contracts, semantic versioning, typed DTOs
 
 ```
 ┌─────────────────────────┐
-│   Frontend (MAUI)       │
+│   Client (separate app)   │
 │  - HttpClient           │
 │  - RestApiClient        │
 └────────┬────────────────┘

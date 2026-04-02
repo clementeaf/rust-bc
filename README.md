@@ -8,7 +8,7 @@
 **Digital ID System for rust-bc Blockchain** — A comprehensive platform integrating blockchain-based identity management with GDPR/eIDAS compliance.
 
 **Status:** Phase 2 Implementation (Weeks 1-20)  
-**Technology:** Rust (backend), C# MAUI (frontend)  
+**Technology:** Rust (backend and API server)  
 **Target Launch:** Q2 2026
 
 ---
@@ -18,7 +18,6 @@
 ### Prerequisites
 
 - **Rust 1.75.0+** (automatically enforced via `rust-toolchain.toml`)
-- **.NET SDK 8.0.0+** (automatically enforced via `global.json`)
 - **Git** with pre-commit hooks
 - **macOS** / **Linux** (Windows support via WSL2)
 
@@ -50,19 +49,13 @@
 4. **Verify toolchain:**
    ```bash
    rustc --version  # Should be 1.75.0
-   dotnet --version # Should be 8.0.0+
    cargo --version
    ```
 
 5. **Build & test locally:**
    ```bash
-   # Backend
    cargo build --release
    cargo test --all
-
-   # Frontend
-   dotnet build --configuration Release
-   dotnet test --configuration Release
    ```
 
 ---
@@ -82,19 +75,11 @@ rust-bc/
 │   ├── consensus/
 │   ├── identity/
 │   └── api/
-├── src/Features/              # Frontend (C# MAUI)
-│   ├── Persistence/           # Layer 1: SQLite
-│   ├── Domain/                # Layer 2: Models
-│   ├── Services/              # Layer 3: Business logic
-│   ├── UI/ViewModels/         # Layer 4: MVVM state
-│   └── UI/Views/              # Layer 5: XAML
 ├── .github/
 │   ├── workflows/             # CI/CD pipelines
 │   └── CODEOWNERS            # Ownership matrix
 ├── rust-toolchain.toml        # Rust version pinning
-├── global.json                # .NET version pinning
-├── Cargo.toml                 # Backend dependencies
-├── *.csproj                   # Frontend projects
+├── Cargo.toml                 # Rust dependencies
 ├── BRANCHING_STRATEGY.md      # Git workflow
 ├── CONTRIBUTING.md            # Contribution guidelines
 └── README.md                  # This file
@@ -112,16 +97,6 @@ rust-bc/
 | 2 | **Consensus** | DAG mining, fork resolution | Custom DAG |
 | 3 | **Identity** | DID, credentials, verification | Did-key |
 | 4 | **API** | REST gateway, serialization | Actix-web |
-
-### Frontend (C#) — 5 Layers
-
-| Layer | Component | Responsibility | Tech |
-|-------|-----------|-----------------|------|
-| 1 | **Persistence** | SQLite, encryption | SQLite-net |
-| 2 | **Models** | Domain objects, validation | C# records |
-| 3 | **Services** | Business logic, HTTP | HttpClient |
-| 4 | **ViewModel** | UI state, commands | MVVM Community Toolkit |
-| 5 | **Views** | Layout, binding | MAUI/XAML |
 
 ### Integration
 
@@ -202,7 +177,6 @@ git checkout -b release/v1.0.0 develop
 
 # Update versions
 # - Cargo.toml: version = "1.0.0"
-# - *.csproj: <Version>1.0.0</Version>
 
 # Update CHANGELOG.md
 
@@ -221,11 +195,7 @@ git push origin v1.0.0
 ### Unit Tests
 
 ```bash
-# Backend
 cargo test --lib --all
-
-# Frontend
-dotnet test --configuration Release
 ```
 
 **Target Coverage:** 80%+ overall (unit: 75%, service: 20%, integration: 5%)
@@ -233,9 +203,7 @@ dotnet test --configuration Release
 ### Integration Tests
 
 ```bash
-# Full stack
 cargo test --all
-dotnet test --configuration Release
 ```
 
 ### Load Testing
@@ -263,29 +231,20 @@ cargo fmt --all
 cargo clippy --all -- -D warnings
 ```
 
-**C#:**
-```bash
-dotnet format --verify-no-changes
-dotnet build /p:EnforceCodeStyleInBuild=true
-```
-
 ### Security Scanning
 
 ```bash
 # Secrets detection
 cargo install cargo-audit
 cargo audit
-
-# Dependency scan
-dotnet list package --outdated
 ```
 
 ### Pre-commit Automation
 
 ```bash
 # All checks run automatically on commit:
-# - Format check (rustfmt, dotnet format)
-# - Lint (clippy, StyleCop)
+# - Format check (rustfmt)
+# - Lint (clippy)
 # - Secrets scan
 # - Branch name validation
 # - Commit message validation
@@ -299,7 +258,7 @@ dotnet list package --outdated
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| **Build** | Push/PR | Compile Rust + C# |
+| **Build** | Push/PR | Compile Rust |
 | **Test** | Push/PR | Run unit tests, coverage |
 | **Lint** | Push/PR | Code style checks |
 | **Security** | Push/PR + daily | Vulnerability scanning |
@@ -338,7 +297,7 @@ See [.github/CODEOWNERS](.github/CODEOWNERS) for tier/layer ownership and review
 **Workstreams:**
 - **WS1:** Backend Storage & Consensus (2 engineers)
 - **WS2:** Backend Identity & API (1-2 engineers)
-- **WS3:** Frontend MAUI App (2 engineers)
+- **WS3:** Client / UX (future; not part of this repository)
 - **WS4:** DevEx — CI/CD, Tooling (1 engineer)
 - **WS5:** Compliance & Security (1 officer, shared)
 
@@ -354,43 +313,25 @@ cargo add serde --features derive
 cargo update
 ```
 
-**C#:**
-```bash
-dotnet add package Newtonsoft.Json
-```
-
 ### Run Specific Tests
 
 ```bash
-# Backend
 cargo test storage:: -- --nocapture
 cargo test consensus::fork_resolution
-
-# Frontend
-dotnet test --filter "DisplayName~Persistence" --configuration Release
 ```
 
 ### Debug Build
 
 ```bash
-# Rust
 cargo build --debug
 RUST_LOG=debug cargo run
-
-# C#
-dotnet build --configuration Debug
 ```
 
 ### Update Toolchain
 
 ```bash
-# Rust
 rustup update 1.75.0
 rustup component add rustfmt clippy
-
-# .NET
-dotnet sdk check
-# Edit global.json manually for version bump
 ```
 
 ---

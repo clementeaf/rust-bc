@@ -66,18 +66,6 @@ repos:
         name: Fix mixed line endings
         args: [--fix=lf]
 
-  # C# code style (if available)
-  - repo: local
-    hooks:
-      - id: dotnet-format
-        name: dotnet format
-        entry: bash -c 'dotnet format --verify-no-changes || dotnet format'
-        language: system
-        types: [csharp]
-        pass_filenames: false
-        always_run: true
-        stages: [commit]
-
   # Branch name validation
   - repo: local
     hooks:

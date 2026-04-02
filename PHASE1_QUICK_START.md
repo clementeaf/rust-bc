@@ -153,18 +153,17 @@ Extract these key concepts (NO code copying):
 Create `ANALYSIS/05_NEURO_TECH_STACK.md`:
 
 ```markdown
-# NeuroAccessMaui Technology Stack
+# Reference client stack (out of repo)
 
-## Frontend Framework
-- .NET MAUI (cross-platform)
-- XAML UI markup
-- C# business logic
+## Notes
+- Any mobile or desktop client is maintained outside this repository.
+- Document integration points (REST, auth) against the Rust API only.
 
-## Architecture Layers
-- Presentation Layer: XAML + BaseContentPage
-- ViewModel Layer: BaseViewModel
-- Service Layer: Multiple specialized services
-- Model Layer: Domain models
+## Architecture layers (example)
+- Presentation: TBD
+- ViewModel / state: TBD
+- Service layer: HTTP to rust-bc API
+- Model layer: API DTOs
 
 ## Key Services (from Content/services.md)
 - NavigationService

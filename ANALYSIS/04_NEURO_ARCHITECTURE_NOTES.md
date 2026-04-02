@@ -4,6 +4,8 @@
 **Status**: Complete  
 **Source**: /NeuroAccessMaui/Content/architecture.md, services.md, navigation.md + directory structure analysis
 
+**Note:** This analyzes an **external** NeuroAccessMaui application for comparison. **rust-bc** does not include or maintain that .NET MAUI codebase here.
+
 ---
 
 ## 1. Overview

@@ -34,7 +34,7 @@ Rationale: Combines rust-bc's blockchain foundation with NeuroAccessMaui's produ
 Scope:
   ├─ Modernize blockchain: Linear → DAG, Sequential → Parallel mining
   ├─ Add identity layer: DID + Verifiable Credentials (W3C)
-  ├─ Build UI client: MAUI-based frontend
+  ├─ Build UI client: separate app (stack TBD)
   ├─ EU compliance: GDPR + eIDAS implementation
   └─ Post-quantum crypto: Ed25519 + post-quantum backup
 
@@ -162,7 +162,7 @@ Scope:
   ├─ Keep rust-bc blockchain (in-house ownership)
   ├─ Build identity layer inspired by NeuroAccessMaui patterns (NOT copy)
   ├─ Implement REST/HTTP bridge (your protocol)
-  ├─ Build MAUI-based frontend (custom)
+  ├─ Build custom frontend (separate repo)
   ├─ Full GDPR + eIDAS compliance
   └─ Maintain 100% code ownership
 
@@ -261,7 +261,7 @@ Tier 4: API Layer (REST Gateway)
 └─ Error standardization
 ```
 
-### 3.2 5-Layer Frontend (MAUI MVVM)
+### 3.2 5-Layer Frontend (MVVM reference; not in this repo)
 
 ```
 Layer 5: Presentation (XAML Views)
@@ -372,7 +372,7 @@ Week 9-12: Phase 3 - API Gateway
 ├─ Rate limiting + error handling
 └─ Contract tests (60 hours)
 
-Week 13-16: Phase 4 - MAUI Frontend
+Week 13-16: Phase 4 - Client UI (out of repo)
 ├─ Build MVVM ViewModels
 ├─ Implement identity registration/verification
 ├─ Add transaction creation + submission

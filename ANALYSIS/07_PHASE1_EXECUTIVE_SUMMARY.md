@@ -223,7 +223,7 @@ Roadmap: Hybrid signing (Ed25519 + Dilithium/Kyber)
 - Error standardization
 - 60 hours effort
 
-**Week 13-16: Phase 4 - MAUI Frontend**
+**Week 13-16: Phase 4 - Client applications (stack TBD; out of repo)**
 - MVVM viewmodels
 - Identity registration/verification UI
 - Transaction creation + submission

@@ -5,6 +5,8 @@
 **Scope**: Client-tier using NeuroAccessMaui patterns  
 **Principles**: Clean MVVM, zero business logic in views, service-oriented  
 
+**Note:** This file is **reference material** only. The **rust-bc** repository does **not** ship a .NET MAUI or C# client; any mobile or desktop app would live in a separate codebase.
+
 ---
 
 ## 1. Architecture Philosophy: MVVM with Clear Responsibilities

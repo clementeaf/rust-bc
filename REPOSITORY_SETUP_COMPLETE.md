@@ -11,45 +11,43 @@
 Repository `rust-bc` has been fully prepared for Phase 2 implementation. All critical configuration, documentation, CI/CD, and project structure files have been created in strict order.
 
 **Total files created/modified: 31 files**  
-**Total configuration scope: 10 strategic areas**  
+**Total configuration scope: 9 strategic areas**  
 **Quality gate: 100% completion**
 
 ---
 
 ## Files Created (Step-by-Step)
 
-### Steps 1-10: Core Infrastructure (10/10 ✅)
+### Steps 1-9: Core Infrastructure (9/9)
 
 | Step | File | Purpose | Status |
 |------|------|---------|--------|
 | 1 | `.github/CODEOWNERS` | Ownership matrix (8 tiers/layers) | ✅ |
 | 2 | `BRANCHING_STRATEGY.md` | Git workflow (main/develop/feature/hotfix/release) | ✅ |
 | 3 | `rust-toolchain.toml` | Rust 1.75.0 pinning | ✅ |
-| 4 | `global.json` | .NET 8.0.0 pinning | ✅ |
-| 5 | `.github/workflows/build.yml` | Build pipeline (Rust + C#) | ✅ |
-| 6 | `.github/workflows/test.yml` | Test pipeline (coverage + artifacts) | ✅ |
-| 7 | `.github/workflows/lint.yml` | Linting (clippy + StyleCop) | ✅ |
-| 8 | `.github/workflows/security.yml` | Security scanning (audit + secrets) | ✅ |
-| 9 | `.pre-commit-config.yaml` | Local developer checks | ✅ |
-| 10 | `README.md` | Project setup + development guide | ✅ |
+| 4 | `.github/workflows/build.yml` | Build pipeline (Rust) | ✅ |
+| 5 | `.github/workflows/test.yml` | Test pipeline (coverage + artifacts) | ✅ |
+| 6 | `.github/workflows/lint.yml` | Linting (clippy + rustfmt) | ✅ |
+| 7 | `.github/workflows/security.yml` | Security scanning (audit + secrets) | ✅ |
+| 8 | `.pre-commit-config.yaml` | Local developer checks | ✅ |
+| 9 | `README.md` | Project setup + development guide | ✅ |
 
-### Steps 11-20: Backend/Frontend Structure (10/10 ✅)
+### Steps 10-18: Backend structure & templates
 
 | Step | File | Purpose | Status |
 |------|------|---------|--------|
-| 11 | `Cargo.toml` (existing) | Workspace config (already present) | ✅ |
-| 12 | `src/storage/lib.rs` | Storage tier scaffold (Tier 1) | ✅ |
-| 13 | `src/consensus/lib.rs` | Consensus tier scaffold (Tier 2) | ✅ |
-| 14 | `src/identity/lib.rs` | Identity tier scaffold (Tier 3) | ✅ |
-| 15 | `src/api/lib.rs` | API tier scaffold (Tier 4) | ✅ |
-| 16 | `src/Features/` (directory) | C# MAUI structure (5 layers) | ✅ |
-| 17 | `.gitignore` (existing) | Build artifacts ignore list | ✅ |
-| 18 | `CONTRIBUTING.md` | Contribution guidelines + standards | ✅ |
-| 19a | `.github/ISSUE_TEMPLATE/feature_request.md` | Feature request template | ✅ |
-| 19b | `.github/ISSUE_TEMPLATE/bug_report.md` | Bug report template | ✅ |
-| 19c | `.github/ISSUE_TEMPLATE/security.md` | Security vulnerability template | ✅ |
-| 19d | `.github/ISSUE_TEMPLATE/performance.md` | Performance issue template | ✅ |
-| 20 | This file | Completion summary | ✅ |
+| 10 | `Cargo.toml` (existing) | Workspace config (already present) | ✅ |
+| 11 | `src/storage/lib.rs` | Storage tier scaffold (Tier 1) | ✅ |
+| 12 | `src/consensus/lib.rs` | Consensus tier scaffold (Tier 2) | ✅ |
+| 13 | `src/identity/lib.rs` | Identity tier scaffold (Tier 3) | ✅ |
+| 14 | `src/api/lib.rs` | API tier scaffold (Tier 4) | ✅ |
+| 15 | `.gitignore` (existing) | Build artifacts ignore list | ✅ |
+| 16 | `CONTRIBUTING.md` | Contribution guidelines + standards | ✅ |
+| 17a | `.github/ISSUE_TEMPLATE/feature_request.md` | Feature request template | ✅ |
+| 17b | `.github/ISSUE_TEMPLATE/bug_report.md` | Bug report template | ✅ |
+| 17c | `.github/ISSUE_TEMPLATE/security.md` | Security vulnerability template | ✅ |
+| 17d | `.github/ISSUE_TEMPLATE/performance.md` | Performance issue template | ✅ |
+| 18 | This file | Completion summary | ✅ |
 
 ---
 
@@ -74,18 +72,10 @@ rust-bc/
 │   ├── consensus/lib.rs                    # Tier 2 scaffold
 │   ├── identity/lib.rs                     # Tier 3 scaffold
 │   ├── api/lib.rs                          # Tier 4 scaffold
-│   └── Features/                           # C# frontend structure
-│       ├── Persistence/                    # Layer 1
-│       ├── Domain/                         # Layer 2
-│       ├── Services/                       # Layer 3
-│       └── UI/
-│           ├── ViewModels/                 # Layer 4
-│           └── Views/                      # Layer 5
 ├── BRANCHING_STRATEGY.md                   # Git workflow
 ├── CONTRIBUTING.md                         # Contribution guidelines
 ├── README.md                               # Setup guide
 ├── rust-toolchain.toml                     # Rust pinning
-├── global.json                             # .NET pinning
 ├── .pre-commit-config.yaml                 # Local checks
 ├── .gitignore                              # Build artifacts
 ├── Cargo.toml                              # Workspace config
@@ -100,17 +90,14 @@ rust-bc/
 
 1. **Build** (.github/workflows/build.yml)
    - Compiles Rust backend (multi-OS: Linux, macOS)
-   - Compiles C# frontend
    - Caches dependencies
 
 2. **Test** (.github/workflows/test.yml)
    - Backend unit tests + integration tests
-   - Frontend unit tests
    - Coverage reports (HTML artifacts)
 
 3. **Lint** (.github/workflows/lint.yml)
    - Rust: rustfmt, clippy -D warnings
-   - C#: StyleCop, dotnet format
    - Code quality gates
 
 4. **Security** (.github/workflows/security.yml)
@@ -151,11 +138,6 @@ Co-Authored-By: Warp <agent@warp.dev>
 | Consensus (Tier 2) | @backend-consensus-owner | ≥1 |
 | Identity (Tier 3) | @backend-identity-owner | ≥1 |
 | API (Tier 4) | @backend-api-owner | ≥1 |
-| Persistence (Layer 1) | @frontend-persistence-owner | ≥1 |
-| Domain (Layer 2) | @frontend-models-owner | ≥1 |
-| Services (Layer 3) | @frontend-services-owner | ≥1 |
-| ViewModels (Layer 4) | @frontend-viewmodel-owner | ≥1 |
-| Views (Layer 5) | @frontend-ui-owner | ≥1 |
 
 ---
 
@@ -166,9 +148,8 @@ Co-Authored-By: Warp <agent@warp.dev>
 - [ ] Clone repository: `git clone https://github.com/your-org/rust-bc.git`
 - [ ] Install pre-commit: `pip install pre-commit && pre-commit install`
 - [ ] Verify Rust: `rustc --version` → 1.75.0
-- [ ] Verify .NET: `dotnet --version` → 8.0.0+
-- [ ] Build locally: `cargo build && dotnet build`
-- [ ] Run tests: `cargo test && dotnet test`
+- [ ] Build locally: `cargo build`
+- [ ] Run tests: `cargo test`
 
 ### Starting Work
 
@@ -193,9 +174,9 @@ git push origin feature/ws1-storage-rocksdb
 ### Pull Request Requirements
 
 ✅ All checks passing:
-- [ ] Build: `cargo build --release && dotnet build --configuration Release`
-- [ ] Tests: `cargo test --all && dotnet test --configuration Release`
-- [ ] Lint: `cargo clippy --all` and `dotnet format`
+- [ ] Build: `cargo build --release`
+- [ ] Tests: `cargo test --all`
+- [ ] Lint: `cargo clippy --all` and `cargo fmt --all -- --check`
 - [ ] Coverage: ≥80% delta
 - [ ] Security: `cargo audit` clean, no hardcoded secrets
 
@@ -241,12 +222,11 @@ git push origin feature/ws1-storage-rocksdb
    - Create GitHub accounts, configure SSH
    - Run `pre-commit install` locally
 
-2. **Create Tier/Layer Repositories (1 PR per)**
+2. **Create tier initialization PRs (1 PR per)**
    - `feature/ws1-storage-initialization`
    - `feature/ws2-consensus-initialization`
    - `feature/ws3-identity-initialization`
    - `feature/ws4-api-initialization`
-   - `feature/ws3-frontend-persistence-initialization`
 
 3. **First Test Submissions**
    - 80+ unit tests for storage
@@ -257,7 +237,6 @@ git push origin feature/ws1-storage-rocksdb
 
 - Complete Tier 1 (Storage) hardening
 - Begin Tier 2 (Consensus) DAG structures
-- Frontend models + persistence schema
 
 ---
 
@@ -289,7 +268,7 @@ Tracked in each workflow run:
 - **Test Time:** < 10 minutes target
 - **Coverage:** ≥80% target (failing if <80%)
 - **Security:** 0 CRITICAL vulnerabilities required
-- **Lint:** 0 clippy warnings, 0 StyleCop warnings (required to merge)
+- **Lint:** 0 clippy warnings, rustfmt clean (required to merge)
 
 ---
 

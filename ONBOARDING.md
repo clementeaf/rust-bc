@@ -46,22 +46,7 @@ rustc --version  # Should be 1.85.0-nightly or newer
 cargo --version
 ```
 
-### Step 3: Install .NET (8 min)
-
-The project uses .NET SDK 8.0.0+.
-
-```bash
-# macOS
-brew install dotnet
-
-# Linux / Manual
-# Download from https://dotnet.microsoft.com/download
-
-# Verify
-dotnet --version  # Should be 8.0.0+
-```
-
-### Step 4: Install Pre-commit Hooks (3 min)
+### Step 3: Install Pre-commit Hooks (3 min)
 
 ```bash
 # Install pre-commit
@@ -77,16 +62,11 @@ pre-commit run --all-files
 
 This runs automated checks before every commit.
 
-### Step 5: First Build (8 min)
+### Step 4: First Build (8 min)
 
 ```bash
-# Backend
 cargo build --debug
 cargo test --lib  # Should pass 112/112 tests
-
-# Frontend (if assigned to C# team)
-dotnet build --configuration Debug
-dotnet test --configuration Debug
 ```
 
 **Expected result:** All builds succeed, zero errors.
@@ -235,16 +215,16 @@ After approval and all checks pass:
 ### Every Morning
 - [ ] `git fetch origin`
 - [ ] `git rebase origin/develop` (if behind)
-- [ ] `cargo check` or `dotnet build` (quick validation)
+- [ ] `cargo check` (quick validation)
 
 ### Before Committing
 - [ ] `pre-commit run --all-files` (runs locally)
-- [ ] Tests pass locally (`cargo test` or `dotnet test`)
+- [ ] Tests pass locally (`cargo test`)
 - [ ] No TODOs/FIXMEs left in code
 
 ### Before Creating PR
 - [ ] Branch is up-to-date with develop
-- [ ] All CI checks will pass (`cargo clippy`, `dotnet format`)
+- [ ] All CI checks will pass (`cargo clippy`, `cargo fmt`)
 - [ ] Coverage ≥80%
 - [ ] PR description includes acceptance criteria
 
@@ -262,12 +242,6 @@ After approval and all checks pass:
 rustup update nightly-2024-12-19
 ```
 
-### ".NET SDK not found"
-```bash
-dotnet --list-sdks
-# If needed: dotnet tool update --global dotnet-format
-```
-
 ### "Pre-commit hook failed"
 ```bash
 # View which check failed
@@ -275,7 +249,6 @@ pre-commit run --all-files
 
 # Auto-fix common issues
 cargo fmt --all
-dotnet format
 
 # Re-commit
 git add . && git commit -m "fix: format code"
@@ -316,7 +289,7 @@ git branch -r
 
 - **Tech Lead:** @tech-lead
 - **Backend Lead (WS1-2):** @backend-storage-owner, @backend-consensus-owner
-- **Frontend Lead (WS3):** @frontend-persistence-owner
+- **Client / UX (WS3, out of repo):** @frontend-persistence-owner
 - **DevEx Lead (WS4):** @devex-lead
 - **Compliance (WS5):** @compliance-officer
 
@@ -366,7 +339,6 @@ You're ready if you can:
 ### Q: Do I need a specific IDE?
 **A:** Any IDE works. Popular choices:
 - Rust: VS Code + Rust Analyzer, IntelliJ IDEA
-- C#: Visual Studio 2022, VS Code + C# Dev Kit
 
 ### Q: How long do tests take to run locally?
 **A:** ~2-3 seconds for unit tests, ~30 seconds for full test suite.
@@ -388,7 +360,7 @@ For subsequent PRs: ≥1 + selective CODEOWNERS approval
 **A:** Re-run locally:
 ```bash
 cargo clippy --all
-dotnet format --verify-no-changes
+cargo fmt --all -- --check
 cargo test --lib
 ```
 

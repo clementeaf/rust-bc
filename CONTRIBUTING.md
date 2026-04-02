@@ -26,7 +26,6 @@ We are committed to providing a welcoming and inclusive environment. All contrib
 
 ### Prerequisites
 - Rust 1.75.0 (auto-enforced)
-- .NET SDK 8.0.0+ (auto-enforced)
 - Git with pre-commit hooks configured
 - Docker (optional, for local testing)
 
@@ -45,7 +44,6 @@ git checkout -b feature/your-feature develop
 
 # 4. Verify setup
 cargo check
-dotnet build
 ```
 
 ---
@@ -82,10 +80,6 @@ cargo build --debug
 cargo test --lib --all
 cargo clippy --all -- -D warnings
 
-# Frontend development
-dotnet build --configuration Debug
-dotnet test --configuration Debug
-
 # Run pre-commit checks
 pre-commit run --all-files
 ```
@@ -104,7 +98,7 @@ Follow **Conventional Commits** format:
 
 **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
 
-**Scopes:** `storage`, `consensus`, `identity`, `api`, `persistence`, `services`, `viewmodels`, `ui`, `ci-cd`, `compliance`
+**Scopes:** `storage`, `consensus`, `identity`, `api`, `network`, `ci-cd`, `compliance`
 
 **Example:**
 
@@ -162,46 +156,6 @@ mod tests {
 }
 ```
 
-### C#
-
-**Code Style:**
-```bash
-dotnet format --verify-no-changes
-dotnet build /p:EnforceCodeStyleInBuild=true
-```
-
-**Best Practices:**
-- Use nullable reference types (`#nullable enable`)
-- Prefer `record` for data objects
-- Use MVVM patterns for UI code
-- Async/await for I/O operations
-- XML documentation (`///`) for public APIs
-
-**Example:**
-```csharp
-/// <summary>
-/// Verifies a credential signature and returns the result.
-/// </summary>
-/// <param name="credential">The credential to verify</param>
-/// <returns>True if valid; otherwise false</returns>
-public async Task<bool> VerifyCredentialAsync(Credential credential)
-{
-    // implementation
-}
-
-[TestFixture]
-public class CredentialServiceTests
-{
-    [Test]
-    public async Task VerifyCredential_WithValidSignature_ReturnsTrue()
-    {
-        // test implementation
-    }
-}
-```
-
----
-
 ## Testing Requirements
 
 ### Test Pyramid
@@ -221,12 +175,8 @@ cargo test --lib --all -- --nocapture
 # Backend: Integration tests
 cargo test --test '*' --all -- --nocapture
 
-# Frontend: All tests
-dotnet test --configuration Release
-
 # Coverage report
 cargo tarpaulin --out Html --output-dir coverage
-dotnet test /p:CollectCoverage=true /p:CoverageFormat=cobertura
 ```
 
 ### Test Quality Checklist
@@ -252,9 +202,6 @@ git rebase origin/develop
 cargo fmt --all
 cargo clippy --all -- -D warnings
 cargo test --all
-dotnet format
-dotnet build --configuration Release
-dotnet test --configuration Release
 
 # 3. Push
 git push origin feature/your-feature
@@ -338,7 +285,6 @@ What actually happens
 ## Environment
 - OS: macOS / Linux / Windows
 - Rust version: 1.75.0
-- .NET version: 8.0.0
 ```
 
 ### Security Vulnerability
@@ -384,32 +330,20 @@ Target value
 ### Add a Dependency
 
 ```bash
-# Rust
 cargo add <crate> --features feature1,feature2
 cargo update
-
-# C#
-dotnet add package <package>
 ```
 
 ### Run Linter Fixes
 
 ```bash
-# Rust: auto-format
 cargo fmt --all
-
-# C#: auto-format
-dotnet format
 ```
 
 ### Debug Build Issues
 
 ```bash
-# Rust verbose output
 RUST_BACKTRACE=1 cargo build 2>&1 | head -50
-
-# C# detailed build
-dotnet build --verbosity detailed
 ```
 
 ---

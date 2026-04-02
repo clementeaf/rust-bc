@@ -66,46 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API versioning (semantic)
 - 60+ unit tests (80%+ coverage)
 
-#### Frontend (C#/.NET MAUI)
+#### Client applications
 
-**Persistence Layer (Layer 1):**
-- SQLite local database with schema migrations
-- AES-256-GCM encryption at rest
-- Optimized CRUD operations
-- Index management
-- 50+ unit tests (85%+ coverage)
-
-**Domain Models Layer (Layer 2):**
-- Identity, Account, Transaction, Credential entities
-- ValueObjects (Amount, PublicKey, Signature)
-- Business rule validators
-- Error state handling
-- 80+ unit tests (90%+ coverage)
-
-**Services Layer (Layer 3):**
-- IdentityService: DID management
-- TransactionService: creation, signing, broadcast
-- SyncService: multi-device synchronization
-- CredentialService: issuance & verification
-- HTTP client with retry logic
-- Offline queue management
-- 70+ unit tests (80%+ coverage)
-
-**ViewModel Layer (Layer 4):**
-- MVVM ViewModels for core flows
-- Command routing and execution
-- Observable state management
-- UI state persistence/restoration
-- Error notification routing
-- 50+ unit tests (75%+ coverage)
-
-**View Layer (Layer 5):**
-- XAML pages for onboarding flow
-- Transaction creation UI
-- Credential management UI
-- Deep linking support
-- WCAG AA accessibility compliance
-- Multi-language support (English, Spanish, German, French)
+Mobile or desktop clients are **not** maintained in this repository; API consumers may be implemented separately.
 
 #### Integration
 
@@ -137,7 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency vulnerability scanning (cargo audit)
 - SAST (static application security testing)
 - Secrets detection (TruffleHog)
-- Code quality gates (clippy, StyleCop)
+- Code quality gates (clippy, rustfmt)
 - Pre-commit hooks for developers
 
 #### DevOps & CI/CD

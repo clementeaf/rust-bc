@@ -213,7 +213,6 @@ When ready for production (every 2 weeks):
 
 2. Update version:
    - Cargo.toml: version = "1.0.0"
-   - *.csproj: <Version>1.0.0</Version>
 
 3. Update CHANGELOG.md:
    - List features, bugfixes, breaking changes
@@ -327,7 +326,7 @@ Align with OpenAPI spec v1.2.
 
 **On Push to any branch:**
 - Build job (compile Rust + C#)
-- Lint job (clippy, StyleCop)
+- Lint job (clippy, rustfmt)
 - Security job (cargo audit)
 
 **On PR to develop:**
