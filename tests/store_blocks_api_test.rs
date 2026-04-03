@@ -53,9 +53,16 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         checkpoint_manager: None,
         transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
         metrics: Arc::new(MetricsCollector::new()),
-        store: Some(store as Arc<dyn BlockStore>),
+        store: {
+            let mut m = std::collections::HashMap::new();
+            m.insert("default".to_string(), store as Arc<dyn BlockStore>);
+            std::sync::Arc::new(std::sync::RwLock::new(m))
+        },
         org_registry: None,
         policy_store: None,
+        crl_store: None,
+        private_data_store: None,
+        collection_registry: None,
     }
 }
 
@@ -76,9 +83,12 @@ fn make_state_no_store() -> AppState {
         checkpoint_manager: None,
         transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
         metrics: Arc::new(MetricsCollector::new()),
-        store: None,
+        store: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         org_registry: None,
         policy_store: None,
+        crl_store: None,
+        private_data_store: None,
+        collection_registry: None,
     }
 }
 

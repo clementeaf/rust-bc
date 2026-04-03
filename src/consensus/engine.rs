@@ -124,7 +124,7 @@ impl ConsensusEngine {
                 // endorsements live on the storage::traits::Block.
                 // We use `endorsements` as carried on the storage representation.
                 let endorsements: &[crate::endorsement::types::Endorsement] = &[];
-                validate_endorsements(endorsements, &policy, reg.as_ref())
+                validate_endorsements(endorsements, &policy, reg.as_ref(), None)
                     .map_err(|e| ConsensusError::EndorsementError(e.to_string()))?;
             }
         }

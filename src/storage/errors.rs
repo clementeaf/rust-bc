@@ -68,6 +68,10 @@ pub enum StorageError {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
+    /// Invalid channel identifier (must be non-empty alphanumeric/hyphen/underscore)
+    #[error("Invalid channel id: '{0}'")]
+    InvalidChannelId(String),
+
     /// Generic error
     #[error("Storage error: {0}")]
     Other(String),

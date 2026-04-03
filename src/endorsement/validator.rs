@@ -6,6 +6,7 @@ use thiserror::Error;
 use super::policy::EndorsementPolicy;
 use super::registry::OrgRegistry;
 use super::types::Endorsement;
+use crate::msp::CrlStore;
 
 /// Errors produced during endorsement verification
 #[derive(Debug, Error)]
@@ -18,6 +19,8 @@ pub enum EndorsementError {
     VerificationFailed,
     #[error("organization not found: {0}")]
     OrgNotFound(String),
+    #[error("signer key revoked (serial {serial}) in MSP {msp_id}")]
+    SignerRevoked { serial: String, msp_id: String },
     #[error("policy not satisfied: got {got} matching orgs, need more")]
     PolicyNotSatisfied { got: usize },
 }
@@ -42,12 +45,15 @@ pub fn verify_endorsement(e: &Endorsement, public_key: &[u8; 32]) -> Result<(), 
 /// Steps:
 /// 1. For each endorsement, look up the org from the registry.
 /// 2. Try to verify the endorsement against any of the org's root public keys.
-/// 3. Collect the unique set of orgs with a valid endorsement.
-/// 4. Evaluate the policy against those orgs.
+/// 3. If `crl_store` is provided, reject endorsements whose signing key serial
+///    appears in the MSP's CRL.
+/// 4. Collect the unique set of orgs with a valid, non-revoked endorsement.
+/// 5. Evaluate the policy against those orgs.
 pub fn validate_endorsements(
     endorsements: &[Endorsement],
     policy: &EndorsementPolicy,
     registry: &dyn OrgRegistry,
+    crl_store: Option<&dyn CrlStore>,
 ) -> Result<(), EndorsementError> {
     let mut valid_orgs: Vec<&str> = Vec::new();
 
@@ -56,12 +62,27 @@ pub fn validate_endorsements(
             .get_org(&e.org_id)
             .map_err(|_| EndorsementError::OrgNotFound(e.org_id.clone()))?;
 
-        let sig_ok = org
+        // Find the root key that verifies this endorsement.
+        let verified_pk = org
             .root_public_keys
             .iter()
-            .any(|pk| verify_endorsement(e, pk).is_ok());
+            .find(|pk| verify_endorsement(e, pk).is_ok());
 
-        if sig_ok && !valid_orgs.contains(&e.org_id.as_str()) {
+        let Some(pk) = verified_pk else { continue };
+
+        // CRL check: reject if the signing key has been revoked.
+        if let Some(store) = crl_store {
+            let serial = hex::encode(pk);
+            let revoked = store.read_crl(&org.msp_id).unwrap_or_default();
+            if revoked.contains(&serial) {
+                return Err(EndorsementError::SignerRevoked {
+                    serial,
+                    msp_id: org.msp_id.clone(),
+                });
+            }
+        }
+
+        if !valid_orgs.contains(&e.org_id.as_str()) {
             valid_orgs.push(&e.org_id);
         }
     }
@@ -166,7 +187,7 @@ mod tests {
             orgs: vec!["org1".into(), "org2".into(), "org3".into()],
         };
 
-        assert!(validate_endorsements(&endorsements, &policy, &reg).is_ok());
+        assert!(validate_endorsements(&endorsements, &policy, &reg, None).is_ok());
     }
 
     #[test]
@@ -184,6 +205,40 @@ mod tests {
             orgs: vec!["org1".into(), "org2".into()],
         };
 
-        assert!(validate_endorsements(&endorsements, &policy, &reg).is_err());
+        assert!(validate_endorsements(&endorsements, &policy, &reg, None).is_err());
+    }
+
+    #[test]
+    fn validate_endorsements_revoked_signer_rejected() {
+        use crate::msp::CrlStore;
+        use crate::storage::errors::StorageResult;
+        use std::collections::HashMap;
+        use std::sync::Mutex;
+
+        // Minimal in-memory CRL store for the test.
+        struct MemCrl(Mutex<HashMap<String, Vec<String>>>);
+        impl CrlStore for MemCrl {
+            fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
+                self.0.lock().unwrap().insert(msp_id.to_string(), serials.to_vec());
+                Ok(())
+            }
+            fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
+                Ok(self.0.lock().unwrap().get(msp_id).cloned().unwrap_or_default())
+            }
+        }
+
+        let (sk1, pk1) = make_keypair();
+        let payload = [7u8; 32];
+        let reg = setup_registry_with_orgs(&[("org1", pk1)]);
+
+        let crl = MemCrl(Mutex::new(HashMap::new()));
+        // Revoke the signing key.
+        crl.write_crl("org1MSP", &[hex::encode(pk1)]).unwrap();
+
+        let endorsements = vec![make_endorsement(&sk1, payload, "org1")];
+        let policy = EndorsementPolicy::AnyOf(vec!["org1".into()]);
+
+        let result = validate_endorsements(&endorsements, &policy, &reg, Some(&crl));
+        assert!(matches!(result, Err(EndorsementError::SignerRevoked { .. })));
     }
 }

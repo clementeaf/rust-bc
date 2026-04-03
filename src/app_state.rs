@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 
 use crate::airdrop::AirdropManager;
 use crate::billing::BillingManager;
@@ -14,6 +16,8 @@ use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
 use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::registry::OrgRegistry;
+use crate::msp::CrlStore;
+use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
 
@@ -34,10 +38,17 @@ pub struct AppState {
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Arc<Mutex<TransactionValidator>>,
     pub metrics: Arc<MetricsCollector>,
-    /// New storage layer (MemoryStore or future RocksDB).
-    pub store: Option<Arc<dyn BlockStore>>,
+    /// Per-channel storage layer. Key `"default"` holds the main store.
+    /// Wrapped in `RwLock` so channels can be added at runtime via `POST /channels`.
+    pub store: StoreMap,
     /// Organization registry for endorsement policies.
     pub org_registry: Option<Arc<dyn OrgRegistry>>,
     /// Endorsement policy store.
     pub policy_store: Option<Arc<dyn PolicyStore>>,
+    /// Certificate Revocation List store.
+    pub crl_store: Option<Arc<dyn CrlStore>>,
+    /// Private data side-store (one per node, shared across channels).
+    pub private_data_store: Option<Arc<dyn PrivateDataStore>>,
+    /// Registry of private data collection definitions.
+    pub collection_registry: Option<Arc<dyn CollectionRegistry>>,
 }

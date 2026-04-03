@@ -1,6 +1,6 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{blocks, chain, credentials, identity, organizations, transactions, utilities};
+use crate::api::handlers::{blocks, chain, channels, credentials, identity, msp, organizations, private_data, proposals, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
@@ -20,6 +20,10 @@ impl ApiRoutes {
                 .service(Self::chain_routes())
                 .service(Self::credentials_routes())
                 .service(Self::transaction_routes())
+                .service(Self::proposal_routes())
+                .service(Self::channels_routes())
+                .service(Self::msp_routes())
+                .service(Self::private_data_routes())
                 .service(Self::utilities_routes()),
         );
     }
@@ -89,6 +93,30 @@ impl ApiRoutes {
         web::scope("")
             .service(transactions::create_transaction)
             .service(transactions::get_mempool)
+    }
+
+    fn proposal_routes() -> Scope {
+        web::scope("")
+            .service(proposals::submit_proposal)
+            .service(proposals::submit_endorsed_transaction)
+    }
+
+    fn channels_routes() -> Scope {
+        web::scope("")
+            .service(channels::create_channel)
+            .service(channels::list_channels)
+    }
+
+    fn msp_routes() -> Scope {
+        web::scope("")
+            .service(msp::revoke_serial)
+            .service(msp::get_msp_info)
+    }
+
+    fn private_data_routes() -> Scope {
+        web::scope("")
+            .service(private_data::put_private_data)
+            .service(private_data::get_private_data)
     }
 
     fn utilities_routes() -> Scope {

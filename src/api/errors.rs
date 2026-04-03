@@ -49,6 +49,9 @@ pub enum ApiError {
 
     #[error("Rate limited")]
     RateLimited,
+
+    #[error("Forbidden: {reason}")]
+    Forbidden { reason: String },
 }
 
 impl ApiError {
@@ -70,6 +73,7 @@ impl ApiError {
             ApiError::UnauthorizedWithMessage { .. } => "UNAUTHORIZED".to_string(),
             ApiError::PaymentRequired { .. } => "PAYMENT_REQUIRED".to_string(),
             ApiError::RateLimited => "RATE_LIMITED".to_string(),
+            ApiError::Forbidden { .. } => "FORBIDDEN".to_string(),
         }
     }
 
@@ -92,6 +96,7 @@ impl ApiError {
             }
             ApiError::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
             ApiError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
+            ApiError::Forbidden { .. } => StatusCode::FORBIDDEN,
             ApiError::Conflict { .. } => StatusCode::CONFLICT,
             ApiError::CredentialExpired | ApiError::CredentialRevoked => StatusCode::BAD_REQUEST,
             ApiError::StorageError { .. }

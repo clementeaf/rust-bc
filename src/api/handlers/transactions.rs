@@ -3,6 +3,7 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::api::models::{CreateTransactionRequest, MempoolResponse};
 use crate::app_state::AppState;
 use crate::models::Transaction;
@@ -182,17 +183,14 @@ pub async fn create_transaction(
 pub async fn store_write_transaction(
     state: web::Data<AppState>,
     body: web::Json<crate::storage::traits::Transaction>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => {
-            store
-                .write_transaction(&body)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store
+        .write_transaction(&body)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 
 /// GET /api/v1/store/transactions/{tx_id} — lee una transacción del store.
@@ -200,15 +198,14 @@ pub async fn store_write_transaction(
 pub async fn store_get_transaction(
     state: web::Data<AppState>,
     path: web::Path<String>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let tx_id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => match store.read_transaction(&tx_id) {
-            Ok(tx) => Ok(HttpResponse::Ok().json(ApiResponse::success(tx, trace_id))),
-            Err(_) => Err(ApiError::NotFound { resource: format!("transaction {tx_id}") }),
-        },
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    match store.read_transaction(&tx_id) {
+        Ok(tx) => Ok(HttpResponse::Ok().json(ApiResponse::success(tx, trace_id))),
+        Err(_) => Err(ApiError::NotFound { resource: format!("transaction {tx_id}") }),
     }
 }
 
@@ -217,18 +214,15 @@ pub async fn store_get_transaction(
 pub async fn store_get_transactions_by_block(
     state: web::Data<AppState>,
     path: web::Path<u64>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let height = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => {
-            let txs = store
-                .transactions_by_block_height(height)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Ok().json(ApiResponse::success(txs, trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let txs = store
+        .transactions_by_block_height(height)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(txs, trace_id)))
 }
 
 /// GET /api/v1/mempool — transacciones pendientes.

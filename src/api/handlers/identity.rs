@@ -1,5 +1,6 @@
 use actix_web::{web, HttpRequest, HttpResponse, post, get};
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::api::models::*;
 use crate::app_state::AppState;
 use chrono::Utc;
@@ -99,17 +100,14 @@ async fn verify_signature(
 pub async fn store_write_identity(
     state: web::Data<AppState>,
     body: web::Json<crate::storage::traits::IdentityRecord>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => {
-            store
-                .write_identity(&body)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store
+        .write_identity(&body)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 
 /// GET /api/v1/store/identities/{did} — lee un IdentityRecord del store.
@@ -117,15 +115,14 @@ pub async fn store_write_identity(
 pub async fn store_get_identity(
     state: web::Data<AppState>,
     path: web::Path<String>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let did = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => match store.read_identity(&did) {
-            Ok(identity) => Ok(HttpResponse::Ok().json(ApiResponse::success(identity, trace_id))),
-            Err(_) => Err(ApiError::NotFound { resource: format!("identity {did}") }),
-        },
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    match store.read_identity(&did) {
+        Ok(identity) => Ok(HttpResponse::Ok().json(ApiResponse::success(identity, trace_id))),
+        Err(_) => Err(ApiError::NotFound { resource: format!("identity {did}") }),
     }
 }
 

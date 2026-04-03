@@ -1,6 +1,7 @@
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::api::models::CreateBlockRequest;
 use crate::app_state::AppState;
 use crate::block_creation;
@@ -81,19 +82,16 @@ pub async fn get_block_by_hash(
 
 /// GET /api/v1/store/blocks/latest — altura del bloque más reciente en el store.
 #[get("/latest")]
-pub async fn store_latest_height(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
+pub async fn store_latest_height(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound {
-            resource: "store".to_string(),
-        }),
-        Some(store) => {
-            let height = store
-                .get_latest_height()
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Ok().json(ApiResponse::success(height, trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let height = store
+        .get_latest_height()
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(height, trace_id)))
 }
 
 /// GET /api/v1/store/blocks/{height} — bloque por altura desde el nuevo store.
@@ -101,19 +99,16 @@ pub async fn store_latest_height(state: web::Data<AppState>) -> ApiResult<HttpRe
 pub async fn store_get_block(
     state: web::Data<AppState>,
     path: web::Path<u64>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let height = *path;
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound {
-            resource: "store".to_string(),
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    match store.read_block(height) {
+        Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
+        Err(_) => Err(ApiError::NotFound {
+            resource: format!("block height {}", height),
         }),
-        Some(store) => match store.read_block(height) {
-            Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
-            Err(_) => Err(ApiError::NotFound {
-                resource: format!("block height {}", height),
-            }),
-        },
     }
 }
 

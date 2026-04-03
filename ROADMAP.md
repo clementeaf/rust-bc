@@ -158,34 +158,34 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 3.1 Read-Write Sets
 
-- [ ] **3.1.1** Crear struct `KVRead { key: String, version: u64 }` y `KVWrite { key: String, value: Vec<u8> }` en `src/transaction/rwset.rs`
+- [x] **3.1.1** Crear struct `KVRead { key: String, version: u64 }` y `KVWrite { key: String, value: Vec<u8> }` en `src/transaction/rwset.rs`
   - Declarar `mod transaction` en `lib.rs`/`main.rs`
   - Tests: crear, serializar, deserializar
-- [ ] **3.1.2** Crear struct `ReadWriteSet { reads: Vec<KVRead>, writes: Vec<KVWrite> }` en mismo archivo
+- [x] **3.1.2** Crear struct `ReadWriteSet { reads: Vec<KVRead>, writes: Vec<KVWrite> }` en mismo archivo
   - Método `fn is_empty(&self) -> bool`
   - Tests: empty rwset, non-empty
 
 ### 3.2 Transaction Proposal
 
-- [ ] **3.2.1** Crear struct `TransactionProposal` en `src/transaction/proposal.rs`
+- [x] **3.2.1** Crear struct `TransactionProposal` en `src/transaction/proposal.rs`
   - Campos: `tx: storage::traits::Transaction`, `creator_did: String`, `creator_signature: [u8; 64]`, `rwset: ReadWriteSet`
   - Tests: crear proposal
-- [ ] **3.2.2** Crear struct `ProposalResponse` en mismo archivo
+- [x] **3.2.2** Crear struct `ProposalResponse` en mismo archivo
   - Campos: `rwset: ReadWriteSet`, `endorsement: Endorsement` (del módulo `endorsement`)
   - Tests: crear response
 
 ### 3.3 Endorsed Transaction
 
-- [ ] **3.3.1** Crear struct `EndorsedTransaction` en `src/transaction/endorsed.rs`
+- [x] **3.3.1** Crear struct `EndorsedTransaction` en `src/transaction/endorsed.rs`
   - Campos: `proposal: TransactionProposal`, `endorsements: Vec<Endorsement>`, `rwset: ReadWriteSet`
   - Tests: crear endorsed tx con 2 endorsements
 
 ### 3.4 REST API lifecycle
 
-- [ ] **3.4.1** Handler `POST /api/v1/proposals` — recibe `TransactionProposal`, simula, devuelve `ProposalResponse` con endorsement del peer local
+- [x] **3.4.1** Handler `POST /api/v1/proposals` — recibe `TransactionProposal`, simula, devuelve `ProposalResponse` con endorsement del peer local
   - La simulación es: leer keys mencionados en tx.data, escribir el resultado → RWSet
   - Tests de integración con MemoryStore
-- [ ] **3.4.2** Handler `POST /api/v1/transactions/submit` — recibe `EndorsedTransaction`, valida endorsements vs policy, envía a ordering service
+- [x] **3.4.2** Handler `POST /api/v1/transactions/submit` — recibe `EndorsedTransaction`, valida endorsements vs policy, envía a ordering service
   - Tests: TX con endorsements válidos → submitted; TX con endorsements insuficientes → 400
 
 ---
@@ -197,35 +197,35 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 4.1 Channel model
 
-- [ ] **4.1.1** Crear struct `Channel` en `src/channel/mod.rs`
+- [x] **4.1.1** Crear struct `Channel` en `src/channel/mod.rs`
   - Campos: `channel_id: String`, `member_org_ids: Vec<String>`, `orderer_org_ids: Vec<String>`, `created_at: u64`, `endorsement_policy: EndorsementPolicy`
   - Declarar `mod channel` en `lib.rs`/`main.rs`
   - Tests: crear channel, agregar org, verificar membership
-- [ ] **4.1.2** Crear trait `ChannelRegistry` + `MemoryChannelRegistry`
+- [x] **4.1.2** Crear trait `ChannelRegistry` + `MemoryChannelRegistry`
   - Métodos: `create_channel`, `get_channel`, `list_channels`, `update_channel`
   - Tests: CRUD, channel not found
 
 ### 4.2 Multi-store
 
-- [ ] **4.2.1** Cambiar `AppState.store` de `Option<Arc<dyn BlockStore>>` a `HashMap<String, Arc<dyn BlockStore>>`
+- [x] **4.2.1** Cambiar `AppState.store` de `Option<Arc<dyn BlockStore>>` a `HashMap<String, Arc<dyn BlockStore>>`
   - Key `"default"` contiene el store actual
   - Actualizar todos los handlers para obtener store via `state.store.get("default")` — cambio mecánico
   - Tests: compilar, todos los tests existentes pasan sin cambios funcionales
-- [ ] **4.2.2** Crear helper `fn get_channel_store(state: &AppState, channel_id: &str) -> Result<Arc<dyn BlockStore>, ApiError>`
+- [x] **4.2.2** Crear helper `fn get_channel_store(state: &AppState, channel_id: &str) -> Result<Arc<dyn BlockStore>, ApiError>`
   - Lookup en `state.store`, error si channel no existe
   - Tests: get default (ok), get unknown (err)
-- [ ] **4.2.3** Para RocksDB: crear store por channel en subdirectorio `{STORAGE_PATH}/{channel_id}/`
+- [x] **4.2.3** Para RocksDB: crear store por channel en subdirectorio `{STORAGE_PATH}/{channel_id}/`
   - `fn create_channel_store(channel_id: &str, base_path: &Path) -> StorageResult<RocksDbBlockStore>`
   - Tests con tempdir: crear 2 channel stores, verificar aislamiento
 
 ### 4.3 Channel-aware endpoints
 
-- [ ] **4.3.1** Añadir header opcional `X-Channel-Id` a todos los store handlers
+- [x] **4.3.1** Añadir header opcional `X-Channel-Id` a todos los store handlers
   - Si ausente → `"default"`. Si presente → lookup en store map
   - Extraer con `req.headers().get("X-Channel-Id")`
   - Tests: request sin header → default, request con header → channel correcto, channel inexistente → 404
-- [ ] **4.3.2** Handler `POST /api/v1/channels` — crear channel, instanciar store, registrar en `AppState.store`
-- [ ] **4.3.3** Handler `GET /api/v1/channels` — listar channels
+- [x] **4.3.2** Handler `POST /api/v1/channels` — crear channel, instanciar store, registrar en `AppState.store`
+- [x] **4.3.3** Handler `GET /api/v1/channels` — listar channels
 
 ---
 
@@ -236,41 +236,41 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 5.1 MSP core
 
-- [ ] **5.1.1** Crear struct `Msp` en `src/msp/mod.rs`
+- [x] **5.1.1** Crear struct `Msp` en `src/msp/mod.rs`
   - Campos: `msp_id: String`, `root_public_keys: Vec<[u8; 32]>`, `revoked_serials: Vec<String>`, `org_id: String`
   - `[u8; 32]` = Ed25519 pubkey, consistente con `identity/keys.rs`
   - Declarar `mod msp` en `lib.rs`/`main.rs`
   - Tests: crear MSP
-- [ ] **5.1.2** Crear enum `MspRole` en mismo archivo: `Admin`, `Member`, `Client`, `Peer`, `Orderer`
+- [x] **5.1.2** Crear enum `MspRole` en mismo archivo: `Admin`, `Member`, `Client`, `Peer`, `Orderer`
   - `#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]`
   - Tests: serde roundtrip
-- [ ] **5.1.3** Crear struct `MspIdentity` en `src/msp/identity.rs`
+- [x] **5.1.3** Crear struct `MspIdentity` en `src/msp/identity.rs`
   - Campos: `did: String`, `org_id: String`, `role: MspRole`, `public_key: [u8; 32]`
   - Tests: crear identity
 
 ### 5.2 Identity validation
 
-- [ ] **5.2.1** Implementar `Msp::validate_identity(&self, public_key: &[u8; 32]) -> Result<(), MspError>`
+- [x] **5.2.1** Implementar `Msp::validate_identity(&self, public_key: &[u8; 32]) -> Result<(), MspError>`
   - Verificar que `public_key` está firmado por alguna root_public_key (key attestation)
   - Verificar que el serial no está en `revoked_serials`
   - Tests: key válida (pass), key de otro MSP (fail), key revocada (fail)
-- [ ] **5.2.2** Implementar `Msp::revoke(&mut self, serial: &str)`
+- [x] **5.2.2** Implementar `Msp::revoke(&mut self, serial: &str)`
   - Push a `revoked_serials`
   - Tests: revoke → re-validate falla
 
 ### 5.3 CRL persistence
 
-- [ ] **5.3.1** Añadir CF `crl` a `adapters.rs`: key = `msp_id`, value = JSON `Vec<String>` (serials)
+- [x] **5.3.1** Añadir CF `crl` a `adapters.rs`: key = `msp_id`, value = JSON `Vec<String>` (serials)
   - Agregar a `ALL_CFS`, helper `cf_crl()`
   - Tests: write/read CRL roundtrip
-- [ ] **5.3.2** Integrar CRL check en `validate_endorsements` (Fase 1.3.3)
+- [x] **5.3.2** Integrar CRL check en `validate_endorsements` (Fase 1.3.3)
   - Antes de aceptar endorsement, consultar CRL del MSP del signer
   - Tests: endorsement de signer revocado → rechazado
 
 ### 5.4 REST API
 
-- [ ] **5.4.1** Handler `POST /api/v1/msp/{msp_id}/revoke` — body: `{ "serial": "..." }`, añade a CRL
-- [ ] **5.4.2** Handler `GET /api/v1/msp/{msp_id}` — devuelve info del MSP (root keys count, CRL size)
+- [x] **5.4.1** Handler `POST /api/v1/msp/{msp_id}/revoke` — body: `{ "serial": "..." }`, añade a CRL
+- [x] **5.4.2** Handler `GET /api/v1/msp/{msp_id}` — devuelve info del MSP (root keys count, CRL size)
 
 ---
 
@@ -281,31 +281,31 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 6.1 Versioned state
 
-- [ ] **6.1.1** Crear CF `world_state` en `adapters.rs`: key = `{key}`, value = JSON `VersionedValue { version: u64, data: Vec<u8> }`
+- [x] **6.1.1** Crear CF `world_state` en `adapters.rs`: key = `{key}`, value = JSON `VersionedValue { version: u64, data: Vec<u8> }`
   - Helper `cf_world_state()`, agregar a `ALL_CFS`
   - Tests: put key → version 1, put again → version 2, get → version correcta
-- [ ] **6.1.2** Crear trait `WorldState` en `src/storage/world_state.rs`
+- [x] **6.1.2** Crear trait `WorldState` en `src/storage/world_state.rs`
   - Métodos: `get(&self, key: &str) -> StorageResult<Option<VersionedValue>>`, `put(&self, key: &str, data: &[u8]) -> StorageResult<u64>` (retorna new version), `delete(&self, key: &str) -> StorageResult<()>`, `get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>>`
   - Implementar para `RocksDbBlockStore` (prefix scan en world_state CF) y `MemoryStore` (BTreeMap para range)
   - Tests: get/put/delete, range query con 10 keys
 
 ### 6.2 MVCC validation
 
-- [ ] **6.2.1** Crear `fn validate_rwset(rwset: &ReadWriteSet, state: &dyn WorldState) -> Result<(), MvccConflict>` en `src/transaction/mvcc.rs`
+- [x] **6.2.1** Crear `fn validate_rwset(rwset: &ReadWriteSet, state: &dyn WorldState) -> Result<(), MvccConflict>` en `src/transaction/mvcc.rs`
   - Para cada `KVRead`: comparar `read.version` con `state.get(key).version`
   - Si difieren → `MvccConflict { key, read_version, current_version }`
   - Tests: sin conflicto (pass), con conflicto en 1 key (fail)
-- [ ] **6.2.2** Integrar MVCC en commit path: al aplicar bloque, validar cada TX
+- [x] **6.2.2** Integrar MVCC en commit path: al aplicar bloque, validar cada TX
   - TXs inválidas se marcan como `state: "mvcc_conflict"` pero el bloque no se rechaza (como Fabric)
   - Tests: bloque con 3 TXs, 1 conflicto MVCC → 2 committed, 1 marcada conflict
 
 ### 6.3 Composite keys
 
-- [ ] **6.3.1** Crear `fn composite_key(object_type: &str, attrs: &[&str]) -> String` en `src/storage/world_state.rs`
+- [x] **6.3.1** Crear `fn composite_key(object_type: &str, attrs: &[&str]) -> String` en `src/storage/world_state.rs`
   - Formato: `\x00{type}\x00{attr1}\x00{attr2}\x00`
   - `fn parse_composite_key(key: &str) -> Option<(String, Vec<String>)>`
   - Tests: create → parse roundtrip, partial prefix matches
-- [ ] **6.3.2** Crear `fn get_by_partial_key(state: &dyn WorldState, object_type: &str, partial: &[&str]) -> StorageResult<Vec<(String, VersionedValue)>>`
+- [x] **6.3.2** Crear `fn get_by_partial_key(state: &dyn WorldState, object_type: &str, partial: &[&str]) -> StorageResult<Vec<(String, VersionedValue)>>`
   - Usa `get_range` con el prefix construido por `composite_key`
   - Tests: 5 assets, partial query por type devuelve 5, partial por type+attr1 devuelve subset
 
@@ -315,11 +315,11 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 7.1 Core
 
-- [ ] **7.1.1** Crear struct `PrivateDataCollection` en `src/private_data/mod.rs`
+- [x] **7.1.1** Crear struct `PrivateDataCollection` en `src/private_data/mod.rs`
   - Campos: `name: String`, `member_org_ids: Vec<String>`, `required_peer_count: usize`, `blocks_to_live: u64`
   - Declarar `mod private_data` en `lib.rs`/`main.rs`
   - Tests: crear collection, verificar membership check
-- [ ] **7.1.2** Crear CF `private_{collection_name}` dinámicamente en RocksDB para cada collection
+- [x] **7.1.2** Crear CF `private_{collection_name}` dinámicamente en RocksDB para cada collection
   - Hash SHA-256 del dato va on-chain (en TX data field), dato real en side CF
   - Tests: write private data → hash in block tx, dato en side CF, get private data → matches
 - [ ] **7.1.3** Implementar purge: `fn purge_expired(&self, current_height: u64)` borra datos con `blocks_to_live` expirado
@@ -327,7 +327,7 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 7.2 Access control
 
-- [ ] **7.2.1** En los handlers de private data, verificar que el caller pertenece a una org miembro de la collection
+- [x] **7.2.1** En los handlers de private data, verificar que el caller pertenece a una org miembro de la collection
   - Reutilizar `OrgRegistry` + `MspIdentity` de Fases 1 y 5
   - Tests: miembro accede (ok), no-miembro → 403
 

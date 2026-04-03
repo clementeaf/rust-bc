@@ -11,12 +11,17 @@ pub mod adapters;
 pub mod errors;
 pub mod memory;
 pub mod traits;
+pub mod world_state;
 pub mod comprehensive_tests;
 
 pub use adapters::RocksDbBlockStore;
 pub use errors::{StorageError, StorageResult};
 pub use memory::MemoryStore;
 pub use traits::BlockStore;
+pub use world_state::{
+    composite_key, get_by_partial_key, parse_composite_key, MemoryWorldState, VersionedValue,
+    WorldState,
+};
 
 /// Storage configuration
 #[derive(Clone, Debug)]

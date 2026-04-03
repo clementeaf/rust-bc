@@ -43,5 +43,8 @@ pub mod pki;
 pub mod endorsement;
 pub mod ordering;
 pub mod transaction;
+pub mod channel;
+pub mod msp;
+pub mod private_data;
 
 pub use app_state::AppState;

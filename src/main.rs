@@ -30,6 +30,9 @@ mod pki;
 mod endorsement;
 mod ordering;
 mod transaction;
+mod channel;
+mod msp;
+mod private_data;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -588,26 +591,32 @@ async fn main() -> std::io::Result<()> {
         metrics: metrics_collector.clone(),
         store: {
             let backend = env::var("STORAGE_BACKEND").unwrap_or_default();
-            if backend == "rocksdb" {
+            let default_store: Arc<dyn storage::BlockStore> = if backend == "rocksdb" {
                 let path = env::var("ROCKSDB_PATH")
                     .unwrap_or_else(|_| "./data/blocks".to_string());
                 match RocksDbBlockStore::new(&path) {
                     Ok(s) => {
                         log::info!("Storage backend: RocksDB at {path}");
-                        Some(Arc::new(s) as Arc<dyn storage::BlockStore>)
+                        Arc::new(s)
                     }
                     Err(e) => {
                         log::error!("Failed to open RocksDB at {path}: {e}. Falling back to MemoryStore.");
-                        Some(Arc::new(MemoryStore::new()) as Arc<dyn storage::BlockStore>)
+                        Arc::new(MemoryStore::new())
                     }
                 }
             } else {
                 log::info!("Storage backend: MemoryStore");
-                Some(Arc::new(MemoryStore::new()) as Arc<dyn storage::BlockStore>)
-            }
+                Arc::new(MemoryStore::new())
+            };
+            let mut store_map = std::collections::HashMap::new();
+            store_map.insert("default".to_string(), default_store);
+            std::sync::Arc::new(std::sync::RwLock::new(store_map))
         },
         org_registry: None,
         policy_store: None,
+        crl_store: None,
+        private_data_store: None,
+        collection_registry: None,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

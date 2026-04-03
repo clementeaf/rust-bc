@@ -6,6 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-03 (Fase 7 — Private Data Collections)
+
+**7.2.1 — Access control en handlers de private data**
+- `CollectionRegistry` trait + `MemoryCollectionRegistry` en `src/private_data/mod.rs`
+- `ApiError::Forbidden` → HTTP 403
+- `PUT/GET /api/v1/private-data/{collection}/{key}` en `src/api/handlers/private_data.rs`
+- Header `X-Org-Id` obligatorio; `check_membership` verifica org en `member_org_ids` de la collection
+- `AppState`: campos `private_data_store` y `collection_registry`
+- 6 tests nuevos (member → 200, non-member → 403, sin header → 400, clave ausente → 404)
+
+**7.1.2 — RocksDB private data store**
+- `PrivateDataStore` trait + `MemoryPrivateDataStore`; impl para `RocksDbBlockStore` con CF `private_{name}` dinámica
+- Helper `sha256` para hash on-chain; DB migrada a `DBWithThreadMode<MultiThreaded>`
+
+**7.1.1 — PrivateDataCollection struct**
+- `PrivateDataCollection { name, member_org_ids, required_peer_count, blocks_to_live }` + `is_member()`
+- `PrivateDataError`: `InvalidCollection`, `AccessDenied`
+- 634 lib + 535 integration tests al cierre de 7.2.1
+
+---
+
 ### 2026-04-03 (Fase 3 — Transaction Lifecycle)
 
 **Transaction — Fase 3.1: Read-Write Sets**

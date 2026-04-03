@@ -10,13 +10,19 @@
 //! | `credentials` | cred_id string        | JSON Credential|
 //! | `meta`        | well-known byte keys  | raw bytes      |
 
-use rocksdb::{ColumnFamilyDescriptor, Direction, IteratorMode, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamilyDescriptor, Direction, IteratorMode, MultiThreaded, Options, WriteBatch, DBWithThreadMode};
+
+type RocksDB = DBWithThreadMode<MultiThreaded>;
 use std::path::Path;
+use std::sync::Arc;
 
 use super::errors::{StorageError, StorageResult};
 use super::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
+use super::world_state::{VersionedValue, WorldState};
 use crate::endorsement::org::Organization;
 use crate::endorsement::registry::OrgRegistry;
+use crate::msp::CrlStore;
+use crate::private_data::{sha256, PrivateDataStore};
 
 const CF_BLOCKS: &str = "blocks";
 const CF_TRANSACTIONS: &str = "transactions";
@@ -29,6 +35,10 @@ const CF_TX_BY_BLOCK: &str = "tx_by_block";
 const CF_CRED_BY_SUBJECT: &str = "cred_by_subject";
 /// Organizations registry
 const CF_ORGANIZATIONS: &str = "organizations";
+/// Certificate Revocation List: key = msp_id, value = JSON Vec<String> (serials)
+const CF_CRL: &str = "crl";
+/// World state: key = arbitrary string key, value = JSON VersionedValue
+const CF_WORLD_STATE: &str = "world_state";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -41,11 +51,14 @@ const ALL_CFS: &[&str] = &[
     CF_TX_BY_BLOCK,
     CF_CRED_BY_SUBJECT,
     CF_ORGANIZATIONS,
+    CF_CRL,
+    CF_WORLD_STATE,
 ];
+
 
 /// RocksDB-backed block store using Column Families for data isolation
 pub struct RocksDbBlockStore {
-    db: DB,
+    db: RocksDB,
 }
 
 impl RocksDbBlockStore {
@@ -63,60 +76,94 @@ impl RocksDbBlockStore {
             .map(|&name| ColumnFamilyDescriptor::new(name, Options::default()))
             .collect();
 
-        let db = DB::open_cf_descriptors(&opts, path.as_ref(), cf_descriptors)
+        let db = RocksDB::open_cf_descriptors(&opts, path.as_ref(), cf_descriptors)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
 
         Ok(RocksDbBlockStore { db })
     }
 
+    /// Open (or create) a per-channel RocksDB database.
+    ///
+    /// The database is placed at `<base_path>/channels/<channel_id>`, so each
+    /// channel gets its own isolated set of column families.
+    ///
+    /// `channel_id` must be a non-empty string containing only alphanumeric
+    /// characters, hyphens, or underscores to avoid path-traversal issues.
+    pub fn create_channel_store(
+        channel_id: &str,
+        base_path: &Path,
+    ) -> StorageResult<RocksDbBlockStore> {
+        if channel_id.is_empty()
+            || !channel_id
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(StorageError::InvalidChannelId(channel_id.to_string()));
+        }
+        let channel_path = base_path.join("channels").join(channel_id);
+        RocksDbBlockStore::new(channel_path)
+    }
+
     // ── Column Family handle helpers ──────────────────────────────────────────
 
-    fn cf_blocks(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_blocks(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_BLOCKS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_BLOCKS.to_string()))
     }
 
-    fn cf_transactions(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_transactions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_TRANSACTIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TRANSACTIONS.to_string()))
     }
 
-    fn cf_identities(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_identities(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_IDENTITIES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_IDENTITIES.to_string()))
     }
 
-    fn cf_credentials(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_credentials(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_CREDENTIALS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CREDENTIALS.to_string()))
     }
 
-    fn cf_meta(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_meta(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_META)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_META.to_string()))
     }
 
-    fn cf_tx_by_block(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_tx_by_block(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_TX_BY_BLOCK)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TX_BY_BLOCK.to_string()))
     }
 
-    fn cf_cred_by_subject(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_cred_by_subject(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_CRED_BY_SUBJECT)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CRED_BY_SUBJECT.to_string()))
     }
 
-    fn cf_organizations(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+    fn cf_organizations(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_ORGANIZATIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ORGANIZATIONS.to_string()))
+    }
+
+    fn cf_crl(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_CRL)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CRL.to_string()))
+    }
+
+    fn cf_world_state(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_WORLD_STATE)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_WORLD_STATE.to_string()))
     }
 
     // ── Key encoders ─────────────────────────────────────────────────────────
@@ -158,6 +205,55 @@ impl RocksDbBlockStore {
         prefix.push(0x00);
         prefix
     }
+
+    // ── World state ───────────────────────────────────────────────────────────
+
+    /// Write `data` under `key` in the world state CF.
+    ///
+    /// If the key already exists the version is incremented; if it is new the
+    /// version starts at 1.  Returns the new version number.
+    pub fn world_state_put(&self, key: &str, data: &[u8]) -> StorageResult<u64> {
+        let cf = self.cf_world_state()?;
+        let new_version = match self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => {
+                let existing: VersionedValue = serde_json::from_slice(&bytes)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+                existing.version + 1
+            }
+            None => 1,
+        };
+        let vv = VersionedValue {
+            version: new_version,
+            data: data.to_vec(),
+        };
+        let encoded = serde_json::to_vec(&vv)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &encoded)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(new_version)
+    }
+
+    /// Read the current `VersionedValue` for `key`, or `None` if absent.
+    pub fn world_state_get(&self, key: &str) -> StorageResult<Option<VersionedValue>> {
+        let cf = self.cf_world_state()?;
+        match self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => {
+                let vv: VersionedValue = serde_json::from_slice(&bytes)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+                Ok(Some(vv))
+            }
+            None => Ok(None),
+        }
+    }
 }
 
 impl BlockStore for RocksDbBlockStore {
@@ -170,9 +266,9 @@ impl BlockStore for RocksDbBlockStore {
         let cf_m = self.cf_meta()?;
 
         let mut batch = WriteBatch::default();
-        batch.put_cf(cf_b, Self::block_key(block.height), &value);
+        batch.put_cf(&cf_b, Self::block_key(block.height), &value);
         if block.height >= current_latest {
-            batch.put_cf(cf_m, META_LATEST_HEIGHT, block.height.to_le_bytes());
+            batch.put_cf(&cf_m, META_LATEST_HEIGHT, block.height.to_le_bytes());
         }
         self.db
             .write(batch)
@@ -183,7 +279,7 @@ impl BlockStore for RocksDbBlockStore {
         let key = Self::block_key(height);
         match self
             .db
-            .get_cf(self.cf_blocks()?, &key)
+            .get_cf(&self.cf_blocks()?, &key)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -197,9 +293,9 @@ impl BlockStore for RocksDbBlockStore {
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
 
         let mut batch = WriteBatch::default();
-        batch.put_cf(self.cf_transactions()?, tx.id.as_bytes(), &value);
+        batch.put_cf(&self.cf_transactions()?, tx.id.as_bytes(), &value);
         batch.put_cf(
-            self.cf_tx_by_block()?,
+            &self.cf_tx_by_block()?,
             Self::tx_block_index_key(tx.block_height, &tx.id),
             b"",
         );
@@ -211,7 +307,7 @@ impl BlockStore for RocksDbBlockStore {
     fn read_transaction(&self, tx_id: &str) -> StorageResult<Transaction> {
         match self
             .db
-            .get_cf(self.cf_transactions()?, tx_id.as_bytes())
+            .get_cf(&self.cf_transactions()?, tx_id.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -224,14 +320,14 @@ impl BlockStore for RocksDbBlockStore {
         let value = serde_json::to_vec(identity)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
-            .put_cf(self.cf_identities()?, identity.did.as_bytes(), &value)
+            .put_cf(&self.cf_identities()?, identity.did.as_bytes(), &value)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
     fn read_identity(&self, did: &str) -> StorageResult<IdentityRecord> {
         match self
             .db
-            .get_cf(self.cf_identities()?, did.as_bytes())
+            .get_cf(&self.cf_identities()?, did.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -245,9 +341,9 @@ impl BlockStore for RocksDbBlockStore {
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
 
         let mut batch = WriteBatch::default();
-        batch.put_cf(self.cf_credentials()?, credential.id.as_bytes(), &value);
+        batch.put_cf(&self.cf_credentials()?, credential.id.as_bytes(), &value);
         batch.put_cf(
-            self.cf_cred_by_subject()?,
+            &self.cf_cred_by_subject()?,
             Self::cred_subject_index_key(&credential.subject_did, &credential.id),
             b"",
         );
@@ -259,7 +355,7 @@ impl BlockStore for RocksDbBlockStore {
     fn read_credential(&self, cred_id: &str) -> StorageResult<Credential> {
         match self
             .db
-            .get_cf(self.cf_credentials()?, cred_id.as_bytes())
+            .get_cf(&self.cf_credentials()?, cred_id.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -288,7 +384,7 @@ impl BlockStore for RocksDbBlockStore {
         for block in blocks {
             let value = serde_json::to_vec(block)
                 .map_err(|e| StorageError::SerializationError(e.to_string()))?;
-            batch.put_cf(cf_b, Self::block_key(block.height), &value);
+            batch.put_cf(&cf_b, Self::block_key(block.height), &value);
             if block.height > new_latest {
                 new_latest = block.height;
             }
@@ -297,16 +393,16 @@ impl BlockStore for RocksDbBlockStore {
         for tx in txs {
             let value = serde_json::to_vec(tx)
                 .map_err(|e| StorageError::SerializationError(e.to_string()))?;
-            batch.put_cf(cf_t, tx.id.as_bytes(), &value);
+            batch.put_cf(&cf_t, tx.id.as_bytes(), &value);
             batch.put_cf(
-                cf_idx,
+                &cf_idx,
                 Self::tx_block_index_key(tx.block_height, &tx.id),
                 b"",
             );
         }
 
         if new_latest > current_latest {
-            batch.put_cf(cf_m, META_LATEST_HEIGHT, new_latest.to_le_bytes());
+            batch.put_cf(&cf_m, META_LATEST_HEIGHT, new_latest.to_le_bytes());
         }
 
         self.db
@@ -317,7 +413,7 @@ impl BlockStore for RocksDbBlockStore {
     fn get_latest_height(&self) -> StorageResult<u64> {
         match self
             .db
-            .get_cf(self.cf_meta()?, META_LATEST_HEIGHT)
+            .get_cf(&self.cf_meta()?, META_LATEST_HEIGHT)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => {
@@ -332,7 +428,7 @@ impl BlockStore for RocksDbBlockStore {
 
     fn block_exists(&self, height: u64) -> StorageResult<bool> {
         self.db
-            .get_cf(self.cf_blocks()?, Self::block_key(height))
+            .get_cf(&self.cf_blocks()?, Self::block_key(height))
             .map(|v| v.is_some())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
@@ -344,7 +440,7 @@ impl BlockStore for RocksDbBlockStore {
 
         let iter = self
             .db
-            .iterator_cf(cf_idx, IteratorMode::From(&prefix, Direction::Forward));
+            .iterator_cf(&cf_idx, IteratorMode::From(&prefix, Direction::Forward));
 
         let mut txs = Vec::new();
         for item in iter {
@@ -361,7 +457,7 @@ impl BlockStore for RocksDbBlockStore {
 
             let tx_bytes = self
                 .db
-                .get_cf(cf_t, tx_id.as_bytes())
+                .get_cf(&cf_t, tx_id.as_bytes())
                 .map_err(|e| StorageError::RocksDbError(e.to_string()))?
                 .ok_or_else(|| StorageError::KeyNotFound(format!("tx:{tx_id}")))?;
 
@@ -380,7 +476,7 @@ impl BlockStore for RocksDbBlockStore {
 
         let iter = self
             .db
-            .iterator_cf(cf_idx, IteratorMode::From(&prefix, Direction::Forward));
+            .iterator_cf(&cf_idx, IteratorMode::From(&prefix, Direction::Forward));
 
         let mut creds = Vec::new();
         for item in iter {
@@ -396,7 +492,7 @@ impl BlockStore for RocksDbBlockStore {
 
             let cred_bytes = self
                 .db
-                .get_cf(cf_c, cred_id.as_bytes())
+                .get_cf(&cf_c, cred_id.as_bytes())
                 .map_err(|e| StorageError::RocksDbError(e.to_string()))?
                 .ok_or_else(|| StorageError::KeyNotFound(format!("cred:{cred_id}")))?;
 
@@ -461,6 +557,126 @@ impl OrgRegistry for RocksDbBlockStore {
     }
 }
 
+impl crate::msp::CrlStore for RocksDbBlockStore {
+    fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
+        let cf = self.cf_crl()?;
+        let value = serde_json::to_vec(serials)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, msp_id.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
+        let cf = self.cf_crl()?;
+        match self
+            .db
+            .get_cf(&cf, msp_id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+impl WorldState for RocksDbBlockStore {
+    fn get(&self, key: &str) -> StorageResult<Option<VersionedValue>> {
+        self.world_state_get(key)
+    }
+
+    fn put(&self, key: &str, data: &[u8]) -> StorageResult<u64> {
+        self.world_state_put(key, data)
+    }
+
+    fn delete(&self, key: &str) -> StorageResult<()> {
+        let cf = self.cf_world_state()?;
+        self.db
+            .delete_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>> {
+        let cf = self.cf_world_state()?;
+        let mut result = Vec::new();
+        let iter = self
+            .db
+            .iterator_cf(&cf, IteratorMode::From(start.as_bytes(), Direction::Forward));
+        for item in iter {
+            let (raw_key, raw_value) =
+                item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let k = String::from_utf8(raw_key.to_vec())
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            if k.as_str() >= end {
+                break;
+            }
+            let vv: VersionedValue = serde_json::from_slice(&raw_value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            result.push((k, vv));
+        }
+        Ok(result)
+    }
+}
+
+// ── PrivateDataStore impl ─────────────────────────────────────────────────────
+
+impl RocksDbBlockStore {
+    /// CF name for a private data collection: `private_{collection_name}`.
+    fn private_cf_name(collection_name: &str) -> String {
+        format!("private_{collection_name}")
+    }
+
+    /// Ensure the side CF for `collection_name` exists, creating it if needed.
+    fn ensure_private_cf(&self, collection_name: &str) -> StorageResult<()> {
+        let cf_name = Self::private_cf_name(collection_name);
+        if self.db.cf_handle(&cf_name).is_none() {
+            self.db
+                .create_cf(&cf_name, &Options::default())
+                .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        }
+        Ok(())
+    }
+}
+
+impl PrivateDataStore for RocksDbBlockStore {
+    fn put_private_data(
+        &self,
+        collection_name: &str,
+        key: &str,
+        value: &[u8],
+    ) -> StorageResult<[u8; 32]> {
+        self.ensure_private_cf(collection_name)?;
+        let cf_name = Self::private_cf_name(collection_name);
+        let cf = self
+            .db
+            .cf_handle(&cf_name)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(cf_name.clone()))?;
+        let hash = sha256(value);
+        self.db
+            .put_cf(&cf, key.as_bytes(), value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(hash)
+    }
+
+    fn get_private_data(
+        &self,
+        collection_name: &str,
+        key: &str,
+    ) -> StorageResult<Option<Vec<u8>>> {
+        self.ensure_private_cf(collection_name)?;
+        let cf_name = Self::private_cf_name(collection_name);
+        let cf = self
+            .db
+            .cf_handle(&cf_name)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(cf_name.clone()))?;
+        self.db
+            .get_cf(&cf, key.as_bytes())
+            .map(|opt| opt.map(|b| b.to_vec()))
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,6 +686,69 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let store = RocksDbBlockStore::new(dir.path()).unwrap();
         (store, dir)
+    }
+
+    // ── create_channel_store tests ────────────────────────────────────────────
+
+    #[test]
+    fn create_channel_store_opens_at_channels_subdir() {
+        let base = TempDir::new().unwrap();
+        let store = RocksDbBlockStore::create_channel_store("ch-01", base.path());
+        assert!(store.is_ok());
+        let expected = base.path().join("channels").join("ch-01");
+        assert!(expected.exists());
+    }
+
+    #[test]
+    fn create_channel_store_two_channels_are_isolated() {
+        let base = TempDir::new().unwrap();
+        let _s1 = RocksDbBlockStore::create_channel_store("alpha", base.path()).unwrap();
+        let _s2 = RocksDbBlockStore::create_channel_store("beta", base.path()).unwrap();
+        assert!(base.path().join("channels").join("alpha").exists());
+        assert!(base.path().join("channels").join("beta").exists());
+    }
+
+    #[test]
+    fn create_channel_store_rejects_empty_id() {
+        let base = TempDir::new().unwrap();
+        let err = RocksDbBlockStore::create_channel_store("", base.path())
+            .err()
+            .expect("expected InvalidChannelId error");
+        assert!(matches!(err, StorageError::InvalidChannelId(_)));
+    }
+
+    #[test]
+    fn create_channel_store_rejects_path_traversal() {
+        let base = TempDir::new().unwrap();
+        let err = RocksDbBlockStore::create_channel_store("../evil", base.path())
+            .err()
+            .expect("expected InvalidChannelId error");
+        assert!(matches!(err, StorageError::InvalidChannelId(_)));
+    }
+
+    #[test]
+    fn create_channel_store_rejects_slash_in_id() {
+        let base = TempDir::new().unwrap();
+        let err = RocksDbBlockStore::create_channel_store("a/b", base.path())
+            .err()
+            .expect("expected InvalidChannelId error");
+        assert!(matches!(err, StorageError::InvalidChannelId(_)));
+    }
+
+    #[test]
+    fn create_channel_store_accepts_alphanumeric_hyphen_underscore() {
+        let base = TempDir::new().unwrap();
+        assert!(
+            RocksDbBlockStore::create_channel_store("Channel_01-test", base.path()).is_ok()
+        );
+    }
+
+    #[test]
+    fn create_channel_store_is_functional_store() {
+        let base = TempDir::new().unwrap();
+        let store = RocksDbBlockStore::create_channel_store("ch-functional", base.path()).unwrap();
+        // get_latest_height returns 0 on an empty store
+        assert!(store.get_latest_height().is_ok());
     }
 
     fn sample_block(height: u64) -> Block {
@@ -838,5 +1117,126 @@ mod tests {
         OrgRegistry::register_org(&store, &make_org("org1")).unwrap();
         OrgRegistry::remove_org(&store, "org1").unwrap();
         assert!(OrgRegistry::get_org(&store, "org1").is_err());
+    }
+
+    // ── CRL tests ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn crl_write_read_roundtrip() {
+        let (store, _dir) = tmp_store();
+        let serials = vec!["serial-001".to_string(), "serial-002".to_string()];
+        CrlStore::write_crl(&store, "Org1MSP", &serials).unwrap();
+        let loaded = CrlStore::read_crl(&store, "Org1MSP").unwrap();
+        assert_eq!(loaded, serials);
+    }
+
+    #[test]
+    fn crl_read_missing_returns_empty() {
+        let (store, _dir) = tmp_store();
+        let serials = CrlStore::read_crl(&store, "UnknownMSP").unwrap();
+        assert!(serials.is_empty());
+    }
+
+    #[test]
+    fn crl_overwrite_replaces_serials() {
+        let (store, _dir) = tmp_store();
+        CrlStore::write_crl(&store, "Org1MSP", &["s1".to_string()]).unwrap();
+        CrlStore::write_crl(&store, "Org1MSP", &["s1".to_string(), "s2".to_string()]).unwrap();
+        let loaded = CrlStore::read_crl(&store, "Org1MSP").unwrap();
+        assert_eq!(loaded.len(), 2);
+    }
+
+    // ── World state ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn world_state_put_new_key_starts_at_version_1() {
+        let (store, _dir) = tmp_store();
+        let ver = store.world_state_put("asset1", b"value_a").unwrap();
+        assert_eq!(ver, 1);
+        let vv = store.world_state_get("asset1").unwrap().unwrap();
+        assert_eq!(vv.version, 1);
+        assert_eq!(vv.data, b"value_a");
+    }
+
+    #[test]
+    fn world_state_put_again_increments_version() {
+        let (store, _dir) = tmp_store();
+        store.world_state_put("asset1", b"value_a").unwrap();
+        let ver2 = store.world_state_put("asset1", b"value_b").unwrap();
+        assert_eq!(ver2, 2);
+        let vv = store.world_state_get("asset1").unwrap().unwrap();
+        assert_eq!(vv.version, 2);
+        assert_eq!(vv.data, b"value_b");
+    }
+
+    #[test]
+    fn world_state_get_absent_key_returns_none() {
+        let (store, _dir) = tmp_store();
+        assert!(store.world_state_get("missing").unwrap().is_none());
+    }
+
+    #[test]
+    fn world_state_multiple_keys_are_independent() {
+        let (store, _dir) = tmp_store();
+        store.world_state_put("k1", b"a").unwrap();
+        store.world_state_put("k1", b"b").unwrap(); // version 2
+        store.world_state_put("k2", b"x").unwrap(); // version 1
+
+        let v1 = store.world_state_get("k1").unwrap().unwrap();
+        let v2 = store.world_state_get("k2").unwrap().unwrap();
+        assert_eq!(v1.version, 2);
+        assert_eq!(v2.version, 1);
+    }
+
+    // ── PrivateDataStore tests ────────────────────────────────────────────────
+
+    #[test]
+    fn private_data_put_returns_sha256_hash() {
+        let (store, _dir) = tmp_store();
+        let value = b"secret data";
+        let hash = store.put_private_data("mycol", "key1", value).unwrap();
+        assert_eq!(hash, sha256(value));
+    }
+
+    #[test]
+    fn private_data_get_returns_original_value() {
+        let (store, _dir) = tmp_store();
+        let value = b"private payload";
+        store.put_private_data("mycol", "key1", value).unwrap();
+        let got = store.get_private_data("mycol", "key1").unwrap();
+        assert_eq!(got, Some(value.to_vec()));
+    }
+
+    #[test]
+    fn private_data_hash_matches_sha256_of_value() {
+        let (store, _dir) = tmp_store();
+        let value = b"on-chain integrity";
+        let hash = store.put_private_data("col", "k", value).unwrap();
+        // caller would embed `hash` in TX data field; verify it matches
+        assert_eq!(hash, sha256(value));
+        let stored = store.get_private_data("col", "k").unwrap().unwrap();
+        assert_eq!(sha256(&stored), hash);
+    }
+
+    #[test]
+    fn private_data_get_returns_none_for_missing_key() {
+        let (store, _dir) = tmp_store();
+        let got = store.get_private_data("col", "nonexistent").unwrap();
+        assert_eq!(got, None);
+    }
+
+    #[test]
+    fn private_data_collections_are_isolated() {
+        let (store, _dir) = tmp_store();
+        store.put_private_data("col1", "k", b"alpha").unwrap();
+        store.put_private_data("col2", "k", b"beta").unwrap();
+        assert_eq!(
+            store.get_private_data("col1", "k").unwrap(),
+            Some(b"alpha".to_vec())
+        );
+        assert_eq!(
+            store.get_private_data("col2", "k").unwrap(),
+            Some(b"beta".to_vec())
+        );
     }
 }

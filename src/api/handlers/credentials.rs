@@ -1,5 +1,6 @@
 use actix_web::{web, HttpRequest, HttpResponse, post, get};
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::api::models::*;
 use crate::app_state::AppState;
 use chrono::Utc;
@@ -114,17 +115,14 @@ async fn revoke_credential(
 pub async fn store_write_credential(
     state: web::Data<AppState>,
     body: web::Json<crate::storage::traits::Credential>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => {
-            store
-                .write_credential(&body)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store
+        .write_credential(&body)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 
 /// GET /api/v1/store/credentials/{cred_id} — lee un Credential del store.
@@ -132,15 +130,14 @@ pub async fn store_write_credential(
 pub async fn store_get_credential(
     state: web::Data<AppState>,
     path: web::Path<String>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let cred_id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => match store.read_credential(&cred_id) {
-            Ok(cred) => Ok(HttpResponse::Ok().json(ApiResponse::success(cred, trace_id))),
-            Err(_) => Err(ApiError::NotFound { resource: format!("credential {cred_id}") }),
-        },
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    match store.read_credential(&cred_id) {
+        Ok(cred) => Ok(HttpResponse::Ok().json(ApiResponse::success(cred, trace_id))),
+        Err(_) => Err(ApiError::NotFound { resource: format!("credential {cred_id}") }),
     }
 }
 
@@ -150,18 +147,15 @@ pub async fn store_get_credential(
 pub async fn store_get_credentials_by_subject(
     state: web::Data<AppState>,
     path: web::Path<String>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let subject_did = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => {
-            let creds = store
-                .credentials_by_subject_did(&subject_did)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
-            Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
-        }
-    }
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let creds = store
+        .credentials_by_subject_did(&subject_did)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
 #[cfg(test)]
