@@ -11,6 +11,7 @@ impl ApiRoutes {
             web::scope("/api/v1")
                 .service(Self::identity_routes())
                 .service(Self::blocks_routes())
+                .service(Self::store_blocks_routes())
                 .service(Self::chain_routes())
                 .service(Self::credentials_routes())
                 .service(Self::transaction_routes())
@@ -28,6 +29,12 @@ impl ApiRoutes {
             .service(blocks::list_blocks)
             .service(blocks::get_block_by_index)
             .service(blocks::get_block_by_hash)
+    }
+
+    fn store_blocks_routes() -> Scope {
+        web::scope("/store/blocks")
+            .service(blocks::store_latest_height)
+            .service(blocks::store_get_block)
     }
 
     fn chain_routes() -> Scope {

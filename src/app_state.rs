@@ -12,6 +12,7 @@ use crate::network::Node;
 use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
+use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
 
 /// Shared application state for the HTTP API layer.
@@ -31,4 +32,6 @@ pub struct AppState {
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Arc<Mutex<TransactionValidator>>,
     pub metrics: Arc<MetricsCollector>,
+    /// New storage layer (MemoryStore or future RocksDB).
+    pub store: Option<Arc<dyn BlockStore>>,
 }

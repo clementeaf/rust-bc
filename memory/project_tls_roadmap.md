@@ -1,12 +1,12 @@
 ---
 name: Roadmap de fases completadas
-description: Estado de todas las fases implementadas en rust-bc (TLS A-F, Consensus G-H)
+description: Estado de todas las fases implementadas en rust-bc (TLS A-F, Consensus G-H, Storage I)
 type: project
 ---
 
-Stack TLS completo (Fases A–F, 2026-04-02) y Consensus en curso (Fases G–H, 2026-04-03).
+Stack TLS completo (Fases A–F), Consensus completo (G–H), y Storage Fase I completa (2026-04-03).
 
-**Why:** TLS asegura HTTP y P2P antes de despliegue público. Consensus implementa fork resolution y el engine central.
+**Why:** Cada capa es prerequisito de la siguiente: TLS → Consensus → Storage → API de bloques.
 
 ---
 
@@ -32,4 +32,16 @@ Variables de entorno TLS: `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `T
 | G | Fork resolution: `canonical_chain`, `resolve_fork`, `ForkChoice` | `src/consensus/dag.rs`, `src/consensus/fork_choice.rs` |
 | H | `ConsensusEngine`: `accept_block`, `canonical_tip`, `canonical_chain` | `src/consensus/engine.rs` |
 
-**How to apply:** Próximas áreas libres: Storage (persistencia en disco) o Networking (gossip/peer discovery).
+---
+
+## Storage — Fase I ✅ (2026-04-03)
+
+| Tarea | Descripción | Módulos |
+|-------|-------------|---------|
+| T1 | `MemoryStore` — `BlockStore` in-memory con `Mutex` | `src/storage/memory.rs` |
+| T2 | `BlockStore` impl para `Arc<T>` — compartir store entre engine y API | `src/storage/traits.rs` |
+| T3 | `ConsensusEngine::with_store()` — persiste bloques aceptados | `src/consensus/engine.rs` |
+| T4 | `AppState.store` + endpoints `GET /store/blocks/{height}` y `/latest` | `src/app_state.rs`, `src/api/handlers/blocks.rs`, `src/api/routes.rs` |
+| T5 | 7 tests de integración actix-web para ambos endpoints | `tests/store_blocks_api_test.rs` |
+
+**How to apply:** Próximas áreas: T6 (benchmark/stress del store) o persistencia en disco (RocksDB).

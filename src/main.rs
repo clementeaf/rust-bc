@@ -22,6 +22,9 @@ mod smart_contracts;
 mod staking;
 mod state_reconstructor;
 mod state_snapshot;
+mod storage;
+mod consensus;
+mod identity;
 mod tls;
 mod pki;
 
@@ -579,6 +582,7 @@ async fn main() -> std::io::Result<()> {
         checkpoint_manager: checkpoint_manager.clone(),
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),
+        store: None,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

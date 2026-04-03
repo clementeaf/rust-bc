@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ConsensusError`: errores tipados (`InvalidBlock`, `DagError`) vía `thiserror`
 - 11 tests (accept, reject ×5, canonical tip/chain, fork)
 
+**Storage — Fase I (2026-04-03)**
+
+- `src/storage/memory.rs`: `MemoryStore` — implementación in-memory de `BlockStore` con `Mutex` interno
+- `src/storage/traits.rs`: impl `BlockStore` para `Arc<T>` — permite compartir el store entre el engine y el API
+- `src/consensus/engine.rs`: `ConsensusEngine::with_store(Box<dyn BlockStore>)` — persiste bloques aceptados al store
+- `src/app_state.rs`: campo `store: Option<Arc<dyn BlockStore>>`
+- `src/api/handlers/blocks.rs`: dos endpoints nuevos
+  - `GET /api/v1/store/blocks/{height}` — lee un bloque por altura desde el store
+  - `GET /api/v1/store/blocks/latest` — retorna la altura del bloque más reciente
+- `src/api/routes.rs`: scope `/store/blocks` con ambos handlers
+- `tests/store_blocks_api_test.rs`: 7 tests de integración actix-web
+  - Bloque por altura (height 0 y 1), latest height, bloque inexistente → 404
+  - Sin store configurado → 404 en ambos endpoints
+  - Ruta `/latest` no confundida con el parámetro `/{height}`
+
 **CI — fix toolchain (2026-04-03)**
 
 - `.github/workflows/`: añadido `toolchain: stable` en los 4 workflows (`build`, `security`, `lint`, `test`) — `dtolnay/rust-toolchain@master` requiere el input explícito
@@ -231,6 +246,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** April 2, 2026
+**Last Updated:** April 3, 2026
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

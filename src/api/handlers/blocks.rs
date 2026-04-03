@@ -79,12 +79,60 @@ pub async fn get_block_by_hash(
     }
 }
 
+/// GET /api/v1/store/blocks/latest — altura del bloque más reciente en el store.
+#[get("/latest")]
+pub async fn store_latest_height(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound {
+            resource: "store".to_string(),
+        }),
+        Some(store) => {
+            let height = store
+                .get_latest_height()
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Ok().json(ApiResponse::success(height, trace_id)))
+        }
+    }
+}
+
+/// GET /api/v1/store/blocks/{height} — bloque por altura desde el nuevo store.
+#[get("/{height}")]
+pub async fn store_get_block(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let height = *path;
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound {
+            resource: "store".to_string(),
+        }),
+        Some(store) => match store.read_block(height) {
+            Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
+            Err(_) => Err(ApiError::NotFound {
+                resource: format!("block height {}", height),
+            }),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{create_block, get_block_by_hash, get_block_by_index, list_blocks};
+    use super::{
+        create_block, get_block_by_hash, get_block_by_index, list_blocks, store_get_block,
+        store_latest_height,
+    };
 
     #[test]
     fn blocks_gateway_handlers_are_public() {
-        let _ = (create_block, list_blocks, get_block_by_index, get_block_by_hash);
+        let _ = (
+            create_block,
+            list_blocks,
+            get_block_by_index,
+            get_block_by_hash,
+            store_get_block,
+            store_latest_height,
+        );
     }
 }

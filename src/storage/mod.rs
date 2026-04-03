@@ -9,11 +9,13 @@
 
 pub mod adapters;
 pub mod errors;
+pub mod memory;
 pub mod traits;
 pub mod comprehensive_tests;
 
 pub use adapters::RocksDbBlockStore;
 pub use errors::{StorageError, StorageResult};
+pub use memory::MemoryStore;
 pub use traits::BlockStore;
 
 /// Storage configuration
