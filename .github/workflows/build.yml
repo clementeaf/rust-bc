@@ -24,6 +24,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache Cargo registry
@@ -70,6 +71,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
 
       - name: Cargo check
         run: cargo check --all 2>&1 | head -20

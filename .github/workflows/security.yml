@@ -34,6 +34,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
 
       - name: Cache Cargo
         uses: actions/cache@v3
@@ -61,6 +63,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
 
       - name: Run clippy (strict)
         run: cargo clippy --all -- -W clippy::all -W clippy::pedantic 2>&1 | grep -E "warning|error" | head -30
