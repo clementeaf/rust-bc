@@ -53,6 +53,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/api/routes.rs`: tres nuevos scopes `store_transactions_routes`, `store_identities_routes`, `store_credentials_routes`
 - Todos los handlers delegan a `state.store` siguiendo el patrón de `store_get_block`; responden 404 si el store no está configurado
 
+**Storage — Índices secundarios por rango (2026-04-03)**
+
+- `src/storage/adapters.rs`: nueva CF `tx_by_block`
+  - Key schema: `{012_padded_height}:{tx_id}` → value vacío; prefijo fijo garantiza colocalización y orden lexicográfico
+  - `write_transaction` y `write_batch` escriben la entrada de índice en el mismo `WriteBatch` (atómico)
+  - `transactions_by_block_height(height)`: prefix scan con `IteratorMode::From`, extrae `tx_id` del key y resuelve la tx en CF `transactions`
+- `src/storage/memory.rs`: misma query implementada como scan lineal sobre el `HashMap` filtrando por `block_height`
+- `src/storage/traits.rs`: `BlockStore::transactions_by_block_height` añadido al trait + delegación en el blanket `Arc<T>`
+- 9 tests nuevos (5 adapter, 3 memory, 1 trait): formato de key, vaciado para altura desconocida, filtrado correcto, no bleed-over entre alturas adyacentes, batch indexing; 463 tests totales pasando
+
 **Storage — Fase IV: Column Families en RocksDB (2026-04-03)**
 
 - `src/storage/adapters.rs`: migración de prefijos de clave a Column Families dedicadas
@@ -274,6 +284,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** April 3, 2026 (Storage Fase V — REST endpoints store)
+**Last Updated:** April 3, 2026 (Storage — índices secundarios por rango)
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

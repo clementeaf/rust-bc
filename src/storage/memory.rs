@@ -124,6 +124,18 @@ impl BlockStore for MemoryStore {
     fn block_exists(&self, height: u64) -> StorageResult<bool> {
         Ok(self.blocks.lock().unwrap().contains_key(&height))
     }
+
+    fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>> {
+        let txs = self
+            .transactions
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|tx| tx.block_height == height)
+            .cloned()
+            .collect();
+        Ok(txs)
+    }
 }
 
 #[cfg(test)]
@@ -261,5 +273,36 @@ mod tests {
     fn write_batch_empty_returns_error() {
         let store = MemoryStore::new();
         assert!(store.write_batch(&[], &[]).is_err());
+    }
+
+    // ── Secondary index: transactions_by_block_height ─────────────────────────
+
+    #[test]
+    fn transactions_by_block_height_returns_empty_for_unknown_height() {
+        let store = MemoryStore::new();
+        assert!(store.transactions_by_block_height(99).unwrap().is_empty());
+    }
+
+    #[test]
+    fn transactions_by_block_height_filters_correctly() {
+        let store = MemoryStore::new();
+        store.write_transaction(&sample_tx("tx-1", 3)).unwrap();
+        store.write_transaction(&sample_tx("tx-2", 3)).unwrap();
+        store.write_transaction(&sample_tx("tx-3", 4)).unwrap();
+
+        let result = store.transactions_by_block_height(3).unwrap();
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|t| t.block_height == 3));
+    }
+
+    #[test]
+    fn transactions_by_block_height_returns_all_for_height() {
+        let store = MemoryStore::new();
+        for i in 0..5u64 {
+            store
+                .write_transaction(&sample_tx(&format!("tx-{i}"), 10))
+                .unwrap();
+        }
+        assert_eq!(store.transactions_by_block_height(10).unwrap().len(), 5);
     }
 }

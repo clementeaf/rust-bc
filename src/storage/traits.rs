@@ -102,6 +102,11 @@ pub trait BlockStore: Send + Sync {
 
     /// Check if block exists
     fn block_exists(&self, height: u64) -> StorageResult<bool>;
+
+    /// Return all transactions belonging to a given block height.
+    ///
+    /// Returns an empty `Vec` when no transactions are indexed for that height.
+    fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>>;
 }
 
 /// Blanket impl so `Arc<T>` can be used wherever `Box<dyn BlockStore>` is expected.
@@ -141,6 +146,10 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     }
     fn block_exists(&self, height: u64) -> StorageResult<bool> {
         (**self).block_exists(height)
+    }
+
+    fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>> {
+        (**self).transactions_by_block_height(height)
     }
 }
 

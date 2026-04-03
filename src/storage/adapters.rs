@@ -10,7 +10,7 @@
 //! | `credentials` | cred_id string        | JSON Credential|
 //! | `meta`        | well-known byte keys  | raw bytes      |
 
-use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamilyDescriptor, Direction, IteratorMode, Options, WriteBatch, DB};
 use std::path::Path;
 
 use super::errors::{StorageError, StorageResult};
@@ -21,10 +21,19 @@ const CF_TRANSACTIONS: &str = "transactions";
 const CF_IDENTITIES: &str = "identities";
 const CF_CREDENTIALS: &str = "credentials";
 const CF_META: &str = "meta";
+/// Secondary index: `{012-padded-height}:{tx_id}` → `""` (empty)
+const CF_TX_BY_BLOCK: &str = "tx_by_block";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
-const ALL_CFS: &[&str] = &[CF_BLOCKS, CF_TRANSACTIONS, CF_IDENTITIES, CF_CREDENTIALS, CF_META];
+const ALL_CFS: &[&str] = &[
+    CF_BLOCKS,
+    CF_TRANSACTIONS,
+    CF_IDENTITIES,
+    CF_CREDENTIALS,
+    CF_META,
+    CF_TX_BY_BLOCK,
+];
 
 /// RocksDB-backed block store using Column Families for data isolation
 pub struct RocksDbBlockStore {
@@ -84,11 +93,30 @@ impl RocksDbBlockStore {
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_META.to_string()))
     }
 
+    fn cf_tx_by_block(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_TX_BY_BLOCK)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TX_BY_BLOCK.to_string()))
+    }
+
     // ── Key encoders ─────────────────────────────────────────────────────────
 
     /// Zero-padded decimal height gives lexicographic == numeric ordering.
     fn block_key(height: u64) -> Vec<u8> {
         format!("{:012}", height).into_bytes()
+    }
+
+    /// Secondary-index key: `{012-padded-height}:{tx_id}`.
+    ///
+    /// The fixed-width height prefix keeps all entries for a block contiguous
+    /// and in numeric order, enabling a simple prefix range scan.
+    fn tx_block_index_key(height: u64, tx_id: &str) -> Vec<u8> {
+        format!("{:012}:{}", height, tx_id).into_bytes()
+    }
+
+    /// The prefix used to scan all index entries for `height`.
+    fn tx_block_prefix(height: u64) -> Vec<u8> {
+        format!("{:012}:", height).into_bytes()
     }
 }
 
@@ -127,8 +155,16 @@ impl BlockStore for RocksDbBlockStore {
     fn write_transaction(&self, tx: &Transaction) -> StorageResult<()> {
         let value = serde_json::to_vec(tx)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+
+        let mut batch = WriteBatch::default();
+        batch.put_cf(self.cf_transactions()?, tx.id.as_bytes(), &value);
+        batch.put_cf(
+            self.cf_tx_by_block()?,
+            Self::tx_block_index_key(tx.block_height, &tx.id),
+            b"",
+        );
         self.db
-            .put_cf(self.cf_transactions()?, tx.id.as_bytes(), &value)
+            .write(batch)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
@@ -197,6 +233,7 @@ impl BlockStore for RocksDbBlockStore {
         let cf_b = self.cf_blocks()?;
         let cf_t = self.cf_transactions()?;
         let cf_m = self.cf_meta()?;
+        let cf_idx = self.cf_tx_by_block()?;
 
         let mut batch = WriteBatch::default();
 
@@ -213,6 +250,11 @@ impl BlockStore for RocksDbBlockStore {
             let value = serde_json::to_vec(tx)
                 .map_err(|e| StorageError::SerializationError(e.to_string()))?;
             batch.put_cf(cf_t, tx.id.as_bytes(), &value);
+            batch.put_cf(
+                cf_idx,
+                Self::tx_block_index_key(tx.block_height, &tx.id),
+                b"",
+            );
         }
 
         if new_latest > current_latest {
@@ -245,6 +287,42 @@ impl BlockStore for RocksDbBlockStore {
             .get_cf(self.cf_blocks()?, Self::block_key(height))
             .map(|v| v.is_some())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>> {
+        let prefix = Self::tx_block_prefix(height);
+        let cf_idx = self.cf_tx_by_block()?;
+        let cf_t = self.cf_transactions()?;
+
+        let iter = self
+            .db
+            .iterator_cf(cf_idx, IteratorMode::From(&prefix, Direction::Forward));
+
+        let mut txs = Vec::new();
+        for item in iter {
+            let (key, _) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+
+            // Stop once we've passed all keys with this height prefix.
+            if !key.starts_with(&prefix) {
+                break;
+            }
+
+            // Extract tx_id: everything after `{012}:`
+            let tx_id = std::str::from_utf8(&key[prefix.len()..])
+                .map_err(|e| StorageError::DataCorrupted(e.to_string()))?;
+
+            let tx_bytes = self
+                .db
+                .get_cf(cf_t, tx_id.as_bytes())
+                .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+                .ok_or_else(|| StorageError::KeyNotFound(format!("tx:{tx_id}")))?;
+
+            let tx: Transaction = serde_json::from_slice(&tx_bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            txs.push(tx);
+        }
+
+        Ok(txs)
     }
 }
 
@@ -458,5 +536,73 @@ mod tests {
         store.write_batch(&[], &[sample_tx("only-tx")]).unwrap();
         // Latest height unchanged — no blocks in batch
         assert_eq!(store.get_latest_height().unwrap(), 5);
+    }
+
+    // ── Secondary index: tx_by_block_height ───────────────────────────────────
+
+    fn tx_at_height(id: &str, height: u64) -> Transaction {
+        Transaction {
+            id: id.to_string(),
+            block_height: height,
+            timestamp: 1_000,
+            input_did: "did:bc:in".to_string(),
+            output_recipient: "did:bc:out".to_string(),
+            amount: 1,
+            state: "confirmed".to_string(),
+        }
+    }
+
+    #[test]
+    fn index_key_format_is_correct() {
+        let key = RocksDbBlockStore::tx_block_index_key(7, "abc");
+        assert_eq!(key, b"000000000007:abc");
+        let prefix = RocksDbBlockStore::tx_block_prefix(7);
+        assert!(key.starts_with(&prefix));
+    }
+
+    #[test]
+    fn transactions_by_block_height_returns_empty_for_unknown_height() {
+        let (store, _dir) = tmp_store();
+        let txs = store.transactions_by_block_height(99).unwrap();
+        assert!(txs.is_empty());
+    }
+
+    #[test]
+    fn write_transaction_is_queryable_by_block_height() {
+        let (store, _dir) = tmp_store();
+        store.write_transaction(&tx_at_height("tx-a", 5)).unwrap();
+        store.write_transaction(&tx_at_height("tx-b", 5)).unwrap();
+        store.write_transaction(&tx_at_height("tx-c", 6)).unwrap();
+
+        let block5 = store.transactions_by_block_height(5).unwrap();
+        let ids: Vec<&str> = block5.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"tx-a"));
+        assert!(ids.contains(&"tx-b"));
+
+        let block6 = store.transactions_by_block_height(6).unwrap();
+        assert_eq!(block6.len(), 1);
+        assert_eq!(block6[0].id, "tx-c");
+    }
+
+    #[test]
+    fn write_batch_indexes_transactions_by_block_height() {
+        let (store, _dir) = tmp_store();
+        let txs = vec![tx_at_height("btx-1", 10), tx_at_height("btx-2", 10)];
+        store.write_batch(&[sample_block(10)], &txs).unwrap();
+
+        let result = store.transactions_by_block_height(10).unwrap();
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn index_does_not_cross_height_boundaries() {
+        let (store, _dir) = tmp_store();
+        // heights 9 and 10 have similar decimal prefix — confirm no bleed-over
+        store.write_transaction(&tx_at_height("tx-9", 9)).unwrap();
+        store.write_transaction(&tx_at_height("tx-10", 10)).unwrap();
+
+        assert_eq!(store.transactions_by_block_height(9).unwrap().len(), 1);
+        assert_eq!(store.transactions_by_block_height(10).unwrap().len(), 1);
     }
 }
