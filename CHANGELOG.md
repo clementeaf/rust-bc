@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 21 tests unitarios en `tls.rs`; todos pasando (26 en total con integración)
 - Dependencia dev: `rcgen 0.13` para generar certs en tests
 
+**TLS — Fase C Certificate Pinning (2026-04-02)**
+
+- `src/tls.rs`: allowlist de certificados por fingerprint SHA-256
+  - `CertPinConfig`: parse y validación de fingerprints hex; desactivado si la lista está vacía
+  - `PinningServerCertVerifier`: valida CA primero, luego comprueba el fingerprint del cert del servidor
+  - `PinningClientCertVerifier`: ídem para el cert del cliente en mTLS
+  - Variable `TLS_PINNED_CERTS`: fingerprints separados por coma; ausente → pinning desactivado
+- 32 tests TLS en total; todos pasando
+- `docs/NETWORK_MEMBERSHIP.md`: nueva sección "Certificate Pinning TLS" con tabla de variables, comportamiento, comando openssl y guía de rotación
+
 ### Changed
 - Reorganized documentation: `ANALYSIS/` → `docs/analysis/`, former `Documents/` → `docs/archive/`
 - Stop tracking local `blockchain_blocks/` sample data
