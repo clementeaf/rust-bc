@@ -223,6 +223,95 @@ impl Dag {
             0
         }
     }
+
+    /// Count the number of descendants of a block (subtree weight).
+    ///
+    /// Used by `canonical_chain` to break ties at fork points: the child
+    /// with the heavier subtree (more total descendants) wins.
+    pub fn subtree_weight(&self, hash: &[u8; 32]) -> u64 {
+        let children = match self.vertices.get(hash) {
+            Some(v) => v.children.clone(),
+            None => return 0,
+        };
+        let mut weight = children.len() as u64;
+        for child in &children {
+            weight += self.subtree_weight(child);
+        }
+        weight
+    }
+
+    /// Given a set of competing tip hashes, return the one that lies on the
+    /// canonical chain, selecting the deepest (latest) one.
+    ///
+    /// Returns `None` if `candidates` is empty or none of them appear in the
+    /// canonical chain.
+    pub fn resolve_fork(&self, candidates: &[[u8; 32]]) -> Option<[u8; 32]> {
+        if candidates.is_empty() {
+            return None;
+        }
+
+        let canonical = self.canonical_chain();
+
+        // Build a position map: hash → index in canonical chain
+        let positions: HashMap<[u8; 32], usize> = canonical
+            .iter()
+            .enumerate()
+            .map(|(i, h)| (*h, i))
+            .collect();
+
+        candidates
+            .iter()
+            .filter_map(|h| positions.get(h).map(|pos| (*h, *pos)))
+            .max_by_key(|(_, pos)| *pos)
+            .map(|(h, _)| h)
+    }
+
+    /// Return the canonical chain as an ordered list of hashes from genesis
+    /// to the canonical tip.
+    ///
+    /// At each fork the child with the greatest subtree weight is chosen.
+    /// Ties are broken deterministically by selecting the lexicographically
+    /// smallest hash.
+    ///
+    /// Returns an empty `Vec` if the DAG has no genesis block.
+    pub fn canonical_chain(&self) -> Vec<[u8; 32]> {
+        // Find genesis: the unique block whose parent_hash is all-zero
+        let genesis_hash = self
+            .vertices
+            .values()
+            .find(|v| v.block.is_genesis())
+            .map(|v| v.block.hash);
+
+        let mut genesis = match genesis_hash {
+            Some(h) => h,
+            None => return Vec::new(),
+        };
+
+        let mut chain = vec![genesis];
+
+        loop {
+            let children = match self.vertices.get(&genesis) {
+                Some(v) => v.children.clone(),
+                None => break,
+            };
+
+            if children.is_empty() {
+                break;
+            }
+
+            // Pick the child with the heaviest subtree; break ties by hash
+            let best = children
+                .iter()
+                .max_by_key(|h| (self.subtree_weight(h), std::cmp::Reverse(*h)))
+                .copied()
+                .expect("children is non-empty");
+
+            chain.push(best);
+            genesis = best;
+        }
+
+        chain
+    }
 }
 
 impl Default for Dag {
@@ -416,5 +505,139 @@ mod tests {
         );
         dag.add_block(block).unwrap();
         assert_eq!(dag.chain_height(), 1);
+    }
+
+    // --- canonical_chain tests ---
+
+    fn mk(id: u8) -> [u8; 32] {
+        let mut h = [0u8; 32];
+        h[0] = id;
+        h
+    }
+
+    fn block(hash: u8, parent: u8, height: u64) -> DagBlock {
+        DagBlock::new(mk(hash), mk(parent), height, 0, 1000, "p".to_string(), [2u8; 64])
+    }
+
+    #[test]
+    fn canonical_chain_empty_dag() {
+        let dag = Dag::new();
+        assert!(dag.canonical_chain().is_empty());
+    }
+
+    #[test]
+    fn canonical_chain_single_block() {
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        assert_eq!(dag.canonical_chain(), vec![mk(1)]);
+    }
+
+    #[test]
+    fn canonical_chain_linear() {
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 2, 2)).unwrap();
+        assert_eq!(dag.canonical_chain(), vec![mk(1), mk(2), mk(3)]);
+    }
+
+    #[test]
+    fn canonical_chain_picks_heavier_fork() {
+        // genesis=1 → fork: branch A (2→4) has weight 2, branch B (3) has weight 1
+        //   1
+        //  / \
+        // 2   3
+        // |
+        // 4
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 1, 1)).unwrap();
+        dag.add_block(block(4, 2, 2)).unwrap();
+
+        let chain = dag.canonical_chain();
+        assert_eq!(chain, vec![mk(1), mk(2), mk(4)]);
+    }
+
+    #[test]
+    fn canonical_chain_tie_broken_by_hash() {
+        // Two equal-weight children: 2 and 3 (both leaves).
+        // Tie broken by smallest hash → block 2 wins (mk(2) < mk(3)).
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 1, 1)).unwrap();
+
+        let chain = dag.canonical_chain();
+        assert_eq!(chain, vec![mk(1), mk(2)]);
+    }
+
+    #[test]
+    fn subtree_weight_leaf_is_zero() {
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        assert_eq!(dag.subtree_weight(&mk(1)), 0);
+    }
+
+    // --- resolve_fork tests ---
+
+    #[test]
+    fn resolve_fork_empty_candidates() {
+        let dag = Dag::new();
+        assert_eq!(dag.resolve_fork(&[]), None);
+    }
+
+    #[test]
+    fn resolve_fork_single_canonical_tip() {
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        assert_eq!(dag.resolve_fork(&[mk(2)]), Some(mk(2)));
+    }
+
+    #[test]
+    fn resolve_fork_picks_canonical_tip_over_stale() {
+        // genesis=1 → branch A: 2→4 (heavier), branch B: 3 (stale)
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 1, 1)).unwrap();
+        dag.add_block(block(4, 2, 2)).unwrap();
+
+        // Both tips offered; canonical tip is 4
+        assert_eq!(dag.resolve_fork(&[mk(3), mk(4)]), Some(mk(4)));
+    }
+
+    #[test]
+    fn resolve_fork_none_on_non_canonical_candidates() {
+        // Same fork as above; offer only the stale tip
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 1, 1)).unwrap();
+        dag.add_block(block(4, 2, 2)).unwrap();
+
+        assert_eq!(dag.resolve_fork(&[mk(3)]), None);
+    }
+
+    #[test]
+    fn resolve_fork_picks_deepest_canonical_candidate() {
+        // Linear chain 1→2→3; offer genesis and tip — deepest wins
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 2, 2)).unwrap();
+
+        assert_eq!(dag.resolve_fork(&[mk(1), mk(3)]), Some(mk(3)));
+    }
+
+    #[test]
+    fn subtree_weight_counts_all_descendants() {
+        let mut dag = Dag::new();
+        dag.add_block(block(1, 0, 0)).unwrap();
+        dag.add_block(block(2, 1, 1)).unwrap();
+        dag.add_block(block(3, 2, 2)).unwrap();
+        // 1 has descendants 2 and 3 → weight 2
+        assert_eq!(dag.subtree_weight(&mk(1)), 2);
     }
 }

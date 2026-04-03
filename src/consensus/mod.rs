@@ -8,10 +8,12 @@
 //! - Thread-safe parallel mining
 
 pub mod dag;
+pub mod fork_choice;
 pub mod scheduler;
 pub mod validator;
 
-pub use dag::{DagBlock, DagVertex, DagEdge, Dag};
+pub use dag::{Dag, DagBlock, DagEdge, DagVertex};
+pub use fork_choice::{ForkChoice, ForkChoiceRule};
 pub use scheduler::SlotScheduler;
 pub use validator::{BlockValidator, ValidityResult};
 
