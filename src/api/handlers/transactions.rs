@@ -212,6 +212,25 @@ pub async fn store_get_transaction(
     }
 }
 
+/// GET /api/v1/store/blocks/{height}/transactions — lista txs de un bloque por altura.
+#[get("/store/blocks/{height}/transactions")]
+pub async fn store_get_transactions_by_block(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let height = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => {
+            let txs = store
+                .transactions_by_block_height(height)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Ok().json(ApiResponse::success(txs, trace_id)))
+        }
+    }
+}
+
 /// GET /api/v1/mempool — transacciones pendientes.
 #[get("/mempool")]
 pub async fn get_mempool(state: web::Data<AppState>) -> ApiResult<HttpResponse> {

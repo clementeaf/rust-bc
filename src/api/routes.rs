@@ -38,6 +38,7 @@ impl ApiRoutes {
         web::scope("/store/blocks")
             .service(blocks::store_latest_height)
             .service(blocks::store_get_block)
+            .service(transactions::store_get_transactions_by_block)
     }
 
     fn store_transactions_routes() -> Scope {
