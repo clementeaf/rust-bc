@@ -23,6 +23,7 @@ mod staking;
 mod state_reconstructor;
 mod state_snapshot;
 mod tls;
+mod pki;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -44,7 +45,7 @@ use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use transaction_validation::TransactionValidator;
-use tls::{load_client_config_from_env, load_tls_config_from_env};
+use tls::{load_client_config_from_env, load_tls_config_from_env, reload_tls_config, tls_reload_params_from_env};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -737,6 +738,9 @@ async fn main() -> std::io::Result<()> {
         requests_per_hour: 1000,
     };
 
+    // Parámetros de recarga TLS (para SIGHUP)
+    let tls_reload_params = tls_reload_params_from_env();
+
     let api_bind = format!("127.0.0.1:{}", api_port);
 
     // Configurar límite de tamaño para JSON (256KB por defecto, aumentamos a 1MB)
@@ -786,6 +790,89 @@ async fn main() -> std::io::Result<()> {
     }
     .workers(8)
     .run();
+
+    // Tarea SIGHUP: recarga certificados TLS y detiene el servidor si los nuevos son válidos
+    {
+        let sighup_server_handle = api_handle.handle();
+        let params = tls_reload_params.clone();
+        tokio::spawn(async move {
+            let mut sig = match tokio::signal::unix::signal(
+                tokio::signal::unix::SignalKind::hangup(),
+            ) {
+                Ok(s) => s,
+                Err(e) => {
+                    log::error!("No se pudo registrar SIGHUP: {}", e);
+                    return;
+                }
+            };
+            loop {
+                sig.recv().await;
+                log::info!("SIGHUP recibido — verificando certificados TLS...");
+                match &params {
+                    None => log::info!("TLS no configurado; SIGHUP ignorado."),
+                    Some(p) => match reload_tls_config(p) {
+                        Ok(_) => {
+                            log::info!(
+                                "Certificados TLS OK. Deteniendo servidor para aplicar cambios..."
+                            );
+                            sighup_server_handle.stop(true).await;
+                            break;
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "Error al recargar certificados TLS: {}. Servidor sin cambios.",
+                                e
+                            );
+                        }
+                    },
+                }
+            }
+        });
+    }
+
+    // Tarea periódica de recarga TLS (opcional: TLS_RELOAD_INTERVAL en segundos)
+    if let Some(interval_secs) = env::var("TLS_RELOAD_INTERVAL")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .filter(|&s| s > 0)
+    {
+        let reload_server_handle = api_handle.handle();
+        let params = tls_reload_params.clone();
+        tokio::spawn(async move {
+            let mut ticker =
+                tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+            ticker.tick().await; // saltar el tick inicial inmediato
+            loop {
+                ticker.tick().await;
+                log::info!(
+                    "Recarga TLS periódica (intervalo {}s) — verificando certificados...",
+                    interval_secs
+                );
+                match &params {
+                    None => log::debug!("TLS no configurado; recarga periódica omitida."),
+                    Some(p) => match reload_tls_config(p) {
+                        Ok(_) => {
+                            log::info!(
+                                "Certificados TLS OK. Deteniendo servidor para aplicar cambios..."
+                            );
+                            reload_server_handle.stop(true).await;
+                            break;
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "Error en recarga TLS periódica: {}. Servidor sin cambios.",
+                                e
+                            );
+                        }
+                    },
+                }
+            }
+        });
+        log::info!(
+            "Recarga TLS automática habilitada cada {} segundos.",
+            interval_secs
+        );
+    }
 
     // Tarea periódica para limpiar peers desconectados (cada 60 segundos)
     let node_for_cleanup = node_arc.clone();

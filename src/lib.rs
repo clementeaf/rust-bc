@@ -39,5 +39,6 @@ pub mod app_state;
 pub mod api;
 pub mod block_creation;
 pub mod tls;
+pub mod pki;
 
 pub use app_state::AppState;

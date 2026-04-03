@@ -52,12 +52,16 @@ pub enum TlsConfigError {
     ServerVerifierBuild(#[from] rustls::client::VerifierBuilderError),
     #[error("invalid pin config: {0}")]
     PinConfig(PinConfigError),
+    #[error("ocsp staple: {0}")]
+    OcspStaple(OcspStapleError),
 }
 
 /// Lee `TLS_CERT_PATH` y `TLS_KEY_PATH` del entorno.
 /// - Si ambos están definidos, construye y devuelve `Ok(Some(ServerConfig))`.
 /// - Si ninguno está definido, devuelve `Ok(None)` (sin TLS).
 /// - Si solo uno está definido, devuelve error.
+/// - `TLS_OCSP_STAPLE_PATH` — ruta a un fichero DER con la respuesta OCSP
+///   pre-firmada; si está definido, el staple se adjunta al handshake TLS.
 pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError> {
     let cert_path = std::env::var("TLS_CERT_PATH").ok();
     let key_path = std::env::var("TLS_KEY_PATH").ok();
@@ -69,12 +73,18 @@ pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError
 
     match (cert_path, key_path) {
         (Some(cert), Some(key)) => {
+            let ocsp = OcspStaple::from_env().map_err(TlsConfigError::OcspStaple)?;
             let config = if mtls {
                 let ca = std::env::var("TLS_CA_CERT_PATH")
                     .map_err(|_| TlsConfigError::MtlsMissingCa)?;
                 let pins = CertPinConfig::from_env().map_err(TlsConfigError::PinConfig)?;
                 if pins.is_disabled() {
-                    build_server_config_mtls(Path::new(&cert), Path::new(&key), Path::new(&ca))?
+                    build_server_config_mtls_with_ocsp(
+                        Path::new(&cert),
+                        Path::new(&key),
+                        Path::new(&ca),
+                        ocsp.as_ref(),
+                    )?
                 } else {
                     // mTLS + pinning: build inline para envolver el verifier con PinningClientCertVerifier
                     let certs = load_certs(Path::new(&cert))?;
@@ -87,12 +97,23 @@ pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError
                         .build()
                         .map_err(TlsConfigError::VerifierBuild)?;
                     let verifier = Arc::new(PinningClientCertVerifier::new(inner, pins));
-                    ServerConfig::builder()
-                        .with_client_cert_verifier(verifier)
-                        .with_single_cert(certs, key_der)?
+                    if let Some(staple) = ocsp.as_ref() {
+                        let ck = build_certified_key(certs, key_der, Some(staple))?;
+                        ServerConfig::builder()
+                            .with_client_cert_verifier(verifier)
+                            .with_cert_resolver(Arc::new(SingleCertResolver::new(ck)))
+                    } else {
+                        ServerConfig::builder()
+                            .with_client_cert_verifier(verifier)
+                            .with_single_cert(certs, key_der)?
+                    }
                 }
             } else {
-                build_server_config(Path::new(&cert), Path::new(&key))?
+                build_server_config_with_ocsp(
+                    Path::new(&cert),
+                    Path::new(&key),
+                    ocsp.as_ref(),
+                )?
             };
             Ok(Some(config))
         }
@@ -116,6 +137,58 @@ pub fn build_server_config(
         .with_single_cert(certs, key)?;
 
     Ok(config)
+}
+
+/// Igual que [`build_server_config`] pero añade un OCSP staple cuando se
+/// proporciona uno.
+///
+/// Si `ocsp` es `None` el comportamiento es idéntico a `build_server_config`.
+pub fn build_server_config_with_ocsp(
+    cert_path: &Path,
+    key_path: &Path,
+    ocsp: Option<&OcspStaple>,
+) -> Result<ServerConfig, TlsConfigError> {
+    let certs = load_certs(cert_path)?;
+    let key = load_private_key(key_path)?;
+    if ocsp.is_none() {
+        return Ok(ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)?);
+    }
+    let ck = build_certified_key(certs, key, ocsp)?;
+    Ok(ServerConfig::builder()
+        .with_no_client_auth()
+        .with_cert_resolver(Arc::new(SingleCertResolver::new(ck))))
+}
+
+/// Igual que [`build_server_config_mtls`] pero añade un OCSP staple cuando se
+/// proporciona uno.
+pub fn build_server_config_mtls_with_ocsp(
+    cert_path: &Path,
+    key_path: &Path,
+    ca_cert_path: &Path,
+    ocsp: Option<&OcspStaple>,
+) -> Result<ServerConfig, TlsConfigError> {
+    let certs = load_certs(cert_path)?;
+    let key = load_private_key(key_path)?;
+
+    let mut root_store = RootCertStore::empty();
+    for cert in load_certs(ca_cert_path)? {
+        root_store.add(cert)?;
+    }
+    let verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
+        .build()
+        .map_err(TlsConfigError::VerifierBuild)?;
+
+    if ocsp.is_none() {
+        return Ok(ServerConfig::builder()
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(certs, key)?);
+    }
+    let ck = build_certified_key(certs, key, ocsp)?;
+    Ok(ServerConfig::builder()
+        .with_client_cert_verifier(verifier)
+        .with_cert_resolver(Arc::new(SingleCertResolver::new(ck))))
 }
 
 /// Construye un `rustls::ServerConfig` con mTLS: exige que el cliente presente
@@ -547,6 +620,171 @@ impl rustls::server::danger::ClientCertVerifier for PinningClientCertVerifier {
     }
 }
 
+// ── OCSP Stapling ──────────────────────────────────────────────────────────
+
+/// Error al cargar la respuesta OCSP.
+#[derive(Debug, thiserror::Error)]
+pub enum OcspStapleError {
+    #[error("cannot read OCSP response file '{0}': {1}")]
+    ReadFile(String, std::io::Error),
+    #[error("OCSP response file '{0}' is empty")]
+    EmptyFile(String),
+}
+
+/// DER-encoded OCSP response that can be stapled to the TLS handshake.
+///
+/// In the TLS Certificate Status extension the server attaches a pre-fetched
+/// OCSP response so the client does not need to contact the CA's OCSP
+/// endpoint directly.
+///
+/// # Environment variable
+///
+/// Set `TLS_OCSP_STAPLE_PATH` to the path of a DER-encoded OCSP response file
+/// and call [`OcspStaple::from_env`].  The response can be obtained from your
+/// CA's OCSP endpoint, e.g.:
+///
+/// ```text
+/// openssl ocsp -issuer ca.pem -cert node.pem \
+///     -url http://ocsp.example.com -respout ocsp.der
+/// ```
+///
+/// For the internal CA (Fase E) use [`crate::pki::sign_ocsp_response`] to
+/// generate and sign the response locally.
+#[derive(Debug, Clone)]
+pub struct OcspStaple(Vec<u8>);
+
+impl OcspStaple {
+    /// Load a DER-encoded OCSP response from `path`.
+    pub fn from_der_file(path: &Path) -> Result<Self, OcspStapleError> {
+        let bytes = fs::read(path)
+            .map_err(|e| OcspStapleError::ReadFile(path.display().to_string(), e))?;
+        if bytes.is_empty() {
+            return Err(OcspStapleError::EmptyFile(path.display().to_string()));
+        }
+        Ok(Self(bytes))
+    }
+
+    /// Read `TLS_OCSP_STAPLE_PATH` from the environment and load the response.
+    ///
+    /// Returns `Ok(None)` when the variable is not set (stapling disabled).
+    pub fn from_env() -> Result<Option<Self>, OcspStapleError> {
+        match std::env::var("TLS_OCSP_STAPLE_PATH") {
+            Ok(path) => Self::from_der_file(Path::new(&path)).map(Some),
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Returns the raw DER bytes of the OCSP response.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+// ── CertifiedKey con staple ─────────────────────────────────────────────────
+
+/// Builds a [`rustls::sign::CertifiedKey`] from DER certs and key, optionally
+/// attaching an OCSP staple.
+///
+/// When `ocsp` is `Some`, rustls includes the staple in the TLS Certificate
+/// Status extension during the handshake, so clients do not need to contact
+/// the CA's OCSP endpoint.
+pub fn build_certified_key(
+    certs: Vec<CertificateDer<'static>>,
+    key_der: PrivateKeyDer<'static>,
+    ocsp: Option<&OcspStaple>,
+) -> Result<Arc<rustls::sign::CertifiedKey>, TlsConfigError> {
+    let signing_key = rustls::crypto::aws_lc_rs::sign::any_supported_type(&key_der)
+        .map_err(|_| {
+            TlsConfigError::Rustls(rustls::Error::General(
+                "unsupported private key type".into(),
+            ))
+        })?;
+    let mut ck = rustls::sign::CertifiedKey::new(certs, signing_key);
+    if let Some(staple) = ocsp {
+        ck.ocsp = Some(staple.as_bytes().to_vec());
+    }
+    Ok(Arc::new(ck))
+}
+
+/// A [`rustls::server::ResolvesServerCert`] that always returns the same
+/// [`rustls::sign::CertifiedKey`].
+///
+/// Use this to supply a pre-built key (with optional OCSP staple) to a
+/// [`rustls::ServerConfig`] via `with_cert_resolver`.
+#[derive(Debug)]
+pub struct SingleCertResolver(Arc<rustls::sign::CertifiedKey>);
+
+impl SingleCertResolver {
+    pub fn new(ck: Arc<rustls::sign::CertifiedKey>) -> Self {
+        Self(ck)
+    }
+}
+
+impl rustls::server::ResolvesServerCert for SingleCertResolver {
+    fn resolve(
+        &self,
+        _client_hello: rustls::server::ClientHello<'_>,
+    ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        Some(Arc::clone(&self.0))
+    }
+}
+
+// ── Recarga en caliente ────────────────────────────────────────────────────
+
+/// Construye un `TlsReloadParams` leyendo las mismas variables de entorno que
+/// `load_tls_config_from_env`. Devuelve `None` si TLS no está configurado.
+pub fn tls_reload_params_from_env() -> Option<TlsReloadParams> {
+    let cert_path = std::env::var("TLS_CERT_PATH").ok().map(PathBuf::from)?;
+    let key_path = std::env::var("TLS_KEY_PATH").ok().map(PathBuf::from)?;
+    let mtls = std::env::var("TLS_MUTUAL")
+        .unwrap_or_default()
+        .to_lowercase();
+    let ca_cert_path = if mtls.trim() == "true" {
+        std::env::var("TLS_CA_CERT_PATH").ok().map(PathBuf::from)
+    } else {
+        None
+    };
+    Some(TlsReloadParams {
+        cert_path,
+        key_path,
+        ca_cert_path,
+    })
+}
+
+/// Parámetros necesarios para construir (o reconstruir) un `ServerConfig`.
+#[derive(Debug, Clone)]
+pub struct TlsReloadParams {
+    pub cert_path: PathBuf,
+    pub key_path: PathBuf,
+    /// Si `Some`, se usa mTLS con esa CA.
+    pub ca_cert_path: Option<PathBuf>,
+}
+
+/// Recarga cert + key del disco y devuelve un nuevo `Arc<ServerConfig>`.
+///
+/// No modifica ningún servidor en ejecución; el llamador es responsable de
+/// propagar el nuevo config (p. ej., mediante un `RwLock` compartido).
+///
+/// ```no_run
+/// # use std::path::PathBuf;
+/// # use rust_bc::tls::{TlsReloadParams, reload_tls_config};
+/// let params = TlsReloadParams {
+///     cert_path: PathBuf::from("/etc/tls/cert.pem"),
+///     key_path:  PathBuf::from("/etc/tls/key.pem"),
+///     ca_cert_path: None,
+/// };
+/// let new_config = reload_tls_config(&params).unwrap();
+/// ```
+pub fn reload_tls_config(
+    params: &TlsReloadParams,
+) -> Result<std::sync::Arc<ServerConfig>, TlsConfigError> {
+    let config = match &params.ca_cert_path {
+        Some(ca) => build_server_config_mtls(&params.cert_path, &params.key_path, ca)?,
+        None => build_server_config(&params.cert_path, &params.key_path)?,
+    };
+    Ok(std::sync::Arc::new(config))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -938,5 +1176,307 @@ mod tests {
         std::env::remove_var("TLS_CA_CERT_PATH");
         std::env::remove_var("TLS_PINNED_CERTS");
         assert!(result.unwrap().is_some());
+    }
+
+    // ── Reload tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn reload_tls_config_returns_arc_server_config() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let params = TlsReloadParams {
+            cert_path: cert.path().to_path_buf(),
+            key_path: key.path().to_path_buf(),
+            ca_cert_path: None,
+        };
+        let result = reload_tls_config(&params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn reload_tls_config_fails_with_missing_cert() {
+        let key = write_temp(TEST_KEY_PEM);
+        let params = TlsReloadParams {
+            cert_path: PathBuf::from("/nonexistent/cert.pem"),
+            key_path: key.path().to_path_buf(),
+            ca_cert_path: None,
+        };
+        assert!(matches!(
+            reload_tls_config(&params),
+            Err(TlsConfigError::CertFile(..))
+        ));
+    }
+
+    #[test]
+    fn reload_tls_config_fails_with_missing_key() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let params = TlsReloadParams {
+            cert_path: cert.path().to_path_buf(),
+            key_path: PathBuf::from("/nonexistent/key.pem"),
+            ca_cert_path: None,
+        };
+        assert!(matches!(
+            reload_tls_config(&params),
+            Err(TlsConfigError::KeyFile(..))
+        ));
+    }
+
+    #[test]
+    fn reload_tls_config_mtls_with_valid_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        let params = TlsReloadParams {
+            cert_path: cert.path().to_path_buf(),
+            key_path: key.path().to_path_buf(),
+            ca_cert_path: Some(ca.path().to_path_buf()),
+        };
+        assert!(reload_tls_config(&params).is_ok());
+    }
+
+    #[test]
+    fn reload_tls_config_mtls_fails_with_missing_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let params = TlsReloadParams {
+            cert_path: cert.path().to_path_buf(),
+            key_path: key.path().to_path_buf(),
+            ca_cert_path: Some(PathBuf::from("/nonexistent/ca.pem")),
+        };
+        assert!(matches!(
+            reload_tls_config(&params),
+            Err(TlsConfigError::CertFile(..))
+        ));
+    }
+
+    #[test]
+    fn tls_reload_params_from_env_returns_none_without_vars() {
+        let _g = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        assert!(tls_reload_params_from_env().is_none());
+    }
+
+    #[test]
+    fn tls_reload_params_from_env_builds_params() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::remove_var("TLS_MUTUAL");
+        let params = tls_reload_params_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        let p = params.unwrap();
+        assert_eq!(p.cert_path, cert.path());
+        assert_eq!(p.key_path, key.path());
+        assert!(p.ca_cert_path.is_none());
+    }
+
+    #[test]
+    fn tls_reload_params_from_env_includes_ca_when_mtls() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_MUTUAL", "true");
+        std::env::set_var("TLS_CA_CERT_PATH", ca.path());
+        let params = tls_reload_params_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_CA_CERT_PATH");
+        assert!(params.unwrap().ca_cert_path.is_some());
+    }
+
+    // ── OcspStaple ─────────────────────────────────────────────────────────
+
+    fn write_temp_bytes(data: &[u8]) -> NamedTempFile {
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(data).unwrap();
+        f.flush().unwrap();
+        f
+    }
+
+    #[test]
+    fn ocsp_staple_from_der_file_loads_bytes() {
+        let data = b"\x30\x03\x0a\x01\x00"; // minimal fake DER bytes
+        let f = write_temp_bytes(data);
+        let staple = OcspStaple::from_der_file(f.path()).unwrap();
+        assert_eq!(staple.as_bytes(), data.as_ref());
+    }
+
+    #[test]
+    fn ocsp_staple_from_der_file_fails_on_missing_file() {
+        let result = OcspStaple::from_der_file(Path::new("/nonexistent/ocsp.der"));
+        assert!(matches!(result, Err(OcspStapleError::ReadFile(..))));
+    }
+
+    #[test]
+    fn ocsp_staple_from_der_file_fails_on_empty_file() {
+        let f = write_temp_bytes(b"");
+        let result = OcspStaple::from_der_file(f.path());
+        assert!(matches!(result, Err(OcspStapleError::EmptyFile(..))));
+    }
+
+    #[test]
+    fn ocsp_staple_from_env_returns_none_when_unset() {
+        let _g = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("TLS_OCSP_STAPLE_PATH");
+        let result = OcspStaple::from_env().unwrap();
+        assert!(result.is_none());
+    }
+
+    // ── load_tls_config_from_env con TLS_OCSP_STAPLE_PATH ─────────────────
+
+    #[test]
+    fn load_tls_config_from_env_without_ocsp_still_works() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_PINNED_CERTS");
+        std::env::remove_var("TLS_OCSP_STAPLE_PATH");
+        let result = load_tls_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn load_tls_config_from_env_with_ocsp_staple_path_succeeds() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let staple = write_temp_bytes(b"\x30\x03\x0a\x01\x00");
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_OCSP_STAPLE_PATH", staple.path());
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_PINNED_CERTS");
+        let result = load_tls_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_OCSP_STAPLE_PATH");
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn load_tls_config_from_env_with_invalid_ocsp_path_fails() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_OCSP_STAPLE_PATH", "/nonexistent/ocsp.der");
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_PINNED_CERTS");
+        let result = load_tls_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_OCSP_STAPLE_PATH");
+        assert!(matches!(result, Err(TlsConfigError::OcspStaple(..))));
+    }
+
+    // ── build_server_config_with_ocsp ─────────────────────────────────────
+
+    #[test]
+    fn build_server_config_with_ocsp_none_behaves_like_plain() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let result = build_server_config_with_ocsp(cert.path(), key.path(), None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_server_config_with_ocsp_some_succeeds() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let staple_file = write_temp_bytes(b"\x30\x03\x0a\x01\x00");
+        let staple = OcspStaple::from_der_file(staple_file.path()).unwrap();
+        let result = build_server_config_with_ocsp(cert.path(), key.path(), Some(&staple));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_server_config_mtls_with_ocsp_none_succeeds() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        let result =
+            build_server_config_mtls_with_ocsp(cert.path(), key.path(), ca.path(), None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_server_config_mtls_with_ocsp_some_succeeds() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        let staple_file = write_temp_bytes(b"\x30\x03\x0a\x01\x00");
+        let staple = OcspStaple::from_der_file(staple_file.path()).unwrap();
+        let result = build_server_config_mtls_with_ocsp(
+            cert.path(),
+            key.path(),
+            ca.path(),
+            Some(&staple),
+        );
+        assert!(result.is_ok());
+    }
+
+    // ── build_certified_key + SingleCertResolver ───────────────────────────
+
+    #[test]
+    fn build_certified_key_without_ocsp_has_no_staple() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let certs = load_certs(cert.path()).unwrap();
+        let key_der = load_private_key(key.path()).unwrap();
+        let ck = build_certified_key(certs, key_der, None).unwrap();
+        assert!(ck.ocsp.is_none());
+    }
+
+    #[test]
+    fn build_certified_key_with_ocsp_attaches_bytes() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let certs = load_certs(cert.path()).unwrap();
+        let key_der = load_private_key(key.path()).unwrap();
+        let ocsp_bytes = b"\x30\x03\x0a\x01\x00";
+        let staple_file = write_temp_bytes(ocsp_bytes);
+        let staple = OcspStaple::from_der_file(staple_file.path()).unwrap();
+        let ck = build_certified_key(certs, key_der, Some(&staple)).unwrap();
+        assert_eq!(ck.ocsp.as_deref(), Some(ocsp_bytes.as_ref()));
+    }
+
+    #[test]
+    fn single_cert_resolver_returns_same_key() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let certs = load_certs(cert.path()).unwrap();
+        let key_der = load_private_key(key.path()).unwrap();
+        let ck = build_certified_key(certs, key_der, None).unwrap();
+        let resolver = SingleCertResolver::new(Arc::clone(&ck));
+        // build a minimal ClientHello via a real ServerConfig handshake is
+        // complex; we verify the resolver stores the key correctly.
+        assert!(Arc::ptr_eq(&ck, &resolver.0));
+    }
+
+    #[test]
+    fn ocsp_staple_from_env_loads_file_when_set() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let data = b"\x30\x03\x0a\x01\x00";
+        let f = write_temp_bytes(data);
+        std::env::set_var("TLS_OCSP_STAPLE_PATH", f.path());
+        let result = OcspStaple::from_env();
+        std::env::remove_var("TLS_OCSP_STAPLE_PATH");
+        let staple = result.unwrap().unwrap();
+        assert_eq!(staple.as_bytes(), data.as_ref());
     }
 }

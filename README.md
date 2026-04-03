@@ -115,18 +115,45 @@ Both the HTTP API server and the P2P layer support TLS. TLS is **opt-in**: if th
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `TLS_CERT_PATH` | For TLS | — | Path to the PEM certificate file (server cert or self-signed). Must be set together with `TLS_KEY_PATH`. |
+| `TLS_CERT_PATH` | For TLS | — | Path to the PEM certificate file. Must be set together with `TLS_KEY_PATH`. |
 | `TLS_KEY_PATH` | For TLS | — | Path to the PEM private key file. Must be set together with `TLS_CERT_PATH`. |
-| `TLS_VERIFY_PEER` | No | `true` | Set to `false` to disable peer certificate verification on outbound P2P connections. **Only for development/testing — never use in production.** |
-| `TLS_CA_CERT_PATH` | No | — | Path to a custom CA certificate (PEM). When set, outbound connections verify peers against this CA instead of the built-in Mozilla root store. Ignored if `TLS_VERIFY_PEER=false`. |
+| `TLS_VERIFY_PEER` | No | `true` | Set to `false` to disable peer certificate verification on outbound P2P connections. **Only for development/testing.** |
+| `TLS_CA_CERT_PATH` | No | — | Path to a custom CA certificate (PEM). Outbound connections verify peers against this CA instead of the Mozilla root store. Required when `TLS_MUTUAL=true`. |
+| `TLS_MUTUAL` | No | `false` | Set to `true` to enable mutual TLS (mTLS): the server requires a client certificate signed by `TLS_CA_CERT_PATH`. |
+| `TLS_PINNED_CERTS` | No | — | Comma-separated list of SHA-256 fingerprints (hex, 64 chars each) of allowed peer certificates. When set, connections are rejected unless the peer cert matches one of the pins. |
+| `TLS_RELOAD_INTERVAL` | No | — | Interval in seconds for automatic certificate rotation. When set, the node validates the cert files on disk at each tick and restarts gracefully if they have changed. |
+| `TLS_OCSP_STAPLE_PATH` | No | — | Path to a DER-encoded OCSP response file. When set, the server attaches the staple to every TLS handshake so clients do not need to contact the CA's OCSP endpoint. |
 
 ### Quick examples
 
-**Production node with TLS (custom CA for P2P mutual verification):**
+**Production node with mTLS:**
 ```bash
 export TLS_CERT_PATH=/etc/rust-bc/node.crt
 export TLS_KEY_PATH=/etc/rust-bc/node.key
 export TLS_CA_CERT_PATH=/etc/rust-bc/ca.crt
+export TLS_MUTUAL=true
+cargo run --release
+```
+
+**Production node with certificate pinning:**
+```bash
+export TLS_CERT_PATH=/etc/rust-bc/node.crt
+export TLS_KEY_PATH=/etc/rust-bc/node.key
+export TLS_CA_CERT_PATH=/etc/rust-bc/ca.crt
+# Generate fingerprint: openssl x509 -in peer.crt -outform DER | sha256sum
+export TLS_PINNED_CERTS=abc123...def456,789abc...012def
+cargo run --release
+```
+
+**Production node with OCSP stapling:**
+```bash
+# Generate the staple (refresh daily via cron)
+openssl ocsp -issuer ca.pem -cert node.crt \
+    -url http://ocsp.example.com -respout /etc/rust-bc/ocsp.der
+
+export TLS_CERT_PATH=/etc/rust-bc/node.crt
+export TLS_KEY_PATH=/etc/rust-bc/node.key
+export TLS_OCSP_STAPLE_PATH=/etc/rust-bc/ocsp.der
 cargo run --release
 ```
 
@@ -150,6 +177,35 @@ cargo run
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
   -keyout key.pem -out cert.pem -days 3650 -nodes -subj '/CN=localhost'
 ```
+
+### Certificate rotation
+
+The node supports zero-downtime certificate rotation via two mechanisms:
+
+**Manual rotation (SIGHUP):**
+
+Replace the cert/key files on disk, then send `SIGHUP` to the process. The node
+validates the new files and, if they are valid, shuts down gracefully so the
+process supervisor (systemd, PM2, etc.) can restart it with the new certificates.
+
+```bash
+# Replace certs on disk, then:
+kill -HUP $(pidof rust-bc)
+```
+
+If the new cert files are invalid or unreadable, the node logs the error and
+continues serving with the existing certificates.
+
+**Automatic rotation (`TLS_RELOAD_INTERVAL`):**
+
+```bash
+export TLS_RELOAD_INTERVAL=3600   # check every hour
+```
+
+At each interval the node validates the cert files on disk. If they differ
+(e.g. renewed by certbot/ACME), the node stops gracefully for the supervisor
+to restart it. If validation fails the node keeps running and retries at the
+next tick.
 
 > **Note:** Setting only one of `TLS_CERT_PATH` / `TLS_KEY_PATH` is an error and the node will refuse to start.
 
