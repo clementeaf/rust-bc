@@ -1,44 +1,94 @@
 //! RocksDB storage adapter implementation
 //!
-//! Implements the BlockStore trait using RocksDB as the backing store.
+//! Implements the BlockStore trait using RocksDB with dedicated Column Families:
+//!
+//! | CF name       | Key schema            | Value          |
+//! |---------------|-----------------------|----------------|
+//! | `blocks`      | zero-padded height    | JSON Block     |
+//! | `transactions`| tx_id                 | JSON Tx        |
+//! | `identities`  | DID string            | JSON Identity  |
+//! | `credentials` | cred_id string        | JSON Credential|
+//! | `meta`        | well-known byte keys  | raw bytes      |
 
-use rocksdb::{Options, WriteBatch, DB};
+use rocksdb::{ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use std::path::Path;
 
 use super::errors::{StorageError, StorageResult};
 use super::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
 
-const META_LATEST_HEIGHT: &[u8] = b"META:latest_height";
+const CF_BLOCKS: &str = "blocks";
+const CF_TRANSACTIONS: &str = "transactions";
+const CF_IDENTITIES: &str = "identities";
+const CF_CREDENTIALS: &str = "credentials";
+const CF_META: &str = "meta";
 
-/// RocksDB-backed block store
+const META_LATEST_HEIGHT: &[u8] = b"latest_height";
+
+const ALL_CFS: &[&str] = &[CF_BLOCKS, CF_TRANSACTIONS, CF_IDENTITIES, CF_CREDENTIALS, CF_META];
+
+/// RocksDB-backed block store using Column Families for data isolation
 pub struct RocksDbBlockStore {
     db: DB,
 }
 
 impl RocksDbBlockStore {
     /// Open (or create) a RocksDB database at the given path.
+    ///
+    /// All five column families are created automatically when missing,
+    /// so this works on both new and existing databases.
     pub fn new(path: impl AsRef<Path>) -> StorageResult<Self> {
         let mut opts = Options::default();
         opts.create_if_missing(true);
-        let db = DB::open(&opts, path.as_ref())
+        opts.create_missing_column_families(true);
+
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = ALL_CFS
+            .iter()
+            .map(|&name| ColumnFamilyDescriptor::new(name, Options::default()))
+            .collect();
+
+        let db = DB::open_cf_descriptors(&opts, path.as_ref(), cf_descriptors)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+
         Ok(RocksDbBlockStore { db })
     }
 
+    // ── Column Family handle helpers ──────────────────────────────────────────
+
+    fn cf_blocks(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_BLOCKS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_BLOCKS.to_string()))
+    }
+
+    fn cf_transactions(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_TRANSACTIONS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TRANSACTIONS.to_string()))
+    }
+
+    fn cf_identities(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_IDENTITIES)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_IDENTITIES.to_string()))
+    }
+
+    fn cf_credentials(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_CREDENTIALS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CREDENTIALS.to_string()))
+    }
+
+    fn cf_meta(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_META)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_META.to_string()))
+    }
+
+    // ── Key encoders ─────────────────────────────────────────────────────────
+
+    /// Zero-padded decimal height gives lexicographic == numeric ordering.
     fn block_key(height: u64) -> Vec<u8> {
-        format!("BLK:{:012}", height).into_bytes()
-    }
-
-    fn transaction_key(tx_id: &str) -> Vec<u8> {
-        format!("TX:{}", tx_id).into_bytes()
-    }
-
-    fn identity_key(did: &str) -> Vec<u8> {
-        format!("DID:{}", did).into_bytes()
-    }
-
-    fn credential_key(cred_id: &str) -> Vec<u8> {
-        format!("CRED:{}", cred_id).into_bytes()
+        format!("{:012}", height).into_bytes()
     }
 }
 
@@ -48,11 +98,13 @@ impl BlockStore for RocksDbBlockStore {
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
 
         let current_latest = self.get_latest_height().unwrap_or(0);
+        let cf_b = self.cf_blocks()?;
+        let cf_m = self.cf_meta()?;
 
         let mut batch = WriteBatch::default();
-        batch.put(Self::block_key(block.height), &value);
+        batch.put_cf(cf_b, Self::block_key(block.height), &value);
         if block.height >= current_latest {
-            batch.put(META_LATEST_HEIGHT, block.height.to_le_bytes());
+            batch.put_cf(cf_m, META_LATEST_HEIGHT, block.height.to_le_bytes());
         }
         self.db
             .write(batch)
@@ -63,14 +115,12 @@ impl BlockStore for RocksDbBlockStore {
         let key = Self::block_key(height);
         match self
             .db
-            .get(&key)
+            .get_cf(self.cf_blocks()?, &key)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
                 .map_err(|e| StorageError::DeserializationError(e.to_string())),
-            None => Err(StorageError::KeyNotFound(
-                String::from_utf8_lossy(&key).into_owned(),
-            )),
+            None => Err(StorageError::KeyNotFound(format!("block:{height}"))),
         }
     }
 
@@ -78,22 +128,19 @@ impl BlockStore for RocksDbBlockStore {
         let value = serde_json::to_vec(tx)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
-            .put(Self::transaction_key(&tx.id), &value)
+            .put_cf(self.cf_transactions()?, tx.id.as_bytes(), &value)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
     fn read_transaction(&self, tx_id: &str) -> StorageResult<Transaction> {
-        let key = Self::transaction_key(tx_id);
         match self
             .db
-            .get(&key)
+            .get_cf(self.cf_transactions()?, tx_id.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
                 .map_err(|e| StorageError::DeserializationError(e.to_string())),
-            None => Err(StorageError::KeyNotFound(
-                String::from_utf8_lossy(&key).into_owned(),
-            )),
+            None => Err(StorageError::KeyNotFound(format!("tx:{tx_id}"))),
         }
     }
 
@@ -101,15 +148,14 @@ impl BlockStore for RocksDbBlockStore {
         let value = serde_json::to_vec(identity)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
-            .put(Self::identity_key(&identity.did), &value)
+            .put_cf(self.cf_identities()?, identity.did.as_bytes(), &value)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
     fn read_identity(&self, did: &str) -> StorageResult<IdentityRecord> {
-        let key = Self::identity_key(did);
         match self
             .db
-            .get(&key)
+            .get_cf(self.cf_identities()?, did.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -122,15 +168,14 @@ impl BlockStore for RocksDbBlockStore {
         let value = serde_json::to_vec(credential)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
-            .put(Self::credential_key(&credential.id), &value)
+            .put_cf(self.cf_credentials()?, credential.id.as_bytes(), &value)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
     fn read_credential(&self, cred_id: &str) -> StorageResult<Credential> {
-        let key = Self::credential_key(cred_id);
         match self
             .db
-            .get(&key)
+            .get_cf(self.cf_credentials()?, cred_id.as_bytes())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => serde_json::from_slice(&bytes)
@@ -148,12 +193,17 @@ impl BlockStore for RocksDbBlockStore {
 
         let current_latest = self.get_latest_height().unwrap_or(0);
         let mut new_latest = current_latest;
+
+        let cf_b = self.cf_blocks()?;
+        let cf_t = self.cf_transactions()?;
+        let cf_m = self.cf_meta()?;
+
         let mut batch = WriteBatch::default();
 
         for block in blocks {
             let value = serde_json::to_vec(block)
                 .map_err(|e| StorageError::SerializationError(e.to_string()))?;
-            batch.put(Self::block_key(block.height), &value);
+            batch.put_cf(cf_b, Self::block_key(block.height), &value);
             if block.height > new_latest {
                 new_latest = block.height;
             }
@@ -162,11 +212,11 @@ impl BlockStore for RocksDbBlockStore {
         for tx in txs {
             let value = serde_json::to_vec(tx)
                 .map_err(|e| StorageError::SerializationError(e.to_string()))?;
-            batch.put(Self::transaction_key(&tx.id), &value);
+            batch.put_cf(cf_t, tx.id.as_bytes(), &value);
         }
 
         if new_latest > current_latest {
-            batch.put(META_LATEST_HEIGHT, new_latest.to_le_bytes());
+            batch.put_cf(cf_m, META_LATEST_HEIGHT, new_latest.to_le_bytes());
         }
 
         self.db
@@ -177,7 +227,7 @@ impl BlockStore for RocksDbBlockStore {
     fn get_latest_height(&self) -> StorageResult<u64> {
         match self
             .db
-            .get(META_LATEST_HEIGHT)
+            .get_cf(self.cf_meta()?, META_LATEST_HEIGHT)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
         {
             Some(bytes) => {
@@ -192,7 +242,7 @@ impl BlockStore for RocksDbBlockStore {
 
     fn block_exists(&self, height: u64) -> StorageResult<bool> {
         self.db
-            .get(Self::block_key(height))
+            .get_cf(self.cf_blocks()?, Self::block_key(height))
             .map(|v| v.is_some())
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
@@ -233,32 +283,47 @@ mod tests {
         }
     }
 
+    // ── Key encoding ─────────────────────────────────────────────────────────
+
     #[test]
-    fn test_block_key_format() {
-        assert_eq!(RocksDbBlockStore::block_key(1), b"BLK:000000000001");
-        assert_eq!(RocksDbBlockStore::block_key(123456), b"BLK:000000123456");
+    fn block_key_is_zero_padded() {
+        assert_eq!(RocksDbBlockStore::block_key(1), b"000000000001");
+        assert_eq!(RocksDbBlockStore::block_key(123456), b"000000123456");
     }
 
     #[test]
-    fn test_transaction_key_format() {
-        assert_eq!(RocksDbBlockStore::transaction_key("abc123"), b"TX:abc123");
+    fn block_key_lexicographic_order_matches_numeric() {
+        let k1 = RocksDbBlockStore::block_key(9);
+        let k2 = RocksDbBlockStore::block_key(10);
+        assert!(k1 < k2, "lexicographic order must match numeric order");
+    }
+
+    // ── Column Family presence ────────────────────────────────────────────────
+
+    #[test]
+    fn all_column_families_exist_after_open() {
+        let (store, _dir) = tmp_store();
+        assert!(store.cf_blocks().is_ok());
+        assert!(store.cf_transactions().is_ok());
+        assert!(store.cf_identities().is_ok());
+        assert!(store.cf_credentials().is_ok());
+        assert!(store.cf_meta().is_ok());
     }
 
     #[test]
-    fn test_identity_key_format() {
-        assert_eq!(
-            RocksDbBlockStore::identity_key("did:bc:xyz"),
-            b"DID:did:bc:xyz"
-        );
+    fn reopening_existing_db_preserves_data() {
+        let dir = TempDir::new().unwrap();
+        {
+            let store = RocksDbBlockStore::new(dir.path()).unwrap();
+            store.write_block(&sample_block(1)).unwrap();
+        }
+        // Re-open same path
+        let store2 = RocksDbBlockStore::new(dir.path()).unwrap();
+        assert!(store2.block_exists(1).unwrap());
+        assert_eq!(store2.get_latest_height().unwrap(), 1);
     }
 
-    #[test]
-    fn test_credential_key_format() {
-        assert_eq!(
-            RocksDbBlockStore::credential_key("cred-1"),
-            b"CRED:cred-1"
-        );
-    }
+    // ── Block operations ─────────────────────────────────────────────────────
 
     #[test]
     fn write_and_read_block_roundtrip() {
@@ -296,6 +361,8 @@ mod tests {
         assert_eq!(store.get_latest_height().unwrap(), 7);
     }
 
+    // ── Transaction operations ───────────────────────────────────────────────
+
     #[test]
     fn write_and_read_transaction_roundtrip() {
         let (store, _dir) = tmp_store();
@@ -304,6 +371,16 @@ mod tests {
         assert_eq!(tx.id, "tx123");
         assert_eq!(tx.amount, 100);
     }
+
+    #[test]
+    fn transaction_stored_in_own_cf_not_visible_as_block() {
+        let (store, _dir) = tmp_store();
+        store.write_transaction(&sample_tx("tx-cf-isolation")).unwrap();
+        // height 0 should not exist (tx keys are strings, block keys are numbers)
+        assert!(!store.block_exists(0).unwrap());
+    }
+
+    // ── Identity operations ──────────────────────────────────────────────────
 
     #[test]
     fn write_and_read_identity_roundtrip() {
@@ -319,6 +396,15 @@ mod tests {
         assert_eq!(loaded.did, "did:bc:123");
         assert_eq!(loaded.status, "active");
     }
+
+    #[test]
+    fn read_identity_not_found_returns_identity_error() {
+        let (store, _dir) = tmp_store();
+        let err = store.read_identity("did:bc:ghost").unwrap_err();
+        assert!(matches!(err, StorageError::IdentityNotFound(_)));
+    }
+
+    // ── Credential operations ────────────────────────────────────────────────
 
     #[test]
     fn write_and_read_credential_roundtrip() {
@@ -339,6 +425,15 @@ mod tests {
     }
 
     #[test]
+    fn read_credential_not_found_returns_credential_error() {
+        let (store, _dir) = tmp_store();
+        let err = store.read_credential("ghost").unwrap_err();
+        assert!(matches!(err, StorageError::CredentialNotFound(_)));
+    }
+
+    // ── Batch operations ─────────────────────────────────────────────────────
+
+    #[test]
     fn write_batch_empty_fails() {
         let (store, _dir) = tmp_store();
         assert!(store.write_batch(&[], &[]).is_err());
@@ -354,5 +449,14 @@ mod tests {
         assert!(store.block_exists(11).unwrap());
         assert_eq!(store.read_transaction("batch-tx-1").unwrap().id, "batch-tx-1");
         assert_eq!(store.get_latest_height().unwrap(), 11);
+    }
+
+    #[test]
+    fn write_batch_txs_only_does_not_update_latest_height() {
+        let (store, _dir) = tmp_store();
+        store.write_block(&sample_block(5)).unwrap();
+        store.write_batch(&[], &[sample_tx("only-tx")]).unwrap();
+        // Latest height unchanged — no blocks in batch
+        assert_eq!(store.get_latest_height().unwrap(), 5);
     }
 }

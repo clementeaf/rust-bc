@@ -45,6 +45,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `memory` (default) → `MemoryStore`
   - `rocksdb` → `RocksDbBlockStore` en `ROCKSDB_PATH` (default `./data/blocks`); fallback a `MemoryStore` si falla la apertura
 
+**Storage — Fase V: REST endpoints store para transacciones, identidades y credenciales (2026-04-03)**
+
+- `src/api/handlers/transactions.rs`: `POST /api/v1/store/transactions`, `GET /api/v1/store/transactions/{tx_id}`
+- `src/api/handlers/identity.rs`: `POST /api/v1/store/identities`, `GET /api/v1/store/identities/{did}`
+- `src/api/handlers/credentials.rs`: `POST /api/v1/store/credentials`, `GET /api/v1/store/credentials/{cred_id}`
+- `src/api/routes.rs`: tres nuevos scopes `store_transactions_routes`, `store_identities_routes`, `store_credentials_routes`
+- Todos los handlers delegan a `state.store` siguiendo el patrón de `store_get_block`; responden 404 si el store no está configurado
+
+**Storage — Fase IV: Column Families en RocksDB (2026-04-03)**
+
+- `src/storage/adapters.rs`: migración de prefijos de clave a Column Families dedicadas
+  - 5 CFs: `blocks`, `transactions`, `identities`, `credentials`, `meta`
+  - `DB::open_cf_descriptors` con `create_missing_column_families(true)` — compatible con DBs nuevas y existentes
+  - Helpers privados `cf_blocks()` / `cf_transactions()` / etc. con error tipado `ColumnFamilyNotFound`
+  - Todas las operaciones usan `put_cf` / `get_cf`; `WriteBatch` usa `put_cf` por CF
+  - Claves sin prefijo (el CF provee el namespace); bloques usan altura zero-padded `000000000001`
+  - 17 tests: roundtrip por tipo, aislamiento entre CFs, `reopen` con datos persistidos
+
 **Storage — Fase II: RocksDB (2026-04-03)**
 
 - `Cargo.toml`: dependencia `rocksdb = "0.22"`
@@ -256,6 +274,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** April 3, 2026 (Storage Fase III — backend switcheable)
+**Last Updated:** April 3, 2026 (Storage Fase V — REST endpoints store)
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

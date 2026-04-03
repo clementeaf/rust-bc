@@ -1,6 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, post, get};
-use crate::api::errors::ApiResult;
+use crate::api::errors::{ApiError, ApiResponse, ApiResult};
 use crate::api::models::*;
+use crate::app_state::AppState;
 use chrono::Utc;
 
 /// POST /credentials/issue - Issue a credential
@@ -106,12 +107,49 @@ async fn revoke_credential(
     Ok(HttpResponse::Ok().json(api_response))
 }
 
+// ── Store-backed credential endpoints ────────────────────────────────────────
+
+/// POST /api/v1/store/credentials — persiste un Credential en el store.
+#[post("/store/credentials")]
+pub async fn store_write_credential(
+    state: web::Data<AppState>,
+    body: web::Json<crate::storage::traits::Credential>,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => {
+            store
+                .write_credential(&body)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
+        }
+    }
+}
+
+/// GET /api/v1/store/credentials/{cred_id} — lee un Credential del store.
+#[get("/store/credentials/{cred_id}")]
+pub async fn store_get_credential(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let cred_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => match store.read_credential(&cred_id) {
+            Ok(cred) => Ok(HttpResponse::Ok().json(ApiResponse::success(cred, trace_id))),
+            Err(_) => Err(ApiError::NotFound { resource: format!("credential {cred_id}") }),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_credentials_handlers_module_compiles() {
-        assert!(true);
+    fn store_credential_handlers_are_public() {
+        let _ = (store_write_credential, store_get_credential);
     }
 }

@@ -175,6 +175,43 @@ pub async fn create_transaction(
     Ok(HttpResponse::Created().json(body))
 }
 
+// ── Store-backed transaction endpoints ───────────────────────────────────────
+
+/// POST /api/v1/store/transactions — persiste una transacción en el store.
+#[post("/store/transactions")]
+pub async fn store_write_transaction(
+    state: web::Data<AppState>,
+    body: web::Json<crate::storage::traits::Transaction>,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => {
+            store
+                .write_transaction(&body)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
+        }
+    }
+}
+
+/// GET /api/v1/store/transactions/{tx_id} — lee una transacción del store.
+#[get("/store/transactions/{tx_id}")]
+pub async fn store_get_transaction(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let tx_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => match store.read_transaction(&tx_id) {
+            Ok(tx) => Ok(HttpResponse::Ok().json(ApiResponse::success(tx, trace_id))),
+            Err(_) => Err(ApiError::NotFound { resource: format!("transaction {tx_id}") }),
+        },
+    }
+}
+
 /// GET /api/v1/mempool — transacciones pendientes.
 #[get("/mempool")]
 pub async fn get_mempool(state: web::Data<AppState>) -> ApiResult<HttpResponse> {

@@ -1,6 +1,6 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{blocks, chain, transactions, utilities};
+use crate::api::handlers::{blocks, chain, credentials, identity, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
@@ -12,6 +12,9 @@ impl ApiRoutes {
                 .service(Self::identity_routes())
                 .service(Self::blocks_routes())
                 .service(Self::store_blocks_routes())
+                .service(Self::store_transactions_routes())
+                .service(Self::store_identities_routes())
+                .service(Self::store_credentials_routes())
                 .service(Self::chain_routes())
                 .service(Self::credentials_routes())
                 .service(Self::transaction_routes())
@@ -35,6 +38,24 @@ impl ApiRoutes {
         web::scope("/store/blocks")
             .service(blocks::store_latest_height)
             .service(blocks::store_get_block)
+    }
+
+    fn store_transactions_routes() -> Scope {
+        web::scope("")
+            .service(transactions::store_write_transaction)
+            .service(transactions::store_get_transaction)
+    }
+
+    fn store_identities_routes() -> Scope {
+        web::scope("")
+            .service(identity::store_write_identity)
+            .service(identity::store_get_identity)
+    }
+
+    fn store_credentials_routes() -> Scope {
+        web::scope("")
+            .service(credentials::store_write_credential)
+            .service(credentials::store_get_credential)
     }
 
     fn chain_routes() -> Scope {

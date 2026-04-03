@@ -1,10 +1,10 @@
 ---
 name: Roadmap de fases completadas
-description: Fases completadas — TLS A-F, Consensus G-H, Storage I-III (MemoryStore, RocksDB, backend switcheable)
+description: Fases completadas — TLS A-F, Consensus G-H, Storage I-V
 type: project
 ---
 
-TLS A–F, Consensus G–H, Storage I–III completos a 2026-04-03.
+TLS A–F, Consensus G–H, Storage I–V completos a 2026-04-03.
 
 **Why:** Cada capa es prerequisito de la siguiente: TLS → Consensus → Storage → API de bloques.
 
@@ -34,26 +34,14 @@ Variables de entorno TLS: `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `T
 
 ---
 
-## Storage — Fase I ✅ (2026-04-03)
+## Storage ✅
 
-| Tarea | Descripción | Módulos |
-|-------|-------------|---------|
-| T1 | `MemoryStore` — `BlockStore` in-memory con `Mutex` | `src/storage/memory.rs` |
-| T2 | `BlockStore` impl para `Arc<T>` — compartir store entre engine y API | `src/storage/traits.rs` |
-| T3 | `ConsensusEngine::with_store()` — persiste bloques aceptados | `src/consensus/engine.rs` |
-| T4 | `AppState.store` + endpoints `GET /store/blocks/{height}` y `/latest` | `src/app_state.rs`, `src/api/handlers/blocks.rs`, `src/api/routes.rs` |
-| T5 | 7 tests de integración actix-web para ambos endpoints | `tests/store_blocks_api_test.rs` |
+| Fase | Descripción | Módulos |
+|------|-------------|---------|
+| I | `MemoryStore`, `Arc<T>` impl, endpoints `GET /store/blocks/{height}` y `/latest` | `src/storage/memory.rs`, `src/storage/traits.rs`, `src/api/handlers/blocks.rs` |
+| II | `RocksDbBlockStore` con JSON + `WriteBatch` atómico | `src/storage/adapters.rs` |
+| III | Backend switcheable vía `STORAGE_BACKEND=rocksdb\|memory` | `src/main.rs` |
+| IV | Column Families: `blocks`, `transactions`, `identities`, `credentials`, `meta` | `src/storage/adapters.rs` |
+| V | REST endpoints store: `POST/GET /store/transactions`, `/store/identities`, `/store/credentials` | `src/api/handlers/{transactions,identity,credentials}.rs`, `src/api/routes.rs` |
 
-## Storage — Fase II ✅ (2026-04-03)
-
-| Tarea | Descripción | Módulos |
-|-------|-------------|---------|
-| RocksDB | `RocksDbBlockStore` real con `rocksdb = "0.22"`, serde en todos los tipos, `WriteBatch` atómico, `META:latest_height` | `src/storage/adapters.rs`, `src/storage/traits.rs` |
-
-## Storage — Fase III ✅ (2026-04-03)
-
-| Tarea | Descripción | Módulos |
-|-------|-------------|---------|
-| III | `AppState.store` switcheable via `STORAGE_BACKEND=rocksdb\|memory` + `ROCKSDB_PATH` | `src/main.rs` |
-
-**How to apply:** Próxima área: column families en RocksDB por tipo (bloques, txs, identidades).
+**How to apply:** Próxima área: índices secundarios por rango (e.g. tx por block_height) o iteradores CF.

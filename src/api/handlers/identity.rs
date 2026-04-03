@@ -1,6 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, post, get};
-use crate::api::errors::ApiResult;
+use crate::api::errors::{ApiError, ApiResponse, ApiResult};
 use crate::api::models::*;
+use crate::app_state::AppState;
 use chrono::Utc;
 
 /// POST /identity/create - Create a new DID and keypair
@@ -91,13 +92,49 @@ async fn verify_signature(
     Ok(HttpResponse::Ok().json(api_response))
 }
 
+// ── Store-backed identity endpoints ──────────────────────────────────────────
+
+/// POST /api/v1/store/identities — persiste un IdentityRecord en el store.
+#[post("/store/identities")]
+pub async fn store_write_identity(
+    state: web::Data<AppState>,
+    body: web::Json<crate::storage::traits::IdentityRecord>,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => {
+            store
+                .write_identity(&body)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
+        }
+    }
+}
+
+/// GET /api/v1/store/identities/{did} — lee un IdentityRecord del store.
+#[get("/store/identities/{did}")]
+pub async fn store_get_identity(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let did = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => match store.read_identity(&did) {
+            Ok(identity) => Ok(HttpResponse::Ok().json(ApiResponse::success(identity, trace_id))),
+            Err(_) => Err(ApiError::NotFound { resource: format!("identity {did}") }),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_identity_handlers_module_compiles() {
-        // Module compiles
-        assert!(true);
+    fn store_identity_handlers_are_public() {
+        let _ = (store_write_identity, store_get_identity);
     }
 }
