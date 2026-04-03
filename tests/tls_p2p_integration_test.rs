@@ -1,14 +1,20 @@
-/// T5 — TLS P2P integration tests
+/// TLS P2P integration tests
 ///
 /// Spins up a real TLS server and client on localhost using the test fixtures
 /// (self-signed cert + key). The client uses `PeerVerification::Dangerous` so
 /// the handshake succeeds without a trusted CA.
+///
+/// mTLS tests generate fresh certs via rcgen so that the SAN matches "localhost".
 
 const TEST_CERT_PEM: &str = include_str!("fixtures/test_cert.pem");
 const TEST_KEY_PEM: &str = include_str!("fixtures/test_key.pem");
 
-use rust_bc::tls::{build_client_config, build_server_config, PeerVerification};
+use rust_bc::tls::{
+    build_client_config, build_client_config_mtls, build_server_config,
+    build_server_config_mtls, PeerVerification,
+};
 use rustls::pki_types::ServerName;
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use std::io::Write as IoWrite;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -139,4 +145,97 @@ async fn bidirectional_tls_exchange() {
     server_handle.await.expect("server task");
 
     assert_eq!(response, msg);
+}
+
+// ── mTLS integration tests ─────────────────────────────────────────────────
+
+/// Generate a self-signed cert+key for "localhost" using rcgen, returning PEM strings.
+fn gen_localhost_cert() -> (String, String) {
+    let CertifiedKey { cert, key_pair } =
+        generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+    (cert.pem(), key_pair.serialize_pem())
+}
+
+/// Write PEM content to a temp file.
+fn write_pem(content: &str) -> NamedTempFile {
+    let mut f = NamedTempFile::new().unwrap();
+    f.write_all(content.as_bytes()).unwrap();
+    f.flush().unwrap();
+    f
+}
+
+/// mTLS handshake succeeds when both peers present certs signed by the shared CA.
+#[tokio::test]
+async fn mtls_handshake_succeeds_with_valid_client_cert() {
+    let (cert_pem, key_pem) = gen_localhost_cert();
+
+    let cert_file = write_pem(&cert_pem);
+    let key_file = write_pem(&key_pem);
+    // The self-signed cert IS the CA.
+    let ca_file = write_pem(&cert_pem);
+
+    let server_cfg =
+        build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+            .expect("build_server_config_mtls");
+    let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local_addr = listener.local_addr().unwrap();
+
+    let server_handle = spawn_tls_server(listener, acceptor).await;
+
+    let client_cfg =
+        build_client_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+            .expect("build_client_config_mtls");
+    let connector = TlsConnector::from(Arc::new(client_cfg));
+
+    let tcp = TcpStream::connect(local_addr).await.unwrap();
+    let server_name = ServerName::try_from("localhost").unwrap();
+    let mut tls = connector
+        .connect(server_name, tcp)
+        .await
+        .expect("mTLS client handshake");
+
+    tls.write_all(b"mtls ok").await.unwrap();
+    tls.shutdown().await.unwrap();
+
+    let received = server_handle.await.expect("server task");
+    assert_eq!(received, b"mtls ok");
+}
+
+/// mTLS server rejects a client that presents no certificate.
+#[tokio::test]
+async fn mtls_server_rejects_client_without_cert() {
+    let (cert_pem, key_pem) = gen_localhost_cert();
+
+    let cert_file = write_pem(&cert_pem);
+    let key_file = write_pem(&key_pem);
+    let ca_file = write_pem(&cert_pem);
+
+    let server_cfg =
+        build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+            .expect("build_server_config_mtls");
+    let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let local_addr = listener.local_addr().unwrap();
+
+    // Server: accept one connection, TLS handshake should fail (no client cert).
+    let server_handle = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.expect("accept");
+        acceptor.accept(tcp).await.is_err()
+    });
+
+    // Client: standard TLS without client cert.
+    let client_cfg =
+        build_client_config(PeerVerification::Dangerous).expect("build_client_config");
+    let connector = TlsConnector::from(Arc::new(client_cfg));
+
+    let tcp = TcpStream::connect(local_addr).await.unwrap();
+    let server_name = ServerName::try_from("localhost").unwrap();
+    // Client handshake may fail too — we only care that the server rejected it.
+    let _ = connector.connect(server_name, tcp).await;
+
+    let handshake_failed = server_handle.await.expect("server task");
+    assert!(handshake_failed, "mTLS server must reject client without cert");
 }

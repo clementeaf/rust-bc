@@ -11,18 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **TLS — Fase A (2026-04-02)**
 
-- `src/tls.rs`: load PEM cert+key, build `rustls::ServerConfig` and `ClientConfig`
-  - `PeerVerification` enum: `Full` (WebPKI roots or custom CA) and `Dangerous` (skip verify, dev only)
-  - `load_tls_config_from_env` / `load_client_config_from_env` read `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `TLS_CA_CERT_PATH`
-- `src/network.rs`: P2P connections wrapped in TLS via `TlsAcceptor` / `TlsConnector`
-  - `AsyncStream` supertrait unifies plain TCP and TLS streams
-  - `open_stream` applies TLS on outbound connections when a connector is set
-  - `start_server` performs TLS handshake on inbound connections when an acceptor is set
-- `tests/fixtures/`: self-signed EC cert+key for testing
-- `tests/tls_p2p_integration_test.rs`: 3 integration tests (handshake, plain TCP rejection, bidirectional echo)
-- 20 unit tests across `tls.rs` and `network.rs`; all passing
-- `README.md`: new "TLS Configuration" section with variable table and usage examples
-- Dependencies added: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`, `webpki-roots 0.26`
+- `src/tls.rs`: cargar PEM cert+key, construir `ServerConfig` y `ClientConfig`
+  - `PeerVerification`: `Full` (WebPKI roots o CA propia) y `Dangerous` (solo dev)
+  - Variables de entorno: `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `TLS_CA_CERT_PATH`
+- `src/network.rs`: conexiones P2P envueltas en TLS vía `TlsAcceptor` / `TlsConnector`
+- `tests/tls_p2p_integration_test.rs`: 3 tests de integración (handshake, rechazo TCP plano, echo bidireccional)
+- 20 tests unitarios en `tls.rs` y `network.rs`; todos pasando
+- `README.md`: sección "TLS Configuration" con tabla de variables y ejemplos
+- Dependencias: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`, `webpki-roots 0.26`
+
+**TLS — Fase B mTLS (2026-04-02)**
+
+- `src/tls.rs`: autenticación mutua de nodos (mTLS)
+  - `build_server_config_mtls`: exige certificado cliente firmado por la CA
+  - `build_client_config_mtls`: presenta cert+key propio al servidor y verifica la CA
+  - `load_tls_config_from_env` / `load_client_config_from_env` leen `TLS_MUTUAL=true` y `TLS_CA_CERT_PATH`
+  - Error `MtlsMissingCa`: falla explícito si `TLS_MUTUAL=true` sin CA configurada
+- `tests/tls_p2p_integration_test.rs`: 2 tests mTLS P2P
+  - Handshake mTLS exitoso entre dos nodos con cert válido
+  - Servidor rechaza cliente sin certificado
+- 21 tests unitarios en `tls.rs`; todos pasando (26 en total con integración)
+- Dependencia dev: `rcgen 0.13` para generar certs en tests
 
 ### Changed
 - Reorganized documentation: `ANALYSIS/` → `docs/analysis/`, former `Documents/` → `docs/archive/`

@@ -1,4 +1,5 @@
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::server::WebPkiClientVerifier;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use std::fs;
 use std::io::BufReader;
@@ -28,6 +29,8 @@ fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsConfigErro
 /// Errores al construir la configuración TLS.
 #[derive(Debug, thiserror::Error)]
 pub enum TlsConfigError {
+    #[error("mTLS requires TLS_CA_CERT_PATH to be set")]
+    MtlsMissingCa,
     #[error("cannot open cert file '{0}': {1}")]
     CertFile(String, std::io::Error),
     #[error("cannot parse certs in '{0}': {1}")]
@@ -40,6 +43,8 @@ pub enum TlsConfigError {
     NoKeyFound(String),
     #[error("rustls config error: {0}")]
     Rustls(#[from] rustls::Error),
+    #[error("failed to build client cert verifier: {0}")]
+    VerifierBuild(rustls::server::VerifierBuilderError),
 }
 
 /// Lee `TLS_CERT_PATH` y `TLS_KEY_PATH` del entorno.
@@ -50,9 +55,20 @@ pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError
     let cert_path = std::env::var("TLS_CERT_PATH").ok();
     let key_path = std::env::var("TLS_KEY_PATH").ok();
 
+    let mutual = std::env::var("TLS_MUTUAL")
+        .unwrap_or_default()
+        .to_lowercase();
+    let mtls = mutual.trim() == "true";
+
     match (cert_path, key_path) {
         (Some(cert), Some(key)) => {
-            let config = build_server_config(Path::new(&cert), Path::new(&key))?;
+            let config = if mtls {
+                let ca = std::env::var("TLS_CA_CERT_PATH")
+                    .map_err(|_| TlsConfigError::MtlsMissingCa)?;
+                build_server_config_mtls(Path::new(&cert), Path::new(&key), Path::new(&ca))?
+            } else {
+                build_server_config(Path::new(&cert), Path::new(&key))?
+            };
             Ok(Some(config))
         }
         (None, None) => Ok(None),
@@ -72,6 +88,32 @@ pub fn build_server_config(
 
     let config = ServerConfig::builder()
         .with_no_client_auth()
+        .with_single_cert(certs, key)?;
+
+    Ok(config)
+}
+
+/// Construye un `rustls::ServerConfig` con mTLS: exige que el cliente presente
+/// un certificado firmado por la CA indicada en `ca_cert_path`.
+pub fn build_server_config_mtls(
+    cert_path: &Path,
+    key_path: &Path,
+    ca_cert_path: &Path,
+) -> Result<ServerConfig, TlsConfigError> {
+    let certs = load_certs(cert_path)?;
+    let key = load_private_key(key_path)?;
+
+    let mut root_store = RootCertStore::empty();
+    for cert in load_certs(ca_cert_path)? {
+        root_store.add(cert)?;
+    }
+
+    let verifier = WebPkiClientVerifier::builder(Arc::new(root_store))
+        .build()
+        .map_err(TlsConfigError::VerifierBuild)?;
+
+    let config = ServerConfig::builder()
+        .with_client_cert_verifier(verifier)
         .with_single_cert(certs, key)?;
 
     Ok(config)
@@ -171,16 +213,53 @@ pub fn build_client_config(verification: PeerVerification) -> Result<ClientConfi
     }
 }
 
+/// Construye un `rustls::ClientConfig` con mTLS: presenta cert+key propios al servidor
+/// y verifica el cert del servidor contra `ca_cert_path`.
+pub fn build_client_config_mtls(
+    cert_path: &Path,
+    key_path: &Path,
+    ca_cert_path: &Path,
+) -> Result<ClientConfig, TlsConfigError> {
+    let certs = load_certs(cert_path)?;
+    let key = load_private_key(key_path)?;
+
+    let mut root_store = RootCertStore::empty();
+    for cert in load_certs(ca_cert_path)? {
+        root_store.add(cert)?;
+    }
+
+    Ok(ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_client_auth_cert(certs, key)?)
+}
+
 /// Lee variables de entorno para construir un `ClientConfig` de salida.
 ///
 /// - Devuelve `Ok(None)` si `TLS_CERT_PATH` o `TLS_KEY_PATH` no están definidos.
+/// - `TLS_MUTUAL=true` → presenta cert cliente al servidor (mTLS); requiere `TLS_CA_CERT_PATH`.
 /// - `TLS_VERIFY_PEER=false` → deshabilita la verificación (solo dev/testing).
 /// - `TLS_CA_CERT_PATH` → sobrescribe las raíces WebPKI con una CA personalizada.
 pub fn load_client_config_from_env() -> Result<Option<ClientConfig>, TlsConfigError> {
-    let tls_enabled =
-        std::env::var("TLS_CERT_PATH").is_ok() && std::env::var("TLS_KEY_PATH").is_ok();
+    let cert_path = std::env::var("TLS_CERT_PATH").ok();
+    let key_path = std::env::var("TLS_KEY_PATH").ok();
+
+    let tls_enabled = cert_path.is_some() && key_path.is_some();
     if !tls_enabled {
         return Ok(None);
+    }
+
+    let mutual = std::env::var("TLS_MUTUAL")
+        .unwrap_or_default()
+        .to_lowercase();
+    let mtls = mutual.trim() == "true";
+
+    if mtls {
+        let cert = cert_path.unwrap();
+        let key = key_path.unwrap();
+        let ca = std::env::var("TLS_CA_CERT_PATH")
+            .map_err(|_| TlsConfigError::MtlsMissingCa)?;
+        return build_client_config_mtls(Path::new(&cert), Path::new(&key), Path::new(&ca))
+            .map(Some);
     }
 
     let verify_peer = std::env::var("TLS_VERIFY_PEER")
@@ -303,6 +382,7 @@ mod tests {
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
         std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::remove_var("TLS_MUTUAL");
         std::env::remove_var("TLS_VERIFY_PEER");
         std::env::remove_var("TLS_CA_CERT_PATH");
         let result = load_client_config_from_env();
@@ -318,12 +398,121 @@ mod tests {
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
         std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::remove_var("TLS_MUTUAL");
         std::env::set_var("TLS_VERIFY_PEER", "false");
         std::env::remove_var("TLS_CA_CERT_PATH");
         let result = load_client_config_from_env();
         std::env::remove_var("TLS_CERT_PATH");
         std::env::remove_var("TLS_KEY_PATH");
         std::env::remove_var("TLS_VERIFY_PEER");
+        assert!(result.unwrap().is_some());
+    }
+
+    // ── mTLS unit tests ────────────────────────────────────────────────────
+
+    #[test]
+    fn build_server_config_mtls_accepts_valid_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        let result = build_server_config_mtls(cert.path(), key.path(), ca.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_server_config_mtls_fails_with_missing_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let result = build_server_config_mtls(
+            cert.path(),
+            key.path(),
+            Path::new("/nonexistent/ca.pem"),
+        );
+        assert!(matches!(result, Err(TlsConfigError::CertFile(..))));
+    }
+
+    #[test]
+    fn build_client_config_mtls_accepts_valid_cert_and_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        let result = build_client_config_mtls(cert.path(), key.path(), ca.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn build_client_config_mtls_fails_with_missing_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let result = build_client_config_mtls(
+            cert.path(),
+            key.path(),
+            Path::new("/nonexistent/ca.pem"),
+        );
+        assert!(matches!(result, Err(TlsConfigError::CertFile(..))));
+    }
+
+    #[test]
+    fn load_tls_config_from_env_mtls_fails_without_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_MUTUAL", "true");
+        std::env::remove_var("TLS_CA_CERT_PATH");
+        let result = load_tls_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        assert!(matches!(result, Err(TlsConfigError::MtlsMissingCa)));
+    }
+
+    #[test]
+    fn load_tls_config_from_env_mtls_succeeds_with_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_MUTUAL", "true");
+        std::env::set_var("TLS_CA_CERT_PATH", ca.path());
+        let result = load_tls_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_CA_CERT_PATH");
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn load_client_config_from_env_mtls_fails_without_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_MUTUAL", "true");
+        std::env::remove_var("TLS_CA_CERT_PATH");
+        let result = load_client_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        assert!(matches!(result, Err(TlsConfigError::MtlsMissingCa)));
+    }
+
+    #[test]
+    fn load_client_config_from_env_mtls_succeeds_with_ca() {
+        let cert = write_temp(TEST_CERT_PEM);
+        let key = write_temp(TEST_KEY_PEM);
+        let ca = write_temp(TEST_CERT_PEM);
+        std::env::set_var("TLS_CERT_PATH", cert.path());
+        std::env::set_var("TLS_KEY_PATH", key.path());
+        std::env::set_var("TLS_MUTUAL", "true");
+        std::env::set_var("TLS_CA_CERT_PATH", ca.path());
+        let result = load_client_config_from_env();
+        std::env::remove_var("TLS_CERT_PATH");
+        std::env::remove_var("TLS_KEY_PATH");
+        std::env::remove_var("TLS_MUTUAL");
+        std::env::remove_var("TLS_CA_CERT_PATH");
         assert!(result.unwrap().is_some());
     }
 }

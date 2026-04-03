@@ -44,6 +44,7 @@ metrics-exporter-prometheus = "0.12"
 
 [dev-dependencies]
 tempfile = "3.8"
+rcgen = "0.13"
 
 [[bin]]
 name = "test_mining"
