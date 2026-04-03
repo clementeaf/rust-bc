@@ -54,6 +54,8 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
         metrics: Arc::new(MetricsCollector::new()),
         store: Some(store as Arc<dyn BlockStore>),
+        org_registry: None,
+        policy_store: None,
     }
 }
 
@@ -75,6 +77,8 @@ fn make_state_no_store() -> AppState {
         transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
         metrics: Arc::new(MetricsCollector::new()),
         store: None,
+        org_registry: None,
+        policy_store: None,
     }
 }
 

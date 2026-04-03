@@ -136,6 +136,18 @@ impl BlockStore for MemoryStore {
             .collect();
         Ok(txs)
     }
+
+    fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>> {
+        let creds = self
+            .credentials
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|c| c.subject_did == subject_did)
+            .cloned()
+            .collect();
+        Ok(creds)
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +163,7 @@ mod tests {
             transactions: vec![format!("tx-{}", height)],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         }
     }
 
@@ -304,5 +317,41 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(store.transactions_by_block_height(10).unwrap().len(), 5);
+    }
+
+    // ── Secondary index: credentials_by_subject_did ───────────────────────────
+
+    fn sample_cred(id: &str, subject_did: &str) -> Credential {
+        Credential {
+            id: id.to_string(),
+            issuer_did: "did:bc:issuer".to_string(),
+            subject_did: subject_did.to_string(),
+            cred_type: "eid".to_string(),
+            issued_at: 1_000,
+            expires_at: 9_999,
+            revoked_at: None,
+        }
+    }
+
+    #[test]
+    fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
+        let store = MemoryStore::new();
+        assert!(store.credentials_by_subject_did("did:bc:ghost").unwrap().is_empty());
+    }
+
+    #[test]
+    fn credentials_by_subject_did_filters_correctly() {
+        let store = MemoryStore::new();
+        store.write_credential(&sample_cred("cred-1", "did:bc:alice")).unwrap();
+        store.write_credential(&sample_cred("cred-2", "did:bc:alice")).unwrap();
+        store.write_credential(&sample_cred("cred-3", "did:bc:bob")).unwrap();
+
+        let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
+        assert_eq!(alice.len(), 2);
+        assert!(alice.iter().all(|c| c.subject_did == "did:bc:alice"));
+
+        let bob = store.credentials_by_subject_did("did:bc:bob").unwrap();
+        assert_eq!(bob.len(), 1);
+        assert_eq!(bob[0].id, "cred-3");
     }
 }

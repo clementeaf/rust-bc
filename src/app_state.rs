@@ -12,6 +12,8 @@ use crate::network::Node;
 use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
+use crate::endorsement::policy_store::PolicyStore;
+use crate::endorsement::registry::OrgRegistry;
 use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
 
@@ -34,4 +36,8 @@ pub struct AppState {
     pub metrics: Arc<MetricsCollector>,
     /// New storage layer (MemoryStore or future RocksDB).
     pub store: Option<Arc<dyn BlockStore>>,
+    /// Organization registry for endorsement policies.
+    pub org_registry: Option<Arc<dyn OrgRegistry>>,
+    /// Endorsement policy store.
+    pub policy_store: Option<Arc<dyn PolicyStore>>,
 }

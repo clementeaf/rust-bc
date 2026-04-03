@@ -15,6 +15,8 @@ use std::path::Path;
 
 use super::errors::{StorageError, StorageResult};
 use super::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
+use crate::endorsement::org::Organization;
+use crate::endorsement::registry::OrgRegistry;
 
 const CF_BLOCKS: &str = "blocks";
 const CF_TRANSACTIONS: &str = "transactions";
@@ -23,6 +25,10 @@ const CF_CREDENTIALS: &str = "credentials";
 const CF_META: &str = "meta";
 /// Secondary index: `{012-padded-height}:{tx_id}` → `""` (empty)
 const CF_TX_BY_BLOCK: &str = "tx_by_block";
+/// Secondary index: `{subject_did}:{cred_id}` → `""` (empty)
+const CF_CRED_BY_SUBJECT: &str = "cred_by_subject";
+/// Organizations registry
+const CF_ORGANIZATIONS: &str = "organizations";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -33,6 +39,8 @@ const ALL_CFS: &[&str] = &[
     CF_CREDENTIALS,
     CF_META,
     CF_TX_BY_BLOCK,
+    CF_CRED_BY_SUBJECT,
+    CF_ORGANIZATIONS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -99,6 +107,18 @@ impl RocksDbBlockStore {
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TX_BY_BLOCK.to_string()))
     }
 
+    fn cf_cred_by_subject(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_CRED_BY_SUBJECT)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CRED_BY_SUBJECT.to_string()))
+    }
+
+    fn cf_organizations(&self) -> StorageResult<&rocksdb::ColumnFamily> {
+        self.db
+            .cf_handle(CF_ORGANIZATIONS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ORGANIZATIONS.to_string()))
+    }
+
     // ── Key encoders ─────────────────────────────────────────────────────────
 
     /// Zero-padded decimal height gives lexicographic == numeric ordering.
@@ -117,6 +137,26 @@ impl RocksDbBlockStore {
     /// The prefix used to scan all index entries for `height`.
     fn tx_block_prefix(height: u64) -> Vec<u8> {
         format!("{:012}:", height).into_bytes()
+    }
+
+    /// Secondary-index key for the subject-DID index: `{subject_did}\x00{cred_id}`.
+    ///
+    /// `\x00` is used as separator because DID characters and cred IDs never
+    /// contain a NUL byte, making the prefix scan unambiguous.
+    fn cred_subject_index_key(subject_did: &str, cred_id: &str) -> Vec<u8> {
+        let mut key = Vec::with_capacity(subject_did.len() + 1 + cred_id.len());
+        key.extend_from_slice(subject_did.as_bytes());
+        key.push(0x00);
+        key.extend_from_slice(cred_id.as_bytes());
+        key
+    }
+
+    /// Prefix used to scan all index entries for `subject_did`.
+    fn cred_subject_prefix(subject_did: &str) -> Vec<u8> {
+        let mut prefix = Vec::with_capacity(subject_did.len() + 1);
+        prefix.extend_from_slice(subject_did.as_bytes());
+        prefix.push(0x00);
+        prefix
     }
 }
 
@@ -203,8 +243,16 @@ impl BlockStore for RocksDbBlockStore {
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         let value = serde_json::to_vec(credential)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+
+        let mut batch = WriteBatch::default();
+        batch.put_cf(self.cf_credentials()?, credential.id.as_bytes(), &value);
+        batch.put_cf(
+            self.cf_cred_by_subject()?,
+            Self::cred_subject_index_key(&credential.subject_did, &credential.id),
+            b"",
+        );
         self.db
-            .put_cf(self.cf_credentials()?, credential.id.as_bytes(), &value)
+            .write(batch)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
@@ -324,6 +372,93 @@ impl BlockStore for RocksDbBlockStore {
 
         Ok(txs)
     }
+
+    fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>> {
+        let prefix = Self::cred_subject_prefix(subject_did);
+        let cf_idx = self.cf_cred_by_subject()?;
+        let cf_c = self.cf_credentials()?;
+
+        let iter = self
+            .db
+            .iterator_cf(cf_idx, IteratorMode::From(&prefix, Direction::Forward));
+
+        let mut creds = Vec::new();
+        for item in iter {
+            let (key, _) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+
+            if !key.starts_with(&prefix) {
+                break;
+            }
+
+            // Extract cred_id: everything after `{subject_did}\x00`
+            let cred_id = std::str::from_utf8(&key[prefix.len()..])
+                .map_err(|e| StorageError::DataCorrupted(e.to_string()))?;
+
+            let cred_bytes = self
+                .db
+                .get_cf(cf_c, cred_id.as_bytes())
+                .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+                .ok_or_else(|| StorageError::KeyNotFound(format!("cred:{cred_id}")))?;
+
+            let cred: Credential = serde_json::from_slice(&cred_bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            creds.push(cred);
+        }
+
+        Ok(creds)
+    }
+}
+
+impl OrgRegistry for RocksDbBlockStore {
+    fn register_org(&self, org: &Organization) -> StorageResult<()> {
+        let cf = self.cf_organizations()?;
+        let value = serde_json::to_vec(org)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, org.org_id.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn get_org(&self, org_id: &str) -> StorageResult<Organization> {
+        let cf = self.cf_organizations()?;
+        match self
+            .db
+            .get_cf(&cf, org_id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Err(StorageError::KeyNotFound(org_id.to_string())),
+        }
+    }
+
+    fn list_orgs(&self) -> StorageResult<Vec<Organization>> {
+        let cf = self.cf_organizations()?;
+        let mut orgs = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            let (_, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let org: Organization = serde_json::from_slice(&value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            orgs.push(org);
+        }
+        Ok(orgs)
+    }
+
+    fn remove_org(&self, org_id: &str) -> StorageResult<()> {
+        let cf = self.cf_organizations()?;
+        // Verify it exists first
+        if self
+            .db
+            .get_cf(&cf, org_id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .is_none()
+        {
+            return Err(StorageError::KeyNotFound(org_id.to_string()));
+        }
+        self.db
+            .delete_cf(&cf, org_id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
 }
 
 #[cfg(test)]
@@ -346,6 +481,7 @@ mod tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         }
     }
 
@@ -604,5 +740,103 @@ mod tests {
 
         assert_eq!(store.transactions_by_block_height(9).unwrap().len(), 1);
         assert_eq!(store.transactions_by_block_height(10).unwrap().len(), 1);
+    }
+
+    // ── Secondary index: cred_by_subject_did ─────────────────────────────────
+
+    fn cred_for_subject(id: &str, subject_did: &str) -> Credential {
+        Credential {
+            id: id.to_string(),
+            issuer_did: "did:bc:issuer".to_string(),
+            subject_did: subject_did.to_string(),
+            cred_type: "eid".to_string(),
+            issued_at: 1_000,
+            expires_at: 9_999,
+            revoked_at: None,
+        }
+    }
+
+    #[test]
+    fn cred_subject_index_key_format_is_correct() {
+        let key = RocksDbBlockStore::cred_subject_index_key("did:bc:alice", "cred-1");
+        let prefix = RocksDbBlockStore::cred_subject_prefix("did:bc:alice");
+        assert!(key.starts_with(&prefix));
+        // cred_id follows the NUL separator
+        assert_eq!(&key[prefix.len()..], b"cred-1");
+    }
+
+    #[test]
+    fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
+        let (store, _dir) = tmp_store();
+        assert!(store.credentials_by_subject_did("did:bc:ghost").unwrap().is_empty());
+    }
+
+    #[test]
+    fn write_credential_is_queryable_by_subject_did() {
+        let (store, _dir) = tmp_store();
+        store.write_credential(&cred_for_subject("cred-1", "did:bc:alice")).unwrap();
+        store.write_credential(&cred_for_subject("cred-2", "did:bc:alice")).unwrap();
+        store.write_credential(&cred_for_subject("cred-3", "did:bc:bob")).unwrap();
+
+        let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
+        let ids: Vec<&str> = alice.iter().map(|c| c.id.as_str()).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"cred-1"));
+        assert!(ids.contains(&"cred-2"));
+
+        let bob = store.credentials_by_subject_did("did:bc:bob").unwrap();
+        assert_eq!(bob.len(), 1);
+        assert_eq!(bob[0].id, "cred-3");
+    }
+
+    #[test]
+    fn cred_subject_index_does_not_cross_subject_boundaries() {
+        let (store, _dir) = tmp_store();
+        // "did:bc:ali" is a prefix of "did:bc:alice" — confirm no bleed-over
+        store.write_credential(&cred_for_subject("cred-a", "did:bc:ali")).unwrap();
+        store.write_credential(&cred_for_subject("cred-b", "did:bc:alice")).unwrap();
+
+        assert_eq!(store.credentials_by_subject_did("did:bc:ali").unwrap().len(), 1);
+        assert_eq!(store.credentials_by_subject_did("did:bc:alice").unwrap().len(), 1);
+    }
+
+    // ── OrgRegistry (RocksDB) ─────────────────────────────────────────────────
+
+    fn make_org(id: &str) -> Organization {
+        Organization::new(
+            id,
+            &format!("{id}MSP"),
+            vec![format!("did:bc:{id}:admin")],
+            vec![],
+            vec![],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn org_write_read_roundtrip() {
+        let (store, _dir) = tmp_store();
+        let org = make_org("org1");
+        OrgRegistry::register_org(&store, &org).unwrap();
+        let retrieved = OrgRegistry::get_org(&store, "org1").unwrap();
+        assert_eq!(retrieved.org_id, "org1");
+        assert_eq!(retrieved.msp_id, "org1MSP");
+    }
+
+    #[test]
+    fn org_list() {
+        let (store, _dir) = tmp_store();
+        OrgRegistry::register_org(&store, &make_org("org1")).unwrap();
+        OrgRegistry::register_org(&store, &make_org("org2")).unwrap();
+        let orgs = OrgRegistry::list_orgs(&store).unwrap();
+        assert_eq!(orgs.len(), 2);
+    }
+
+    #[test]
+    fn org_remove() {
+        let (store, _dir) = tmp_store();
+        OrgRegistry::register_org(&store, &make_org("org1")).unwrap();
+        OrgRegistry::remove_org(&store, "org1").unwrap();
+        assert!(OrgRegistry::get_org(&store, "org1").is_err());
     }
 }

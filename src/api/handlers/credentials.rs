@@ -144,6 +144,26 @@ pub async fn store_get_credential(
     }
 }
 
+/// GET /api/v1/store/credentials/by-subject/{subject_did} — devuelve todos los
+/// Credentials cuyo `subject_did` coincide con el parámetro de ruta.
+#[get("/store/credentials/by-subject/{subject_did}")]
+pub async fn store_get_credentials_by_subject(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let subject_did = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    match &state.store {
+        None => Err(ApiError::NotFound { resource: "store".to_string() }),
+        Some(store) => {
+            let creds = store
+                .credentials_by_subject_did(&subject_did)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -40,5 +40,8 @@ pub mod api;
 pub mod block_creation;
 pub mod tls;
 pub mod pki;
+pub mod endorsement;
+pub mod ordering;
+pub mod transaction;
 
 pub use app_state::AppState;

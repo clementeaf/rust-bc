@@ -27,6 +27,7 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -116,6 +117,7 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
+                endorsements: vec![],
             };
             assert!(store.write_block(&block).is_ok());
         }
@@ -151,6 +153,7 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_batch(&[block], &[]).is_ok());
     }
@@ -181,6 +184,7 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         let tx = Transaction {
             id: "tx1".to_string(),
@@ -212,6 +216,7 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
+                endorsements: vec![],
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -248,6 +253,7 @@ mod comprehensive_storage_tests {
                     .collect(),
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
+                endorsements: vec![],
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -264,6 +270,7 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         }];
         let txs = vec![Transaction {
             id: "tx1".to_string(),
@@ -289,6 +296,7 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "proposer".to_string(),
                 signature: [2u8; 64],
+                endorsements: vec![],
             };
             assert!(store.write_batch(&[block], &[]).is_ok());
         }
@@ -330,6 +338,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         let block2 = Block {
             height: 2,
@@ -339,6 +348,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p2".to_string(),
             signature: [3u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_batch(&[block1, block2], &[]).is_ok());
     }
@@ -358,6 +368,7 @@ mod comprehensive_storage_tests {
                 .collect(),
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -373,6 +384,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "genesis".to_string(),
             signature: [0u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -388,6 +400,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "max".to_string(),
             signature: [255u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -403,6 +416,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -431,6 +445,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-!@#$%^&*()".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -446,6 +461,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-🚀-✅".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -577,6 +593,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: [0u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -592,6 +609,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -627,6 +645,7 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p".to_string(),
             signature: [0u8; 64],
+            endorsements: vec![],
         };
         let start = Instant::now();
         let _ = store.write_block(&block);
@@ -648,6 +667,7 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "p".to_string(),
                 signature: [0u8; 64],
+                endorsements: vec![],
             };
             let _ = store.write_block(&block);
         }

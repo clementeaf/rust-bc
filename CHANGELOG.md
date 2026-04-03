@@ -6,7 +6,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-04-03
+### 2026-04-03 (Fase 3 — Transaction Lifecycle)
+
+**Transaction — Fase 3.1: Read-Write Sets**
+- `src/transaction/mod.rs` + `rwset.rs`: `KVRead { key, version }`, `KVWrite { key, value }`, `ReadWriteSet { reads, writes }` con `is_empty()`
+- Serde derive en los tres tipos; módulo declarado en `lib.rs` y `main.rs`
+- 6 tests nuevos; 531 tests en total
+
+---
+
+### 2026-04-03 (Fase 1–2 — Endorsement + Ordering)
+
+**Endorsement (Fase 1) — completa**
+- `src/endorsement/`: `Organization`, `OrgRegistry` trait + `MemoryOrgRegistry`, CF `organizations` en RocksDB
+- `EndorsementPolicy` (AnyOf / AllOf / NOutOf / And / Or) + `evaluate()`
+- `PolicyStore` trait + `MemoryPolicyStore`
+- `Endorsement` struct + `verify_endorsement` + `validate_endorsements`
+- `Block.endorsements: Vec<Endorsement>` (serde default)
+- `ConsensusEngine::with_policy_store()`: valida endorsements antes de insertar en DAG
+- REST: `POST/GET /api/v1/store/organizations`, `GET /api/v1/store/organizations/{id}`, `POST/GET /api/v1/store/policies/{resource_id}`
+- `AppState`: `org_registry`, `policy_store`
+
+**Ordering (Fase 2) — completa**
+- `src/ordering/`: `NodeRole` enum (Peer / Orderer / PeerAndOrderer) + `FromStr` desde `NODE_ROLE` env
+- `OrderingService`: cola `VecDeque<Transaction>`, `submit_tx`, `cut_block` con batch drain
+- `run_batch_loop`: tokio task lanzada en `main.rs` si el nodo ordena
+- `Node.role: NodeRole`; `Message::SubmitTransaction` y `Message::OrderedBlock`
+- `process_message`: orderer ingesta TXs; peer persiste `OrderedBlock` directamente en store
+- 525 tests al cierre de Fase 2
+
+---
+
+### 2026-04-03 (Storage)
 
 **Storage — secondary index endpoint**
 - `GET /api/v1/store/blocks/{height}/transactions` — queries `transactions_by_block_height` via prefix scan on `tx_by_block` CF

@@ -17,6 +17,7 @@ use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
 use crate::smart_contracts::{ContractManager, SmartContract};
 use crate::transaction_validation::TransactionValidator;
+use crate::ordering::NodeRole;
 
 /// Abstracts over plain TCP and TLS peer streams.
 trait AsyncStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static {}
@@ -50,6 +51,10 @@ pub enum Message {
     Contracts(Vec<SmartContract>),
     NewContract(SmartContract),
     UpdateContract(SmartContract),
+    /// Peer sends an endorsed transaction to the orderer.
+    SubmitTransaction(crate::storage::traits::Transaction),
+    /// Orderer broadcasts an ordered block to peers.
+    OrderedBlock(crate::storage::traits::Block),
 }
 
 /**
@@ -92,6 +97,12 @@ pub struct Node {
     pub peer_allowlist: Option<Arc<HashSet<String>>>,
     pub tls_acceptor: Option<Arc<TlsAcceptor>>,
     pub tls_connector: Option<Arc<TlsConnector>>,
+    /// Role of this node in the network (peer / orderer / both).
+    pub role: NodeRole,
+    /// Ordering service (present when role is Orderer or PeerAndOrderer).
+    pub ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
+    /// New storage layer (present when STORAGE_BACKEND is configured).
+    pub store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
 }
 
 /// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
@@ -150,6 +161,26 @@ impl Node {
         seed_nodes: Option<Vec<String>>,
         peer_allowlist: Option<Arc<HashSet<String>>>,
     ) -> Node {
+        Node::with_role(
+            address,
+            blockchain,
+            network_id,
+            bootstrap_nodes,
+            seed_nodes,
+            peer_allowlist,
+            NodeRole::from_env(),
+        )
+    }
+
+    pub fn with_role(
+        address: SocketAddr,
+        blockchain: Arc<Mutex<Blockchain>>,
+        network_id: Option<String>,
+        bootstrap_nodes: Option<Vec<String>>,
+        seed_nodes: Option<Vec<String>>,
+        peer_allowlist: Option<Arc<HashSet<String>>>,
+        role: NodeRole,
+    ) -> Node {
         Node {
             address,
             peers: Arc::new(Mutex::new(HashSet::new())),
@@ -171,6 +202,9 @@ impl Node {
             peer_allowlist,
             tls_acceptor: None,
             tls_connector: None,
+            role,
+            ordering_service: None,
+            store: None,
         }
     }
 
@@ -258,6 +292,9 @@ impl Node {
         let network_id = self.network_id.clone();
         let peer_allowlist = self.peer_allowlist.clone();
         let tls_acceptor = self.tls_acceptor.clone();
+        let role = self.role;
+        let ordering_service = self.ordering_service.clone();
+        let store = self.store.clone();
 
         loop {
             match listener.accept().await {
@@ -287,6 +324,8 @@ impl Node {
                     let pending_broadcasts_clone = pending_broadcasts.clone();
                     let network_id_clone = network_id.clone();
                     let tls_acceptor_clone = tls_acceptor.clone();
+                    let ordering_service_clone = ordering_service.clone();
+                    let store_clone = store.clone();
 
                     tokio::spawn(async move {
                         let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone {
@@ -315,6 +354,9 @@ impl Node {
                             rate_limits_clone,
                             pending_broadcasts_clone,
                             Some(network_id_clone),
+                            role,
+                            ordering_service_clone,
+                            store_clone,
                         )
                         .await
                         {
@@ -348,6 +390,9 @@ impl Node {
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
         pending_broadcasts: Arc<Mutex<Vec<(String, SmartContract)>>>,
         network_id: Option<String>,
+        role: NodeRole,
+        ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
+        store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
         let mut buffer = [0; 8192]; // Aumentado a 8KB para contratos más grandes
@@ -436,6 +481,9 @@ impl Node {
                     recent_receipts.clone(),
                     rate_limits.clone(),
                     network_id.clone(),
+                    role,
+                    ordering_service.clone(),
+                    store.clone(),
                 )
                 .await?;
 
@@ -453,7 +501,7 @@ impl Node {
      * Procesa un mensaje recibido
      */
     #[allow(clippy::too_many_arguments)]
-    async fn process_message(
+    pub(crate) async fn process_message(
         message: Message,
         peers: &Arc<Mutex<HashSet<String>>>,
         blockchain: &Arc<Mutex<Blockchain>>,
@@ -467,6 +515,9 @@ impl Node {
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
         rate_limits: Arc<Mutex<HashMap<String, (u64, usize)>>>,
         network_id: Option<String>,
+        role: NodeRole,
+        ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
+        store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
@@ -1027,6 +1078,24 @@ impl Node {
                                 contract.name, contract.address
                             );
                         }
+                    }
+                }
+                Ok(None)
+            }
+
+            Message::SubmitTransaction(tx) => {
+                if matches!(role, NodeRole::Orderer | NodeRole::PeerAndOrderer) {
+                    if let Some(svc) = &ordering_service {
+                        let _ = svc.submit_tx(tx);
+                    }
+                }
+                Ok(None)
+            }
+
+            Message::OrderedBlock(block) => {
+                if matches!(role, NodeRole::Peer | NodeRole::PeerAndOrderer) {
+                    if let Some(s) = &store {
+                        let _ = s.write_block(&block);
                     }
                 }
                 Ok(None)
@@ -2252,5 +2321,143 @@ mod tests {
     fn parse_server_name_dns() {
         let name = parse_server_name("localhost:8000").unwrap();
         assert!(matches!(name, ServerName::DnsName(_)));
+    }
+
+    fn make_node(role: NodeRole) -> Node {
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let bc = Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1)));
+        Node::with_role(addr, bc, None, None, None, None, role)
+    }
+
+    #[test]
+    fn node_role_peer() {
+        let node = make_node(NodeRole::Peer);
+        assert_eq!(node.role, NodeRole::Peer);
+    }
+
+    #[test]
+    fn node_role_orderer() {
+        let node = make_node(NodeRole::Orderer);
+        assert_eq!(node.role, NodeRole::Orderer);
+    }
+
+    fn make_storage_tx() -> crate::storage::traits::Transaction {
+        crate::storage::traits::Transaction {
+            id: "tx-test".to_string(),
+            block_height: 1,
+            timestamp: 42,
+            input_did: "did:bc:alice".to_string(),
+            output_recipient: "did:bc:bob".to_string(),
+            amount: 10,
+            state: "pending".to_string(),
+        }
+    }
+
+    #[test]
+    fn submit_transaction_serde_roundtrip() {
+        let msg = Message::SubmitTransaction(make_storage_tx());
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: Message = serde_json::from_str(&json).unwrap();
+        if let Message::SubmitTransaction(tx) = decoded {
+            assert_eq!(tx.id, "tx-test");
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    fn empty_process_message_args(
+    ) -> (
+        Arc<Mutex<HashSet<String>>>,
+        Arc<Mutex<crate::blockchain::Blockchain>>,
+        Arc<Mutex<HashMap<String, (u64, String)>>>,
+        Arc<Mutex<HashMap<String, (u64, usize)>>>,
+    ) {
+        (
+            Arc::new(Mutex::new(HashSet::new())),
+            Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),
+            Arc::new(Mutex::new(HashMap::new())),
+            Arc::new(Mutex::new(HashMap::new())),
+        )
+    }
+
+    #[tokio::test]
+    async fn orderer_submit_transaction_increases_pending_count() {
+        let svc = Arc::new(crate::ordering::service::OrderingService::with_config(100, 2000));
+        let (peers, bc, receipts, rates) = empty_process_message_args();
+        let tx = make_storage_tx();
+
+        Node::process_message(
+            Message::SubmitTransaction(tx),
+            &peers, &bc,
+            None, None, None, None, None,
+            None, None,
+            receipts, rates, None,
+            NodeRole::Orderer,
+            Some(svc.clone()),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(svc.pending_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn peer_ordered_block_writes_to_store() {
+        use crate::storage::MemoryStore;
+        use crate::storage::traits::BlockStore;
+
+        let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let (peers, bc, receipts, rates) = empty_process_message_args();
+
+        let block = crate::storage::traits::Block {
+            height: 7,
+            timestamp: 0,
+            parent_hash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            transactions: vec![],
+            proposer: "ord".to_string(),
+            signature: [0u8; 64],
+            endorsements: vec![],
+        };
+
+        Node::process_message(
+            Message::OrderedBlock(block),
+            &peers, &bc,
+            None, None, None, None, None,
+            None, None,
+            receipts, rates, None,
+            NodeRole::Peer,
+            None,
+            Some(store.clone()),
+        )
+        .await
+        .unwrap();
+
+        let saved = store.read_block(7).unwrap();
+        assert_eq!(saved.height, 7);
+    }
+
+    #[test]
+    fn ordered_block_serde_roundtrip() {
+        let block = crate::storage::traits::Block {
+            height: 5,
+            timestamp: 100,
+            parent_hash: [0u8; 32],
+            merkle_root: [0u8; 32],
+            transactions: vec!["tx-test".to_string()],
+            proposer: "orderer1".to_string(),
+            signature: [0u8; 64],
+            endorsements: vec![],
+        };
+        let msg = Message::OrderedBlock(block);
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: Message = serde_json::from_str(&json).unwrap();
+        if let Message::OrderedBlock(b) = decoded {
+            assert_eq!(b.height, 5);
+            assert_eq!(b.transactions, vec!["tx-test"]);
+        } else {
+            panic!("wrong variant");
+        }
     }
 }

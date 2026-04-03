@@ -27,6 +27,9 @@ mod consensus;
 mod identity;
 mod tls;
 mod pki;
+mod endorsement;
+mod ordering;
+mod transaction;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -603,6 +606,8 @@ async fn main() -> std::io::Result<()> {
                 Some(Arc::new(MemoryStore::new()) as Arc<dyn storage::BlockStore>)
             }
         },
+        org_registry: None,
+        policy_store: None,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use super::errors::StorageResult;
+use crate::endorsement::types::Endorsement;
 
 /// Block structure for storage
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -17,6 +18,9 @@ pub struct Block {
     pub proposer: String,
     #[serde(with = "sig_hex")]
     pub signature: [u8; 64],
+    /// Endorsements collected for this block (empty for legacy blocks)
+    #[serde(default)]
+    pub endorsements: Vec<Endorsement>,
 }
 
 mod sig_hex {
@@ -107,6 +111,11 @@ pub trait BlockStore: Send + Sync {
     ///
     /// Returns an empty `Vec` when no transactions are indexed for that height.
     fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>>;
+
+    /// Return all credentials issued to a given subject DID.
+    ///
+    /// Returns an empty `Vec` when no credentials are indexed for that subject.
+    fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>>;
 }
 
 /// Blanket impl so `Arc<T>` can be used wherever `Box<dyn BlockStore>` is expected.
@@ -151,6 +160,10 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>> {
         (**self).transactions_by_block_height(height)
     }
+
+    fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>> {
+        (**self).credentials_by_subject_did(subject_did)
+    }
 }
 
 #[cfg(test)]
@@ -170,7 +183,56 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
+            endorsements: vec![],
         }
+    }
+
+    #[test]
+    fn block_serde_roundtrip_without_endorsements() {
+        let block = sample_block(1);
+        let json = serde_json::to_string(&block).unwrap();
+        let decoded: Block = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.height, 1);
+        assert!(decoded.endorsements.is_empty());
+    }
+
+    #[test]
+    fn block_serde_roundtrip_with_endorsements() {
+        use crate::endorsement::types::Endorsement;
+        let e = Endorsement {
+            signer_did: "did:bc:alice".to_string(),
+            org_id: "org1".to_string(),
+            signature: [1u8; 64],
+            payload_hash: [2u8; 32],
+            timestamp: 9999,
+        };
+        let block = Block {
+            height: 5,
+            timestamp: 1_000,
+            parent_hash: [0u8; 32],
+            merkle_root: [1u8; 32],
+            transactions: vec![],
+            proposer: "node-1".to_string(),
+            signature: [2u8; 64],
+            endorsements: vec![e.clone()],
+        };
+        let json = serde_json::to_string(&block).unwrap();
+        let decoded: Block = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.endorsements.len(), 1);
+        assert_eq!(decoded.endorsements[0].org_id, "org1");
+    }
+
+    #[test]
+    fn block_without_endorsements_field_deserializes_to_empty_vec() {
+        // Serialize a block, strip the endorsements field, then deserialize — simulates legacy JSON.
+        let block = sample_block(3);
+        let full_json = serde_json::to_string(&block).unwrap();
+        // Remove `,"endorsements":[]` or `"endorsements":[],` from the JSON.
+        let legacy_json = full_json
+            .replace(",\"endorsements\":[]", "")
+            .replace("\"endorsements\":[],", "");
+        let decoded: Block = serde_json::from_str(&legacy_json).unwrap();
+        assert!(decoded.endorsements.is_empty());
     }
 
     #[test]
