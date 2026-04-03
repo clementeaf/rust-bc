@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/api/handlers/blocks.rs`: `GET /api/v1/store/blocks/{height}` y `/latest`
 - `tests/store_blocks_api_test.rs`: 7 tests de integración actix-web
 
+**Storage — Fase III: backend switcheable (2026-04-03)**
+
+- `src/main.rs`: `AppState.store` ya no es `None` fijo; se inicializa según `STORAGE_BACKEND`
+  - `memory` (default) → `MemoryStore`
+  - `rocksdb` → `RocksDbBlockStore` en `ROCKSDB_PATH` (default `./data/blocks`); fallback a `MemoryStore` si falla la apertura
+
 **Storage — Fase II: RocksDB (2026-04-03)**
 
 - `Cargo.toml`: dependencia `rocksdb = "0.22"`
@@ -250,6 +256,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** April 3, 2026 (Storage Fase II — RocksDB)
+**Last Updated:** April 3, 2026 (Storage Fase III — backend switcheable)
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

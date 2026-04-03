@@ -1,10 +1,10 @@
 ---
 name: Roadmap de fases completadas
-description: Estado de todas las fases implementadas en rust-bc (TLS A-F, Consensus G-H, Storage I)
+description: Fases completadas — TLS A-F, Consensus G-H, Storage I-III (MemoryStore, RocksDB, backend switcheable)
 type: project
 ---
 
-Stack TLS completo (Fases A–F), Consensus completo (G–H), y Storage Fase I completa (2026-04-03).
+TLS A–F, Consensus G–H, Storage I–III completos a 2026-04-03.
 
 **Why:** Cada capa es prerequisito de la siguiente: TLS → Consensus → Storage → API de bloques.
 
@@ -50,4 +50,10 @@ Variables de entorno TLS: `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `T
 |-------|-------------|---------|
 | RocksDB | `RocksDbBlockStore` real con `rocksdb = "0.22"`, serde en todos los tipos, `WriteBatch` atómico, `META:latest_height` | `src/storage/adapters.rs`, `src/storage/traits.rs` |
 
-**How to apply:** Próximas áreas: integrar `RocksDbBlockStore` en `AppState` reemplazando `MemoryStore`, o añadir column families por tipo.
+## Storage — Fase III ✅ (2026-04-03)
+
+| Tarea | Descripción | Módulos |
+|-------|-------------|---------|
+| III | `AppState.store` switcheable via `STORAGE_BACKEND=rocksdb\|memory` + `ROCKSDB_PATH` | `src/main.rs` |
+
+**How to apply:** Próxima área: column families en RocksDB por tipo (bloques, txs, identidades).

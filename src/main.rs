@@ -49,6 +49,7 @@ use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use transaction_validation::TransactionValidator;
 use tls::{load_client_config_from_env, load_tls_config_from_env, reload_tls_config, tls_reload_params_from_env};
+use storage::{MemoryStore, RocksDbBlockStore};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -582,7 +583,26 @@ async fn main() -> std::io::Result<()> {
         checkpoint_manager: checkpoint_manager.clone(),
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),
-        store: None,
+        store: {
+            let backend = env::var("STORAGE_BACKEND").unwrap_or_default();
+            if backend == "rocksdb" {
+                let path = env::var("ROCKSDB_PATH")
+                    .unwrap_or_else(|_| "./data/blocks".to_string());
+                match RocksDbBlockStore::new(&path) {
+                    Ok(s) => {
+                        log::info!("Storage backend: RocksDB at {path}");
+                        Some(Arc::new(s) as Arc<dyn storage::BlockStore>)
+                    }
+                    Err(e) => {
+                        log::error!("Failed to open RocksDB at {path}: {e}. Falling back to MemoryStore.");
+                        Some(Arc::new(MemoryStore::new()) as Arc<dyn storage::BlockStore>)
+                    }
+                }
+            } else {
+                log::info!("Storage backend: MemoryStore");
+                Some(Arc::new(MemoryStore::new()) as Arc<dyn storage::BlockStore>)
+            }
+        },
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
