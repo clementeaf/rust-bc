@@ -1,0 +1,2 @@
+- [Roadmap de fases](project_tls_roadmap.md) — TLS A-F completo; Consensus G (fork resolution) y H (ConsensusEngine) completos el 2026-04-03
+- [Microtask preference](feedback_microtasks.md) — Tareas pequeñas, sin agentes de planning innecesarios

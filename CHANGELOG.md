@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Consensus — Fase G Fork Resolution (2026-04-03)**
+
+- `src/consensus/dag.rs`: selección de cadena canónica y resolución de forks
+  - `Dag::subtree_weight()`: cuenta descendientes totales de un bloque
+  - `Dag::canonical_chain()`: recorre el DAG desde genesis eligiendo el hijo con mayor peso; desempate por hash
+  - `Dag::resolve_fork()`: dado un conjunto de tips competidores, retorna el que pertenece a la cadena canónica
+- `src/consensus/fork_choice.rs`: módulo nuevo
+  - `ForkChoiceRule`: enum con dos estrategias — `HeaviestSubtree` (default) y `LongestChain`
+  - `ForkChoice`: engine configurable que expone `canonical_chain()` y `resolve()`
+- 33 tests nuevos (22 en `dag`, 11 en `fork_choice`); todos pasando
+
+**Consensus — Fase H ConsensusEngine (2026-04-03)**
+
+- `src/consensus/engine.rs`: módulo nuevo
+  - `ConsensusEngine`: agrupa `Dag`, `ForkChoice` y `SlotScheduler` en un único punto de entrada
+  - `accept_block()`: valida el bloque (formato, firma, parent, slot) e inserta en el DAG
+  - `canonical_tip()`: retorna el hash del tip canónico actual
+  - `canonical_chain()`: retorna el path completo genesis → tip
+  - `ConsensusError`: errores tipados (`InvalidBlock`, `DagError`) vía `thiserror`
+- 11 tests (accept, reject ×5, canonical tip/chain, fork)
+
+**CI — fix toolchain (2026-04-03)**
+
+- `.github/workflows/`: añadido `toolchain: stable` en los 4 workflows (`build`, `security`, `lint`, `test`) — `dtolnay/rust-toolchain@master` requiere el input explícito
+
 **TLS — Fase A (2026-04-02)**
 
 - `src/tls.rs`: cargar PEM cert+key, construir `ServerConfig` y `ClientConfig`
