@@ -30,20 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ConsensusError`: errores tipados (`InvalidBlock`, `DagError`) vía `thiserror`
 - 11 tests (accept, reject ×5, canonical tip/chain, fork)
 
-**Storage — Fase I (2026-04-03)**
+**Storage — Fase I: MemoryStore + API (2026-04-03)**
 
-- `src/storage/memory.rs`: `MemoryStore` — implementación in-memory de `BlockStore` con `Mutex` interno
-- `src/storage/traits.rs`: impl `BlockStore` para `Arc<T>` — permite compartir el store entre el engine y el API
-- `src/consensus/engine.rs`: `ConsensusEngine::with_store(Box<dyn BlockStore>)` — persiste bloques aceptados al store
+- `src/storage/memory.rs`: `MemoryStore` — `BlockStore` in-memory con `Mutex` interno
+- `src/storage/traits.rs`: impl `BlockStore` para `Arc<T>` — compartir store entre engine y API
+- `src/consensus/engine.rs`: `ConsensusEngine::with_store()` — persiste bloques aceptados
 - `src/app_state.rs`: campo `store: Option<Arc<dyn BlockStore>>`
-- `src/api/handlers/blocks.rs`: dos endpoints nuevos
-  - `GET /api/v1/store/blocks/{height}` — lee un bloque por altura desde el store
-  - `GET /api/v1/store/blocks/latest` — retorna la altura del bloque más reciente
-- `src/api/routes.rs`: scope `/store/blocks` con ambos handlers
+- `src/api/handlers/blocks.rs`: `GET /api/v1/store/blocks/{height}` y `/latest`
 - `tests/store_blocks_api_test.rs`: 7 tests de integración actix-web
-  - Bloque por altura (height 0 y 1), latest height, bloque inexistente → 404
-  - Sin store configurado → 404 en ambos endpoints
-  - Ruta `/latest` no confundida con el parámetro `/{height}`
+
+**Storage — Fase II: RocksDB (2026-04-03)**
+
+- `Cargo.toml`: dependencia `rocksdb = "0.22"`
+- `src/storage/traits.rs`: serde derives en `Transaction`, `IdentityRecord`, `Credential`
+- `src/storage/adapters.rs`: `RocksDbBlockStore` con implementación real
+  - Serialización JSON por clave prefijada (`BLK:`, `TX:`, `DID:`, `CRED:`)
+  - `write_batch` atómico vía `WriteBatch`
+  - `META:latest_height` — tracking persistente de la altura máxima
+  - 13 tests unitarios con `TempDir` (aislados entre runs)
 
 **CI — fix toolchain (2026-04-03)**
 
@@ -246,6 +250,6 @@ For questions about releases or changelog: See [SECURITY.md](SECURITY.md) for se
 
 ---
 
-**Last Updated:** April 3, 2026
+**Last Updated:** April 3, 2026 (Storage Fase II — RocksDB)
 **Maintainer:** rust-bc team  
 **Repository:** https://github.com/your-org/rust-bc

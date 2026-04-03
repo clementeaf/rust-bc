@@ -36,7 +36,7 @@ mod sig_hex {
 }
 
 /// Transaction structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Transaction {
     pub id: String,
     pub block_height: u64,
@@ -48,7 +48,7 @@ pub struct Transaction {
 }
 
 /// Identity record structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IdentityRecord {
     pub did: String,
     pub created_at: u64,
@@ -57,7 +57,7 @@ pub struct IdentityRecord {
 }
 
 /// Credential structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Credential {
     pub id: String,
     pub issuer_did: String,

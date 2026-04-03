@@ -44,4 +44,10 @@ Variables de entorno TLS: `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `T
 | T4 | `AppState.store` + endpoints `GET /store/blocks/{height}` y `/latest` | `src/app_state.rs`, `src/api/handlers/blocks.rs`, `src/api/routes.rs` |
 | T5 | 7 tests de integración actix-web para ambos endpoints | `tests/store_blocks_api_test.rs` |
 
-**How to apply:** Próximas áreas: T6 (benchmark/stress del store) o persistencia en disco (RocksDB).
+## Storage — Fase II ✅ (2026-04-03)
+
+| Tarea | Descripción | Módulos |
+|-------|-------------|---------|
+| RocksDB | `RocksDbBlockStore` real con `rocksdb = "0.22"`, serde en todos los tipos, `WriteBatch` atómico, `META:latest_height` | `src/storage/adapters.rs`, `src/storage/traits.rs` |
+
+**How to apply:** Próximas áreas: integrar `RocksDbBlockStore` en `AppState` reemplazando `MemoryStore`, o añadir column families por tipo.
