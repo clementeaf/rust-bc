@@ -107,6 +107,54 @@ rust-bc/
 
 ---
 
+## TLS Configuration
+
+Both the HTTP API server and the P2P layer support TLS. TLS is **opt-in**: if the environment variables below are not set the node runs over plain TCP/HTTP.
+
+### Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TLS_CERT_PATH` | For TLS | — | Path to the PEM certificate file (server cert or self-signed). Must be set together with `TLS_KEY_PATH`. |
+| `TLS_KEY_PATH` | For TLS | — | Path to the PEM private key file. Must be set together with `TLS_CERT_PATH`. |
+| `TLS_VERIFY_PEER` | No | `true` | Set to `false` to disable peer certificate verification on outbound P2P connections. **Only for development/testing — never use in production.** |
+| `TLS_CA_CERT_PATH` | No | — | Path to a custom CA certificate (PEM). When set, outbound connections verify peers against this CA instead of the built-in Mozilla root store. Ignored if `TLS_VERIFY_PEER=false`. |
+
+### Quick examples
+
+**Production node with TLS (custom CA for P2P mutual verification):**
+```bash
+export TLS_CERT_PATH=/etc/rust-bc/node.crt
+export TLS_KEY_PATH=/etc/rust-bc/node.key
+export TLS_CA_CERT_PATH=/etc/rust-bc/ca.crt
+cargo run --release
+```
+
+**Development / localhost (self-signed cert, skip peer verification):**
+```bash
+export TLS_CERT_PATH=tests/fixtures/test_cert.pem
+export TLS_KEY_PATH=tests/fixtures/test_key.pem
+export TLS_VERIFY_PEER=false
+cargo run
+```
+
+**No TLS (plain TCP + HTTP):**
+```bash
+# Simply do not set TLS_CERT_PATH or TLS_KEY_PATH
+cargo run
+```
+
+### Generating a self-signed certificate for testing
+
+```bash
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+  -keyout key.pem -out cert.pem -days 3650 -nodes -subj '/CN=localhost'
+```
+
+> **Note:** Setting only one of `TLS_CERT_PATH` / `TLS_KEY_PATH` is an error and the node will refuse to start.
+
+---
+
 ## Development Workflow
 
 ### 1. Create Feature Branch

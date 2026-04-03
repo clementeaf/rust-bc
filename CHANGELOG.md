@@ -8,26 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **TLS module** (`src/tls.rs`): load PEM cert+key from `TLS_CERT_PATH` / `TLS_KEY_PATH` env vars, build `rustls::ServerConfig`
-- Dependencies: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`
-- `actix-web` feature `rustls-0_23` enabled; `HttpServer` binds via `bind_rustls_0_23` when both env vars are set, plain TCP otherwise
-- **P2P TLS** (`src/network.rs`): `TlsAcceptor`/`TlsConnector` wiring for peer-to-peer connections
-  - `AsyncStream` supertrait abstracts over plain and TLS streams
-  - `Node::set_tls_acceptor` / `set_tls_connector` for runtime configuration
-  - `open_stream` helper wraps outgoing TCP in TLS when a connector is configured
-  - `start_server` performs TLS handshake on accepted connections when an acceptor is configured
-  - `parse_server_name` derives `ServerName` (IP or DNS) from peer address
-  - All 10 outgoing connection sites updated to use `open_stream`
-- Test fixtures: self-signed EC cert+key under `tests/fixtures/`
-- 5 unit tests in `src/tls.rs` (valid cert, missing cert, missing key, invalid key, no env vars)
-- 6 unit tests in `src/network.rs` (allowlist parsing, TLS acceptor setup, server name parsing)
-- `docs/README.md` index for documentation layout
+
+**TLS — Fase A (2026-04-02)**
+
+- `src/tls.rs`: load PEM cert+key, build `rustls::ServerConfig` and `ClientConfig`
+  - `PeerVerification` enum: `Full` (WebPKI roots or custom CA) and `Dangerous` (skip verify, dev only)
+  - `load_tls_config_from_env` / `load_client_config_from_env` read `TLS_CERT_PATH`, `TLS_KEY_PATH`, `TLS_VERIFY_PEER`, `TLS_CA_CERT_PATH`
+- `src/network.rs`: P2P connections wrapped in TLS via `TlsAcceptor` / `TlsConnector`
+  - `AsyncStream` supertrait unifies plain TCP and TLS streams
+  - `open_stream` applies TLS on outbound connections when a connector is set
+  - `start_server` performs TLS handshake on inbound connections when an acceptor is set
+- `tests/fixtures/`: self-signed EC cert+key for testing
+- `tests/tls_p2p_integration_test.rs`: 3 integration tests (handshake, plain TCP rejection, bidirectional echo)
+- 20 unit tests across `tls.rs` and `network.rs`; all passing
+- `README.md`: new "TLS Configuration" section with variable table and usage examples
+- Dependencies added: `rustls 0.23`, `rustls-pemfile 2`, `tokio-rustls 0.26`, `webpki-roots 0.26`
 
 ### Changed
 - Reorganized documentation: `ANALYSIS/` → `docs/analysis/`, former `Documents/` → `docs/archive/`
-- Grouped root markdown into `docs/dev/`, `docs/commercial/`, and `docs/technical/`
-- README and contributor links updated to new paths
-- Stop tracking local `blockchain_blocks/` sample data; ignore runtime blockchain data directories
+- Stop tracking local `blockchain_blocks/` sample data
 
 ---
 

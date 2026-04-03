@@ -44,7 +44,7 @@ use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use transaction_validation::TransactionValidator;
-use tls::load_tls_config_from_env;
+use tls::{load_client_config_from_env, load_tls_config_from_env};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -417,6 +417,22 @@ async fn main() -> std::io::Result<()> {
     }
     node_arc.set_transaction_validator(transaction_validator.clone());
 
+    // Configurar TLS para conexiones P2P salientes
+    let tls_client_cfg = match load_client_config_from_env() {
+        Ok(Some(cfg)) => {
+            println!("🔐 TLS P2P saliente habilitado");
+            Some(Arc::new(cfg))
+        }
+        Ok(None) => None,
+        Err(e) => {
+            eprintln!("❌ Error al cargar ClientConfig TLS P2P: {}", e);
+            return Err(std::io::Error::other(e.to_string()));
+        }
+    };
+    if let Some(ref cfg) = tls_client_cfg {
+        node_arc.set_tls_connector(tokio_rustls::TlsConnector::from(Arc::clone(cfg)));
+    }
+
     // Clonar los recursos compartidos antes de crear el Arc
     let shared_peers = node_arc.peers.clone();
     let shared_contract_sync_metrics = node_arc.contract_sync_metrics.clone();
@@ -442,6 +458,9 @@ async fn main() -> std::io::Result<()> {
         node_for_server.set_checkpoint_manager(checkpoint_mgr.clone());
     }
     node_for_server.set_transaction_validator(transaction_validator.clone());
+    if let Some(ref cfg) = tls_client_cfg {
+        node_for_server.set_tls_connector(tokio_rustls::TlsConnector::from(Arc::clone(cfg)));
+    }
     // Compartir los mismos recursos compartidos
     node_for_server.peers = shared_peers;
     node_for_server.contract_sync_metrics = shared_contract_sync_metrics;
