@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 12 — Hardening · §12.3 Benchmarks)
+
+**12.3.1–12.3.3 — Criterion benchmarks** (`benches/ordering_throughput.rs`)
+- `ordering_service/submit_and_cut/100` — throughput de ordering: 100 TXs → 1 bloque; reporta TXs/s
+- `endorsement_validation/validate_endorsements/{1,3,5,10}` — latencia por endorsement Ed25519 con política `AllOf(N)`
+- `event_bus_fanout/publish_1_event/{1,5,10,50}` — costo de `publish()` con N suscriptores activos en canal broadcast
+- `criterion = "0.5"` añadido a `[dev-dependencies]`; informes HTML en `target/criterion/`
+
+---
+
+### 2026-04-04 (Fase 7 — Private Data Collections · §7.1.3)
+
+**7.1.3 — Purge de datos expirados**
+- `put_private_data_at(collection, key, value, written_at_height, blocks_to_live)` añadido al trait `PrivateDataStore` — default no-op delegando a `put_private_data` para backwards compat
+- `purge_expired(current_height)` en el trait con default no-op; `MemoryPrivateDataStore` elimina entradas donde `written_at + blocks_to_live <= current_height`
+- Entradas sin TTL (`blocks_to_live = 0`) nunca expiran
+- 5 tests: expiración exacta en altura 6, sin expirar antes, purge selectivo (corto vs largo TTL), sin-TTL inmortal, `blocks_to_live=0`
+
+---
+
 ### 2026-04-03 (Fase 9 — Fabric Gateway)
 
 **9.1.1 — `Gateway` struct**

@@ -1,341 +1,436 @@
-/**
- * Prometheus Metrics Module
- *
- * Thread-safe metrics collection for blockchain monitoring and observability.
- * Provides counters, gauges, and histograms for:
- * - Blockchain state (blocks, height, difficulty)
- * - Transactions (validated, rejected, fees)
- * - Mempool (pending transactions, fees)
- * - Network (connected peers)
- * - Performance (block time, validation time)
- */
-
-use std::sync::atomic::{AtomicU64, Ordering};
+use prometheus::{Histogram, HistogramOpts, IntCounter, IntGauge, Opts, Registry, TextEncoder};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Blockchain metrics
-#[derive(Clone)]
-pub struct BlockchainMetrics {
-    pub blocks_total: Arc<AtomicU64>,
-    pub transactions_total: Arc<AtomicU64>,
-    pub chain_height: Arc<AtomicU64>,
-    pub difficulty: Arc<AtomicU64>,
-    pub last_block_time_ms: Arc<AtomicU64>,
-}
-
-impl BlockchainMetrics {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        BlockchainMetrics {
-            blocks_total: Arc::new(AtomicU64::new(0)),
-            transactions_total: Arc::new(AtomicU64::new(0)),
-            chain_height: Arc::new(AtomicU64::new(0)),
-            difficulty: Arc::new(AtomicU64::new(0)),
-            last_block_time_ms: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn record_block(&self, tx_count: u64, difficulty: u8, chain_height: u64) {
-        self.blocks_total.fetch_add(1, Ordering::Relaxed);
-        self.transactions_total.fetch_add(tx_count, Ordering::Relaxed);
-        self.chain_height.store(chain_height, Ordering::Relaxed);
-        self.difficulty.store(difficulty as u64, Ordering::Relaxed);
-
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        self.last_block_time_ms.store(now, Ordering::Relaxed);
-    }
-
-    #[allow(dead_code)]
-    pub fn update_height(&self, height: u64) {
-        self.chain_height.store(height, Ordering::Relaxed);
-    }
-
-    #[allow(dead_code)]
-    pub fn update_difficulty(&self, difficulty: u8) {
-        self.difficulty.store(difficulty as u64, Ordering::Relaxed);
-    }
-}
-
-impl Default for BlockchainMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Transaction metrics
-#[derive(Clone)]
-pub struct TransactionMetrics {
-    pub validated_total: Arc<AtomicU64>,
-    pub rejected_total: Arc<AtomicU64>,
-    pub total_fees: Arc<AtomicU64>,
-    pub validation_time_sum_ms: Arc<AtomicU64>,
-}
-
-impl TransactionMetrics {
-    #[allow(dead_code)]
-    pub fn new() -> Self {
-        TransactionMetrics {
-            validated_total: Arc::new(AtomicU64::new(0)),
-            rejected_total: Arc::new(AtomicU64::new(0)),
-            total_fees: Arc::new(AtomicU64::new(0)),
-            validation_time_sum_ms: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn record_validated(&self, fee: u64, validation_time_ms: u64) {
-        self.validated_total.fetch_add(1, Ordering::Relaxed);
-        self.total_fees.fetch_add(fee, Ordering::Relaxed);
-        self.validation_time_sum_ms
-            .fetch_add(validation_time_ms, Ordering::Relaxed);
-    }
-
-    #[allow(dead_code)]
-    pub fn record_rejected(&self, _reason: &str) {
-        self.rejected_total.fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-impl Default for TransactionMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Mempool metrics
-#[derive(Clone)]
-pub struct MempoolMetrics {
-    pub pending_transactions: Arc<AtomicU64>,
-    pub total_fees_pending: Arc<AtomicU64>,
-    pub oldest_pending_timestamp: Arc<AtomicU64>,
-}
-
-impl MempoolMetrics {
-    pub fn new() -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        MempoolMetrics {
-            pending_transactions: Arc::new(AtomicU64::new(0)),
-            total_fees_pending: Arc::new(AtomicU64::new(0)),
-            oldest_pending_timestamp: Arc::new(AtomicU64::new(now)),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn update_state(&self, pending_count: u64, total_fees: u64, oldest_timestamp: u64) {
-        self.pending_transactions
-            .store(pending_count, Ordering::Relaxed);
-        self.total_fees_pending.store(total_fees, Ordering::Relaxed);
-        self.oldest_pending_timestamp
-            .store(oldest_timestamp, Ordering::Relaxed);
-    }
-}
-
-impl Default for MempoolMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Network metrics
-#[derive(Clone)]
-pub struct NetworkMetrics {
-    pub connected_peers: Arc<AtomicU64>,
-    pub messages_received: Arc<AtomicU64>,
-    pub messages_sent: Arc<AtomicU64>,
-}
-
-impl NetworkMetrics {
-    pub fn new() -> Self {
-        NetworkMetrics {
-            connected_peers: Arc::new(AtomicU64::new(0)),
-            messages_received: Arc::new(AtomicU64::new(0)),
-            messages_sent: Arc::new(AtomicU64::new(0)),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn update_peers(&self, count: u64) {
-        self.connected_peers.store(count, Ordering::Relaxed);
-    }
-
-    #[allow(dead_code)]
-    pub fn record_message_received(&self) {
-        self.messages_received.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[allow(dead_code)]
-    pub fn record_message_sent(&self) {
-        self.messages_sent.fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-impl Default for NetworkMetrics {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Central metrics collector
+/// Central Prometheus metrics collector.
+///
+/// Wraps a private [`Registry`] so each node gets isolated metric state.
+/// All metric handles are `Clone` and internally `Arc`-backed, making the
+/// collector itself cheaply cloneable.
 #[derive(Clone)]
 pub struct MetricsCollector {
-    pub blockchain: BlockchainMetrics,
-    pub transactions: TransactionMetrics,
-    pub mempool: MempoolMetrics,
-    pub network: NetworkMetrics,
+    registry: Arc<Registry>,
+
+    // ── Blockchain ────────────────────────────────────────────────────────────
+    pub blocks_total: IntCounter,
+    pub blockchain_transactions_total: IntCounter,
+    pub chain_height: IntGauge,
+    pub difficulty: IntGauge,
+
+    // ── Transaction pipeline ──────────────────────────────────────────────────
+    pub transactions_validated_total: IntCounter,
+    pub transactions_rejected_total: IntCounter,
+    pub transactions_total_fees: IntCounter,
+    /// Histogram of per-transaction validation latency in milliseconds.
+    pub transaction_validation_duration_ms: Histogram,
+
+    // ── Mempool ───────────────────────────────────────────────────────────────
+    pub mempool_pending: IntGauge,
+    pub mempool_fees_pending: IntGauge,
+
+    // ── Network / P2P ─────────────────────────────────────────────────────────
+    pub network_peers: IntGauge,
+    pub network_messages_received: IntCounter,
+    pub network_messages_sent: IntCounter,
+
+    // ── Gossip (Phase 12.1.1) ─────────────────────────────────────────────────
+    /// Number of blocks sent to gossip fanout peers.
+    pub gossip_blocks_gossiped: IntCounter,
+
+    // ── Endorsement (Phase 12.2.1) ────────────────────────────────────────────
+    /// Total endorsement policy validations performed.
+    pub endorsement_validations_total: IntCounter,
+
+    // ── Ordering (Phase 12.2.1) ───────────────────────────────────────────────
+    /// Total ordered blocks cut by the ordering service.
+    pub ordering_blocks_cut_total: IntCounter,
+
+    // ── MVCC (Phase 12.2.1) ───────────────────────────────────────────────────
+    /// Total MVCC read-set conflicts detected during block commit.
+    pub mvcc_conflicts_total: IntCounter,
+
+    // ── Events (Phase 12.2.1) ─────────────────────────────────────────────────
+    /// Current number of active event bus subscriptions.
+    pub event_subscriptions_active: IntGauge,
+
+    // ── Discovery (Phase 12.2.1) ──────────────────────────────────────────────
+    /// Current number of registered peers in the discovery service.
+    pub discovery_peers_registered: IntGauge,
 }
 
 impl MetricsCollector {
     pub fn new() -> Self {
+        let registry = Registry::new();
+
+        // ── Blockchain ────────────────────────────────────────────────────────
+        let blocks_total = IntCounter::with_opts(
+            Opts::new("blockchain_blocks_total", "Total number of blocks in the chain"),
+        )
+        .expect("metric creation failed");
+        registry.register(Box::new(blocks_total.clone())).expect("register failed");
+
+        let blockchain_transactions_total = IntCounter::with_opts(
+            Opts::new("blockchain_transactions_total", "Total transactions committed to blocks"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(blockchain_transactions_total.clone()))
+            .expect("register failed");
+
+        let chain_height = IntGauge::with_opts(
+            Opts::new("blockchain_height", "Current blockchain height"),
+        )
+        .expect("metric creation failed");
+        registry.register(Box::new(chain_height.clone())).expect("register failed");
+
+        let difficulty = IntGauge::with_opts(
+            Opts::new("blockchain_difficulty", "Current mining difficulty"),
+        )
+        .expect("metric creation failed");
+        registry.register(Box::new(difficulty.clone())).expect("register failed");
+
+        // ── Transaction pipeline ──────────────────────────────────────────────
+        let transactions_validated_total = IntCounter::with_opts(
+            Opts::new("transactions_validated_total", "Total validated transactions"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(transactions_validated_total.clone()))
+            .expect("register failed");
+
+        let transactions_rejected_total = IntCounter::with_opts(
+            Opts::new("transactions_rejected_total", "Total rejected transactions"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(transactions_rejected_total.clone()))
+            .expect("register failed");
+
+        let transactions_total_fees = IntCounter::with_opts(
+            Opts::new("transactions_total_fees_collected", "Total fees collected (in base units)"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(transactions_total_fees.clone()))
+            .expect("register failed");
+
+        let transaction_validation_duration_ms = Histogram::with_opts(
+            HistogramOpts::new(
+                "transaction_validation_duration_ms",
+                "Transaction validation latency in milliseconds",
+            )
+            .buckets(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0]),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(transaction_validation_duration_ms.clone()))
+            .expect("register failed");
+
+        // ── Mempool ───────────────────────────────────────────────────────────
+        let mempool_pending = IntGauge::with_opts(
+            Opts::new("mempool_pending_transactions", "Pending transactions in mempool"),
+        )
+        .expect("metric creation failed");
+        registry.register(Box::new(mempool_pending.clone())).expect("register failed");
+
+        let mempool_fees_pending = IntGauge::with_opts(
+            Opts::new("mempool_total_fees_pending", "Total fees of pending transactions"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(mempool_fees_pending.clone()))
+            .expect("register failed");
+
+        // ── Network ───────────────────────────────────────────────────────────
+        let network_peers = IntGauge::with_opts(
+            Opts::new("network_connected_peers", "Number of connected P2P peers"),
+        )
+        .expect("metric creation failed");
+        registry.register(Box::new(network_peers.clone())).expect("register failed");
+
+        let network_messages_received = IntCounter::with_opts(
+            Opts::new("network_messages_received_total", "Total P2P messages received"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(network_messages_received.clone()))
+            .expect("register failed");
+
+        let network_messages_sent = IntCounter::with_opts(
+            Opts::new("network_messages_sent_total", "Total P2P messages sent"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(network_messages_sent.clone()))
+            .expect("register failed");
+
+        // ── Gossip ────────────────────────────────────────────────────────────
+        let gossip_blocks_gossiped = IntCounter::with_opts(
+            Opts::new("gossip_blocks_gossiped_total", "Blocks sent to gossip fanout peers"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(gossip_blocks_gossiped.clone()))
+            .expect("register failed");
+
+        // ── Endorsement ───────────────────────────────────────────────────────
+        let endorsement_validations_total = IntCounter::with_opts(
+            Opts::new("endorsement_validations_total", "Total endorsement policy validations"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(endorsement_validations_total.clone()))
+            .expect("register failed");
+
+        // ── Ordering ─────────────────────────────────────────────────────────
+        let ordering_blocks_cut_total = IntCounter::with_opts(
+            Opts::new("ordering_blocks_cut_total", "Total ordered blocks cut"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(ordering_blocks_cut_total.clone()))
+            .expect("register failed");
+
+        // ── MVCC ──────────────────────────────────────────────────────────────
+        let mvcc_conflicts_total = IntCounter::with_opts(
+            Opts::new("mvcc_conflicts_total", "Total MVCC read-set conflicts"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(mvcc_conflicts_total.clone()))
+            .expect("register failed");
+
+        // ── Events ────────────────────────────────────────────────────────────
+        let event_subscriptions_active = IntGauge::with_opts(
+            Opts::new("event_subscriptions_active", "Active event bus subscriptions"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(event_subscriptions_active.clone()))
+            .expect("register failed");
+
+        // ── Discovery ─────────────────────────────────────────────────────────
+        let discovery_peers_registered = IntGauge::with_opts(
+            Opts::new("discovery_peers_registered", "Registered peers in discovery service"),
+        )
+        .expect("metric creation failed");
+        registry
+            .register(Box::new(discovery_peers_registered.clone()))
+            .expect("register failed");
+
         MetricsCollector {
-            blockchain: BlockchainMetrics::new(),
-            transactions: TransactionMetrics::new(),
-            mempool: MempoolMetrics::new(),
-            network: NetworkMetrics::new(),
+            registry: Arc::new(registry),
+            blocks_total,
+            blockchain_transactions_total,
+            chain_height,
+            difficulty,
+            transactions_validated_total,
+            transactions_rejected_total,
+            transactions_total_fees,
+            transaction_validation_duration_ms,
+            mempool_pending,
+            mempool_fees_pending,
+            network_peers,
+            network_messages_received,
+            network_messages_sent,
+            gossip_blocks_gossiped,
+            endorsement_validations_total,
+            ordering_blocks_cut_total,
+            mvcc_conflicts_total,
+            event_subscriptions_active,
+            discovery_peers_registered,
         }
     }
 
-    /// Generate Prometheus text format metrics
+    // ── Blockchain helpers ────────────────────────────────────────────────────
+
+    pub fn record_block(&self, tx_count: u64, difficulty: u8, chain_height: u64) {
+        self.blocks_total.inc();
+        self.blockchain_transactions_total.inc_by(tx_count);
+        self.chain_height.set(chain_height as i64);
+        self.difficulty.set(difficulty as i64);
+    }
+
+    pub fn update_height(&self, height: u64) {
+        self.chain_height.set(height as i64);
+    }
+
+    pub fn update_difficulty(&self, difficulty: u8) {
+        self.difficulty.set(difficulty as i64);
+    }
+
+    // ── Transaction helpers ───────────────────────────────────────────────────
+
+    pub fn record_validated(&self, fee: u64, validation_time_ms: f64) {
+        self.transactions_validated_total.inc();
+        self.transactions_total_fees.inc_by(fee);
+        self.transaction_validation_duration_ms.observe(validation_time_ms);
+    }
+
+    pub fn record_rejected(&self, _reason: &str) {
+        self.transactions_rejected_total.inc();
+    }
+
+    // ── Mempool helpers ───────────────────────────────────────────────────────
+
+    pub fn update_mempool(&self, pending_count: u64, total_fees: u64) {
+        self.mempool_pending.set(pending_count as i64);
+        self.mempool_fees_pending.set(total_fees as i64);
+    }
+
+    // ── Network helpers ───────────────────────────────────────────────────────
+
+    pub fn update_peers(&self, count: u64) {
+        self.network_peers.set(count as i64);
+    }
+
+    pub fn record_message_received(&self) {
+        self.network_messages_received.inc();
+    }
+
+    pub fn record_message_sent(&self) {
+        self.network_messages_sent.inc();
+    }
+
+    // ── Gossip helpers ────────────────────────────────────────────────────────
+
+    pub fn record_gossip_block(&self) {
+        self.gossip_blocks_gossiped.inc();
+    }
+
+    // ── Endorsement helpers ───────────────────────────────────────────────────
+
+    /// Increment after each call to `validate_endorsements`.
+    pub fn record_endorsement_validation(&self) {
+        self.endorsement_validations_total.inc();
+    }
+
+    // ── Ordering helpers ──────────────────────────────────────────────────────
+
+    /// Increment each time the ordering service cuts a new block.
+    pub fn record_ordering_block_cut(&self) {
+        self.ordering_blocks_cut_total.inc();
+    }
+
+    // ── MVCC helpers ──────────────────────────────────────────────────────────
+
+    /// Increment each time a transaction is rejected due to an MVCC conflict.
+    pub fn record_mvcc_conflict(&self) {
+        self.mvcc_conflicts_total.inc();
+    }
+
+    // ── Event bus helpers ─────────────────────────────────────────────────────
+
+    /// Set the current active subscription count (call after subscribe/unsubscribe).
+    pub fn set_event_subscriptions(&self, count: usize) {
+        self.event_subscriptions_active.set(count as i64);
+    }
+
+    // ── Discovery helpers ─────────────────────────────────────────────────────
+
+    /// Set the current registered peer count (call after register/unregister).
+    pub fn set_discovery_peers(&self, count: usize) {
+        self.discovery_peers_registered.set(count as i64);
+    }
+
+    // ── Rendering ─────────────────────────────────────────────────────────────
+
+    /// Render all metrics in Prometheus text exposition format (0.0.4).
     pub fn collect_metrics(&self) -> String {
-        let mut output = String::new();
-
-        // Blockchain metrics
-        output.push_str("# HELP blockchain_blocks_total Total number of blocks in the chain\n");
-        output.push_str("# TYPE blockchain_blocks_total counter\n");
-        output.push_str(&format!(
-            "blockchain_blocks_total {}\n",
-            self.blockchain.blocks_total.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP blockchain_transactions_total Total number of transactions\n");
-        output.push_str("# TYPE blockchain_transactions_total counter\n");
-        output.push_str(&format!(
-            "blockchain_transactions_total {}\n",
-            self.blockchain.transactions_total.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP blockchain_height Current blockchain height\n");
-        output.push_str("# TYPE blockchain_height gauge\n");
-        output.push_str(&format!(
-            "blockchain_height {}\n",
-            self.blockchain.chain_height.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP blockchain_difficulty Current mining difficulty\n");
-        output.push_str("# TYPE blockchain_difficulty gauge\n");
-        output.push_str(&format!(
-            "blockchain_difficulty {}\n",
-            self.blockchain.difficulty.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP blockchain_last_block_time_ms Timestamp of last block (ms since epoch)\n");
-        output.push_str("# TYPE blockchain_last_block_time_ms gauge\n");
-        output.push_str(&format!(
-            "blockchain_last_block_time_ms {}\n",
-            self.blockchain.last_block_time_ms.load(Ordering::Relaxed)
-        ));
-
-        // Transaction metrics
-        output.push_str("# HELP transactions_validated_total Total validated transactions\n");
-        output.push_str("# TYPE transactions_validated_total counter\n");
-        output.push_str(&format!(
-            "transactions_validated_total {}\n",
-            self.transactions.validated_total.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP transactions_rejected_total Total rejected transactions\n");
-        output.push_str("# TYPE transactions_rejected_total counter\n");
-        output.push_str(&format!(
-            "transactions_rejected_total {}\n",
-            self.transactions.rejected_total.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP transactions_total_fees_collected Total fees collected\n");
-        output.push_str("# TYPE transactions_total_fees_collected counter\n");
-        output.push_str(&format!(
-            "transactions_total_fees_collected {}\n",
-            self.transactions.total_fees.load(Ordering::Relaxed)
-        ));
-
-        let total_validated = self.transactions.validated_total.load(Ordering::Relaxed);
-        let avg_validation_time = if total_validated > 0 {
-            self.transactions.validation_time_sum_ms.load(Ordering::Relaxed) / total_validated
-        } else {
-            0
-        };
-
-        output.push_str("# HELP transactions_avg_validation_time_ms Average transaction validation time (ms)\n");
-        output.push_str("# TYPE transactions_avg_validation_time_ms gauge\n");
-        output.push_str(&format!(
-            "transactions_avg_validation_time_ms {}\n",
-            avg_validation_time
-        ));
-
-        // Mempool metrics
-        output.push_str("# HELP mempool_pending_transactions Number of pending transactions in mempool\n");
-        output.push_str("# TYPE mempool_pending_transactions gauge\n");
-        output.push_str(&format!(
-            "mempool_pending_transactions {}\n",
-            self.mempool.pending_transactions.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP mempool_total_fees_pending Total fees of pending transactions\n");
-        output.push_str("# TYPE mempool_total_fees_pending gauge\n");
-        output.push_str(&format!(
-            "mempool_total_fees_pending {}\n",
-            self.mempool.total_fees_pending.load(Ordering::Relaxed)
-        ));
-
-        let oldest_ts = self.mempool.oldest_pending_timestamp.load(Ordering::Relaxed);
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let oldest_age = if now >= oldest_ts { now - oldest_ts } else { 0 };
-
-        output.push_str("# HELP mempool_oldest_pending_age_seconds Age of oldest pending transaction (seconds)\n");
-        output.push_str("# TYPE mempool_oldest_pending_age_seconds gauge\n");
-        output.push_str(&format!(
-            "mempool_oldest_pending_age_seconds {}\n",
-            oldest_age
-        ));
-
-        // Network metrics
-        output.push_str("# HELP network_connected_peers Number of connected peers\n");
-        output.push_str("# TYPE network_connected_peers gauge\n");
-        output.push_str(&format!(
-            "network_connected_peers {}\n",
-            self.network.connected_peers.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP network_messages_received_total Total P2P messages received\n");
-        output.push_str("# TYPE network_messages_received_total counter\n");
-        output.push_str(&format!(
-            "network_messages_received_total {}\n",
-            self.network.messages_received.load(Ordering::Relaxed)
-        ));
-
-        output.push_str("# HELP network_messages_sent_total Total P2P messages sent\n");
-        output.push_str("# TYPE network_messages_sent_total counter\n");
-        output.push_str(&format!(
-            "network_messages_sent_total {}\n",
-            self.network.messages_sent.load(Ordering::Relaxed)
-        ));
-
-        output
+        let mf = self.registry.gather();
+        let encoder = TextEncoder::new();
+        encoder.encode_to_string(&mf).unwrap_or_default()
     }
 }
 
 impl Default for MetricsCollector {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_metrics_returns_prometheus_text() {
+        let m = MetricsCollector::new();
+        m.record_block(5, 2, 10);
+        let output = m.collect_metrics();
+        assert!(output.contains("blockchain_blocks_total 1"));
+        assert!(output.contains("blockchain_height 10"));
+    }
+
+    #[test]
+    fn transaction_metrics_increment() {
+        let m = MetricsCollector::new();
+        m.record_validated(100, 3.5);
+        m.record_rejected("bad sig");
+        let output = m.collect_metrics();
+        assert!(output.contains("transactions_validated_total 1"));
+        assert!(output.contains("transactions_rejected_total 1"));
+    }
+
+    #[test]
+    fn gossip_counter_increments() {
+        let m = MetricsCollector::new();
+        m.record_gossip_block();
+        m.record_gossip_block();
+        let output = m.collect_metrics();
+        assert!(output.contains("gossip_blocks_gossiped_total 2"));
+    }
+
+    #[test]
+    fn network_peer_gauge() {
+        let m = MetricsCollector::new();
+        m.update_peers(7);
+        let output = m.collect_metrics();
+        assert!(output.contains("network_connected_peers 7"));
+    }
+
+    #[test]
+    fn endorsement_validation_counter() {
+        let m = MetricsCollector::new();
+        m.record_endorsement_validation();
+        m.record_endorsement_validation();
+        m.record_endorsement_validation();
+        let output = m.collect_metrics();
+        assert!(output.contains("endorsement_validations_total 3"));
+    }
+
+    #[test]
+    fn ordering_blocks_cut_counter() {
+        let m = MetricsCollector::new();
+        m.record_ordering_block_cut();
+        m.record_ordering_block_cut();
+        let output = m.collect_metrics();
+        assert!(output.contains("ordering_blocks_cut_total 2"));
+    }
+
+    #[test]
+    fn mvcc_conflicts_counter() {
+        let m = MetricsCollector::new();
+        m.record_mvcc_conflict();
+        let output = m.collect_metrics();
+        assert!(output.contains("mvcc_conflicts_total 1"));
+    }
+
+    #[test]
+    fn event_subscriptions_gauge() {
+        let m = MetricsCollector::new();
+        m.set_event_subscriptions(5);
+        let out = m.collect_metrics();
+        assert!(out.contains("event_subscriptions_active 5"));
+        m.set_event_subscriptions(3);
+        let out2 = m.collect_metrics();
+        assert!(out2.contains("event_subscriptions_active 3"));
+    }
+
+    #[test]
+    fn discovery_peers_gauge() {
+        let m = MetricsCollector::new();
+        m.set_discovery_peers(12);
+        let out = m.collect_metrics();
+        assert!(out.contains("discovery_peers_registered 12"));
     }
 }

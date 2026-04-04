@@ -76,12 +76,43 @@ pub trait PrivateDataStore: Send + Sync {
         value: &[u8],
     ) -> StorageResult<[u8; 32]>;
 
+    /// Store `value` together with TTL metadata so it can later be purged.
+    ///
+    /// `written_at_height` is the block height at which the data is written.
+    /// `blocks_to_live` is how many blocks the data survives before becoming
+    /// eligible for purge (0 means never expires).
+    ///
+    /// Default implementation ignores TTL and delegates to `put_private_data`.
+    fn put_private_data_at(
+        &self,
+        collection_name: &str,
+        key: &str,
+        value: &[u8],
+        written_at_height: u64,
+        blocks_to_live: u64,
+    ) -> StorageResult<[u8; 32]> {
+        let _ = (written_at_height, blocks_to_live); // ignored by default
+        self.put_private_data(collection_name, key, value)
+    }
+
     /// Retrieve the bytes previously stored under `(collection_name, key)`.
     fn get_private_data(
         &self,
         collection_name: &str,
         key: &str,
     ) -> StorageResult<Option<Vec<u8>>>;
+
+    /// Remove all entries whose TTL has expired.
+    ///
+    /// An entry expires when `written_at_height + blocks_to_live <= current_height`
+    /// (and `blocks_to_live > 0`).
+    ///
+    /// Default implementation is a no-op (stores that don't track TTL simply
+    /// never expire entries in-memory — a future phase can implement RocksDB
+    /// compaction filters for durable purge).
+    fn purge_expired(&self, current_height: u64) {
+        let _ = current_height;
+    }
 }
 
 // ── SHA-256 helper ────────────────────────────────────────────────────────────
@@ -96,14 +127,18 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
 
 /// In-memory `PrivateDataStore` for tests and single-node dev.
 pub struct MemoryPrivateDataStore {
-    /// key = (collection_name, entry_key)
+    /// key = (collection_name, entry_key) → value bytes
     data: Mutex<HashMap<(String, String), Vec<u8>>>,
+    /// TTL metadata for entries written via `put_private_data_at`.
+    /// value = (written_at_height, blocks_to_live)
+    ttl: Mutex<HashMap<(String, String), (u64, u64)>>,
 }
 
 impl MemoryPrivateDataStore {
     pub fn new() -> Self {
         Self {
             data: Mutex::new(HashMap::new()),
+            ttl: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -129,6 +164,27 @@ impl PrivateDataStore for MemoryPrivateDataStore {
         Ok(hash)
     }
 
+    fn put_private_data_at(
+        &self,
+        collection_name: &str,
+        key: &str,
+        value: &[u8],
+        written_at_height: u64,
+        blocks_to_live: u64,
+    ) -> StorageResult<[u8; 32]> {
+        let hash = self.put_private_data(collection_name, key, value)?;
+        if blocks_to_live > 0 {
+            self.ttl
+                .lock()
+                .map_err(|_| StorageError::Other("mutex poisoned".to_string()))?
+                .insert(
+                    (collection_name.to_string(), key.to_string()),
+                    (written_at_height, blocks_to_live),
+                );
+        }
+        Ok(hash)
+    }
+
     fn get_private_data(
         &self,
         collection_name: &str,
@@ -139,6 +195,28 @@ impl PrivateDataStore for MemoryPrivateDataStore {
             .lock()
             .map_err(|_| StorageError::Other("mutex poisoned".to_string()))?;
         Ok(map.get(&(collection_name.to_string(), key.to_string())).cloned())
+    }
+
+    /// Remove all entries whose `blocks_to_live` window has closed.
+    ///
+    /// An entry expires when `written_at + blocks_to_live <= current_height`.
+    fn purge_expired(&self, current_height: u64) {
+        let mut ttl_map = self.ttl.lock().expect("ttl mutex poisoned");
+        let expired: Vec<(String, String)> = ttl_map
+            .iter()
+            .filter(|(_, (written_at, btl))| written_at + btl <= current_height)
+            .map(|(k, _)| k.clone())
+            .collect();
+
+        if expired.is_empty() {
+            return;
+        }
+
+        let mut data_map = self.data.lock().expect("data mutex poisoned");
+        for key in &expired {
+            data_map.remove(key);
+            ttl_map.remove(key);
+        }
     }
 }
 
@@ -304,6 +382,91 @@ mod tests {
         assert_eq!(
             store.get_private_data("col1", "k").unwrap(),
             Some(b"v2".to_vec())
+        );
+    }
+
+    // ── purge_expired tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn purge_removes_expired_entry_data_absent_after_purge() {
+        let store = MemoryPrivateDataStore::new();
+        let value = b"sensitive payload";
+
+        // Write at height 1 with blocks_to_live = 5 → expires when height >= 6.
+        let hash = store.put_private_data_at("col1", "k1", value, 1, 5).unwrap();
+        assert_eq!(hash, sha256(value));
+
+        // Still present before expiry.
+        assert_eq!(
+            store.get_private_data("col1", "k1").unwrap(),
+            Some(value.to_vec())
+        );
+
+        // Purge at height 5 — not yet expired (1 + 5 = 6 > 5).
+        store.purge_expired(5);
+        assert_eq!(
+            store.get_private_data("col1", "k1").unwrap(),
+            Some(value.to_vec()),
+            "should still be present at height 5"
+        );
+
+        // Purge at height 6 — now expired (1 + 5 = 6 <= 6).
+        store.purge_expired(6);
+        assert_eq!(
+            store.get_private_data("col1", "k1").unwrap(),
+            None,
+            "data must be absent after purge"
+        );
+
+        // The hash is only on-chain (in the TX data field), not in the store;
+        // verify it matches the original value for integrity proof.
+        assert_eq!(hash, sha256(value), "on-chain hash must still match original value");
+    }
+
+    #[test]
+    fn purge_does_not_remove_unexpired_entry() {
+        let store = MemoryPrivateDataStore::new();
+        store.put_private_data_at("col1", "k", b"data", 1, 100).unwrap();
+        store.purge_expired(50);
+        assert!(store.get_private_data("col1", "k").unwrap().is_some());
+    }
+
+    #[test]
+    fn purge_removes_only_expired_leaves_others() {
+        let store = MemoryPrivateDataStore::new();
+        // Expires at height 6.
+        store.put_private_data_at("col1", "short", b"short-lived", 1, 5).unwrap();
+        // Expires at height 101.
+        store.put_private_data_at("col1", "long", b"long-lived", 1, 100).unwrap();
+
+        store.purge_expired(6);
+
+        assert_eq!(store.get_private_data("col1", "short").unwrap(), None);
+        assert_eq!(
+            store.get_private_data("col1", "long").unwrap(),
+            Some(b"long-lived".to_vec())
+        );
+    }
+
+    #[test]
+    fn entry_without_ttl_is_never_purged() {
+        let store = MemoryPrivateDataStore::new();
+        store.put_private_data("col1", "k", b"immortal").unwrap();
+        store.purge_expired(u64::MAX);
+        assert_eq!(
+            store.get_private_data("col1", "k").unwrap(),
+            Some(b"immortal".to_vec())
+        );
+    }
+
+    #[test]
+    fn zero_blocks_to_live_never_expires() {
+        let store = MemoryPrivateDataStore::new();
+        store.put_private_data_at("col1", "k", b"no-ttl", 1, 0).unwrap();
+        store.purge_expired(u64::MAX);
+        assert_eq!(
+            store.get_private_data("col1", "k").unwrap(),
+            Some(b"no-ttl".to_vec())
         );
     }
 }

@@ -14,6 +14,11 @@ use crate::storage::traits::Transaction;
 pub struct GatewaySubmitRequest {
     /// Chaincode to invoke (used to look up the endorsement policy).
     pub chaincode_id: String,
+    /// Channel on which to endorse. When provided and a discovery service is
+    /// configured, the gateway uses `endorsement_plan` instead of the local
+    /// org registry to find endorsers.
+    #[serde(default)]
+    pub channel_id: String,
     /// The transaction to submit.
     pub transaction: TransactionBody,
 }
@@ -85,7 +90,7 @@ pub async fn gateway_submit(
     };
 
     let result = gw
-        .submit(&req.chaincode_id, tx)
+        .submit(&req.chaincode_id, &req.channel_id, tx)
         .map_err(|e| ApiError::InternalError { reason: e.to_string() })?;
 
     let trace_id = uuid::Uuid::new_v4().to_string();
@@ -151,6 +156,8 @@ mod tests {
             chaincode_package_store: None,
             chaincode_definition_store: None,
             gateway,
+            discovery_service: None,
+            event_bus: Arc::new(crate::events::EventBus::new()),
         })
     }
 

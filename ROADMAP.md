@@ -322,7 +322,7 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 - [x] **7.1.2** Crear CF `private_{collection_name}` dinámicamente en RocksDB para cada collection
   - Hash SHA-256 del dato va on-chain (en TX data field), dato real en side CF
   - Tests: write private data → hash in block tx, dato en side CF, get private data → matches
-- [ ] **7.1.3** Implementar purge: `fn purge_expired(&self, current_height: u64)` borra datos con `blocks_to_live` expirado
+- [x] **7.1.3** Implementar purge: `fn purge_expired(&self, current_height: u64)` borra datos con `blocks_to_live` expirado
   - Tests: dato con blocks_to_live=5, escribir 6 bloques → purge → dato ausente, hash persiste
 
 ### 7.2 Access control
@@ -397,34 +397,34 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 10.1 Discovery registry
 
-- [ ] **10.1.1** Crear struct `PeerDescriptor` en `src/discovery/mod.rs`
+- [x] **10.1.1** Crear struct `PeerDescriptor` en `src/discovery/mod.rs`
   - Campos: `peer_address: String`, `org_id: String`, `role: NodeRole`, `chaincodes: Vec<String>`, `channels: Vec<String>`, `last_heartbeat: u64`
   - Declarar `mod discovery` en `lib.rs`/`main.rs`
   - Tests: crear descriptor, serializar/deserializar
-- [ ] **10.1.2** Crear struct `DiscoveryService` en `src/discovery/service.rs`
+- [x] **10.1.2** Crear struct `DiscoveryService` en `src/discovery/service.rs`
   - Campos: `peers: Mutex<HashMap<String, PeerDescriptor>>`, `org_registry: Arc<dyn OrgRegistry>`, `policy_store: Arc<dyn PolicyStore>`
   - Métodos: `register_peer(&self, desc: PeerDescriptor)`, `unregister_peer(&self, address: &str)`, `heartbeat(&self, address: &str)`
   - Tests: register 3 peers, heartbeat actualiza timestamp, unregister remueve
 
 ### 10.2 Endorsement plan
 
-- [ ] **10.2.1** Implementar `DiscoveryService::endorsement_plan(&self, chaincode_id: &str, channel_id: &str) -> Result<Vec<PeerDescriptor>, DiscoveryError>`
+- [x] **10.2.1** Implementar `DiscoveryService::endorsement_plan(&self, chaincode_id: &str, channel_id: &str) -> Result<Vec<PeerDescriptor>, DiscoveryError>`
   - Consulta policy del chaincode, filtra peers que pertenecen a orgs requeridas y tienen el chaincode instalado
   - Retorna el conjunto mínimo de peers para satisfacer la policy
   - Tests: policy NOutOf{2, [org1, org2, org3]} con 5 peers → retorna 2 peers de 2 orgs distintas
-- [ ] **10.2.2** Implementar `DiscoveryService::channel_peers(&self, channel_id: &str) -> Vec<PeerDescriptor>`
+- [x] **10.2.2** Implementar `DiscoveryService::channel_peers(&self, channel_id: &str) -> Vec<PeerDescriptor>`
   - Filtra peers que participan en el channel dado
   - Tests: 5 peers, 3 en channel "mychannel" → retorna 3
 
 ### 10.3 REST API
 
-- [ ] **10.3.1** Handler `GET /api/v1/discovery/endorsers?chaincode={id}&channel={id}` — retorna endorsement plan
-- [ ] **10.3.2** Handler `GET /api/v1/discovery/peers?channel={id}` — retorna peers del channel
-- [ ] **10.3.3** Handler `POST /api/v1/discovery/register` — un peer se registra en el discovery service (llamado al boot)
+- [x] **10.3.1** Handler `GET /api/v1/discovery/endorsers?chaincode={id}&channel={id}` — retorna endorsement plan
+- [x] **10.3.2** Handler `GET /api/v1/discovery/peers?channel={id}` — retorna peers del channel
+- [x] **10.3.3** Handler `POST /api/v1/discovery/register` — un peer se registra en el discovery service (llamado al boot)
 
 ### 10.4 Integración con Gateway
 
-- [ ] **10.4.1** En `Gateway::submit` (Fase 9.1.2), usar `DiscoveryService::endorsement_plan` para determinar a qué peers enviar la proposal
+- [x] **10.4.1** En `Gateway::submit` (Fase 9.1.2), usar `DiscoveryService::endorsement_plan` para determinar a qué peers enviar la proposal
   - En vez de hardcodear el peer local, consultar discovery → enviar proposals a peers del plan
   - Tests: gateway usa discovery para encontrar endorsers, submit funciona end-to-end
 
@@ -437,35 +437,35 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 11.1 Event bus
 
-- [ ] **11.1.1** Crear struct `EventBus` en `src/events/mod.rs`
+- [x] **11.1.1** Crear struct `EventBus` en `src/events/mod.rs`
   - Usa `tokio::sync::broadcast::channel` para fan-out a múltiples suscriptores
   - Declarar `mod events` en `lib.rs`/`main.rs`
   - Tests: 3 receivers, enviar evento → los 3 lo reciben
-- [ ] **11.1.2** Crear enum `BlockEvent` en `src/events/types.rs`
+- [x] **11.1.2** Crear enum `BlockEvent` en `src/events/types.rs`
   - Variantes: `BlockCommitted { height: u64, tx_count: usize }`, `TransactionCommitted { tx_id: String, block_height: u64, valid: bool }`, `ChaincodeEvent { chaincode_id: String, event_name: String, payload: Vec<u8> }`
   - Tests: serde roundtrip de cada variante
 
 ### 11.2 Emisión de eventos
 
-- [ ] **11.2.1** Añadir `event_bus: Arc<EventBus>` a `AppState`
+- [x] **11.2.1** Añadir `event_bus: Arc<EventBus>` a `AppState`
   - En el commit path (donde el peer escribe el bloque en store), emitir `BlockCommitted` y `TransactionCommitted` por cada TX del bloque
   - Tests: escribir bloque con 3 TXs → event bus recibe 1 BlockCommitted + 3 TransactionCommitted
-- [ ] **11.2.2** En `WasmExecutor` (Fase 8.3), exponer host function `set_event(name, payload)` que emite `ChaincodeEvent`
+- [x] **11.2.2** En `WasmExecutor` (Fase 8.3), exponer host function `set_event(name, payload)` que emite `ChaincodeEvent`
   - Tests: chaincode emite evento → EventBus lo recibe
 
 ### 11.3 WebSocket endpoint
 
-- [ ] **11.3.1** Handler `GET /api/v1/events/blocks` — WebSocket que envía `BlockEvent` en JSON a cada suscriptor
+- [x] **11.3.1** Handler `GET /api/v1/events/blocks` — WebSocket que envía `BlockEvent` en JSON a cada suscriptor
   - Usa `actix_web::web::Payload` + `actix_ws` (Actix-Web tiene soporte WS nativo)
   - Cada conexión WS se suscribe al `broadcast::channel` del `EventBus`
   - Tests: conectar WS, escribir bloque, WS recibe evento
-- [ ] **11.3.2** Soporte de filtros: el cliente envía un mensaje JSON al conectar con `{ "channel_id": "...", "chaincode_id": "..." }` para filtrar eventos
+- [x] **11.3.2** Soporte de filtros: el cliente envía un mensaje JSON al conectar con `{ "channel_id": "...", "chaincode_id": "..." }` para filtrar eventos
   - Si no envía filtro → recibe todo
   - Tests: filtro por channel → solo recibe eventos de ese channel
 
 ### 11.4 REST fallback (long-polling)
 
-- [ ] **11.4.1** Handler `GET /api/v1/events/blocks?from_height={n}` — retorna bloques desde height N
+- [x] **11.4.1** Handler `GET /api/v1/events/blocks?from_height={n}` — retorna bloques desde height N
   - Para clientes que no soportan WebSocket
   - El cliente hace polling periódico con el último height recibido
   - Tests: escribir 3 bloques, query from_height=2 → retorna 2 bloques
@@ -476,20 +476,20 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 12.1 Gossip improvements
 
-- [ ] **12.1.1** Añadir push-gossip a `network.rs`: al recibir bloque nuevo, re-enviar `Message::NewBlock` a N peers aleatorios (ya existe parcialmente para contratos en `process_message`)
+- [x] **12.1.1** Añadir push-gossip a `network.rs`: al recibir bloque nuevo, re-enviar `Message::NewBlock` a N peers aleatorios (ya existe parcialmente para contratos en `process_message`)
   - Tests: 3 nodos en-proceso, nodo A recibe bloque → nodo B y C lo reciben via gossip
 
 ### 12.2 Observabilidad
 
-- [ ] **12.2.1** Añadir métricas Prometheus en `metrics.rs` para: `endorsement_validations_total`, `ordering_blocks_cut_total`, `mvcc_conflicts_total`, `event_subscriptions_active`, `discovery_peers_registered`
+- [x] **12.2.1** Añadir métricas Prometheus en `metrics.rs` para: `endorsement_validations_total`, `ordering_blocks_cut_total`, `mvcc_conflicts_total`, `event_subscriptions_active`, `discovery_peers_registered`
   - Reutilizar `prometheus` crate que ya está en Cargo.toml
   - Tests: incrementar counter, verificar valor
 
 ### 12.3 Benchmarks
 
-- [ ] **12.3.1** Benchmark con Criterion: ordering service throughput (TXs/segundo con batch_size=100)
-- [ ] **12.3.2** Benchmark: endorsement validation latency (N endorsements contra policy)
-- [ ] **12.3.3** Benchmark: event bus fan-out latency (1 evento → N suscriptores)
+- [x] **12.3.1** Benchmark con Criterion: ordering service throughput (TXs/segundo con batch_size=100)
+- [x] **12.3.2** Benchmark: endorsement validation latency (N endorsements contra policy)
+- [x] **12.3.3** Benchmark: event bus fan-out latency (1 evento → N suscriptores)
 
 ---
 

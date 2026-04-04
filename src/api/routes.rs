@@ -1,12 +1,15 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{blocks, chain, chaincode, channels, credentials, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
+use crate::api::handlers::{blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
 
 impl ApiRoutes {
     pub fn configure(cfg: &mut web::ServiceConfig) {
+        // Prometheus scrape endpoint — conventional path outside /api/v1
+        cfg.service(utilities::get_metrics);
+
         cfg.service(
             web::scope("/api/v1")
                 .service(Self::identity_routes())
@@ -26,6 +29,8 @@ impl ApiRoutes {
                 .service(Self::private_data_routes())
                 .service(Self::chaincode_routes())
                 .service(Self::gateway_routes())
+                .service(Self::discovery_routes())
+                .service(Self::events_routes())
                 .service(Self::utilities_routes()),
         );
     }
@@ -130,6 +135,17 @@ impl ApiRoutes {
 
     fn gateway_routes() -> Scope {
         web::scope("").service(gateway::gateway_submit)
+    }
+
+    fn discovery_routes() -> Scope {
+        web::scope("")
+            .service(discovery::get_endorsers)
+            .service(discovery::get_channel_peers)
+            .service(discovery::post_register_peer)
+    }
+
+    fn events_routes() -> Scope {
+        web::scope("").service(events::events_blocks)
     }
 
     fn utilities_routes() -> Scope {

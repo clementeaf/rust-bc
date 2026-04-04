@@ -158,6 +158,8 @@ mod tests {
             chaincode_package_store: None,
             chaincode_definition_store: None,
             gateway: None,
+            discovery_service: None,
+            event_bus: Arc::new(crate::events::EventBus::new()),
         }
     }
 

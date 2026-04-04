@@ -103,6 +103,8 @@ pub struct Node {
     pub ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
     /// New storage layer (present when STORAGE_BACKEND is configured).
     pub store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
+    /// Sender side of the push-gossip channel for newly accepted blocks.
+    pub gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
 }
 
 /// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
@@ -130,6 +132,64 @@ pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
         None
     } else {
         Some(set)
+    }
+}
+
+/// Number of random peers to forward a newly received block to (push-gossip fanout).
+const GOSSIP_FANOUT: usize = 3;
+
+/// Opens a TCP connection (optionally wrapped in TLS) without requiring a `Node` reference.
+async fn open_peer_stream(
+    address: &str,
+    tls_connector: Option<&TlsConnector>,
+) -> Result<Box<dyn AsyncStream>, Box<dyn std::error::Error + Send + Sync>> {
+    let tcp = TcpStream::connect(address).await?;
+    match tls_connector {
+        Some(connector) => {
+            let name = parse_server_name(address)?;
+            let tls = connector.connect(name, tcp).await?;
+            Ok(Box::new(tls))
+        }
+        None => Ok(Box::new(tcp)),
+    }
+}
+
+/// Background task that re-gossips accepted blocks to up to `GOSSIP_FANOUT` random peers,
+/// excluding the peer that originally sent the block.
+async fn gossip_loop(
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<(Block, Option<String>)>,
+    peers: Arc<Mutex<HashSet<String>>>,
+    tls_connector: Option<Arc<TlsConnector>>,
+) {
+    use rand::seq::SliceRandom as _;
+    while let Some((block, source)) = rx.recv().await {
+        let all_peers: Vec<String> = peers.lock().unwrap().iter().cloned().collect();
+        let candidates: Vec<String> = all_peers
+            .into_iter()
+            .filter(|p| source.as_deref() != Some(p.as_str()))
+            .collect();
+        let n = GOSSIP_FANOUT.min(candidates.len());
+        if n == 0 {
+            continue;
+        }
+        let chosen: Vec<String> = candidates
+            .choose_multiple(&mut rand::thread_rng(), n)
+            .cloned()
+            .collect();
+        let msg_json = match serde_json::to_string(&Message::NewBlock(block)) {
+            Ok(j) => j,
+            Err(_) => continue,
+        };
+        for addr in chosen {
+            match open_peer_stream(&addr, tls_connector.as_deref()).await {
+                Ok(mut stream) => {
+                    if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes()).await {
+                        eprintln!("gossip: error sending block to {}: {}", addr, e);
+                    }
+                }
+                Err(e) => eprintln!("gossip: could not connect to {}: {}", addr, e),
+            }
+        }
     }
 }
 
@@ -205,6 +265,7 @@ impl Node {
             role,
             ordering_service: None,
             store: None,
+            gossip_block_tx: None,
         }
     }
 
@@ -256,15 +317,7 @@ impl Node {
         &self,
         address: &str,
     ) -> Result<Box<dyn AsyncStream>, Box<dyn std::error::Error + Send + Sync>> {
-        let tcp = TcpStream::connect(address).await?;
-        match &self.tls_connector {
-            Some(connector) => {
-                let name = parse_server_name(address)?;
-                let tls = connector.connect(name, tcp).await?;
-                Ok(Box::new(tls))
-            }
-            None => Ok(Box::new(tcp)),
-        }
+        open_peer_stream(address, self.tls_connector.as_deref()).await
     }
 
     /**
@@ -296,6 +349,18 @@ impl Node {
         let ordering_service = self.ordering_service.clone();
         let store = self.store.clone();
 
+        // Push-gossip channel: newly accepted blocks are sent here and forwarded
+        // to GOSSIP_FANOUT random peers by the background gossip task.
+        let (gossip_tx, gossip_rx) =
+            tokio::sync::mpsc::unbounded_channel::<(Block, Option<String>)>();
+        let gossip_tx = Arc::new(gossip_tx);
+        self.gossip_block_tx = Some(gossip_tx.clone());
+        {
+            let gossip_peers = peers.clone();
+            let gossip_tls = self.tls_connector.clone();
+            tokio::spawn(gossip_loop(gossip_rx, gossip_peers, gossip_tls));
+        }
+
         loop {
             match listener.accept().await {
                 Ok((stream, peer_addr)) => {
@@ -326,6 +391,7 @@ impl Node {
                     let tls_acceptor_clone = tls_acceptor.clone();
                     let ordering_service_clone = ordering_service.clone();
                     let store_clone = store.clone();
+                    let gossip_tx_clone = gossip_tx.clone();
 
                     tokio::spawn(async move {
                         let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone {
@@ -357,6 +423,7 @@ impl Node {
                             role,
                             ordering_service_clone,
                             store_clone,
+                            Some(gossip_tx_clone),
                         )
                         .await
                         {
@@ -393,6 +460,7 @@ impl Node {
         role: NodeRole,
         ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
+        gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
         let mut buffer = [0; 8192]; // Aumentado a 8KB para contratos más grandes
@@ -484,6 +552,7 @@ impl Node {
                     role,
                     ordering_service.clone(),
                     store.clone(),
+                    gossip_block_tx.clone(),
                 )
                 .await?;
 
@@ -518,6 +587,7 @@ impl Node {
         role: NodeRole,
         ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
+        gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
@@ -693,6 +763,12 @@ impl Node {
                     if let Err(e) = storage.save_block(&block_clone) {
                         eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                     }
+                }
+
+                // Push-gossip: forward the accepted block to GOSSIP_FANOUT random peers
+                // (excluding the peer we received it from).
+                if let Some(ref tx) = gossip_block_tx {
+                    let _ = tx.send((block_clone, source_peer.clone()));
                 }
 
                 Ok(None)
@@ -2395,6 +2471,7 @@ mod tests {
             NodeRole::Orderer,
             Some(svc.clone()),
             None,
+            None, // gossip_block_tx
         )
         .await
         .unwrap();
@@ -2430,12 +2507,66 @@ mod tests {
             NodeRole::Peer,
             None,
             Some(store.clone()),
+            None, // gossip_block_tx
         )
         .await
         .unwrap();
 
         let saved = store.read_block(7).unwrap();
         assert_eq!(saved.height, 7);
+    }
+
+    #[tokio::test]
+    async fn new_block_sends_to_gossip_channel() {
+        use crate::blockchain::{Block, Blockchain};
+
+        // Build a fresh chain and mine block 1 on top of the genesis.
+        let bc_arc = Arc::new(Mutex::new(Blockchain::new(1)));
+        let genesis_hash = bc_arc.lock().unwrap().get_latest_block().hash.clone();
+
+        let coinbase = Blockchain::create_coinbase_transaction(
+            "miner_address_for_gossip_test_12345",
+            Some(50),
+        );
+        let mut block = Block::new(1, vec![coinbase], genesis_hash, 1);
+        block.mine(); // satisfies is_valid()
+
+        let block_hash = block.hash.clone();
+
+        let (gossip_tx, mut gossip_rx) =
+            tokio::sync::mpsc::unbounded_channel::<(Block, Option<String>)>();
+        let gossip_tx = Arc::new(gossip_tx);
+
+        let peers = Arc::new(Mutex::new(HashSet::new()));
+        let receipts = Arc::new(Mutex::new(HashMap::new()));
+        let rates = Arc::new(Mutex::new(HashMap::new()));
+
+        Node::process_message(
+            Message::NewBlock(block),
+            &peers,
+            &bc_arc,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("127.0.0.1:9001".to_string()),
+            receipts,
+            rates,
+            None,
+            NodeRole::PeerAndOrderer,
+            None,
+            None,
+            Some(gossip_tx),
+        )
+        .await
+        .unwrap();
+
+        let (gossiped_block, source) =
+            gossip_rx.try_recv().expect("gossip_tx should receive the accepted block");
+        assert_eq!(gossiped_block.hash, block_hash);
+        assert_eq!(source, Some("127.0.0.1:9001".to_string()));
     }
 
     #[test]

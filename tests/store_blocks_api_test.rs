@@ -66,6 +66,8 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         chaincode_package_store: None,
         chaincode_definition_store: None,
         gateway: None,
+        discovery_service: None,
+        event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
     }
 }
 
@@ -95,6 +97,8 @@ fn make_state_no_store() -> AppState {
         chaincode_package_store: None,
         chaincode_definition_store: None,
         gateway: None,
+        discovery_service: None,
+        event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
     }
 }
 

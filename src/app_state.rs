@@ -18,6 +18,8 @@ use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
 use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
+use crate::discovery::service::DiscoveryService;
+use crate::events::EventBus;
 use crate::gateway::Gateway;
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::storage::traits::BlockStore;
@@ -59,4 +61,8 @@ pub struct AppState {
     pub chaincode_definition_store: Option<Arc<dyn ChaincodeDefinitionStore>>,
     /// Fabric Gateway — orchestrates endorse → order → commit.
     pub gateway: Option<Arc<Gateway>>,
+    /// Service Discovery — peer registry and endorsement plan computation.
+    pub discovery_service: Option<Arc<DiscoveryService>>,
+    /// Event bus — fan-out channel for block and transaction events.
+    pub event_bus: Arc<EventBus>,
 }

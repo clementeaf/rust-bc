@@ -45,9 +45,15 @@ metrics = "0.21"
 metrics-exporter-prometheus = "0.12"
 rocksdb = "0.22"
 wasmtime = "21"
+actix-ws = "0.3"
 
 [dev-dependencies]
 tempfile = "3.8"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "ordering_throughput"
+harness = false
 
 [[bin]]
 name = "test_mining"

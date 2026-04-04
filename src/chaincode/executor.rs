@@ -3,6 +3,7 @@ use std::sync::Arc;
 use wasmtime::{Caller, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 
 use crate::chaincode::ChaincodeError;
+use crate::events::{BlockEvent, EventBus};
 use crate::storage::world_state::WorldState;
 
 /// Compiles and holds a Wasm chaincode module ready for execution.
@@ -14,12 +15,18 @@ pub struct WasmExecutor {
     pub(crate) module: Module,
     pub(crate) fuel_limit: u64,
     pub(crate) memory_limit: Option<usize>,
+    pub(crate) event_bus: Option<EventBus>,
+    pub(crate) chaincode_id: String,
+    pub(crate) channel_id: String,
 }
 
 /// Host data injected into the `Store` for every invocation.
 struct HostState {
     world_state: Arc<dyn WorldState>,
     limits: StoreLimits,
+    event_bus: Option<EventBus>,
+    chaincode_id: String,
+    channel_id: String,
 }
 
 impl WasmExecutor {
@@ -37,7 +44,17 @@ impl WasmExecutor {
         let module = Module::new(&engine, wasm_bytes)
             .map_err(|e| ChaincodeError::Execution(e.to_string()))?;
 
-        Ok(Self { engine, module, fuel_limit, memory_limit: None })
+        Ok(Self { engine, module, fuel_limit, memory_limit: None, event_bus: None, chaincode_id: String::new(), channel_id: String::new() })
+    }
+
+    /// Attach an [`EventBus`] so chaincode can emit [`BlockEvent::ChaincodeEvent`]s
+    /// via the `set_event` host function.
+    ///
+    /// `chaincode_id` is embedded in every event emitted during execution.
+    pub fn with_event_bus(mut self, bus: EventBus, chaincode_id: impl Into<String>) -> Self {
+        self.event_bus = Some(bus);
+        self.chaincode_id = chaincode_id.into();
+        self
     }
 
     /// Set the maximum Wasm linear memory this executor will allow (in bytes).
@@ -83,7 +100,16 @@ impl WasmExecutor {
             None => StoreLimitsBuilder::new().build(),
         };
 
-        let mut store = Store::new(&self.engine, HostState { world_state: state, limits });
+        let mut store = Store::new(
+            &self.engine,
+            HostState {
+                world_state: state,
+                limits,
+                event_bus: self.event_bus.clone(),
+                chaincode_id: self.chaincode_id.clone(),
+                channel_id: self.channel_id.clone(),
+            },
+        );
 
         store.limiter(|s| &mut s.limits);
 
@@ -172,6 +198,48 @@ impl WasmExecutor {
                     let out = out_ptr as usize;
                     mem.data_mut(&mut caller)[out..out + n].copy_from_slice(&value[..n]);
                     n as i32
+                },
+            )
+            .map_err(|e| ChaincodeError::Execution(e.to_string()))?;
+
+        // ── set_event ────────────────────────────────────────────────────────
+        linker
+            .func_wrap(
+                "env",
+                "set_event",
+                |mut caller: Caller<'_, HostState>,
+                 name_ptr: i32,
+                 name_len: i32,
+                 payload_ptr: i32,
+                 payload_len: i32|
+                 -> i32 {
+                    let mem = match caller
+                        .get_export("memory")
+                        .and_then(|e| e.into_memory())
+                    {
+                        Some(m) => m,
+                        None => return -1,
+                    };
+
+                    let (event_name, payload) = {
+                        let data = mem.data(&caller);
+                        let name = match read_str(data, name_ptr, name_len) {
+                            Some(n) => n.to_string(),
+                            None => return -1,
+                        };
+                        let payload = match read_bytes(data, payload_ptr, payload_len) {
+                            Some(p) => p.to_vec(),
+                            None => return -1,
+                        };
+                        (name, payload)
+                    };
+
+                    if let Some(bus) = &caller.data().event_bus {
+                        let chaincode_id = caller.data().chaincode_id.clone();
+                        let channel_id = caller.data().channel_id.clone();
+                        bus.publish(BlockEvent::ChaincodeEvent { channel_id, chaincode_id, event_name, payload });
+                    }
+                    0
                 },
             )
             .map_err(|e| ChaincodeError::Execution(e.to_string()))?;
@@ -270,6 +338,24 @@ mod tests {
 )
 "#;
 
+    /// WAT chaincode that calls set_event("Transfer", [1,2,3]) and returns 0.
+    ///
+    /// Memory layout:
+    ///   offset 0  : "Transfer" (event name, 8 bytes)
+    ///   offset 16 : 0x01 0x02 0x03 (payload, 3 bytes)
+    const SET_EVENT_WAT: &[u8] = br#"
+(module
+  (import "env" "set_event" (func $set_event (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0)  "Transfer")
+  (data (i32.const 16) "\01\02\03")
+  (func (export "run") (result i64)
+    (drop (call $set_event (i32.const 0) (i32.const 8) (i32.const 16) (i32.const 3)))
+    (i64.const 0)
+  )
+)
+"#;
+
     fn make_state() -> Arc<dyn WorldState> {
         Arc::new(MemoryWorldState::new())
     }
@@ -339,6 +425,40 @@ mod tests {
             .unwrap()
             .with_memory_limit(3 * 65_536);
 
+        assert!(ex.invoke(make_state(), "run").is_ok());
+    }
+
+    // ── set_event tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn set_event_emits_chaincode_event_to_bus() {
+        use crate::events::{BlockEvent, EventBus};
+
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+
+        let ex = WasmExecutor::new(SET_EVENT_WAT, 10_000_000)
+            .unwrap()
+            .with_event_bus(bus, "mycc");
+
+        ex.invoke(make_state(), "run").unwrap();
+
+        let event = rx.try_recv().expect("event should be in channel");
+        assert_eq!(
+            event,
+            BlockEvent::ChaincodeEvent {
+                channel_id: "".to_string(),
+                chaincode_id: "mycc".to_string(),
+                event_name: "Transfer".to_string(),
+                payload: vec![1, 2, 3],
+            }
+        );
+    }
+
+    #[test]
+    fn set_event_without_bus_is_noop_and_succeeds() {
+        // No event_bus attached — set_event should still return 0 without panicking.
+        let ex = WasmExecutor::new(SET_EVENT_WAT, 10_000_000).unwrap();
         assert!(ex.invoke(make_state(), "run").is_ok());
     }
 }

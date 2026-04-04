@@ -62,6 +62,18 @@ pub async fn get_openapi(_req: HttpRequest) -> ApiResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(spec))
 }
 
+/// GET /metrics — Prometheus text exposition format (0.0.4).
+///
+/// Intentionally outside `/api/v1` so Prometheus scrapers can use the
+/// conventional path without a prefix.
+#[get("/metrics")]
+pub async fn get_metrics(state: web::Data<AppState>) -> HttpResponse {
+    let body = state.metrics.collect_metrics();
+    HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4; charset=utf-8")
+        .body(body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::SCAFFOLD_HTTP_SINCE;

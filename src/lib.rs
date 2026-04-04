@@ -48,5 +48,7 @@ pub mod msp;
 pub mod private_data;
 pub mod chaincode;
 pub mod gateway;
+pub mod discovery;
+pub mod events;
 
 pub use app_state::AppState;

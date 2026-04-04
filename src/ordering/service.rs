@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::metrics::MetricsCollector;
 use crate::storage::{errors::StorageResult, traits::{Block, BlockStore, Transaction}};
 
 /// Collects endorsed transactions and cuts them into ordered blocks.
@@ -8,6 +9,7 @@ pub struct OrderingService {
     pub(crate) pending_txs: Mutex<VecDeque<Transaction>>,
     pub max_batch_size: usize,
     pub batch_timeout_ms: u64,
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 impl OrderingService {
@@ -33,7 +35,14 @@ impl OrderingService {
             pending_txs: Mutex::new(VecDeque::new()),
             max_batch_size,
             batch_timeout_ms,
+            metrics: None,
         }
+    }
+
+    /// Attach a metrics collector so `cut_block` increments `ordering_blocks_cut_total`.
+    pub fn with_metrics(mut self, metrics: Arc<MetricsCollector>) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     /// Enqueue a transaction for the next ordered block.
@@ -72,6 +81,9 @@ impl OrderingService {
             endorsements: vec![],
         };
 
+        if let Some(m) = &self.metrics {
+            m.record_ordering_block_cut();
+        }
         Ok(Some(block))
     }
 }

@@ -289,6 +289,8 @@ mod tests {
             chaincode_package_store: pkg_store,
             chaincode_definition_store: def_store,
             gateway: None,
+            discovery_service: None,
+            event_bus: Arc::new(crate::events::EventBus::new()),
         })
     }
 
