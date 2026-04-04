@@ -6,6 +6,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 16 — Gossip Protocol Enhancement)
+
+**16.1 — Alive messages**
+- `AliveMessage` struct in `src/network/gossip.rs` with Ed25519 signature verification
+- `Alive(AliveMessage)` variant in the P2P `Message` enum
+- `MembershipTable`: thread-safe peer liveness tracking with suspect sweep
+- `start_alive_loop` on `Node`: periodic broadcast + suspect detection
+- Refactored `src/network.rs` → `src/network/mod.rs` + `gossip.rs` module
+
+**16.2 — Pull-based state sync**
+- `StateRequest { from_height }` and `StateResponse { blocks }` message variants
+- `STATE_BATCH_SIZE` (50) caps response payload
+- `start_pull_sync_loop` on `Node`: periodic height comparison + block fetch
+- Anti-entropy: `latest_height` field on `AliveMessage`, `peers_ahead_of` gap detection
+
+**16.3 — Anchor peers**
+- `AnchorPeer` struct with `parse_anchor_peers` from `ANCHOR_PEERS` env var
+- `connect_to_anchor_peers` runs before bootstrap for cross-org discovery
+- `anchor_peers_from_config` bridges `ChannelConfig.anchor_peers` map to gossip
+
+**16.4 — Leader election per org**
+- `LeaderElectionMode` enum (`Static` / `Dynamic`) from `LEADER_ELECTION` env var
+- `elect_leader(org_id)`: smallest alive peer address wins; failover on suspect
+
+39 network tests passing.
+
+---
+
 ### 2026-04-04 (Fase 15 — Raft Consensus Ordering)
 
 **15.1 — Raft core**

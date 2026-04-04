@@ -700,51 +700,51 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 16.1 Alive messages
 
-- [ ] **16.1.1** Crear struct `AliveMessage` en `src/network/gossip.rs` (nuevo módulo, extraer de network.rs)
+- [x] **16.1.1** Crear struct `AliveMessage` en `src/network/gossip.rs` (nuevo módulo, extraer de network.rs)
   - Campos: `peer_address: String`, `org_id: String`, `timestamp: u64`, `sequence: u64`, `signature: [u8; 64]`
   - Declarar `mod gossip` en `src/network/mod.rs` (refactor: mover `network.rs` → `network/mod.rs`)
   - Tests: crear alive, serde roundtrip, verificar firma
-- [ ] **16.1.2** Añadir variante `Alive(AliveMessage)` al enum `Message`
+- [x] **16.1.2** Añadir variante `Alive(AliveMessage)` al enum `Message`
   - Tests: serde roundtrip
-- [ ] **16.1.3** Implementar alive broadcast loop: cada `ALIVE_INTERVAL_MS` (default 5000), enviar `Alive` a todos los peers
+- [x] **16.1.3** Implementar alive broadcast loop: cada `ALIVE_INTERVAL_MS` (default 5000), enviar `Alive` a todos los peers
   - Si no se recibe `Alive` de un peer en `ALIVE_TIMEOUT_MS` (default 15000) → marcar como sospechoso
   - Tests: 3 nodos, nodo C deja de enviar alive → nodos A,B lo marcan sospechoso tras timeout
 
 ### 16.2 Pull-based state sync
 
-- [ ] **16.2.1** Añadir variante `StateRequest { from_height: u64 }` al enum `Message`
+- [x] **16.2.1** Añadir variante `StateRequest { from_height: u64 }` al enum `Message`
   - Peer envía `StateRequest` para pedir bloques desde `from_height`
   - Tests: serde roundtrip
-- [ ] **16.2.2** Añadir variante `StateResponse { blocks: Vec<Block> }` al enum `Message`
+- [x] **16.2.2** Añadir variante `StateResponse { blocks: Vec<Block> }` al enum `Message`
   - Responde con hasta 50 bloques (configurable `STATE_BATCH_SIZE`)
   - Tests: serde roundtrip, limitar a batch size
-- [ ] **16.2.3** Implementar pull-sync loop: periódicamente (cada `PULL_INTERVAL_MS`, default 10000), comparar height local con peers
+- [x] **16.2.3** Implementar pull-sync loop: periódicamente (cada `PULL_INTERVAL_MS`, default 10000), comparar height local con peers
   - Si peer tiene height > local → enviar `StateRequest { from_height: local_height + 1 }`
   - Al recibir `StateResponse` → validar y escribir bloques en store
   - Tests: nodo A con 10 bloques, nodo B con 0 → pull sync → nodo B tiene 10 bloques
-- [ ] **16.2.4** Anti-entropy: al recibir `Alive` con info de height del peer, detectar gaps
+- [x] **16.2.4** Anti-entropy: al recibir `Alive` con info de height del peer, detectar gaps
   - Añadir `latest_height: u64` a `AliveMessage`
   - Si peer.latest_height > local_height → trigger pull sync
   - Tests: alive con height=20, local=15 → pull sync triggered
 
 ### 16.3 Anchor peers
 
-- [ ] **16.3.1** Crear struct `AnchorPeer` en `src/network/gossip.rs`
+- [x] **16.3.1** Crear struct `AnchorPeer` en `src/network/gossip.rs`
   - Campos: `peer_address: String`, `org_id: String`
   - Config via env `ANCHOR_PEERS` (comma-separated `org_id:address`)
   - Tests: parsear env, crear anchor peers
-- [ ] **16.3.2** En el bootstrap flow, conectar primero a anchor peers de cada org antes de general discovery
+- [x] **16.3.2** En el bootstrap flow, conectar primero a anchor peers de cada org antes de general discovery
   - Anchor peers sirven como punto de entrada cross-org
   - Tests: 2 orgs con anchor peers, nodo nuevo se conecta via anchors → descubre peers de ambas orgs
-- [ ] **16.3.3** Integrar anchor peers en `ChannelConfig` (Fase 13.2.1): campo `anchor_peers` ya definido
+- [x] **16.3.3** Integrar anchor peers en `ChannelConfig` (Fase 13.2.1): campo `anchor_peers` ya definido
   - Al recibir config update con nuevo anchor peer → actualizar gossip routing
   - Tests: config update añade anchor → gossip lo usa para nueva org
 
 ### 16.4 Leader election per org
 
-- [ ] **16.4.1** Crear enum `LeaderElectionMode` en `src/network/gossip.rs`: `Static`, `Dynamic`
+- [x] **16.4.1** Crear enum `LeaderElectionMode` en `src/network/gossip.rs`: `Static`, `Dynamic`
   - Config via env `LEADER_ELECTION=static|dynamic` (default `static`)
-- [ ] **16.4.2** Implementar leader election dinámica: peers de una misma org eligen un leader que tira bloques del orderer
+- [x] **16.4.2** Implementar leader election dinámica: peers de una misma org eligen un leader que tira bloques del orderer
   - Leader: peer con menor `peer_address` (determinístico, sin protocolo de elección complejo)
   - Si leader falla (no alive) → siguiente peer asume
   - Tests: 3 peers de org1, leader = peer con menor address; leader muere → siguiente asume
