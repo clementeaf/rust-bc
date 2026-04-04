@@ -147,7 +147,7 @@ impl ConsensusEngine {
                     .collect(),
                 proposer: block.proposer.clone(),
                 signature: block.signature,
-                endorsements: vec![],
+                endorsements: vec![],orderer_signature: None,
             };
             store
                 .write_block(&storage_block)

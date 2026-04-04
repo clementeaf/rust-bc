@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex, RwLock};
 pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 
 use crate::airdrop::AirdropManager;
+use crate::channel::config::ChannelConfig;
 use crate::billing::BillingManager;
 use crate::block_storage::BlockStorage;
 use crate::blockchain::Blockchain;
@@ -19,8 +20,10 @@ use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
 use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
 use crate::discovery::service::DiscoveryService;
+use crate::acl::AclProvider;
 use crate::events::EventBus;
 use crate::gateway::Gateway;
+use crate::ordering::OrderingBackend;
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
@@ -65,4 +68,10 @@ pub struct AppState {
     pub discovery_service: Option<Arc<DiscoveryService>>,
     /// Event bus — fan-out channel for block and transaction events.
     pub event_bus: Arc<EventBus>,
+    /// Per-channel config history. Key = channel_id; value = ordered list of configs (index 0 = genesis).
+    pub channel_configs: Arc<RwLock<HashMap<String, Vec<ChannelConfig>>>>,
+    /// ACL provider — maps resource names to endorsement policy references.
+    pub acl_provider: Option<Arc<dyn AclProvider>>,
+    /// Ordering backend — solo (default) or raft.
+    pub ordering_backend: Option<Arc<dyn OrderingBackend>>,
 }

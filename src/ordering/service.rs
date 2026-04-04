@@ -10,6 +10,7 @@ pub struct OrderingService {
     pub max_batch_size: usize,
     pub batch_timeout_ms: u64,
     metrics: Option<Arc<MetricsCollector>>,
+    signing_key: Option<ed25519_dalek::SigningKey>,
 }
 
 impl OrderingService {
@@ -36,12 +37,19 @@ impl OrderingService {
             max_batch_size,
             batch_timeout_ms,
             metrics: None,
+            signing_key: None,
         }
     }
 
     /// Attach a metrics collector so `cut_block` increments `ordering_blocks_cut_total`.
     pub fn with_metrics(mut self, metrics: Arc<MetricsCollector>) -> Self {
         self.metrics = Some(metrics);
+        self
+    }
+
+    /// Attach an Ed25519 signing key so `cut_block` signs each block.
+    pub fn with_signing_key(mut self, key: ed25519_dalek::SigningKey) -> Self {
+        self.signing_key = Some(key);
         self
     }
 
@@ -67,7 +75,7 @@ impl OrderingService {
         let count = queue.len().min(self.max_batch_size);
         let tx_ids: Vec<String> = queue.drain(..count).map(|tx| tx.id).collect();
 
-        let block = Block {
+        let mut block = Block {
             height,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -79,7 +87,12 @@ impl OrderingService {
             proposer: proposer.to_string(),
             signature: [0u8; 64],
             endorsements: vec![],
+            orderer_signature: None,
         };
+
+        if let Some(key) = &self.signing_key {
+            super::sign_block(&mut block, key);
+        }
 
         if let Some(m) = &self.metrics {
             m.record_ordering_block_cut();
@@ -108,6 +121,20 @@ pub async fn run_batch_loop(service: Arc<OrderingService>, store: Arc<dyn BlockS
             Ok(None) => {} // No pending txs — nothing to do.
             Err(e) => eprintln!("ordering: cut_block error: {e}"),
         }
+    }
+}
+
+impl super::OrderingBackend for OrderingService {
+    fn submit_tx(&self, tx: &Transaction) -> StorageResult<()> {
+        self.submit_tx(tx.clone())
+    }
+
+    fn cut_block(&self, height: u64, proposer: &str) -> StorageResult<Option<Block>> {
+        self.cut_block(height, proposer)
+    }
+
+    fn pending_count(&self) -> usize {
+        self.pending_count()
     }
 }
 

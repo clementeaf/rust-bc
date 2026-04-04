@@ -42,6 +42,12 @@ const CF_CRL: &str = "crl";
 const CF_WORLD_STATE: &str = "world_state";
 /// Chaincode packages: key = `{chaincode_id}:{version}`, value = raw Wasm bytes
 const CF_CHAINCODE_PACKAGES: &str = "chaincode_packages";
+/// ACL entries: key = resource string, value = JSON AclEntry
+const CF_ACLS: &str = "acls";
+/// Channel config history: key = `{channel_id}:{version:012}`, value = JSON ChannelConfig
+const CF_CHANNEL_CONFIGS: &str = "channel_configs";
+/// Key-level endorsement policies: key = state key string, value = JSON endorsement policy expression
+const CF_KEY_ENDORSEMENT_POLICIES: &str = "key_endorsement_policies";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -57,12 +63,15 @@ const ALL_CFS: &[&str] = &[
     CF_CRL,
     CF_WORLD_STATE,
     CF_CHAINCODE_PACKAGES,
+    CF_ACLS,
+    CF_CHANNEL_CONFIGS,
+    CF_KEY_ENDORSEMENT_POLICIES,
 ];
 
 
 /// RocksDB-backed block store using Column Families for data isolation
 pub struct RocksDbBlockStore {
-    db: RocksDB,
+    pub(crate) db: RocksDB,
 }
 
 impl RocksDbBlockStore {
@@ -174,6 +183,24 @@ impl RocksDbBlockStore {
         self.db
             .cf_handle(CF_CHAINCODE_PACKAGES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHAINCODE_PACKAGES.to_string()))
+    }
+
+    fn cf_acls(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_ACLS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ACLS.to_string()))
+    }
+
+    fn cf_channel_configs(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_CHANNEL_CONFIGS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHANNEL_CONFIGS.to_string()))
+    }
+
+    pub(crate) fn cf_key_endorsement_policies(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_KEY_ENDORSEMENT_POLICIES)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_KEY_ENDORSEMENT_POLICIES.to_string()))
     }
 
     // ── Key encoders ─────────────────────────────────────────────────────────
@@ -735,9 +762,118 @@ impl PrivateDataStore for RocksDbBlockStore {
     }
 }
 
+impl crate::acl::AclProvider for RocksDbBlockStore {
+    fn set_acl(&self, resource: &str, policy_ref: &str) -> StorageResult<()> {
+        let cf = self.cf_acls()?;
+        let entry = crate::acl::AclEntry::new(resource, policy_ref);
+        let bytes = serde_json::to_vec(&entry)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, resource.as_bytes(), bytes)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn get_acl(&self, resource: &str) -> StorageResult<Option<crate::acl::AclEntry>> {
+        let cf = self.cf_acls()?;
+        match self.db.get_cf(&cf, resource.as_bytes()) {
+            Ok(Some(bytes)) => {
+                let entry = serde_json::from_slice(&bytes)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+                Ok(Some(entry))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(StorageError::RocksDbError(e.to_string())),
+        }
+    }
+
+    fn list_acls(&self) -> StorageResult<Vec<crate::acl::AclEntry>> {
+        let cf = self.cf_acls()?;
+        let mut entries = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            let (_, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let entry: crate::acl::AclEntry = serde_json::from_slice(&value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            entries.push(entry);
+        }
+        Ok(entries)
+    }
+
+    fn remove_acl(&self, resource: &str) -> StorageResult<()> {
+        let cf = self.cf_acls()?;
+        self.db
+            .delete_cf(&cf, resource.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+}
+
+impl RocksDbBlockStore {
+    /// Persist a [`ChannelConfig`] snapshot.
+    ///
+    /// Key format: `{channel_id}:{version:012}` — zero-padded so lexicographic
+    /// order matches numeric order, enabling cheap prefix range scans.
+    pub fn write_channel_config(
+        &self,
+        channel_id: &str,
+        config: &crate::channel::config::ChannelConfig,
+    ) -> StorageResult<()> {
+        let cf = self.cf_channel_configs()?;
+        let key = format!("{channel_id}:{:012}", config.version);
+        let value = serde_json::to_vec(config)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    /// Read a specific version of a channel's config. Returns `None` if not found.
+    pub fn read_channel_config(
+        &self,
+        channel_id: &str,
+        version: u64,
+    ) -> StorageResult<Option<crate::channel::config::ChannelConfig>> {
+        let cf = self.cf_channel_configs()?;
+        let key = format!("{channel_id}:{version:012}");
+        match self.db.get_cf(&cf, key.as_bytes()) {
+            Ok(Some(bytes)) => {
+                let config = serde_json::from_slice(&bytes)
+                    .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+                Ok(Some(config))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(StorageError::RocksDbError(e.to_string())),
+        }
+    }
+
+    /// List all stored version numbers for `channel_id` in ascending order.
+    pub fn list_channel_versions(&self, channel_id: &str) -> StorageResult<Vec<u64>> {
+        let cf = self.cf_channel_configs()?;
+        let prefix = format!("{channel_id}:");
+        let iter = self.db.iterator_cf(
+            &cf,
+            IteratorMode::From(prefix.as_bytes(), Direction::Forward),
+        );
+        let mut versions = Vec::new();
+        for item in iter {
+            let (key, _) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let key_str = std::str::from_utf8(&key)
+                .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+            if !key_str.starts_with(&prefix) {
+                break;
+            }
+            let version_str = &key_str[prefix.len()..];
+            let version: u64 = version_str
+                .parse()
+                .map_err(|e: std::num::ParseIntError| StorageError::SerializationError(e.to_string()))?;
+            versions.push(version);
+        }
+        Ok(versions)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::acl::AclProvider;
     use tempfile::TempDir;
 
     fn tmp_store() -> (RocksDbBlockStore, TempDir) {
@@ -818,7 +954,7 @@ mod tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         }
     }
 
@@ -1325,5 +1461,107 @@ mod tests {
         store.store_package("cc", "2.0", &wasm_v2).unwrap();
         assert_eq!(store.get_package("cc", "1.0").unwrap(), Some(wasm_v1));
         assert_eq!(store.get_package("cc", "2.0").unwrap(), Some(wasm_v2));
+    }
+
+    // ── AclProvider tests ────────────────────────────────────────────────────
+
+    #[test]
+    fn acl_write_read_roundtrip() {
+        let (store, _dir) = tmp_store();
+        store.set_acl("peer/ChaincodeInvoke", "OrgPolicy").unwrap();
+        let entry = store.get_acl("peer/ChaincodeInvoke").unwrap().expect("entry");
+        assert_eq!(entry.resource, "peer/ChaincodeInvoke");
+        assert_eq!(entry.policy_ref, "OrgPolicy");
+    }
+
+    #[test]
+    fn acl_get_missing_returns_none() {
+        let (store, _dir) = tmp_store();
+        assert!(store.get_acl("nonexistent").unwrap().is_none());
+    }
+
+    #[test]
+    fn acl_list_and_remove() {
+        let (store, _dir) = tmp_store();
+        store.set_acl("peer/BlockEvents", "PolicyA").unwrap();
+        store.set_acl("peer/ChaincodeInvoke", "PolicyB").unwrap();
+        let mut list = store.list_acls().unwrap();
+        list.sort_by(|a, b| a.resource.cmp(&b.resource));
+        assert_eq!(list.len(), 2);
+        store.remove_acl("peer/BlockEvents").unwrap();
+        assert_eq!(store.list_acls().unwrap().len(), 1);
+        assert!(store.get_acl("peer/BlockEvents").unwrap().is_none());
+    }
+
+    // ── channel_configs tests ────────────────────────────────────────────────
+
+    fn sample_channel_config(version: u64) -> crate::channel::config::ChannelConfig {
+        use crate::channel::config::ChannelConfig;
+        ChannelConfig {
+            version,
+            member_orgs: vec!["org1".to_string()],
+            ..ChannelConfig::default()
+        }
+    }
+
+    #[test]
+    fn channel_config_write_read_roundtrip() {
+        let (store, _dir) = tmp_store();
+        let cfg = sample_channel_config(0);
+        store.write_channel_config("ch1", &cfg).unwrap();
+        let restored = store.read_channel_config("ch1", 0).unwrap().expect("config");
+        assert_eq!(cfg, restored);
+    }
+
+    #[test]
+    fn channel_config_read_missing_returns_none() {
+        let (store, _dir) = tmp_store();
+        assert!(store.read_channel_config("ch1", 99).unwrap().is_none());
+    }
+
+    #[test]
+    fn channel_config_list_versions() {
+        let (store, _dir) = tmp_store();
+        store.write_channel_config("ch1", &sample_channel_config(0)).unwrap();
+        store.write_channel_config("ch1", &sample_channel_config(1)).unwrap();
+        store.write_channel_config("ch1", &sample_channel_config(2)).unwrap();
+        // Different channel — must not appear in ch1 results.
+        store.write_channel_config("ch2", &sample_channel_config(0)).unwrap();
+
+        let versions = store.list_channel_versions("ch1").unwrap();
+        assert_eq!(versions, vec![0, 1, 2]);
+    }
+
+    // ── CF key_endorsement_policies ──────────────────────────────────────────
+
+    #[test]
+    fn cf_key_endorsement_policies_handle_is_present() {
+        let (store, _dir) = tmp_store();
+        assert!(store.cf_key_endorsement_policies().is_ok());
+    }
+
+    #[test]
+    fn key_endorsement_policies_cf_is_distinct_from_world_state() {
+        // The CF name constants must differ — they map to independent key spaces.
+        assert_ne!(CF_KEY_ENDORSEMENT_POLICIES, CF_WORLD_STATE);
+    }
+
+    #[test]
+    fn key_endorsement_policies_roundtrip_via_raw_put_get() {
+        let (store, _dir) = tmp_store();
+        let cf = store.cf_key_endorsement_policies().unwrap();
+        let key = b"asset:color";
+        let value = br#"{"rule":"OR('Org1MSP.member')"}"#;
+        store.db.put_cf(&cf, key, value).unwrap();
+        let got = store.db.get_cf(&cf, key).unwrap().expect("value must exist");
+        assert_eq!(got, value);
+    }
+
+    #[test]
+    fn key_endorsement_policies_missing_key_returns_none() {
+        let (store, _dir) = tmp_store();
+        let cf = store.cf_key_endorsement_policies().unwrap();
+        let got = store.db.get_cf(&cf, b"nonexistent").unwrap();
+        assert!(got.is_none());
     }
 }

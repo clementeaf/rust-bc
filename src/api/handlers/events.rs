@@ -202,7 +202,7 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         }
     }
 
@@ -237,6 +237,8 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: bus,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            acl_provider: None, ordering_backend: None,
         }
     }
 
@@ -405,6 +407,8 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: bus,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            acl_provider: None, ordering_backend: None,
         }
     }
 

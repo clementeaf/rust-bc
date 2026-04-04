@@ -236,6 +236,111 @@ pub async fn commit_chaincode(
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
+/// POST /api/v1/chaincode/{id}/simulate?version=...
+///
+/// Executes the chaincode in simulation mode: writes are buffered locally and
+/// the committed world state is never modified.  Returns the function result
+/// (base64-encoded) and the read-write set produced during execution.
+#[post("/chaincode/{id}/simulate")]
+pub async fn simulate_chaincode(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    query: web::Query<SimulateQuery>,
+    body: web::Json<SimulateRequest>,
+) -> ApiResult<HttpResponse> {
+    use crate::chaincode::executor::WasmExecutor;
+    use crate::storage::MemoryWorldState;
+
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let chaincode_id = path.into_inner();
+
+    if query.version.is_empty() {
+        return Err(ApiError::ValidationError {
+            field: "version".to_string(),
+            reason: "must not be empty".to_string(),
+        });
+    }
+    if body.function.is_empty() {
+        return Err(ApiError::ValidationError {
+            field: "function".to_string(),
+            reason: "must not be empty".to_string(),
+        });
+    }
+
+    let pkg_store = state.chaincode_package_store.as_ref().ok_or(ApiError::NotFound {
+        resource: "chaincode_package_store".to_string(),
+    })?;
+
+    let wasm = pkg_store
+        .get_package(&chaincode_id, &query.version)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("chaincode package '{chaincode_id}:{}'", query.version),
+        })?;
+
+    let executor = WasmExecutor::new(&wasm, 10_000_000)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+
+    let base: std::sync::Arc<dyn crate::storage::WorldState> =
+        std::sync::Arc::new(MemoryWorldState::new());
+
+    let (result_bytes, rwset) = executor
+        .simulate(base, &body.function)
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+
+    let response = SimulateResponse {
+        result: base64_encode(&result_bytes),
+        rwset: RwSetResponse {
+            reads: rwset.reads.into_iter().map(|r| KVReadDto { key: r.key, version: r.version }).collect(),
+            writes: rwset.writes.into_iter().map(|w| KVWriteDto { key: w.key, value: base64_encode(&w.value) }).collect(),
+        },
+    };
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes.iter().fold(String::new(), |mut s, b| { let _ = write!(s, "{:02x}", b); s })
+}
+
+// ── Request / Response types for simulate ─────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct SimulateQuery {
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SimulateRequest {
+    pub function: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SimulateResponse {
+    pub result: String,
+    pub rwset: RwSetResponse,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RwSetResponse {
+    pub reads: Vec<KVReadDto>,
+    pub writes: Vec<KVWriteDto>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct KVReadDto {
+    pub key: String,
+    pub version: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct KVWriteDto {
+    pub key: String,
+    pub value: String,
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -291,6 +396,8 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            acl_provider: None, ordering_backend: None,
         })
     }
 
@@ -566,6 +673,94 @@ mod tests {
         ).await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc/commit?version=1.0")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── simulate tests ────────────────────────────────────────────────────────
+
+    /// Minimal WAT that puts "x"="1" and returns empty (ptr=0, len=0).
+    ///
+    /// Used to verify that simulate produces a write in the rwset and does NOT
+    /// modify the base world state.
+    const SIMULATE_WAT: &[u8] = br#"
+(module
+  (import "env" "put_state" (func $put_state (param i32 i32 i32 i32) (result i32)))
+  (import "env" "get_state" (func $get_state (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "x")
+  (data (i32.const 4) "1")
+  (func (export "run") (result i64)
+    (drop (call $put_state (i32.const 0) (i32.const 1) (i32.const 4) (i32.const 1)))
+    (i64.const 0)
+  )
+)
+"#;
+
+    fn make_app_with_simulate_wasm() -> (web::Data<AppState>, Arc<MemoryChaincodePackageStore>) {
+        let pkg_store = Arc::new(MemoryChaincodePackageStore::new());
+        // Store the WAT bytes as "wasm" — WasmExecutor::new accepts WAT too.
+        pkg_store.store_package("mycc", "1.0", SIMULATE_WAT).unwrap();
+        let state = make_state(Some(pkg_store.clone()), None);
+        (state, pkg_store)
+    }
+
+    #[actix_web::test]
+    async fn simulate_returns_rwset_and_leaves_world_state_untouched() {
+        let (state, _pkg) = make_app_with_simulate_wasm();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(simulate_chaincode)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/chaincode/mycc/simulate?version=1.0")
+            .set_json(serde_json::json!({ "function": "run" }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let writes = body["data"]["rwset"]["writes"].as_array().unwrap();
+        assert!(!writes.is_empty(), "expected at least one write in rwset");
+        let write_keys: Vec<&str> = writes.iter().map(|w| w["key"].as_str().unwrap()).collect();
+        assert!(write_keys.contains(&"x"), "expected write for key 'x'");
+    }
+
+    #[actix_web::test]
+    async fn simulate_without_package_store_is_not_found() {
+        let state = make_state(None, None);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(simulate_chaincode)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/chaincode/cc/simulate?version=1.0")
+            .set_json(serde_json::json!({ "function": "run" }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    #[actix_web::test]
+    async fn simulate_missing_wasm_package_is_not_found() {
+        let state = make_state(Some(Arc::new(MemoryChaincodePackageStore::new())), None);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(simulate_chaincode)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/chaincode/ghost/simulate?version=1.0")
+            .set_json(serde_json::json!({ "function": "run" }))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 404);

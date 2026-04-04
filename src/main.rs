@@ -37,6 +37,7 @@ mod chaincode;
 mod gateway;
 mod discovery;
 mod events;
+mod acl;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -578,6 +579,38 @@ async fn main() -> std::io::Result<()> {
     // Inicializar MetricsCollector
     let metrics_collector = Arc::new(MetricsCollector::new());
 
+    // Ordering backend: "raft" or "solo" (default)
+    let ordering_backend: Option<Arc<dyn ordering::OrderingBackend>> = {
+        let backend_name = env::var("ORDERING_BACKEND").unwrap_or_else(|_| "solo".to_string());
+        match backend_name.as_str() {
+            "raft" => {
+                let raft_id: u64 = env::var("RAFT_NODE_ID")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(1);
+                let raft_peers: Vec<u64> = env::var("RAFT_PEERS")
+                    .unwrap_or_else(|_| raft_id.to_string())
+                    .split(',')
+                    .filter_map(|s| s.trim().parse().ok())
+                    .collect();
+                match ordering::raft_service::RaftOrderingService::new(raft_id, raft_peers, 100, 2000) {
+                    Ok(svc) => {
+                        log::info!("Ordering backend: Raft (node_id={})", raft_id);
+                        Some(Arc::new(svc))
+                    }
+                    Err(e) => {
+                        log::error!("Failed to create Raft ordering service: {e}. Falling back to solo.");
+                        Some(Arc::new(ordering::service::OrderingService::new()))
+                    }
+                }
+            }
+            _ => {
+                log::info!("Ordering backend: Solo");
+                Some(Arc::new(ordering::service::OrderingService::new()))
+            }
+        }
+    };
+
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
@@ -626,6 +659,9 @@ async fn main() -> std::io::Result<()> {
         gateway: None,
         discovery_service: None,
         event_bus: std::sync::Arc::new(events::EventBus::new()),
+        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        acl_provider: None,
+        ordering_backend,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

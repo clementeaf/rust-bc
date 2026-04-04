@@ -7,7 +7,7 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ---
 
-## Estado actual (2026-04-03, 525 tests — Fase 2 completa)
+## Estado actual (2026-04-04, 1612 tests — Fase 12 completa)
 
 | Capa | Archivo(s) | Qué hay |
 |------|-----------|---------|
@@ -493,20 +493,497 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ---
 
+## Fase 13 — ACLs + Channel Configuration
+
+> Fabric gobierna cada recurso mediante ACLs (resource → policy) y cada canal mediante
+> configuration transactions. Actualmente los canales son structs en memoria sin governance.
+> Se reutiliza `EndorsementPolicy` como motor de evaluación y RocksDB para persistencia.
+
+### 13.1 ACL framework
+
+- [x] **13.1.1** Crear struct `AclEntry` en `src/acl/mod.rs`
+  - Campos: `resource: String`, `policy_ref: String` (apunta a una `EndorsementPolicy` por nombre)
+  - Declarar `mod acl` en `lib.rs`/`main.rs`
+  - Tests: crear entry, serde roundtrip
+- [x] **13.1.2** Crear trait `AclProvider` en `src/acl/provider.rs`
+  - Métodos: `set_acl(&self, resource: &str, policy_ref: &str) -> StorageResult<()>`, `get_acl(&self, resource: &str) -> StorageResult<Option<AclEntry>>`, `list_acls(&self) -> StorageResult<Vec<AclEntry>>`, `remove_acl(&self, resource: &str) -> StorageResult<()>`
+  - Implementar `MemoryAclProvider` con `Mutex<HashMap<String, AclEntry>>`
+  - Tests: set/get/list/remove, get-not-found
+- [x] **13.1.3** Añadir CF `acls` a `adapters.rs`: key = `resource`, value = JSON `AclEntry`
+  - Constante `CF_ACLS`, agregar a `ALL_CFS`, helper `cf_acls()`
+  - Implementar `AclProvider` para `RocksDbBlockStore`
+  - Tests con `tempfile::TempDir`: write/read roundtrip, list, remove
+- [x] **13.1.4** Crear `fn check_access(acl_provider: &dyn AclProvider, policy_store: &dyn PolicyStore, resource: &str, caller_orgs: &[&str]) -> Result<(), AclError>` en `src/acl/checker.rs`
+  - Resuelve `policy_ref` del ACL entry → obtiene `EndorsementPolicy` del `PolicyStore` → evalúa contra `caller_orgs`
+  - Tests: acceso permitido (pass), policy no satisfecha (deny), ACL no definida (deny por defecto)
+- [x] **13.1.5** Crear enum `AclResource` con constantes para recursos estándar Fabric en `src/acl/resources.rs`
+  - Variantes: `ChaincodeInvoke`, `ChaincodeQuery`, `BlockEvents`, `ChannelConfig`, `PeerDiscovery`, `PrivateDataRead`, `PrivateDataWrite`, `Custom(String)`
+  - `fn resource_name(&self) -> &str` — retorna string canónico (e.g., `"peer/ChaincodeToChaincode"`)
+  - Tests: resource_name roundtrip
+
+### 13.2 Channel configuration transactions
+
+- [x] **13.2.1** Crear struct `ChannelConfig` en `src/channel/config.rs`
+  - Campos: `version: u64`, `member_orgs: Vec<String>`, `orderer_orgs: Vec<String>`, `endorsement_policy: EndorsementPolicy`, `acls: HashMap<String, String>`, `batch_size: usize`, `batch_timeout_ms: u64`, `anchor_peers: HashMap<String, Vec<String>>` (org_id → peer addresses)
+  - Tests: crear config, serde roundtrip, default values
+- [x] **13.2.2** Crear enum `ConfigUpdateType` en `src/channel/config.rs`
+  - Variantes: `AddOrg(String)`, `RemoveOrg(String)`, `SetPolicy(EndorsementPolicy)`, `SetAcl { resource: String, policy_ref: String }`, `SetBatchSize(usize)`, `SetBatchTimeout(u64)`, `SetAnchorPeer { org_id: String, peer_address: String }`
+  - Tests: serde roundtrip de cada variante
+- [x] **13.2.3** Crear struct `ConfigTransaction` en `src/channel/config.rs`
+  - Campos: `tx_id: String`, `channel_id: String`, `updates: Vec<ConfigUpdateType>`, `signatures: Vec<Endorsement>`, `created_at: u64`
+  - Tests: crear config tx con múltiples updates
+- [x] **13.2.4** Implementar `fn apply_config_update(config: &ChannelConfig, updates: &[ConfigUpdateType]) -> Result<ChannelConfig, ChannelError>` en `src/channel/config.rs`
+  - Retorna nuevo `ChannelConfig` (inmutable) con los cambios aplicados
+  - Tests: agregar org, cambiar policy, agregar anchor peer, batch size update
+- [x] **13.2.5** Implementar `fn validate_config_tx(tx: &ConfigTransaction, current_config: &ChannelConfig, policy_store: &dyn PolicyStore, org_registry: &dyn OrgRegistry) -> Result<(), ChannelError>`
+  - Verificar que las firmas satisfacen la modification policy del canal
+  - Tests: firmas suficientes (pass), insuficientes (fail)
+- [x] **13.2.6** Añadir CF `channel_configs` a `adapters.rs`: key = `{channel_id}:{version:012}`, value = JSON `ChannelConfig`
+  - Tests: write/read, list versions por channel
+
+### 13.3 Genesis block
+
+- [x] **13.3.1** Crear `fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block` en `src/channel/genesis.rs`
+  - Height 0, transactions contiene serialized `ChannelConfig` como JSON string en tx.id
+  - `parent_hash = [0u8; 32]`, `proposer = "genesis"`
+  - Tests: crear genesis block, deserializar config desde block
+- [x] **13.3.2** En `Channel::new()` o handler `POST /api/v1/channels`, generar genesis block automáticamente y escribirlo en el store del channel
+  - Tests: crear channel → store contiene genesis block en height 0
+
+### 13.4 REST API
+
+- [x] **13.4.1** Handler `POST /api/v1/channels/{channel_id}/config` — submit config update transaction
+  - Body: `ConfigTransaction`, valida firmas, aplica update, persiste nueva version
+  - Respuesta: 200 con `ApiResponse<ChannelConfig>` (nueva config)
+- [x] **13.4.2** Handler `GET /api/v1/channels/{channel_id}/config` — retorna config actual (latest version)
+- [x] **13.4.3** Handler `GET /api/v1/channels/{channel_id}/config/history` — retorna todas las versiones de config
+- [x] **13.4.4** Handler `POST /api/v1/acls` — set ACL entry. Body: `{ "resource": "...", "policy_ref": "..." }`
+- [x] **13.4.5** Handler `GET /api/v1/acls` — listar todas las ACL entries
+- [x] **13.4.6** Handler `GET /api/v1/acls/{resource}` — obtener ACL de un recurso
+- [x] **13.4.7** Añadir `acl_provider: Option<Arc<dyn AclProvider>>` a `AppState`
+  - Registrar routes en `routes.rs`
+
+---
+
+## Fase 14 — Chaincode Simulation + Key-level Endorsement
+
+> Fabric ejecuta chaincode en modo simulación (sin commit al state) para generar el rwset.
+> Además permite override de endorsement policy a nivel de key individual.
+> Se reutiliza `WasmExecutor` y `WorldState`.
+
+### 14.1 Simulation (execute sin commit)
+
+- [x] **14.1.1** Crear struct `SimulationWorldState` en `src/chaincode/simulation.rs` que wrappea un `Arc<dyn WorldState>` de solo lectura + buffer de writes local
+  - Campos: `base_state: Arc<dyn WorldState>`, `write_buffer: Mutex<HashMap<String, Vec<u8>>>`, `read_set: Mutex<Vec<KVRead>>`, `delete_set: Mutex<Vec<String>>`
+  - `get()`: buscar primero en write_buffer, luego en base_state; registrar KVRead
+  - `put()`: escribir solo en write_buffer (NO en base_state); NO incrementa versión real
+  - `delete()`: marcar en delete_set
+  - Implementar `WorldState` trait
+  - Tests: simulate put → base_state no cambia; simulate get registra read; simulate put+get retorna valor local
+- [x] **14.1.2** Crear `fn to_rwset(&self) -> ReadWriteSet` en `SimulationWorldState`
+  - Construye `ReadWriteSet` desde `read_set` y `write_buffer`
+  - Tests: simulate 3 reads + 2 writes → rwset con 3 KVReads + 2 KVWrites
+- [x] **14.1.3** Crear `fn simulate(&self, state: Arc<dyn WorldState>, func_name: &str) -> Result<(Vec<u8>, ReadWriteSet), ChaincodeError>` en `WasmExecutor`
+  - Crea `SimulationWorldState` wrapping `state`
+  - Invoca chaincode normalmente via `invoke()` pero con el simulation wrapper
+  - Retorna resultado + rwset generado
+  - Tests: chaincode que hace put("a","1")+get("b") → rwset contiene write("a") y read("b"), base state sin cambios
+- [x] **14.1.4** Handler `POST /api/v1/chaincode/{id}/simulate` — ejecuta chaincode sin commit
+  - Body: `{ "function": "...", "args": [...] }`
+  - Respuesta: `{ "result": "...", "rwset": { "reads": [...], "writes": [...] } }`
+  - Tests de integración: simulate → state sin cambios, rwset presente en respuesta
+
+### 14.2 Key-level endorsement
+
+- [x] **14.2.1** Crear CF `key_endorsement_policies` en `adapters.rs`: key = `{state_key}`, value = JSON `EndorsementPolicy`
+  - Constante `CF_KEY_ENDORSEMENT`, agregar a `ALL_CFS`, helper `cf_key_endorsement()`
+  - Tests: write/read policy per key
+- [x] **14.2.2** Crear trait `KeyEndorsementStore` en `src/endorsement/key_policy.rs`
+  - Métodos: `set_key_policy(&self, key: &str, policy: &EndorsementPolicy) -> StorageResult<()>`, `get_key_policy(&self, key: &str) -> StorageResult<Option<EndorsementPolicy>>`, `delete_key_policy(&self, key: &str) -> StorageResult<()>`
+  - Implementar `MemoryKeyEndorsementStore` con `Mutex<HashMap<String, EndorsementPolicy>>`
+  - Implementar para `RocksDbBlockStore`
+  - Tests: set/get/delete, not-found retorna None
+- [x] **14.2.3** Exponer host function `set_key_endorsement_policy(key, policy_json)` en `WasmExecutor`
+  - Chaincode puede llamar `set_key_endorsement_policy("asset:123", "{\"NOutOf\":{\"n\":2,\"orgs\":[\"org1\",\"org2\"]}}")`
+  - Tests: wasm chaincode llama set_key_endorsement → policy persiste
+- [x] **14.2.4** Modificar `validate_endorsements` (Fase 1.3.3) para consultar key-level policy
+  - Para cada KVWrite en rwset: si existe key-level policy → usar esa en vez de chaincode-level
+  - Prioridad: key-level > collection-level > chaincode-level
+  - Tests: key con override policy → requiere endorsements distintos al chaincode-level
+
+### 14.3 Gateway simulation integration
+
+- [x] **14.3.1** En `Gateway::submit`, antes de ordering: si hay `WasmExecutor` disponible, simular TX para generar rwset automáticamente
+  - Paso 1: simulate → obtener rwset
+  - Paso 2: validar endorsements contra rwset keys (key-level policies)
+  - Paso 3: si pasa → submit a ordering
+  - Tests: gateway con simulación → rwset generado automáticamente, endorsement validado per-key
+
+---
+
+## Fase 15 — Raft Ordering
+
+> Raft es el consenso recomendado por Fabric para ordering. Reemplaza el single-node
+> batching con un cluster de orderers con leader election. Se usa la crate `raft` de
+> tikv (tokio-compatible, la más usada en Rust).
+
+### 15.1 Raft core ✅
+
+- [x] **15.1.1** Agregar `raft = "0.7"` y `prost = "0.13"` a `Cargo.toml`
+  - `raft` = tikv/raft (port de etcd Raft a Rust), `prost` para serialización protobuf interna de raft
+  - Tests: compilar, import `raft::prelude::*`
+- [x] **15.1.2** Crear struct `RaftNode` en `src/ordering/raft_node.rs`
+  - Campos: `id: u64`, `raw_node: RawNode<MemStorage>`, `pending_proposals: Vec<Vec<u8>>`, `committed_entries: Vec<Entry>`
+  - Constructor: `fn new(id: u64, peers: Vec<u64>) -> Self` — configura `Config` con `election_tick=10`, `heartbeat_tick=3`
+  - Tests: crear nodo, verificar que está en estado Follower
+- [x] **15.1.3** Implementar `RaftNode::propose(&mut self, data: Vec<u8>) -> Result<(), RaftError>`
+  - Llama `self.raw_node.propose(vec![], data)`
+  - Tests: proponer dato en leader → entry committed
+- [x] **15.1.4** Implementar `RaftNode::tick(&mut self)` y `RaftNode::step(&mut self, msg: Message)`
+  - `tick()` avanza el reloj lógico; `step()` procesa mensajes Raft entrantes
+  - Tests: 3 nodos, tick suficiente → leader elected; step con AppendEntries → follower acepta
+- [x] **15.1.5** Implementar `RaftNode::advance(&mut self) -> Vec<CommittedEntry>`
+  - Llama `raw_node.ready()`, procesa `committed_entries`, aplica `advance()`
+  - Retorna entries committed para que el caller corte bloques
+  - Tests: propose 5 entries en leader → advance retorna 5 CommittedEntry en todos los nodos
+
+### 15.2 Raft ordering service ✅
+
+- [x] **15.2.1** Crear struct `RaftOrderingService` en `src/ordering/raft_service.rs`
+  - Campos: `raft_node: Mutex<RaftNode>`, `max_batch_size: usize`, `batch_timeout_ms: u64`, `metrics: Option<Arc<MetricsCollector>>`
+  - Implementar misma interfaz que `OrderingService`: `submit_tx(&self, tx: Transaction)`, `cut_block(&self, height: u64, proposer: &str) -> Option<Block>`
+  - `submit_tx`: serializa TX → `raft_node.propose(serialized)`
+  - `cut_block`: drena committed entries → deserializa TXs → corta bloque
+  - Tests: submit 3 TXs → cut_block retorna bloque con 3 TXs
+- [x] **15.2.2** Crear trait `OrderingBackend` en `src/ordering/mod.rs`
+  - Métodos: `submit_tx(&self, tx: Transaction) -> StorageResult<()>`, `cut_block(&self, height: u64, proposer: &str) -> StorageResult<Option<Block>>`, `pending_count(&self) -> usize`
+  - Implementar para `OrderingService` (existente) y `RaftOrderingService`
+  - Tests: trait object `Box<dyn OrderingBackend>` funciona con ambas implementaciones
+- [x] **15.2.3** Selección de backend en `main.rs` via env `ORDERING_BACKEND=raft|solo`
+  - `solo` = `OrderingService` actual (default, backward compat)
+  - `raft` = `RaftOrderingService` con peers de `RAFT_PEERS` env (comma-separated `id:address`)
+  - Tests: env `solo` → OrderingService, env `raft` → RaftOrderingService
+
+### 15.3 Raft network transport ✅
+
+- [x] **15.3.1** Añadir variante `RaftMessage(Vec<u8>)` a `Message` enum en `network.rs`
+  - Serde: serializa como `{ "type": "raft_message", "data": "<base64>" }`
+  - Tests: serde roundtrip de RaftMessage
+- [x] **15.3.2** Crear `fn raft_transport_loop(raft_node: Arc<Mutex<RaftNode>>, peers: Arc<Mutex<HashSet<String>>>, tick_ms: u64)`
+  - Cada `tick_ms` milisegundos: `raft_node.tick()`, procesa `Ready.messages` → envía via `Message::RaftMessage` a peers
+  - Recibe `RaftMessage` en `process_message()` → deserializa → `raft_node.step(msg)`
+  - Tests: 3 nodos in-process, proponer entry en nodo 1 → committed en los 3
+- [x] **15.3.3** Implementar snapshot para catch-up de nodos rezagados
+  - `RaftNode::create_snapshot(&self) -> Snapshot` — serializa estado actual (latest height + pending TXs)
+  - `RaftNode::apply_snapshot(&mut self, snap: Snapshot)` — restore desde snapshot
+  - Tests: nodo A tiene 100 entries, nodo B nuevo → snapshot transfer → nodo B sincronizado
+
+### 15.4 Orderer block signing ✅
+
+- [x] **15.4.1** Añadir campo `orderer_signature: Option<[u8; 64]>` a `Block` struct en `traits.rs`
+  - `#[serde(default)]` para backward compat
+  - Tests: bloque con y sin orderer_signature serializa correctamente
+- [x] **15.4.2** En `cut_block()` de ambos backends, firmar bloque con la key del orderer
+  - Usar `KeyManager::sign(block_hash)` donde `block_hash = sha256(height || parent_hash || merkle_root)`
+  - Tests: bloque cortado → orderer_signature presente y verificable
+- [x] **15.4.3** En peer commit path, verificar `orderer_signature` antes de aceptar bloque
+  - Si orderer_signature presente → verificar contra orderer's known public key
+  - Si ausente → aceptar (backward compat con bloques legacy)
+  - Tests: bloque con firma válida (accept), firma inválida (reject), sin firma (accept)
+
+---
+
+## Fase 16 — Gossip Protocol Enhancement
+
+> Fabric usa un protocolo gossip completo con pull-based sync, alive messages, state
+> transfer, y anchor peers. El push-gossip actual (fanout=3) solo re-envía bloques nuevos.
+
+### 16.1 Alive messages
+
+- [ ] **16.1.1** Crear struct `AliveMessage` en `src/network/gossip.rs` (nuevo módulo, extraer de network.rs)
+  - Campos: `peer_address: String`, `org_id: String`, `timestamp: u64`, `sequence: u64`, `signature: [u8; 64]`
+  - Declarar `mod gossip` en `src/network/mod.rs` (refactor: mover `network.rs` → `network/mod.rs`)
+  - Tests: crear alive, serde roundtrip, verificar firma
+- [ ] **16.1.2** Añadir variante `Alive(AliveMessage)` al enum `Message`
+  - Tests: serde roundtrip
+- [ ] **16.1.3** Implementar alive broadcast loop: cada `ALIVE_INTERVAL_MS` (default 5000), enviar `Alive` a todos los peers
+  - Si no se recibe `Alive` de un peer en `ALIVE_TIMEOUT_MS` (default 15000) → marcar como sospechoso
+  - Tests: 3 nodos, nodo C deja de enviar alive → nodos A,B lo marcan sospechoso tras timeout
+
+### 16.2 Pull-based state sync
+
+- [ ] **16.2.1** Añadir variante `StateRequest { from_height: u64 }` al enum `Message`
+  - Peer envía `StateRequest` para pedir bloques desde `from_height`
+  - Tests: serde roundtrip
+- [ ] **16.2.2** Añadir variante `StateResponse { blocks: Vec<Block> }` al enum `Message`
+  - Responde con hasta 50 bloques (configurable `STATE_BATCH_SIZE`)
+  - Tests: serde roundtrip, limitar a batch size
+- [ ] **16.2.3** Implementar pull-sync loop: periódicamente (cada `PULL_INTERVAL_MS`, default 10000), comparar height local con peers
+  - Si peer tiene height > local → enviar `StateRequest { from_height: local_height + 1 }`
+  - Al recibir `StateResponse` → validar y escribir bloques en store
+  - Tests: nodo A con 10 bloques, nodo B con 0 → pull sync → nodo B tiene 10 bloques
+- [ ] **16.2.4** Anti-entropy: al recibir `Alive` con info de height del peer, detectar gaps
+  - Añadir `latest_height: u64` a `AliveMessage`
+  - Si peer.latest_height > local_height → trigger pull sync
+  - Tests: alive con height=20, local=15 → pull sync triggered
+
+### 16.3 Anchor peers
+
+- [ ] **16.3.1** Crear struct `AnchorPeer` en `src/network/gossip.rs`
+  - Campos: `peer_address: String`, `org_id: String`
+  - Config via env `ANCHOR_PEERS` (comma-separated `org_id:address`)
+  - Tests: parsear env, crear anchor peers
+- [ ] **16.3.2** En el bootstrap flow, conectar primero a anchor peers de cada org antes de general discovery
+  - Anchor peers sirven como punto de entrada cross-org
+  - Tests: 2 orgs con anchor peers, nodo nuevo se conecta via anchors → descubre peers de ambas orgs
+- [ ] **16.3.3** Integrar anchor peers en `ChannelConfig` (Fase 13.2.1): campo `anchor_peers` ya definido
+  - Al recibir config update con nuevo anchor peer → actualizar gossip routing
+  - Tests: config update añade anchor → gossip lo usa para nueva org
+
+### 16.4 Leader election per org
+
+- [ ] **16.4.1** Crear enum `LeaderElectionMode` en `src/network/gossip.rs`: `Static`, `Dynamic`
+  - Config via env `LEADER_ELECTION=static|dynamic` (default `static`)
+- [ ] **16.4.2** Implementar leader election dinámica: peers de una misma org eligen un leader que tira bloques del orderer
+  - Leader: peer con menor `peer_address` (determinístico, sin protocolo de elección complejo)
+  - Si leader falla (no alive) → siguiente peer asume
+  - Tests: 3 peers de org1, leader = peer con menor address; leader muere → siguiente asume
+
+---
+
+## Fase 17 — Key History + Chaincode-to-Chaincode
+
+> Fabric provee `getHistoryForKey` para trazar cambios de un key. También permite
+> que un chaincode invoque a otro. Ambas features se exponen como host functions al Wasm.
+
+### 17.1 Key history
+
+- [ ] **17.1.1** Añadir CF `key_history` a `adapters.rs`: key = `{state_key}\x00{version:012}`, value = JSON `HistoryEntry`
+  - `HistoryEntry`: `{ version: u64, data: Vec<u8>, tx_id: String, timestamp: u64, is_delete: bool }`
+  - Agregar a `ALL_CFS`, helper `cf_key_history()`
+  - Tests: write 3 versions de misma key → read history retorna 3 entries ordenados
+- [ ] **17.1.2** Añadir método `get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>>` al trait `WorldState`
+  - Implementar para `MemoryWorldState`: mantener `history: HashMap<String, Vec<HistoryEntry>>`
+  - Implementar para `RocksDbBlockStore`: prefix scan en CF `key_history` con `{key}\x00`
+  - Tests: put 5 veces → history tiene 5 entries; delete → history tiene 6 entries con `is_delete=true`
+- [ ] **17.1.3** Modificar `WorldState::put()` y `WorldState::delete()` para escribir history entry
+  - En cada put: append `HistoryEntry { version: new_version, data, tx_id: "", timestamp: now, is_delete: false }`
+  - En cada delete: append con `is_delete: true`, data vacía
+  - Tests: put("x","a") → put("x","b") → delete("x") → history = [v1:a, v2:b, v3:deleted]
+- [ ] **17.1.4** Exponer host function `get_history_for_key(key) -> Vec<HistoryEntry>` en `WasmExecutor`
+  - ABI: retorna JSON serializado como bytes (ptr << 32 | len)
+  - Tests: chaincode llama get_history → retorna entries correctos
+
+### 17.2 Chaincode-to-chaincode invocation
+
+- [ ] **17.2.1** Crear trait `ChaincodeResolver` en `src/chaincode/resolver.rs`
+  - Método: `fn resolve(&self, chaincode_id: &str) -> Result<Vec<u8>, ChaincodeError>` — retorna wasm bytes
+  - Implementar `StoreBacked` que usa `ChaincodePackageStore::get_package`
+  - Tests: resolver con chaincode existente (ok), inexistente (err)
+- [ ] **17.2.2** Exponer host function `invoke_chaincode(chaincode_id, function, args) -> bytes` en `WasmExecutor`
+  - Internamente: resuelve wasm bytes via `ChaincodeResolver`, crea nuevo `WasmExecutor` temporal, invoca, retorna resultado
+  - El chaincode invocado comparte el mismo `WorldState` (reads/writes son visibles)
+  - Tests: chaincode A llama chaincode B que hace put("x","1") → chaincode A hace get("x") → "1"
+- [ ] **17.2.3** Añadir ACL check en invocación cross-chaincode
+  - Verificar que el caller tiene permiso `ChaincodeInvoke` para el target chaincode (via `AclProvider` de Fase 13)
+  - Tests: invocación con ACL permitida (ok), sin permiso (denied)
+- [ ] **17.2.4** Prevenir recursión infinita: límite de profundidad `MAX_CHAINCODE_DEPTH=8`
+  - Pasar depth counter en cada invocación; si depth > max → error
+  - Tests: chaincode recursivo → error al llegar a depth 8
+
+---
+
+## Fase 18 — Delivery Service
+
+> Fabric tiene 3 modos de delivery: Deliver (bloques completos), DeliverFiltered (minimal),
+> DeliverWithPrivateData. Actualmente solo hay WebSocket con filtro básico por channel/chaincode.
+
+### 18.1 DeliverFiltered
+
+- [ ] **18.1.1** Crear struct `FilteredBlock` en `src/events/filtered.rs`
+  - Campos: `channel_id: String`, `height: u64`, `tx_summaries: Vec<FilteredTx>`
+  - `FilteredTx`: `{ tx_id: String, validation_code: String, chaincode_id: Option<String> }`
+  - Omite: payload, rwset, endorsements (privacy)
+  - Tests: crear FilteredBlock desde Block, verificar que no contiene datos sensibles
+- [ ] **18.1.2** Crear `fn to_filtered_block(block: &Block, validations: &HashMap<String, String>) -> FilteredBlock`
+  - Convierte bloque completo → filtered (solo IDs + status)
+  - Tests: bloque con 3 TXs (2 committed, 1 conflict) → FilteredBlock con 3 summaries
+- [ ] **18.1.3** Handler `GET /api/v1/events/blocks/filtered` — WebSocket que envía `FilteredBlock` en vez de `BlockEvent`
+  - Misma mecánica de suscripción que `events_blocks` pero con payload reducido
+  - Tests: conectar WS filtered, escribir bloque → recibe FilteredBlock sin datos sensibles
+
+### 18.2 DeliverWithPrivateData
+
+- [ ] **18.2.1** Crear struct `BlockWithPrivateData` en `src/events/private_delivery.rs`
+  - Campos: `block: Block`, `private_data: HashMap<String, Vec<(String, Vec<u8>)>>` (collection_name → [(key, value)])
+  - Tests: crear BlockWithPrivateData, serde roundtrip
+- [ ] **18.2.2** Handler `GET /api/v1/events/blocks/private` — WebSocket que envía bloque + private data autorizada
+  - Requiere header `X-Org-Id` para verificar membership en collections
+  - Solo incluye private data de collections donde caller es member
+  - Tests: org1 member de collection "secret" → recibe private data; org2 no member → no recibe
+
+### 18.3 Replay desde height
+
+- [ ] **18.3.1** Mejorar el WebSocket handler existente para soportar replay desde un height específico
+  - Al conectar, el cliente envía `{ "start_block": N }` junto con filtros
+  - El handler primero envía bloques históricos [N, latest] desde el store, luego switchea a live
+  - Tests: 10 bloques en store, WS con start_block=5 → recibe bloques 5-10, luego live
+- [ ] **18.3.2** Implementar bookmark/checkpoint: el cliente puede enviar `{ "ack": height }` para confirmar receipt
+  - Servidor trackea último ack por suscriptor
+  - Si WS reconecta con mismo client_id → resume desde último ack
+  - Tests: recibir 5 bloques, ack height=5, desconectar, reconectar → resume desde 6
+
+---
+
+## Fase 19 — Snapshots + Pagination
+
+> Fabric puede regenerar world state desde la blockchain y soporta snapshots para
+> fast-sync de nuevos peers. La API necesita pagination para ser usable en producción.
+
+### 19.1 State snapshots
+
+- [ ] **19.1.1** Crear struct `StateSnapshot` en `src/storage/snapshot.rs`
+  - Campos: `snapshot_id: String`, `channel_id: String`, `block_height: u64`, `created_at: u64`, `state_hash: [u8; 32]`, `entry_count: u64`
+  - Tests: crear snapshot metadata
+- [ ] **19.1.2** Implementar `fn create_snapshot(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<StateSnapshot>` en `src/storage/snapshot.rs`
+  - Itera todas las keys en world state, serializa a un archivo `snapshots/{channel_id}/{height}.snap`
+  - Formato: lineas `{key}\t{version}\t{base64(data)}\n` (simple, streamable)
+  - Calcula hash SHA-256 de todo el contenido
+  - Tests: crear snapshot con 100 keys → archivo existe, hash verificable
+- [ ] **19.1.3** Implementar `fn restore_snapshot(path: &Path, state: &dyn WorldState) -> StorageResult<StateSnapshot>`
+  - Lee archivo de snapshot → `state.put(key, data)` para cada entry
+  - Verifica hash al final
+  - Tests: create snapshot → clear state → restore → state idéntico al original
+- [ ] **19.1.4** Handler `POST /api/v1/snapshots/{channel_id}` — trigger snapshot creation
+- [ ] **19.1.5** Handler `GET /api/v1/snapshots/{channel_id}` — list available snapshots
+- [ ] **19.1.6** Handler `GET /api/v1/snapshots/{channel_id}/{snapshot_id}` — download snapshot file (streaming)
+
+### 19.2 State regeneration
+
+- [ ] **19.2.1** Implementar `fn regenerate_state(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<u64>` en `src/storage/snapshot.rs`
+  - Itera bloques [0, latest] en orden → para cada TX con rwset → aplica writes al world state
+  - Retorna número de keys escritas
+  - Tests: 10 bloques con 3 TXs cada uno → regenerate → state contiene todas las keys
+
+### 19.3 Pagination
+
+- [ ] **19.3.1** Crear struct `PaginationParams` en `src/api/pagination.rs`
+  - Campos: `page: Option<usize>` (default 1), `limit: Option<usize>` (default 20, max 100), `cursor: Option<String>`
+  - Implementar `actix_web::FromRequest` via `web::Query<PaginationParams>`
+  - Tests: parsear query `?page=2&limit=10`, defaults, limit capping
+- [ ] **19.3.2** Crear struct `PaginatedResponse<T>` en `src/api/pagination.rs`
+  - Campos: `data: Vec<T>`, `pagination: PaginationMeta`
+  - `PaginationMeta`: `{ total: usize, page: usize, limit: usize, total_pages: usize, has_next: bool, next_cursor: Option<String> }`
+  - Tests: crear PaginatedResponse, serde roundtrip
+- [ ] **19.3.3** Añadir método `list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)>` al trait `BlockStore`
+  - Retorna `(blocks, total_count)` para paginación
+  - Implementar para `MemoryStore` y `RocksDbBlockStore`
+  - Tests: 50 bloques, list(offset=10, limit=5) → 5 bloques, total=50
+- [ ] **19.3.4** Actualizar handler `GET /api/v1/store/blocks` para aceptar `PaginationParams`
+  - Retorna `ApiResponse<PaginatedResponse<Block>>` en vez de lista completa
+  - Backward compat: si no hay query params → default page=1, limit=20
+  - Tests: 50 bloques, GET ?page=3&limit=10 → bloques 20-29, total=50
+- [ ] **19.3.5** Actualizar handler `GET /api/v1/store/organizations` con paginación
+- [ ] **19.3.6** Actualizar handler `GET /api/v1/channels` con paginación
+- [ ] **19.3.7** Actualizar handler `GET /api/v1/acls` con paginación (Fase 13)
+- [ ] **19.3.8** Actualizar handler `GET /api/v1/discovery/peers` con paginación
+
+---
+
+## Fase 20 — HSM + OUs + External Chaincode
+
+> Features avanzadas de Fabric: HSM (PKCS#11) para proteger keys privadas, Organizational
+> Units para subdividir orgs, y chaincode-as-a-service para ejecución externa.
+
+### 20.1 HSM support (PKCS#11)
+
+- [ ] **20.1.1** Agregar `cryptoki = "0.7"` a `Cargo.toml` (feature-gated `hsm`)
+  - `cryptoki` = binding Rust para PKCS#11, mantenido por Parallaxsecond
+  - Feature flag: `[features] hsm = ["cryptoki"]`
+  - Tests: compilar con `--features hsm`, import `cryptoki::context::Pkcs11`
+- [ ] **20.1.2** Crear trait `SigningProvider` en `src/identity/signing.rs`
+  - Métodos: `fn sign(&self, data: &[u8]) -> Result<[u8; 64], SigningError>`, `fn public_key(&self) -> [u8; 32]`, `fn verify(&self, data: &[u8], sig: &[u8; 64]) -> Result<bool, SigningError>`
+  - Implementar `SoftwareSigningProvider` que wrappea `KeyManager` actual
+  - Tests: sign + verify roundtrip con SoftwareSigningProvider
+- [ ] **20.1.3** Implementar `HsmSigningProvider` (bajo feature `hsm`) en `src/identity/hsm.rs`
+  - Constructor: `fn new(pkcs11_lib: &str, slot_id: u64, pin: &str, key_label: &str) -> Result<Self, HsmError>`
+  - Sign via PKCS#11: `C_SignInit` + `C_Sign` con mecanismo `CKM_EDDSA`
+  - Config via env: `HSM_PKCS11_LIB`, `HSM_SLOT_ID`, `HSM_PIN`, `HSM_KEY_LABEL`
+  - Tests: con SoftHSM2 (si disponible) o mock PKCS#11
+- [ ] **20.1.4** Refactorizar `KeyManager` para usar `dyn SigningProvider` internamente
+  - `KeyManager::new()` → usa `SoftwareSigningProvider` por defecto
+  - `KeyManager::with_hsm(config)` → usa `HsmSigningProvider`
+  - Backward compat total: API pública no cambia
+  - Tests: KeyManager con SoftwareSigningProvider funciona exactamente igual que antes
+
+### 20.2 Organizational Units (OUs)
+
+- [ ] **20.2.1** Crear struct `OrganizationalUnit` en `src/msp/ou.rs`
+  - Campos: `ou_id: String`, `org_id: String`, `description: String`, `parent_ou: Option<String>`
+  - Soporte jerárquico: OU puede tener parent OU
+  - Tests: crear OU, OU con parent, serde roundtrip
+- [ ] **20.2.2** Añadir campo `ou_id: Option<String>` a `MspIdentity`
+  - `#[serde(default)]` para backward compat
+  - Tests: identity con OU, identity sin OU (backward compat)
+- [ ] **20.2.3** Crear trait `OuRegistry` en `src/msp/ou.rs`
+  - Métodos: `register_ou(&self, ou: &OrganizationalUnit) -> StorageResult<()>`, `get_ou(&self, ou_id: &str) -> StorageResult<OrganizationalUnit>`, `list_ous(&self, org_id: &str) -> StorageResult<Vec<OrganizationalUnit>>`, `get_hierarchy(&self, ou_id: &str) -> StorageResult<Vec<OrganizationalUnit>>`
+  - Implementar `MemoryOuRegistry` con `Mutex<HashMap<String, OrganizationalUnit>>`
+  - Tests: register, get, list por org, hierarchy traversal
+- [ ] **20.2.4** Añadir CF `organizational_units` a `adapters.rs`: key = `ou_id`, value = JSON
+  - Implementar `OuRegistry` para `RocksDbBlockStore`
+  - Tests: write/read, list por org_id via prefix scan
+- [ ] **20.2.5** Extender `EndorsementPolicy` con variante `OuBased { ou_ids: Vec<String>, min_count: usize }`
+  - Evaluate: contar identities cuyo OU está en `ou_ids`, verificar >= min_count
+  - Tests: policy OuBased{["manufacturing"], 2} con 3 identities de manufacturing → pass; 1 → fail
+- [ ] **20.2.6** REST API: `POST /api/v1/msp/ous`, `GET /api/v1/msp/ous?org_id={id}`, `GET /api/v1/msp/ous/{ou_id}`
+
+### 20.3 External chaincode (chaincode-as-a-service)
+
+- [ ] **20.3.1** Crear enum `ChaincodeRuntime` en `src/chaincode/external.rs`
+  - Variantes: `Wasm { fuel_limit: u64, memory_limit: Option<usize> }`, `External { endpoint: String, tls: bool }`
+  - Añadir campo `runtime: ChaincodeRuntime` a `ChaincodeDefinition` (`#[serde(default)]` → Wasm por default)
+  - Tests: serde roundtrip de ambas variantes
+- [ ] **20.3.2** Crear struct `ExternalChaincodeClient` en `src/chaincode/external.rs`
+  - Constructor: `fn new(endpoint: &str, tls: bool) -> Result<Self, ChaincodeError>`
+  - Método: `async fn invoke(&self, function: &str, args: &[&str], state_context: &str) -> Result<Vec<u8>, ChaincodeError>`
+  - Protocolo: HTTP POST a `{endpoint}/invoke` con body `{ "function": "...", "args": [...], "state_context": "..." }`
+  - Tests: mock HTTP server, invoke → respuesta parseada
+- [ ] **20.3.3** Crear trait `ChaincodeInvoker` en `src/chaincode/invoker.rs`
+  - Método: `fn invoke(&self, state: Arc<dyn WorldState>, func_name: &str) -> Result<Vec<u8>, ChaincodeError>`
+  - Implementar `WasmInvoker` wrapping `WasmExecutor`
+  - Implementar `ExternalInvoker` wrapping `ExternalChaincodeClient`
+  - Tests: ambos invokers a través del trait object
+- [ ] **20.3.4** Modificar Gateway para usar `dyn ChaincodeInvoker` según `ChaincodeRuntime`
+  - Si Wasm → `WasmInvoker`, si External → `ExternalInvoker`
+  - Tests: gateway con chaincode externo → invoca endpoint HTTP → resultado correcto
+- [ ] **20.3.5** Handler `POST /api/v1/chaincode/install` actualizado para aceptar `runtime: "external"` + endpoint
+  - Si runtime=external: no almacena wasm bytes, solo registra endpoint
+  - Tests: install external chaincode → definition con runtime External
+
+---
+
 ## Dependencias entre fases
 
 ```
-Fase 1 (Endorsement) ──┬──→ Fase 3 (TX Lifecycle) ──→ Fase 6 (World State + MVCC)
-Fase 2 (Ordering)  ────┘         │                  │
-                                 │                  ├──→ Fase 7 (Private Data)
-Fase 4 (Channels) ←── 1 + 2     │                  └──→ Fase 8 (Chaincode)
-Fase 5 (MSP) ←── 1              │
-Fase 9 (Gateway) ←── 1 + 2 + 3  │
-Fase 10 (Discovery) ←── 1 + 4 + 9
-Fase 11 (Events) ←── 3 + 8 (ChaincodeEvent requiere WasmExecutor)
-Fase 12 (Hardening) ←── parallelizable desde Fase 3
+Fases 1-12 (completadas) ──────────────────────────────────────────────
+                                                                       │
+Fase 13 (ACLs + Channel Config) ←── 1 (EndorsementPolicy) + 4 (Channels)
+Fase 14 (Simulation + Key Endorsement) ←── 6 (WorldState) + 8 (WasmExecutor) + 1 (Endorsement)
+Fase 15 (Raft Ordering) ←── 2 (OrderingService) + P2P (network.rs)
+Fase 16 (Gossip Enhancement) ←── P2P (network.rs) + 13 (anchor peers en ChannelConfig)
+Fase 17 (Key History + CC-to-CC) ←── 6 (WorldState) + 8 (WasmExecutor) + 13 (ACLs)
+Fase 18 (Delivery Service) ←── 11 (Events) + 7 (Private Data)
+Fase 19 (Snapshots + Pagination) ←── 6 (WorldState) + Storage layer
+Fase 20 (HSM + OUs + External CC) ←── 5 (MSP) + 8 (Chaincode) + 1 (EndorsementPolicy)
+
+Paralelizables:
+  13, 15, 18, 19 — sin dependencias cruzadas entre sí
+  14 depende de 13 (ACLs para key-level)
+  16 depende de 13 (anchor peers en ChannelConfig)
+  17 depende de 13 (ACLs para cross-chaincode)
+  20 es independiente
 ```
 
 ---
 
-*Última revisión: 2026-04-03. Cada decisión técnica está basada en el codebase actual (469 tests).*
+*Última revisión: 2026-04-04. Cada decisión técnica está basada en el codebase actual (1612 tests).*

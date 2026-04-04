@@ -163,7 +163,7 @@ mod tests {
             transactions: vec![format!("tx-{}", height)],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         }
     }
 

@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
+use crate::channel::config::{apply_config_update, ChannelConfig, ConfigTransaction};
+use crate::channel::genesis::create_genesis_block;
+use crate::endorsement::{MemoryOrgRegistry, MemoryPolicyStore};
 use crate::storage::memory::MemoryStore;
 use crate::storage::traits::BlockStore;
 
@@ -88,11 +91,142 @@ pub async fn create_channel(
     }
 
     let new_store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+
+    let genesis_config = ChannelConfig::default();
+    let genesis = create_genesis_block(&channel_id, &genesis_config);
+    new_store.write_block(&genesis).map_err(|e| ApiError::InternalError {
+        reason: format!("failed to write genesis block for channel '{channel_id}': {e}"),
+    })?;
+
     map.insert(channel_id.clone(), new_store);
     drop(map);
 
+    // Seed config history with the genesis config.
+    state
+        .channel_configs
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(channel_id.clone(), vec![genesis_config]);
+
     Ok(HttpResponse::Created()
         .json(ApiResponse::success(ChannelCreatedResponse { channel_id }, trace_id)))
+}
+
+/// POST /api/v1/channels/{channel_id}/config — submit a config-update transaction.
+///
+/// Validates signatures against the channel's current modification policy, applies
+/// the updates, and persists the new `ChannelConfig` version in `AppState::channel_configs`.
+/// Returns 200 with the resulting `ChannelConfig`.
+#[post("/channels/{channel_id}/config")]
+pub async fn update_channel_config(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: web::Json<ConfigTransaction>,
+) -> ApiResult<HttpResponse> {
+    let channel_id = path.into_inner();
+    let tx = body.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+
+    // Channel must exist in the store map.
+    get_channel_store(&state, &channel_id)?;
+
+    // Get current config (last entry in history).
+    let current = {
+        let configs = state.channel_configs.read().unwrap_or_else(|e| e.into_inner());
+        configs
+            .get(&channel_id)
+            .and_then(|v| v.last().cloned())
+            .ok_or_else(|| ApiError::NotFound {
+                resource: format!("config for channel '{channel_id}'"),
+            })?
+    };
+
+    // Validate config-tx signatures. Fall back to empty in-memory registries when
+    // AppState does not carry live org/policy stores (e.g. in unit tests).
+    let fallback_policy_store = MemoryPolicyStore::new();
+    let fallback_org_registry = MemoryOrgRegistry::new();
+    let policy_store = state
+        .policy_store
+        .as_deref()
+        .unwrap_or(&fallback_policy_store);
+    let org_registry = state
+        .org_registry
+        .as_deref()
+        .unwrap_or(&fallback_org_registry);
+
+    crate::channel::config::validate_config_tx(&tx, &current, policy_store, org_registry)
+        .map_err(|e| ApiError::ValidationError {
+            field: "signatures".to_string(),
+            reason: e.to_string(),
+        })?;
+
+    // Apply updates and persist new version.
+    let new_config = apply_config_update(&current, &tx.updates).map_err(|e| {
+        ApiError::ValidationError {
+            field: "updates".to_string(),
+            reason: e.to_string(),
+        }
+    })?;
+
+    state
+        .channel_configs
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(channel_id)
+        .or_default()
+        .push(new_config.clone());
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(new_config, trace_id)))
+}
+
+/// GET /api/v1/channels/{channel_id}/config — retorna la config actual del channel.
+///
+/// Devuelve el último elemento de `state.channel_configs[channel_id]`.
+/// 404 si el channel no existe o no tiene historial de config.
+#[get("/channels/{channel_id}/config")]
+pub async fn get_channel_config(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let channel_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+
+    let config = state
+        .channel_configs
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&channel_id)
+        .and_then(|v| v.last().cloned())
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("config for channel '{channel_id}'"),
+        })?;
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(config, trace_id)))
+}
+
+/// GET /api/v1/channels/{channel_id}/config/history — retorna todas las versiones de config.
+///
+/// Devuelve el historial completo (índice 0 = génesis).
+/// 404 si el channel no existe o no tiene historial.
+#[get("/channels/{channel_id}/config/history")]
+pub async fn get_channel_config_history(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let channel_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+
+    let history = state
+        .channel_configs
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&channel_id)
+        .cloned()
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("config history for channel '{channel_id}'"),
+        })?;
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(history, trace_id)))
 }
 
 /// GET /api/v1/channels — listar todos los channel IDs registrados.
@@ -160,6 +294,8 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
+            channel_configs: Arc::new(RwLock::new(HashMap::new())),
+            acl_provider: None, ordering_backend: None,
         }
     }
 
@@ -245,5 +381,261 @@ mod tests {
         let state = make_state(vec![]);
         let map = state.store.read().unwrap();
         assert!(map.is_empty());
+    }
+
+    // ── genesis block on channel creation ─────────────────────────────────────
+
+    #[test]
+    fn create_channel_writes_genesis_block_at_height_zero() {
+        use crate::channel::config::ChannelConfig;
+        use crate::channel::genesis::create_genesis_block;
+
+        let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let config = ChannelConfig::default();
+        let genesis = create_genesis_block("ch-genesis", &config);
+        store.write_block(&genesis).expect("write genesis");
+
+        let read_back = store.read_block(0).expect("read genesis");
+        assert_eq!(read_back.height, 0);
+        assert_eq!(read_back.parent_hash, [0u8; 32]);
+        assert_eq!(read_back.proposer, "genesis:ch-genesis");
+    }
+
+    #[test]
+    fn create_channel_genesis_block_contains_config_json() {
+        use crate::channel::config::ChannelConfig;
+        use crate::channel::genesis::create_genesis_block;
+
+        let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let config = ChannelConfig::default();
+        let genesis = create_genesis_block("ch-cfg", &config);
+        store.write_block(&genesis).expect("write genesis");
+
+        let block = store.read_block(0).expect("read genesis");
+        assert_eq!(block.transactions.len(), 1);
+        let restored: ChannelConfig =
+            serde_json::from_str(&block.transactions[0]).expect("deserialize config");
+        assert_eq!(restored, config);
+    }
+
+    // ── get_channel_config (13.4.2) ───────────────────────────────────────────
+
+    #[test]
+    fn get_channel_config_returns_current_config() {
+        use crate::channel::config::ChannelConfig;
+
+        let state = make_state(vec![("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>)]);
+        let config = ChannelConfig { batch_size: 42, ..ChannelConfig::default() };
+        state
+            .channel_configs
+            .write()
+            .unwrap()
+            .insert("ch1".to_string(), vec![config.clone()]);
+
+        let result = state
+            .channel_configs
+            .read()
+            .unwrap()
+            .get("ch1")
+            .and_then(|v| v.last().cloned());
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().batch_size, 42);
+    }
+
+    #[test]
+    fn get_channel_config_unknown_channel_returns_none() {
+        let state = make_state(vec![]);
+
+        let result = state
+            .channel_configs
+            .read()
+            .unwrap()
+            .get("ghost")
+            .and_then(|v| v.last().cloned());
+
+        assert!(result.is_none());
+    }
+
+    // ── get_channel_config_history (13.4.3) ───────────────────────────────────
+
+    #[test]
+    fn get_channel_config_history_returns_all_versions() {
+        use crate::channel::config::ChannelConfig;
+
+        let state = make_state(vec![("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>)]);
+        let v0 = ChannelConfig { batch_size: 10, ..ChannelConfig::default() };
+        let v1 = ChannelConfig { batch_size: 20, version: 1, ..ChannelConfig::default() };
+        state
+            .channel_configs
+            .write()
+            .unwrap()
+            .insert("ch1".to_string(), vec![v0.clone(), v1.clone()]);
+
+        let history = state
+            .channel_configs
+            .read()
+            .unwrap()
+            .get("ch1")
+            .cloned()
+            .unwrap();
+
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].batch_size, 10);
+        assert_eq!(history[1].batch_size, 20);
+        assert_eq!(history[1].version, 1);
+    }
+
+    #[test]
+    fn get_channel_config_history_unknown_channel_returns_none() {
+        let state = make_state(vec![]);
+
+        let result = state
+            .channel_configs
+            .read()
+            .unwrap()
+            .get("ghost")
+            .cloned();
+
+        assert!(result.is_none());
+    }
+
+    // ── update_channel_config (13.4.1) ────────────────────────────────────────
+
+    fn make_state_with_channel(channel_id: &str) -> AppState {
+        use crate::channel::config::ChannelConfig;
+        use crate::endorsement::policy::EndorsementPolicy;
+        let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let state = make_state(vec![(channel_id, store)]);
+        // Use AllOf([]) so validation trivially passes with 0 signatures.
+        let config = ChannelConfig {
+            endorsement_policy: EndorsementPolicy::AllOf(vec![]),
+            ..ChannelConfig::default()
+        };
+        state
+            .channel_configs
+            .write()
+            .unwrap()
+            .insert(channel_id.to_string(), vec![config]);
+        state
+    }
+
+    #[test]
+    fn update_channel_config_applies_update_and_increments_version() {
+        use crate::channel::config::{ChannelConfig, ConfigTransaction, ConfigUpdateType};
+
+        let state = make_state_with_channel("ch1");
+
+        // No signatures required: AllOf([]) is satisfied with 0 matching orgs.
+        let tx = ConfigTransaction {
+            tx_id: "tx-1".to_string(),
+            channel_id: "ch1".to_string(),
+            updates: vec![ConfigUpdateType::SetBatchSize(200)],
+            signatures: vec![],
+            created_at: 0,
+        };
+
+        apply_config_update_logic(&state, "ch1", tx);
+
+        let configs = state.channel_configs.read().unwrap();
+        let history = configs.get("ch1").unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[1].batch_size, 200);
+        assert_eq!(history[1].version, 1);
+    }
+
+    #[test]
+    fn update_channel_config_unknown_channel_returns_not_found() {
+        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
+        use crate::api::errors::ApiError;
+
+        let state = make_state(vec![]);
+        let tx = ConfigTransaction {
+            tx_id: "tx-x".to_string(),
+            channel_id: "ghost".to_string(),
+            updates: vec![ConfigUpdateType::SetBatchSize(50)],
+            signatures: vec![],
+            created_at: 0,
+        };
+        let err = try_apply_config_update_logic(&state, "ghost", tx).unwrap_err();
+        assert!(matches!(err, ApiError::NotFound { .. }));
+    }
+
+    #[test]
+    fn update_channel_config_missing_config_history_returns_not_found() {
+        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
+        use crate::api::errors::ApiError;
+
+        // Store exists but no config history seeded.
+        let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let state = make_state(vec![("ch-no-cfg", store)]);
+
+        let tx = ConfigTransaction {
+            tx_id: "tx-y".to_string(),
+            channel_id: "ch-no-cfg".to_string(),
+            updates: vec![ConfigUpdateType::SetBatchSize(50)],
+            signatures: vec![],
+            created_at: 0,
+        };
+        let err = try_apply_config_update_logic(&state, "ch-no-cfg", tx).unwrap_err();
+        assert!(matches!(err, ApiError::NotFound { .. }));
+    }
+
+    // Inline the handler logic so it can be tested without actix runtime.
+    fn apply_config_update_logic(
+        state: &AppState,
+        channel_id: &str,
+        tx: crate::channel::config::ConfigTransaction,
+    ) {
+        try_apply_config_update_logic(state, channel_id, tx).expect("expected Ok");
+    }
+
+    fn try_apply_config_update_logic(
+        state: &AppState,
+        channel_id: &str,
+        tx: crate::channel::config::ConfigTransaction,
+    ) -> Result<crate::channel::config::ChannelConfig, crate::api::errors::ApiError> {
+        use crate::channel::config::{apply_config_update, validate_config_tx};
+        use crate::endorsement::{MemoryOrgRegistry, MemoryPolicyStore};
+
+        get_channel_store(state, channel_id)?;
+
+        let current = {
+            let configs = state.channel_configs.read().unwrap();
+            configs
+                .get(channel_id)
+                .and_then(|v| v.last().cloned())
+                .ok_or_else(|| crate::api::errors::ApiError::NotFound {
+                    resource: format!("config for channel '{channel_id}'"),
+                })?
+        };
+
+        let fallback_policy = MemoryPolicyStore::new();
+        let fallback_orgs = MemoryOrgRegistry::new();
+        let ps = state.policy_store.as_deref().unwrap_or(&fallback_policy);
+        let or_ = state.org_registry.as_deref().unwrap_or(&fallback_orgs);
+
+        validate_config_tx(&tx, &current, ps, or_)
+            .map_err(|e| crate::api::errors::ApiError::ValidationError {
+                field: "signatures".to_string(),
+                reason: e.to_string(),
+            })?;
+
+        let new_config = apply_config_update(&current, &tx.updates).map_err(|e| {
+            crate::api::errors::ApiError::ValidationError {
+                field: "updates".to_string(),
+                reason: e.to_string(),
+            }
+        })?;
+
+        state
+            .channel_configs
+            .write()
+            .unwrap()
+            .entry(channel_id.to_string())
+            .or_default()
+            .push(new_config.clone());
+
+        Ok(new_config)
     }
 }

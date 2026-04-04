@@ -6,6 +6,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 15 — Raft Consensus Ordering)
+
+**15.1 — Raft core**
+- `RaftNode` in `src/ordering/raft_node.rs`: wrapper over tikv `RawNode<MemStorage>`
+- `new`, `tick`, `propose`, `step`, `advance` methods
+- Full raft 0.7 ready cycle: handles `messages()` (leader) and `persisted_messages()` (candidate/follower) correctly
+- `create_snapshot` / `apply_snapshot` for node catch-up
+- 8 tests: init, election, 3-node leader election, propose+commit, 5-entry replication, snapshot transfer
+
+**15.2 — Raft ordering service**
+- `RaftOrderingService` in `src/ordering/raft_service.rs`: JSON-serialized TX proposals through raft, committed entry draining with no-op filtering
+- `OrderingBackend` trait in `src/ordering/mod.rs` with `submit_tx`, `cut_block`, `pending_count`
+- Implemented by both `OrderingService` (solo) and `RaftOrderingService` (raft)
+- Backend selection via `ORDERING_BACKEND=raft|solo` env var; `RAFT_NODE_ID`, `RAFT_PEERS` for raft config
+- `AppState.ordering_backend: Option<Arc<dyn OrderingBackend>>` added
+- 6 tests: 3 raft service + 2 trait object + 1 batch size
+
+**15.3 — Raft network transport**
+- `Message::RaftMessage(Vec<u8>)` variant added to P2P `Message` enum
+- `src/ordering/raft_transport.rs`: prost encode/decode, `tick_and_collect`, `deliver_raw`
+- `prost` dependency aligned to 0.11 (matches raft-proto)
+- 3 tests: serde roundtrip, encode/decode roundtrip, 3-node in-process replication through serialized bytes
+
+**15.4 — Orderer block signing**
+- `Block.orderer_signature: Option<[u8; 64]>` with `#[serde(default, skip_serializing_if)]`
+- `sign_block(block, key)`: `sha256(height || parent_hash || merkle_root)` signed with Ed25519
+- `verify_orderer_signature(block, verifying_key)`: `Ok(true)` valid, `Ok(false)` absent, `Err` invalid
+- Both backends sign when `with_signing_key(key)` is set
+- 4 tests: sign+verify, valid accept, invalid reject, absent accept
+
+---
+
 ### 2026-04-04 (Fase 12 — Hardening · §12.3 Benchmarks)
 
 **12.3.1–12.3.3 — Criterion benchmarks** (`benches/ordering_throughput.rs`)

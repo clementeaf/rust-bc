@@ -193,6 +193,8 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            acl_provider: None, ordering_backend: None,
         })
     }
 

@@ -21,6 +21,9 @@ pub struct Block {
     /// Endorsements collected for this block (empty for legacy blocks)
     #[serde(default)]
     pub endorsements: Vec<Endorsement>,
+    /// Orderer signature over the block hash (absent for legacy blocks).
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_sig_hex")]
+    pub orderer_signature: Option<[u8; 64]>,
 }
 
 mod sig_hex {
@@ -36,6 +39,31 @@ mod sig_hex {
         bytes
             .try_into()
             .map_err(|_| serde::de::Error::custom("signature must be 64 bytes"))
+    }
+}
+
+mod opt_sig_hex {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(sig: &Option<[u8; 64]>, s: S) -> Result<S::Ok, S::Error> {
+        match sig {
+            Some(bytes) => s.serialize_str(&hex::encode(bytes)),
+            None => s.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<[u8; 64]>, D::Error> {
+        let opt: Option<String> = Option::deserialize(d)?;
+        match opt {
+            None => Ok(None),
+            Some(hex_str) => {
+                let bytes = hex::decode(&hex_str).map_err(serde::de::Error::custom)?;
+                let arr: [u8; 64] = bytes
+                    .try_into()
+                    .map_err(|_| serde::de::Error::custom("orderer_signature must be 64 bytes"))?;
+                Ok(Some(arr))
+            }
+        }
     }
 }
 
@@ -183,7 +211,7 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         }
     }
 
@@ -215,11 +243,31 @@ mod tests {
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
             endorsements: vec![e.clone()],
+            orderer_signature: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let decoded: Block = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.endorsements.len(), 1);
         assert_eq!(decoded.endorsements[0].org_id, "org1");
+    }
+
+    #[test]
+    fn block_serde_with_orderer_signature() {
+        let mut block = sample_block(10);
+        block.orderer_signature = Some([42u8; 64]);
+        let json = serde_json::to_string(&block).unwrap();
+        assert!(json.contains("orderer_signature"));
+        let decoded: Block = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.orderer_signature, Some([42u8; 64]));
+    }
+
+    #[test]
+    fn block_serde_without_orderer_signature() {
+        let block = sample_block(11);
+        let json = serde_json::to_string(&block).unwrap();
+        assert!(!json.contains("orderer_signature"));
+        let decoded: Block = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.orderer_signature, None);
     }
 
     #[test]

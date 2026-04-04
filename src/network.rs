@@ -55,6 +55,8 @@ pub enum Message {
     SubmitTransaction(crate::storage::traits::Transaction),
     /// Orderer broadcasts an ordered block to peers.
     OrderedBlock(crate::storage::traits::Block),
+    /// Raft consensus message (protobuf-serialized via prost).
+    RaftMessage(Vec<u8>),
 }
 
 /**
@@ -1174,6 +1176,11 @@ impl Node {
                         let _ = s.write_block(&block);
                     }
                 }
+                Ok(None)
+            }
+
+            Message::RaftMessage(_data) => {
+                // Handled by the raft transport loop (15.3.2), not here.
                 Ok(None)
             }
         }
@@ -2495,7 +2502,7 @@ mod tests {
             transactions: vec![],
             proposer: "ord".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         };
 
         Node::process_message(
@@ -2579,7 +2586,7 @@ mod tests {
             transactions: vec!["tx-test".to_string()],
             proposer: "orderer1".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],
+            endorsements: vec![],orderer_signature: None,
         };
         let msg = Message::OrderedBlock(block);
         let json = serde_json::to_string(&msg).unwrap();
@@ -2587,6 +2594,19 @@ mod tests {
         if let Message::OrderedBlock(b) = decoded {
             assert_eq!(b.height, 5);
             assert_eq!(b.transactions, vec!["tx-test"]);
+        } else {
+            panic!("wrong variant");
+        }
+    }
+
+    #[test]
+    fn raft_message_serde_roundtrip() {
+        let payload = vec![1u8, 2, 3, 42];
+        let msg = Message::RaftMessage(payload.clone());
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: Message = serde_json::from_str(&json).unwrap();
+        if let Message::RaftMessage(data) = decoded {
+            assert_eq!(data, payload);
         } else {
             panic!("wrong variant");
         }
