@@ -46,5 +46,6 @@ pub mod transaction;
 pub mod channel;
 pub mod msp;
 pub mod private_data;
+pub mod chaincode;
 
 pub use app_state::AppState;

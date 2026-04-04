@@ -17,6 +17,7 @@ use crate::staking::StakingManager;
 use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
+use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
@@ -51,4 +52,8 @@ pub struct AppState {
     pub private_data_store: Option<Arc<dyn PrivateDataStore>>,
     /// Registry of private data collection definitions.
     pub collection_registry: Option<Arc<dyn CollectionRegistry>>,
+    /// Chaincode Wasm package store.
+    pub chaincode_package_store: Option<Arc<dyn ChaincodePackageStore>>,
+    /// Chaincode lifecycle definition store.
+    pub chaincode_definition_store: Option<Arc<dyn ChaincodeDefinitionStore>>,
 }

@@ -115,6 +115,8 @@ mod tests {
             crl_store: Some(crl),
             private_data_store: None,
             collection_registry: None,
+            chaincode_package_store: None,
+            chaincode_definition_store: None,
         })
     }
 

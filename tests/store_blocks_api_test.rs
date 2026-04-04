@@ -63,6 +63,8 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         crl_store: None,
         private_data_store: None,
         collection_registry: None,
+        chaincode_package_store: None,
+        chaincode_definition_store: None,
     }
 }
 
@@ -89,6 +91,8 @@ fn make_state_no_store() -> AppState {
         crl_store: None,
         private_data_store: None,
         collection_registry: None,
+        chaincode_package_store: None,
+        chaincode_definition_store: None,
     }
 }
 

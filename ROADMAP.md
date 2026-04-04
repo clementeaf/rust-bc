@@ -340,32 +340,32 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 8.1 Lifecycle states
 
-- [ ] **8.1.1** Crear enum `ChaincodeStatus` en `src/chaincode/mod.rs`: `Installed`, `Approved`, `Committed`, `Deprecated`
+- [x] **8.1.1** Crear enum `ChaincodeStatus` en `src/chaincode/mod.rs`: `Installed`, `Approved`, `Committed`, `Deprecated`
   - Declarar `mod chaincode` en `lib.rs`/`main.rs`
   - Tests: transiciones válidas (Installed→Approved→Committed), inválidas (Installed→Committed → error)
-- [ ] **8.1.2** Crear struct `ChaincodeDefinition` en `src/chaincode/definition.rs`
+- [x] **8.1.2** Crear struct `ChaincodeDefinition` en `src/chaincode/definition.rs`
   - Campos: `chaincode_id: String`, `version: String`, `status: ChaincodeStatus`, `endorsement_policy: EndorsementPolicy`, `approvals: HashMap<String, bool>` (org_id → approved)
   - Tests: crear definition
 
 ### 8.2 Package storage
 
-- [ ] **8.2.1** Añadir CF `chaincode_packages` a `adapters.rs`: key = `chaincode_id:version`, value = Wasm bytes
+- [x] **8.2.1** Añadir CF `chaincode_packages` a `adapters.rs`: key = `chaincode_id:version`, value = Wasm bytes
   - Tests: store 100KB wasm, read back, bytes match
-- [ ] **8.2.2** Handler `POST /api/v1/chaincode/install` — recibe Wasm binary, almacena en CF
-- [ ] **8.2.3** Handler `POST /api/v1/chaincode/{id}/approve` — requiere firma de admin de la org; actualiza approvals en definition
-- [ ] **8.2.4** Handler `POST /api/v1/chaincode/{id}/commit` — verifica approvals de mayoría de orgs (via `EndorsementPolicy::evaluate`), cambia status a `Committed`
+- [x] **8.2.2** Handler `POST /api/v1/chaincode/install` — recibe Wasm binary, almacena en CF
+- [x] **8.2.3** Handler `POST /api/v1/chaincode/{id}/approve` — requiere firma de admin de la org; actualiza approvals en definition
+- [x] **8.2.4** Handler `POST /api/v1/chaincode/{id}/commit` — verifica approvals de mayoría de orgs (via `EndorsementPolicy::evaluate`), cambia status a `Committed`
 
 ### 8.3 Wasm execution
 
-- [ ] **8.3.1** Agregar `wasmtime = "21"` a `Cargo.toml`
-- [ ] **8.3.2** Crear `WasmExecutor` en `src/chaincode/executor.rs`
+- [x] **8.3.1** Agregar `wasmtime = "21"` a `Cargo.toml`
+- [x] **8.3.2** Crear `WasmExecutor` en `src/chaincode/executor.rs`
   - Constructor: `fn new(wasm_bytes: &[u8], fuel_limit: u64) -> Result<Self, ChaincodeError>`
   - Usa `wasmtime::Engine` + `Store` con fuel metering para limitar CPU
   - Tests: cargar wasm válido (ok), wasm inválido (err)
-- [ ] **8.3.3** Exponer host functions al Wasm: `get_state(key) -> bytes`, `put_state(key, bytes)`
+- [x] **8.3.3** Exponer host functions al Wasm: `get_state(key) -> bytes`, `put_state(key, bytes)`
   - Estas funciones leen/escriben en `WorldState` (Fase 6)
   - Tests: wasm chaincode que hace put("x", "1") + get("x") → retorna "1"
-- [ ] **8.3.4** Implementar memory limit: `wasmtime::StoreLimitsBuilder::memory_size(max_bytes)`
+- [x] **8.3.4** Implementar memory limit: `wasmtime::StoreLimitsBuilder::memory_size(max_bytes)`
   - Tests: wasm que intenta allocar más de max → trapped
 
 ---

@@ -12,3 +12,4 @@ pub mod organizations;
 pub mod channels;
 pub mod msp;
 pub mod private_data;
+pub mod chaincode;

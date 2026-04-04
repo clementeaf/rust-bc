@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-03 (Fase 8 — Chaincode Lifecycle · §8.3 Wasm execution)
+
+**8.3.4 — Memory limit**
+- `WasmExecutor::with_memory_limit(max_bytes)` builder method
+- `StoreLimitsBuilder::memory_size` + `store.limiter()` activan el límite por invocación
+- Módulo que pide más páginas de las permitidas falla en instanciación → `ChaincodeError::Execution`
+- 2 tests: exceder límite → error, dentro del límite → ok
+
+**8.3.3 — Host functions `put_state` / `get_state`**
+- `WasmExecutor::invoke(state, func_name) -> Result<Vec<u8>>`
+- ABI: la función Wasm devuelve `i64 = (ptr << 32 | len)`; el host lee `memory[ptr..ptr+len]`
+- Imports `env::put_state` y `env::get_state` enlazan la memoria Wasm con `WorldState`
+- 2 tests: put→get devuelve `"1"`, estado persistido en `WorldState`
+
+**8.3.2 — `WasmExecutor`**
+- `src/chaincode/executor.rs`: `WasmExecutor { engine, module, fuel_limit }`
+- Constructor compila Wasm con fuel metering (`Config::consume_fuel(true)`)
+- `ChaincodeError::Execution(String)` añadido al enum
+- 3 tests: wasm válido ok, fuel_limit guardado, wasm inválido → error
+
+**8.3.1 — Dependencia wasmtime**
+- `wasmtime = "21"` añadido a `Cargo.toml`
+
+---
+
 ### 2026-04-03 (Fase 7 — Private Data Collections)
 
 **7.2.1 — Access control en handlers de private data**

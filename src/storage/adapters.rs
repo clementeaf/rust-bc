@@ -22,6 +22,7 @@ use super::world_state::{VersionedValue, WorldState};
 use crate::endorsement::org::Organization;
 use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
+use crate::chaincode::{ChaincodeError, ChaincodePackageStore};
 use crate::private_data::{sha256, PrivateDataStore};
 
 const CF_BLOCKS: &str = "blocks";
@@ -39,6 +40,8 @@ const CF_ORGANIZATIONS: &str = "organizations";
 const CF_CRL: &str = "crl";
 /// World state: key = arbitrary string key, value = JSON VersionedValue
 const CF_WORLD_STATE: &str = "world_state";
+/// Chaincode packages: key = `{chaincode_id}:{version}`, value = raw Wasm bytes
+const CF_CHAINCODE_PACKAGES: &str = "chaincode_packages";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -53,6 +56,7 @@ const ALL_CFS: &[&str] = &[
     CF_ORGANIZATIONS,
     CF_CRL,
     CF_WORLD_STATE,
+    CF_CHAINCODE_PACKAGES,
 ];
 
 
@@ -164,6 +168,12 @@ impl RocksDbBlockStore {
         self.db
             .cf_handle(CF_WORLD_STATE)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_WORLD_STATE.to_string()))
+    }
+
+    fn cf_chaincode_packages(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_CHAINCODE_PACKAGES)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHAINCODE_PACKAGES.to_string()))
     }
 
     // ── Key encoders ─────────────────────────────────────────────────────────
@@ -616,6 +626,54 @@ impl WorldState for RocksDbBlockStore {
             result.push((k, vv));
         }
         Ok(result)
+    }
+}
+
+// ── Chaincode package storage ─────────────────────────────────────────────────
+
+impl RocksDbBlockStore {
+    /// Compose the CF key as `{chaincode_id}:{version}`.
+    fn package_key(chaincode_id: &str, version: &str) -> Vec<u8> {
+        format!("{chaincode_id}:{version}").into_bytes()
+    }
+
+    /// Store raw Wasm bytes for a chaincode package.
+    pub fn store_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+        wasm_bytes: &[u8],
+    ) -> StorageResult<()> {
+        let cf = self.cf_chaincode_packages()?;
+        self.db
+            .put_cf(&cf, Self::package_key(chaincode_id, version), wasm_bytes)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    /// Retrieve raw Wasm bytes for a chaincode package, or `None` if not found.
+    pub fn get_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> StorageResult<Option<Vec<u8>>> {
+        let cf = self.cf_chaincode_packages()?;
+        self.db
+            .get_cf(&cf, Self::package_key(chaincode_id, version))
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+}
+
+// ── ChaincodePackageStore impl ────────────────────────────────────────────────
+
+impl ChaincodePackageStore for RocksDbBlockStore {
+    fn store_package(&self, chaincode_id: &str, version: &str, wasm_bytes: &[u8]) -> Result<(), ChaincodeError> {
+        self.store_package(chaincode_id, version, wasm_bytes)
+            .map_err(|e| ChaincodeError::Storage(e.to_string()))
+    }
+
+    fn get_package(&self, chaincode_id: &str, version: &str) -> Result<Option<Vec<u8>>, ChaincodeError> {
+        self.get_package(chaincode_id, version)
+            .map_err(|e| ChaincodeError::Storage(e.to_string()))
     }
 }
 
@@ -1238,5 +1296,34 @@ mod tests {
             store.get_private_data("col2", "k").unwrap(),
             Some(b"beta".to_vec())
         );
+    }
+
+    // ── chaincode package tests ───────────────────────────────────────────────
+
+    #[test]
+    fn store_and_get_package_roundtrip() {
+        let (store, _dir) = tmp_store();
+        let wasm = vec![0u8; 100 * 1024]; // 100 KB
+        store.store_package("my_cc", "1.0", &wasm).unwrap();
+        let retrieved = store.get_package("my_cc", "1.0").unwrap();
+        assert_eq!(retrieved, Some(wasm));
+    }
+
+    #[test]
+    fn get_missing_package_returns_none() {
+        let (store, _dir) = tmp_store();
+        let result = store.get_package("missing_cc", "0.1").unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn different_versions_stored_independently() {
+        let (store, _dir) = tmp_store();
+        let wasm_v1 = vec![1u8; 64];
+        let wasm_v2 = vec![2u8; 64];
+        store.store_package("cc", "1.0", &wasm_v1).unwrap();
+        store.store_package("cc", "2.0", &wasm_v2).unwrap();
+        assert_eq!(store.get_package("cc", "1.0").unwrap(), Some(wasm_v1));
+        assert_eq!(store.get_package("cc", "2.0").unwrap(), Some(wasm_v2));
     }
 }

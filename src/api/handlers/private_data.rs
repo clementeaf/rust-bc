@@ -188,6 +188,8 @@ mod tests {
             crl_store: None,
             private_data_store: Some(store),
             collection_registry: Some(registry),
+            chaincode_package_store: None,
+            chaincode_definition_store: None,
         })
     }
 
