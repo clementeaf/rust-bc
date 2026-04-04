@@ -190,6 +190,7 @@ mod tests {
             collection_registry: Some(registry),
             chaincode_package_store: None,
             chaincode_definition_store: None,
+            gateway: None,
         })
     }
 

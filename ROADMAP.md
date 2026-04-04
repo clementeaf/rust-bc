@@ -375,17 +375,17 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 > Gateway es un handler Actix-Web que orquesta el lifecycle completo: endorse → order → commit.
 > Reutiliza los building blocks de Fases 1–3.
 
-- [ ] **9.1.1** Crear struct `Gateway` en `src/gateway/mod.rs`
+- [x] **9.1.1** Crear struct `Gateway` en `src/gateway/mod.rs`
   - Campos: `org_registry: Arc<dyn OrgRegistry>`, `policy_store: Arc<dyn PolicyStore>`, `ordering_service: Arc<OrderingService>`, `store: Arc<dyn BlockStore>`
   - Declarar `mod gateway` en `lib.rs`/`main.rs`
   - Tests: crear gateway con mocks
-- [ ] **9.1.2** Implementar `Gateway::submit(&self, tx: Transaction) -> Result<TxResult, GatewayError>`
+- [x] **9.1.2** Implementar `Gateway::submit(&self, tx: Transaction) -> Result<TxResult, GatewayError>`
   - Paso 1: consultar policy del chaincode → determinar qué orgs necesitan endorsar
   - Paso 2: (en esta versión single-node) generar endorsement local
   - Paso 3: enviar endorsed TX a ordering service
   - Paso 4: esperar bloque con la TX → retornar resultado
   - Tests: submit TX completo → bloque cortado → TX committed
-- [ ] **9.1.3** Handler `POST /api/v1/gateway/submit` — delega a `Gateway::submit`
+- [x] **9.1.3** Handler `POST /api/v1/gateway/submit` — delega a `Gateway::submit`
   - Tests de integración: request HTTP → TX procesada end-to-end
 
 ---

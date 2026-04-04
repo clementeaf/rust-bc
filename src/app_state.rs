@@ -18,6 +18,7 @@ use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
 use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
+use crate::gateway::Gateway;
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::storage::traits::BlockStore;
 use crate::transaction_validation::TransactionValidator;
@@ -56,4 +57,6 @@ pub struct AppState {
     pub chaincode_package_store: Option<Arc<dyn ChaincodePackageStore>>,
     /// Chaincode lifecycle definition store.
     pub chaincode_definition_store: Option<Arc<dyn ChaincodeDefinitionStore>>,
+    /// Fabric Gateway — orchestrates endorse → order → commit.
+    pub gateway: Option<Arc<Gateway>>,
 }

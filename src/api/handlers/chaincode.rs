@@ -288,6 +288,7 @@ mod tests {
             collection_registry: None,
             chaincode_package_store: pkg_store,
             chaincode_definition_store: def_store,
+            gateway: None,
         })
     }
 

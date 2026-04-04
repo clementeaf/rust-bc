@@ -1,6 +1,6 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{blocks, chain, chaincode, channels, credentials, identity, msp, organizations, private_data, proposals, transactions, utilities};
+use crate::api::handlers::{blocks, chain, chaincode, channels, credentials, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
@@ -25,6 +25,7 @@ impl ApiRoutes {
                 .service(Self::msp_routes())
                 .service(Self::private_data_routes())
                 .service(Self::chaincode_routes())
+                .service(Self::gateway_routes())
                 .service(Self::utilities_routes()),
         );
     }
@@ -125,6 +126,10 @@ impl ApiRoutes {
             .service(chaincode::install_chaincode)
             .service(chaincode::approve_chaincode)
             .service(chaincode::commit_chaincode)
+    }
+
+    fn gateway_routes() -> Scope {
+        web::scope("").service(gateway::gateway_submit)
     }
 
     fn utilities_routes() -> Scope {

@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-03 (Fase 9 — Fabric Gateway)
+
+**9.1.1 — `Gateway` struct**
+- `src/gateway/mod.rs`: campos `org_registry`, `policy_store`, `ordering_service`, `store`
+- `mod gateway` declarado en `lib.rs` y `main.rs`
+- 3 tests: crear con mocks, store vacío, policy store vacío
+
+**9.1.2 — `Gateway::submit`**
+- Pipeline: consulta policy → self-endorse → `ordering_service.submit_tx` → `cut_block` → `store.write_block`
+- `TxResult { tx_id, block_height }` como tipo de retorno
+- `GatewayError`: `PolicyNotSatisfied`, `Ordering`, `Storage`
+- 4 tests: sin policy, `AnyOf` satisfecha, policy no satisfecha, alturas secuenciales
+
+**9.1.3 — `POST /api/v1/gateway/submit`**
+- Handler `gateway_submit` en `src/api/handlers/gateway.rs`
+- Acepta `{ chaincode_id, transaction: { id, input_did, output_recipient, amount } }`
+- Devuelve `{ tx_id, block_height }`; 404 si gateway no configurado; 400 si campos vacíos
+- `gateway: Option<Arc<Gateway>>` añadido a `AppState`
+- 3 tests HTTP: 200 end-to-end, 404 sin gateway, 400 con campos vacíos
+
+**Total tests: 1470**
+
+---
+
 ### 2026-04-03 (Fase 8 — Chaincode Lifecycle · §8.3 Wasm execution)
 
 **8.3.4 — Memory limit**

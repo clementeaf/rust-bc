@@ -65,6 +65,7 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         collection_registry: None,
         chaincode_package_store: None,
         chaincode_definition_store: None,
+        gateway: None,
     }
 }
 
@@ -93,6 +94,7 @@ fn make_state_no_store() -> AppState {
         collection_registry: None,
         chaincode_package_store: None,
         chaincode_definition_store: None,
+        gateway: None,
     }
 }
 

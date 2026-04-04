@@ -157,6 +157,7 @@ mod tests {
             collection_registry: None,
             chaincode_package_store: None,
             chaincode_definition_store: None,
+            gateway: None,
         }
     }
 

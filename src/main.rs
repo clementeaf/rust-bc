@@ -34,6 +34,7 @@ mod channel;
 mod msp;
 mod private_data;
 mod chaincode;
+mod gateway;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -620,6 +621,7 @@ async fn main() -> std::io::Result<()> {
         collection_registry: None,
         chaincode_package_store: None,
         chaincode_definition_store: None,
+        gateway: None,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
