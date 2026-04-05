@@ -758,36 +758,36 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 17.1 Key history
 
-- [ ] **17.1.1** Añadir CF `key_history` a `adapters.rs`: key = `{state_key}\x00{version:012}`, value = JSON `HistoryEntry`
+- [x] **17.1.1** Añadir CF `key_history` a `adapters.rs`: key = `{state_key}\x00{version:012}`, value = JSON `HistoryEntry`
   - `HistoryEntry`: `{ version: u64, data: Vec<u8>, tx_id: String, timestamp: u64, is_delete: bool }`
   - Agregar a `ALL_CFS`, helper `cf_key_history()`
   - Tests: write 3 versions de misma key → read history retorna 3 entries ordenados
-- [ ] **17.1.2** Añadir método `get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>>` al trait `WorldState`
+- [x] **17.1.2** Añadir método `get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>>` al trait `WorldState`
   - Implementar para `MemoryWorldState`: mantener `history: HashMap<String, Vec<HistoryEntry>>`
   - Implementar para `RocksDbBlockStore`: prefix scan en CF `key_history` con `{key}\x00`
   - Tests: put 5 veces → history tiene 5 entries; delete → history tiene 6 entries con `is_delete=true`
-- [ ] **17.1.3** Modificar `WorldState::put()` y `WorldState::delete()` para escribir history entry
+- [x] **17.1.3** Modificar `WorldState::put()` y `WorldState::delete()` para escribir history entry
   - En cada put: append `HistoryEntry { version: new_version, data, tx_id: "", timestamp: now, is_delete: false }`
   - En cada delete: append con `is_delete: true`, data vacía
   - Tests: put("x","a") → put("x","b") → delete("x") → history = [v1:a, v2:b, v3:deleted]
-- [ ] **17.1.4** Exponer host function `get_history_for_key(key) -> Vec<HistoryEntry>` en `WasmExecutor`
+- [x] **17.1.4** Exponer host function `get_history_for_key(key) -> Vec<HistoryEntry>` en `WasmExecutor`
   - ABI: retorna JSON serializado como bytes (ptr << 32 | len)
   - Tests: chaincode llama get_history → retorna entries correctos
 
 ### 17.2 Chaincode-to-chaincode invocation
 
-- [ ] **17.2.1** Crear trait `ChaincodeResolver` en `src/chaincode/resolver.rs`
+- [x] **17.2.1** Crear trait `ChaincodeResolver` en `src/chaincode/resolver.rs`
   - Método: `fn resolve(&self, chaincode_id: &str) -> Result<Vec<u8>, ChaincodeError>` — retorna wasm bytes
   - Implementar `StoreBacked` que usa `ChaincodePackageStore::get_package`
   - Tests: resolver con chaincode existente (ok), inexistente (err)
-- [ ] **17.2.2** Exponer host function `invoke_chaincode(chaincode_id, function, args) -> bytes` en `WasmExecutor`
+- [x] **17.2.2** Exponer host function `invoke_chaincode(chaincode_id, function, args) -> bytes` en `WasmExecutor`
   - Internamente: resuelve wasm bytes via `ChaincodeResolver`, crea nuevo `WasmExecutor` temporal, invoca, retorna resultado
   - El chaincode invocado comparte el mismo `WorldState` (reads/writes son visibles)
   - Tests: chaincode A llama chaincode B que hace put("x","1") → chaincode A hace get("x") → "1"
-- [ ] **17.2.3** Añadir ACL check en invocación cross-chaincode
+- [x] **17.2.3** Añadir ACL check en invocación cross-chaincode
   - Verificar que el caller tiene permiso `ChaincodeInvoke` para el target chaincode (via `AclProvider` de Fase 13)
   - Tests: invocación con ACL permitida (ok), sin permiso (denied)
-- [ ] **17.2.4** Prevenir recursión infinita: límite de profundidad `MAX_CHAINCODE_DEPTH=8`
+- [x] **17.2.4** Prevenir recursión infinita: límite de profundidad `MAX_CHAINCODE_DEPTH=8`
   - Pasar depth counter en cada invocación; si depth > max → error
   - Tests: chaincode recursivo → error al llegar a depth 8
 

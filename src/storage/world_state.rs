@@ -6,6 +6,7 @@
 //! current committed version.
 
 use super::errors::StorageResult;
+use super::traits::HistoryEntry;
 
 /// A versioned value stored in the world state.
 ///
@@ -35,6 +36,9 @@ pub trait WorldState: Send + Sync {
     /// Return all entries whose key satisfies `start <= key < end`, ordered
     /// lexicographically by key.
     fn get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>>;
+
+    /// Return the full change history for `key`, ordered by version.
+    fn get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>>;
 }
 
 // ── MemoryStore implementation ────────────────────────────────────────────────
@@ -46,12 +50,14 @@ use std::sync::Mutex;
 /// lexicographic ordering for `get_range`.
 pub struct MemoryWorldState {
     inner: Mutex<BTreeMap<String, VersionedValue>>,
+    history: Mutex<std::collections::HashMap<String, Vec<HistoryEntry>>>,
 }
 
 impl MemoryWorldState {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(BTreeMap::new()),
+            history: Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -77,11 +83,41 @@ impl WorldState for MemoryWorldState {
                 data: data.to_vec(),
             },
         );
+
+        // Append history entry.
+        let mut hist = self.history.lock().unwrap();
+        hist.entry(key.to_string()).or_default().push(HistoryEntry {
+            version: new_version,
+            data: data.to_vec(),
+            tx_id: String::new(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            is_delete: false,
+        });
+
         Ok(new_version)
     }
 
     fn delete(&self, key: &str) -> StorageResult<()> {
-        self.inner.lock().unwrap().remove(key);
+        let mut map = self.inner.lock().unwrap();
+        // Record the delete version before removing.
+        let del_version = map.get(key).map(|v| v.version + 1).unwrap_or(1);
+        map.remove(key);
+
+        let mut hist = self.history.lock().unwrap();
+        hist.entry(key.to_string()).or_default().push(HistoryEntry {
+            version: del_version,
+            data: vec![],
+            tx_id: String::new(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            is_delete: true,
+        });
+
         Ok(())
     }
 
@@ -92,6 +128,11 @@ impl WorldState for MemoryWorldState {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         Ok(result)
+    }
+
+    fn get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>> {
+        let hist = self.history.lock().unwrap();
+        Ok(hist.get(key).cloned().unwrap_or_default())
     }
 }
 
@@ -325,5 +366,56 @@ mod tests {
         state.put(&composite_key("Asset", &["ownerA"]), b"v").unwrap();
         let results = get_by_partial_key(&state, "Token", &[]).unwrap();
         assert!(results.is_empty());
+    }
+
+    // ── get_history ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn put_five_times_yields_five_history_entries() {
+        let s = ws();
+        for i in 1..=5u8 {
+            s.put("k", &[i]).unwrap();
+        }
+        let hist = s.get_history("k").unwrap();
+        assert_eq!(hist.len(), 5);
+        for (i, entry) in hist.iter().enumerate() {
+            assert_eq!(entry.version, (i + 1) as u64);
+            assert!(!entry.is_delete);
+        }
+    }
+
+    #[test]
+    fn delete_appends_history_entry_with_is_delete() {
+        let s = ws();
+        s.put("k", b"a").unwrap();
+        s.delete("k").unwrap();
+        let hist = s.get_history("k").unwrap();
+        assert_eq!(hist.len(), 2);
+        assert!(!hist[0].is_delete);
+        assert!(hist[1].is_delete);
+        assert_eq!(hist[1].version, 2);
+        assert!(hist[1].data.is_empty());
+    }
+
+    #[test]
+    fn put_put_delete_history_sequence() {
+        let s = ws();
+        s.put("x", b"a").unwrap();
+        s.put("x", b"b").unwrap();
+        s.delete("x").unwrap();
+        let hist = s.get_history("x").unwrap();
+        assert_eq!(hist.len(), 3);
+        assert_eq!(hist[0].data, b"a");
+        assert_eq!(hist[0].version, 1);
+        assert_eq!(hist[1].data, b"b");
+        assert_eq!(hist[1].version, 2);
+        assert!(hist[2].is_delete);
+        assert_eq!(hist[2].version, 3);
+    }
+
+    #[test]
+    fn get_history_absent_key_returns_empty() {
+        let s = ws();
+        assert!(s.get_history("missing").unwrap().is_empty());
     }
 }

@@ -48,6 +48,8 @@ const CF_ACLS: &str = "acls";
 const CF_CHANNEL_CONFIGS: &str = "channel_configs";
 /// Key-level endorsement policies: key = state key string, value = JSON endorsement policy expression
 const CF_KEY_ENDORSEMENT_POLICIES: &str = "key_endorsement_policies";
+/// Key history: key = `{state_key}\x00{version:012}`, value = JSON HistoryEntry
+const CF_KEY_HISTORY: &str = "key_history";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -66,6 +68,7 @@ const ALL_CFS: &[&str] = &[
     CF_ACLS,
     CF_CHANNEL_CONFIGS,
     CF_KEY_ENDORSEMENT_POLICIES,
+    CF_KEY_HISTORY,
 ];
 
 
@@ -203,6 +206,12 @@ impl RocksDbBlockStore {
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_KEY_ENDORSEMENT_POLICIES.to_string()))
     }
 
+    pub(crate) fn cf_key_history(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_KEY_HISTORY)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_KEY_HISTORY.to_string()))
+    }
+
     // ── Key encoders ─────────────────────────────────────────────────────────
 
     /// Zero-padded decimal height gives lexicographic == numeric ordering.
@@ -241,6 +250,65 @@ impl RocksDbBlockStore {
         prefix.extend_from_slice(subject_did.as_bytes());
         prefix.push(0x00);
         prefix
+    }
+
+    /// Key-history entry key: `{state_key}\x00{version:012}`.
+    fn history_key(state_key: &str, version: u64) -> Vec<u8> {
+        let mut key = Vec::with_capacity(state_key.len() + 1 + 12);
+        key.extend_from_slice(state_key.as_bytes());
+        key.push(0x00);
+        key.extend_from_slice(format!("{:012}", version).as_bytes());
+        key
+    }
+
+    /// Prefix for scanning all history entries of a given key.
+    fn history_prefix(state_key: &str) -> Vec<u8> {
+        let mut prefix = Vec::with_capacity(state_key.len() + 1);
+        prefix.extend_from_slice(state_key.as_bytes());
+        prefix.push(0x00);
+        prefix
+    }
+
+    // ── Key history ──────────────────────────────────────────────────────────
+
+    /// Write a single history entry for a world-state key.
+    pub fn write_history_entry(
+        &self,
+        state_key: &str,
+        entry: &crate::storage::traits::HistoryEntry,
+    ) -> StorageResult<()> {
+        let cf = self.cf_key_history()?;
+        let key = Self::history_key(state_key, entry.version);
+        let value = serde_json::to_vec(entry)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key, value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    /// Read all history entries for a world-state key, ordered by version.
+    pub fn get_history(
+        &self,
+        state_key: &str,
+    ) -> StorageResult<Vec<crate::storage::traits::HistoryEntry>> {
+        let cf = self.cf_key_history()?;
+        let prefix = Self::history_prefix(state_key);
+        let iter = self.db.iterator_cf(
+            &cf,
+            IteratorMode::From(&prefix, Direction::Forward),
+        );
+
+        let mut entries = Vec::new();
+        for item in iter {
+            let (k, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            if !k.starts_with(&prefix) {
+                break;
+            }
+            let entry: crate::storage::traits::HistoryEntry = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            entries.push(entry);
+        }
+        Ok(entries)
     }
 
     // ── World state ───────────────────────────────────────────────────────────
@@ -653,6 +721,10 @@ impl WorldState for RocksDbBlockStore {
             result.push((k, vv));
         }
         Ok(result)
+    }
+
+    fn get_history(&self, key: &str) -> StorageResult<Vec<crate::storage::traits::HistoryEntry>> {
+        self.get_history(key)
     }
 }
 
@@ -1563,5 +1635,65 @@ mod tests {
         let cf = store.cf_key_endorsement_policies().unwrap();
         let got = store.db.get_cf(&cf, b"nonexistent").unwrap();
         assert!(got.is_none());
+    }
+
+    #[test]
+    fn cf_key_history_handle_is_present() {
+        let (store, _dir) = tmp_store();
+        assert!(store.cf_key_history().is_ok());
+    }
+
+    #[test]
+    fn write_and_read_key_history_three_versions() {
+        use crate::storage::traits::HistoryEntry;
+
+        let (store, _dir) = tmp_store();
+
+        let entries = vec![
+            HistoryEntry { version: 1, data: b"v1".to_vec(), tx_id: "tx1".into(), timestamp: 100, is_delete: false },
+            HistoryEntry { version: 2, data: b"v2".to_vec(), tx_id: "tx2".into(), timestamp: 200, is_delete: false },
+            HistoryEntry { version: 3, data: vec![], tx_id: "tx3".into(), timestamp: 300, is_delete: true },
+        ];
+
+        for entry in &entries {
+            store.write_history_entry("mykey", entry).unwrap();
+        }
+
+        let history = store.get_history("mykey").unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].version, 1);
+        assert_eq!(history[0].data, b"v1");
+        assert_eq!(history[1].version, 2);
+        assert_eq!(history[2].is_delete, true);
+        assert_eq!(history[2].data, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn key_history_isolation_between_keys() {
+        use crate::storage::traits::HistoryEntry;
+
+        let (store, _dir) = tmp_store();
+
+        store.write_history_entry("alpha", &HistoryEntry {
+            version: 1, data: b"a1".to_vec(), tx_id: "t1".into(), timestamp: 10, is_delete: false,
+        }).unwrap();
+        store.write_history_entry("beta", &HistoryEntry {
+            version: 1, data: b"b1".to_vec(), tx_id: "t2".into(), timestamp: 20, is_delete: false,
+        }).unwrap();
+
+        let alpha_history = store.get_history("alpha").unwrap();
+        assert_eq!(alpha_history.len(), 1);
+        assert_eq!(alpha_history[0].data, b"a1");
+
+        let beta_history = store.get_history("beta").unwrap();
+        assert_eq!(beta_history.len(), 1);
+        assert_eq!(beta_history[0].data, b"b1");
+    }
+
+    #[test]
+    fn key_history_empty_returns_empty_vec() {
+        let (store, _dir) = tmp_store();
+        let history = store.get_history("nonexistent").unwrap();
+        assert!(history.is_empty());
     }
 }

@@ -100,6 +100,16 @@ pub struct Credential {
     pub revoked_at: Option<u64>,
 }
 
+/// A single entry in the history of a world-state key.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HistoryEntry {
+    pub version: u64,
+    pub data: Vec<u8>,
+    pub tx_id: String,
+    pub timestamp: u64,
+    pub is_delete: bool,
+}
+
 /// BlockStore trait - main storage interface
 pub trait BlockStore: Send + Sync {
     /// Write a block to storage

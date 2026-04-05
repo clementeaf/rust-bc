@@ -1,5 +1,7 @@
 pub mod definition;
 pub mod executor;
+pub mod resolver;
+pub mod simulation;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -145,6 +147,8 @@ pub enum ChaincodeError {
     Storage(String),
     #[error("wasm execution error: {0}")]
     Execution(String),
+    #[error("not found: {0}")]
+    NotFound(String),
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

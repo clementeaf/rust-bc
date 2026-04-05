@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 17 — Key History + Chaincode-to-Chaincode)
+
+**17.1 — Key history**
+- `HistoryEntry` struct in `storage/traits.rs`
+- CF `key_history` in RocksDB with `{key}\x00{version:012}` key schema
+- `get_history` method on `WorldState` trait, implemented for Memory and RocksDB
+- `put()` and `delete()` auto-append history entries in `MemoryWorldState`
+- `get_history_for_key` host function in `WasmExecutor`
+
+**17.2 — Chaincode-to-chaincode invocation**
+- `ChaincodeResolver` trait + `StoreBackedResolver` in `src/chaincode/resolver.rs`
+- `invoke_chaincode` host function: resolves target, creates child executor, shares `WorldState`
+- ACL check via `AclProvider` before cross-chaincode calls (`chaincode/{id}/invoke`)
+- `MAX_CHAINCODE_DEPTH=8` recursion limit with depth counter propagation
+- `ChaincodeError::NotFound` variant added
+
+---
+
 ### 2026-04-04 (Fase 16 — Gossip Protocol Enhancement)
 
 **16.1 — Alive messages**
