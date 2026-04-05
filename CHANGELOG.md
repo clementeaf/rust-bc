@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 19 — Snapshots + Pagination)
+
+**19.1 — State snapshots**
+- `StateSnapshot` metadata struct in `src/storage/snapshot.rs`
+- `create_snapshot()`: serializes world state to `{key}\t{version}\t{base64}\n` format with SHA-256 hash
+- `restore_snapshot()`: reads `.snap` file, restores world state, verifies hash integrity
+- API handlers: `POST /snapshots/{channel_id}`, `GET /snapshots/{channel_id}`, `GET /snapshots/{channel_id}/{id}`
+- `AppState.world_state` field added; `base64 = "0.22"` dependency added
+
+**19.2 — State regeneration**
+- `regenerate_state()`: replays all blocks from store to rebuild world state
+
+**19.3 — Pagination**
+- `PaginationParams` (page/limit/cursor) and `PaginatedResponse<T>` in `src/api/pagination.rs`
+- `BlockStore::list_blocks(offset, limit)` with default implementation
+- `GET /store/blocks` now accepts `?page=N&limit=M` and returns `PaginatedResponse`
+
+---
+
 ### 2026-04-04 (Fase 18 — Delivery Service)
 
 **18.1 — DeliverFiltered**

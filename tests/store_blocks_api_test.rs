@@ -69,7 +69,7 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         discovery_service: None,
         event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        acl_provider: None, ordering_backend: None,
+        acl_provider: None, ordering_backend: None, world_state: None,
     }
 }
 
@@ -102,7 +102,7 @@ fn make_state_no_store() -> AppState {
         discovery_service: None,
         event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        acl_provider: None, ordering_backend: None,
+        acl_provider: None, ordering_backend: None, world_state: None,
     }
 }
 

@@ -10,6 +10,7 @@
 pub mod adapters;
 pub mod errors;
 pub mod memory;
+pub mod snapshot;
 pub mod traits;
 pub mod world_state;
 pub mod comprehensive_tests;

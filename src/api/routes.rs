@@ -1,6 +1,6 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{acl, blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
+use crate::api::handlers::{acl, blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, snapshots, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
@@ -32,6 +32,7 @@ impl ApiRoutes {
                 .service(Self::discovery_routes())
                 .service(Self::events_routes())
                 .service(Self::acl_routes())
+                .service(Self::snapshot_routes())
                 .service(Self::utilities_routes()),
         );
     }
@@ -50,6 +51,7 @@ impl ApiRoutes {
 
     fn store_blocks_routes() -> Scope {
         web::scope("/store/blocks")
+            .service(blocks::store_list_blocks)
             .service(blocks::store_latest_height)
             .service(blocks::store_get_block)
             .service(transactions::store_get_transactions_by_block)
@@ -161,6 +163,13 @@ impl ApiRoutes {
             .service(acl::set_acl)
             .service(acl::list_acls)
             .service(acl::get_acl)
+    }
+
+    fn snapshot_routes() -> Scope {
+        web::scope("")
+            .service(snapshots::create_snapshot)
+            .service(snapshots::list_snapshots)
+            .service(snapshots::download_snapshot)
     }
 
     fn utilities_routes() -> Scope {

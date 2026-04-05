@@ -501,7 +501,7 @@ mod tests {
             discovery_service: None,
             event_bus: bus,
             channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None,
+            acl_provider: None, ordering_backend: None, world_state: None,
         }
     }
 
@@ -672,7 +672,7 @@ mod tests {
             discovery_service: None,
             event_bus: bus,
             channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None,
+            acl_provider: None, ordering_backend: None, world_state: None,
         }
     }
 

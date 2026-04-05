@@ -842,51 +842,51 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 19.1 State snapshots
 
-- [ ] **19.1.1** Crear struct `StateSnapshot` en `src/storage/snapshot.rs`
+- [x] **19.1.1** Crear struct `StateSnapshot` en `src/storage/snapshot.rs`
   - Campos: `snapshot_id: String`, `channel_id: String`, `block_height: u64`, `created_at: u64`, `state_hash: [u8; 32]`, `entry_count: u64`
   - Tests: crear snapshot metadata
-- [ ] **19.1.2** Implementar `fn create_snapshot(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<StateSnapshot>` en `src/storage/snapshot.rs`
+- [x] **19.1.2** Implementar `fn create_snapshot(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<StateSnapshot>` en `src/storage/snapshot.rs`
   - Itera todas las keys en world state, serializa a un archivo `snapshots/{channel_id}/{height}.snap`
   - Formato: lineas `{key}\t{version}\t{base64(data)}\n` (simple, streamable)
   - Calcula hash SHA-256 de todo el contenido
   - Tests: crear snapshot con 100 keys → archivo existe, hash verificable
-- [ ] **19.1.3** Implementar `fn restore_snapshot(path: &Path, state: &dyn WorldState) -> StorageResult<StateSnapshot>`
+- [x] **19.1.3** Implementar `fn restore_snapshot(path: &Path, state: &dyn WorldState) -> StorageResult<StateSnapshot>`
   - Lee archivo de snapshot → `state.put(key, data)` para cada entry
   - Verifica hash al final
   - Tests: create snapshot → clear state → restore → state idéntico al original
-- [ ] **19.1.4** Handler `POST /api/v1/snapshots/{channel_id}` — trigger snapshot creation
-- [ ] **19.1.5** Handler `GET /api/v1/snapshots/{channel_id}` — list available snapshots
-- [ ] **19.1.6** Handler `GET /api/v1/snapshots/{channel_id}/{snapshot_id}` — download snapshot file (streaming)
+- [x] **19.1.4** Handler `POST /api/v1/snapshots/{channel_id}` — trigger snapshot creation
+- [x] **19.1.5** Handler `GET /api/v1/snapshots/{channel_id}` — list available snapshots
+- [x] **19.1.6** Handler `GET /api/v1/snapshots/{channel_id}/{snapshot_id}` — download snapshot file (streaming)
 
 ### 19.2 State regeneration
 
-- [ ] **19.2.1** Implementar `fn regenerate_state(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<u64>` en `src/storage/snapshot.rs`
+- [x] **19.2.1** Implementar `fn regenerate_state(store: &dyn BlockStore, state: &dyn WorldState, channel_id: &str) -> StorageResult<u64>` en `src/storage/snapshot.rs`
   - Itera bloques [0, latest] en orden → para cada TX con rwset → aplica writes al world state
   - Retorna número de keys escritas
   - Tests: 10 bloques con 3 TXs cada uno → regenerate → state contiene todas las keys
 
 ### 19.3 Pagination
 
-- [ ] **19.3.1** Crear struct `PaginationParams` en `src/api/pagination.rs`
+- [x] **19.3.1** Crear struct `PaginationParams` en `src/api/pagination.rs`
   - Campos: `page: Option<usize>` (default 1), `limit: Option<usize>` (default 20, max 100), `cursor: Option<String>`
   - Implementar `actix_web::FromRequest` via `web::Query<PaginationParams>`
   - Tests: parsear query `?page=2&limit=10`, defaults, limit capping
-- [ ] **19.3.2** Crear struct `PaginatedResponse<T>` en `src/api/pagination.rs`
+- [x] **19.3.2** Crear struct `PaginatedResponse<T>` en `src/api/pagination.rs`
   - Campos: `data: Vec<T>`, `pagination: PaginationMeta`
   - `PaginationMeta`: `{ total: usize, page: usize, limit: usize, total_pages: usize, has_next: bool, next_cursor: Option<String> }`
   - Tests: crear PaginatedResponse, serde roundtrip
-- [ ] **19.3.3** Añadir método `list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)>` al trait `BlockStore`
+- [x] **19.3.3** Añadir método `list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)>` al trait `BlockStore`
   - Retorna `(blocks, total_count)` para paginación
   - Implementar para `MemoryStore` y `RocksDbBlockStore`
   - Tests: 50 bloques, list(offset=10, limit=5) → 5 bloques, total=50
-- [ ] **19.3.4** Actualizar handler `GET /api/v1/store/blocks` para aceptar `PaginationParams`
+- [x] **19.3.4** Actualizar handler `GET /api/v1/store/blocks` para aceptar `PaginationParams`
   - Retorna `ApiResponse<PaginatedResponse<Block>>` en vez de lista completa
   - Backward compat: si no hay query params → default page=1, limit=20
   - Tests: 50 bloques, GET ?page=3&limit=10 → bloques 20-29, total=50
-- [ ] **19.3.5** Actualizar handler `GET /api/v1/store/organizations` con paginación
-- [ ] **19.3.6** Actualizar handler `GET /api/v1/channels` con paginación
-- [ ] **19.3.7** Actualizar handler `GET /api/v1/acls` con paginación (Fase 13)
-- [ ] **19.3.8** Actualizar handler `GET /api/v1/discovery/peers` con paginación
+- [x] **19.3.5** Actualizar handler `GET /api/v1/store/organizations` con paginación
+- [x] **19.3.6** Actualizar handler `GET /api/v1/channels` con paginación
+- [x] **19.3.7** Actualizar handler `GET /api/v1/acls` con paginación (Fase 13)
+- [x] **19.3.8** Actualizar handler `GET /api/v1/discovery/peers` con paginación
 
 ---
 

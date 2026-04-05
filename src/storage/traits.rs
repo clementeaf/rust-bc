@@ -154,6 +154,23 @@ pub trait BlockStore: Send + Sync {
     ///
     /// Returns an empty `Vec` when no credentials are indexed for that subject.
     fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>>;
+
+    /// Return a page of blocks plus the total count for pagination.
+    ///
+    /// Default implementation iterates `[offset, offset+limit)` by height.
+    fn list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)> {
+        let latest = self.get_latest_height().unwrap_or(0) as usize;
+        let total = if latest == 0 && self.read_block(0).is_err() { 0 } else { latest + 1 };
+        let mut blocks = Vec::new();
+        let start = offset;
+        let end = (offset + limit).min(total);
+        for h in start..end {
+            if let Ok(b) = self.read_block(h as u64) {
+                blocks.push(b);
+            }
+        }
+        Ok((blocks, total))
+    }
 }
 
 /// Blanket impl so `Arc<T>` can be used wherever `Box<dyn BlockStore>` is expected.
@@ -201,6 +218,10 @@ impl<T: BlockStore> BlockStore for Arc<T> {
 
     fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>> {
         (**self).credentials_by_subject_did(subject_did)
+    }
+
+    fn list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)> {
+        (**self).list_blocks(offset, limit)
     }
 }
 

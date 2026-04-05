@@ -662,6 +662,7 @@ async fn main() -> std::io::Result<()> {
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         acl_provider: None,
         ordering_backend,
+        world_state: None,
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

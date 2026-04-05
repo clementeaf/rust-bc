@@ -74,4 +74,6 @@ pub struct AppState {
     pub acl_provider: Option<Arc<dyn AclProvider>>,
     /// Ordering backend — solo (default) or raft.
     pub ordering_backend: Option<Arc<dyn OrderingBackend>>,
+    /// World state for snapshots and state queries.
+    pub world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
 }

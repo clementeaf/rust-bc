@@ -16,3 +16,5 @@ pub mod chaincode;
 pub mod gateway;
 pub mod discovery;
 pub mod events;
+pub mod acl;
+pub mod snapshots;

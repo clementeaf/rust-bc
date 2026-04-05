@@ -81,6 +81,22 @@ pub async fn get_block_by_hash(
 }
 
 /// GET /api/v1/store/blocks/latest — altura del bloque más reciente en el store.
+/// GET /api/v1/store/blocks?page=N&limit=M — paginated block listing.
+#[get("")]
+pub async fn store_list_blocks(
+    state: web::Data<AppState>,
+    query: web::Query<crate::api::pagination::PaginationParams>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let (blocks, total) = store
+        .list_blocks(query.offset(), query.limit())
+        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    let resp = crate::api::pagination::PaginatedResponse::new(blocks, total, &query);
+    Ok(HttpResponse::Ok().json(ApiResponse::success(resp, trace_id)))
+}
+
 #[get("/latest")]
 pub async fn store_latest_height(
     state: web::Data<AppState>,
