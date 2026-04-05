@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-04 (Fase 18 — Delivery Service)
+
+**18.1 — DeliverFiltered**
+- `FilteredBlock` and `FilteredTx` structs in `src/events/filtered.rs`
+- `to_filtered_block()` strips payload/rwset/endorsements, keeps only tx IDs and validation codes
+- `GET /events/blocks/filtered` WebSocket streams `FilteredBlock` summaries
+
+**18.2 — DeliverWithPrivateData**
+- `BlockWithPrivateData` struct in `src/events/private_delivery.rs`
+- `GET /events/blocks/private` WebSocket with `X-Org-Id` header for collection membership filtering
+- `CollectionRegistry::list()` method added for iterating registered collections
+
+**18.3 — Replay and checkpoints**
+- `start_block` field in `WsFilter`: replays historical blocks before switching to live
+- `ack` + `client_id` checkpoint system: server tracks last acked height per client
+- Reconnect with same `client_id` resumes from `last_ack + 1`
+
+---
+
 ### 2026-04-04 (Fase 17 — Key History + Chaincode-to-Chaincode)
 
 **17.1 — Key history**

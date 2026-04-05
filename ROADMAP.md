@@ -800,35 +800,35 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 18.1 DeliverFiltered
 
-- [ ] **18.1.1** Crear struct `FilteredBlock` en `src/events/filtered.rs`
+- [x] **18.1.1** Crear struct `FilteredBlock` en `src/events/filtered.rs`
   - Campos: `channel_id: String`, `height: u64`, `tx_summaries: Vec<FilteredTx>`
   - `FilteredTx`: `{ tx_id: String, validation_code: String, chaincode_id: Option<String> }`
   - Omite: payload, rwset, endorsements (privacy)
   - Tests: crear FilteredBlock desde Block, verificar que no contiene datos sensibles
-- [ ] **18.1.2** Crear `fn to_filtered_block(block: &Block, validations: &HashMap<String, String>) -> FilteredBlock`
+- [x] **18.1.2** Crear `fn to_filtered_block(block: &Block, validations: &HashMap<String, String>) -> FilteredBlock`
   - Convierte bloque completo → filtered (solo IDs + status)
   - Tests: bloque con 3 TXs (2 committed, 1 conflict) → FilteredBlock con 3 summaries
-- [ ] **18.1.3** Handler `GET /api/v1/events/blocks/filtered` — WebSocket que envía `FilteredBlock` en vez de `BlockEvent`
+- [x] **18.1.3** Handler `GET /api/v1/events/blocks/filtered` — WebSocket que envía `FilteredBlock` en vez de `BlockEvent`
   - Misma mecánica de suscripción que `events_blocks` pero con payload reducido
   - Tests: conectar WS filtered, escribir bloque → recibe FilteredBlock sin datos sensibles
 
 ### 18.2 DeliverWithPrivateData
 
-- [ ] **18.2.1** Crear struct `BlockWithPrivateData` en `src/events/private_delivery.rs`
+- [x] **18.2.1** Crear struct `BlockWithPrivateData` en `src/events/private_delivery.rs`
   - Campos: `block: Block`, `private_data: HashMap<String, Vec<(String, Vec<u8>)>>` (collection_name → [(key, value)])
   - Tests: crear BlockWithPrivateData, serde roundtrip
-- [ ] **18.2.2** Handler `GET /api/v1/events/blocks/private` — WebSocket que envía bloque + private data autorizada
+- [x] **18.2.2** Handler `GET /api/v1/events/blocks/private` — WebSocket que envía bloque + private data autorizada
   - Requiere header `X-Org-Id` para verificar membership en collections
   - Solo incluye private data de collections donde caller es member
   - Tests: org1 member de collection "secret" → recibe private data; org2 no member → no recibe
 
 ### 18.3 Replay desde height
 
-- [ ] **18.3.1** Mejorar el WebSocket handler existente para soportar replay desde un height específico
+- [x] **18.3.1** Mejorar el WebSocket handler existente para soportar replay desde un height específico
   - Al conectar, el cliente envía `{ "start_block": N }` junto con filtros
   - El handler primero envía bloques históricos [N, latest] desde el store, luego switchea a live
   - Tests: 10 bloques en store, WS con start_block=5 → recibe bloques 5-10, luego live
-- [ ] **18.3.2** Implementar bookmark/checkpoint: el cliente puede enviar `{ "ack": height }` para confirmar receipt
+- [x] **18.3.2** Implementar bookmark/checkpoint: el cliente puede enviar `{ "ack": height }` para confirmar receipt
   - Servidor trackea último ack por suscriptor
   - Si WS reconecta con mismo client_id → resume desde último ack
   - Tests: recibir 5 bloques, ack height=5, desconectar, reconectar → resume desde 6

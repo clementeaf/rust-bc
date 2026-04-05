@@ -1,6 +1,6 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
+use crate::api::handlers::{acl, blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, transactions, utilities};
 
 /// API routes configuration
 pub struct ApiRoutes;
@@ -31,6 +31,7 @@ impl ApiRoutes {
                 .service(Self::gateway_routes())
                 .service(Self::discovery_routes())
                 .service(Self::events_routes())
+                .service(Self::acl_routes())
                 .service(Self::utilities_routes()),
         );
     }
@@ -112,6 +113,9 @@ impl ApiRoutes {
         web::scope("")
             .service(channels::create_channel)
             .service(channels::list_channels)
+            .service(channels::update_channel_config)
+            .service(channels::get_channel_config)
+            .service(channels::get_channel_config_history)
     }
 
     fn msp_routes() -> Scope {
@@ -131,6 +135,7 @@ impl ApiRoutes {
             .service(chaincode::install_chaincode)
             .service(chaincode::approve_chaincode)
             .service(chaincode::commit_chaincode)
+            .service(chaincode::simulate_chaincode)
     }
 
     fn gateway_routes() -> Scope {
@@ -145,7 +150,17 @@ impl ApiRoutes {
     }
 
     fn events_routes() -> Scope {
-        web::scope("").service(events::events_blocks)
+        web::scope("")
+            .service(events::events_blocks)
+            .service(events::events_blocks_filtered)
+            .service(events::events_blocks_private)
+    }
+
+    fn acl_routes() -> Scope {
+        web::scope("")
+            .service(acl::set_acl)
+            .service(acl::list_acls)
+            .service(acl::get_acl)
     }
 
     fn utilities_routes() -> Scope {

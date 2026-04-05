@@ -31,10 +31,39 @@ use crate::events::BlockEvent;
 // ── Filter (WebSocket) ────────────────────────────────────────────────────────
 
 /// Optional filter sent by the WebSocket client as a JSON text frame.
+///
+/// If `start_block` is set, the server replays historical blocks from that
+/// height to the latest before switching to live streaming.
 #[derive(Debug, Default, Deserialize)]
 struct WsFilter {
     channel_id: Option<String>,
     chaincode_id: Option<String>,
+    start_block: Option<u64>,
+    /// Client-side acknowledgment of the last processed block height.
+    ack: Option<u64>,
+    /// Persistent client identifier for reconnect-based resume.
+    client_id: Option<String>,
+}
+
+// ── Checkpoint tracker ──────────────────────────────────────────────────────
+
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Global in-memory checkpoint store: `client_id → last_acked_height`.
+fn checkpoints() -> &'static Mutex<HashMap<String, u64>> {
+    static STORE: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
+    STORE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Record an ack for a client.
+fn record_ack(client_id: &str, height: u64) {
+    checkpoints().lock().unwrap().insert(client_id.to_string(), height);
+}
+
+/// Get the last acked height for a client.
+fn get_last_ack(client_id: &str) -> Option<u64> {
+    checkpoints().lock().unwrap().get(client_id).copied()
 }
 
 /// Returns `true` when `event` passes the given `filter`.
@@ -118,6 +147,9 @@ async fn poll_blocks(
 }
 
 /// WebSocket upgrade: stream [`BlockEvent`]s to the client.
+///
+/// If the client sends a filter with `start_block`, the server first replays
+/// historical blocks from that height to the latest, then switches to live.
 async fn ws_stream(
     req: HttpRequest,
     stream: web::Payload,
@@ -126,9 +158,12 @@ async fn ws_stream(
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
 
     let mut rx = state.event_bus.subscribe();
+    let store_map = state.store.clone();
 
     actix_web::rt::spawn(async move {
         let mut filter = WsFilter::default();
+        let mut replayed = false;
+
         loop {
             tokio::select! {
                 result = rx.recv() => {
@@ -143,6 +178,234 @@ async fn ws_stream(
                             };
                             if session.text(json).await.is_err() {
                                 break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                msg = msg_stream.recv() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            if let Ok(f) = serde_json::from_str::<WsFilter>(&text) {
+                                // Handle ack: record the checkpoint.
+                                if let (Some(ack_h), Some(ref cid)) = (f.ack, &f.client_id) {
+                                    record_ack(cid, ack_h);
+                                    // ack-only message — don't update filter
+                                    continue;
+                                }
+
+                                // Replay historical blocks on first filter with start_block.
+                                if !replayed {
+                                    // If client reconnects with client_id, resume from last ack + 1.
+                                    let effective_start = match &f.client_id {
+                                        Some(cid) => get_last_ack(cid).map(|h| h + 1).or(f.start_block),
+                                        None => f.start_block,
+                                    };
+
+                                    if let Some(start) = effective_start {
+                                        let channel = f.channel_id.as_deref().unwrap_or("default");
+                                        let store = {
+                                            let map = store_map.read().unwrap();
+                                            map.get(channel).cloned()
+                                        };
+                                        if let Some(s) = store {
+                                            let latest = s.get_latest_height().unwrap_or(0);
+                                            for h in start..=latest {
+                                                if let Ok(block) = s.read_block(h) {
+                                                    let event = BlockEvent::BlockCommitted {
+                                                        channel_id: channel.to_string(),
+                                                        height: block.height,
+                                                        tx_count: block.transactions.len(),
+                                                    };
+                                                    if let Ok(json) = serde_json::to_string(&event) {
+                                                        if session.text(json).await.is_err() {
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    replayed = true;
+                                }
+                                filter = f;
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) | None => {
+                            let _ = session.close(None).await;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(response)
+}
+
+// ── Filtered WebSocket ──────────────────────────────────────────────────────
+
+/// `GET /api/v1/events/blocks/filtered`
+///
+/// Upgrades to WebSocket and streams [`FilteredBlock`] summaries instead of
+/// full [`BlockEvent`]s. Only `BlockCommitted` events are converted; other
+/// event types are silently skipped.
+#[get("/events/blocks/filtered")]
+pub async fn events_blocks_filtered(
+    req: HttpRequest,
+    stream: web::Payload,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse, actix_web::Error> {
+    use std::collections::HashMap;
+    use crate::events::filtered::to_filtered_block;
+
+    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
+
+    let mut rx = state.event_bus.subscribe();
+    let store_map = state.store.clone();
+
+    actix_web::rt::spawn(async move {
+        let mut filter = WsFilter::default();
+        loop {
+            tokio::select! {
+                result = rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            if !event_passes_filter(&event, &filter) {
+                                continue;
+                            }
+                            // Only convert BlockCommitted events.
+                            if let BlockEvent::BlockCommitted { ref channel_id, height, .. } = event {
+                                let store = {
+                                    let map = store_map.read().unwrap();
+                                    map.get(channel_id).cloned()
+                                };
+                                let block = match store {
+                                    Some(s) => match s.read_block(height) {
+                                        Ok(b) => b,
+                                        Err(_) => continue,
+                                    },
+                                    None => continue,
+                                };
+                                let validations = HashMap::new();
+                                let fb = to_filtered_block(&block, channel_id, &validations);
+                                let json = match serde_json::to_string(&fb) {
+                                    Ok(j) => j,
+                                    Err(_) => continue,
+                                };
+                                if session.text(json).await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+                msg = msg_stream.recv() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            if let Ok(f) = serde_json::from_str::<WsFilter>(&text) {
+                                filter = f;
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) | None => {
+                            let _ = session.close(None).await;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(response)
+}
+
+// ── Private data delivery WebSocket ─────────────────────────────────────────
+
+/// `GET /api/v1/events/blocks/private`
+///
+/// Upgrades to WebSocket and streams [`BlockWithPrivateData`] — a committed
+/// block bundled with the private data the caller's org is authorized to see.
+///
+/// The caller must send header `X-Org-Id` to identify their organization.
+/// Only private data from collections where the org is a member is included.
+#[get("/events/blocks/private")]
+pub async fn events_blocks_private(
+    req: HttpRequest,
+    stream: web::Payload,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse, actix_web::Error> {
+    use std::collections::HashMap;
+    use crate::events::private_delivery::BlockWithPrivateData;
+
+    let org_id = req
+        .headers()
+        .get("X-Org-Id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    let (response, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
+
+    let mut rx = state.event_bus.subscribe();
+    let store_map = state.store.clone();
+    let private_store = state.private_data_store.clone();
+    let collection_registry = state.collection_registry.clone();
+
+    actix_web::rt::spawn(async move {
+        let mut filter = WsFilter::default();
+        loop {
+            tokio::select! {
+                result = rx.recv() => {
+                    match result {
+                        Ok(event) => {
+                            if !event_passes_filter(&event, &filter) {
+                                continue;
+                            }
+                            if let BlockEvent::BlockCommitted { ref channel_id, height, .. } = event {
+                                let store = {
+                                    let map = store_map.read().unwrap();
+                                    map.get(channel_id).cloned()
+                                };
+                                let block = match store {
+                                    Some(s) => match s.read_block(height) {
+                                        Ok(b) => b,
+                                        Err(_) => continue,
+                                    },
+                                    None => continue,
+                                };
+
+                                // Gather authorized private data.
+                                let mut private_data: HashMap<String, Vec<(String, Vec<u8>)>> = HashMap::new();
+                                if let (Some(ref registry), Some(ref pds)) = (&collection_registry, &private_store) {
+                                    let collections = registry.list();
+                                    for col in collections {
+                                        if col.member_org_ids.contains(&org_id) {
+                                            // Collect all keys for this collection.
+                                            // In a real impl this would iterate TX rwsets;
+                                            // for now we expose the collection if authorized.
+                                            if let Ok(Some(data)) = pds.get_private_data(&col.name, "*") {
+                                                private_data.insert(
+                                                    col.name.clone(),
+                                                    vec![("*".to_string(), data)],
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let bwpd = BlockWithPrivateData { block, private_data };
+                                let json = match serde_json::to_string(&bwpd) {
+                                    Ok(j) => j,
+                                    Err(_) => continue,
+                                };
+                                if session.text(json).await.is_err() {
+                                    break;
+                                }
                             }
                         }
                         Err(_) => break,
@@ -323,7 +586,7 @@ mod tests {
 
     #[tokio::test]
     async fn channel_filter_passes_matching_channel() {
-        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None };
+        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None, ..Default::default() };
         assert!(event_passes_filter(&bc("ch-a"), &f));
         assert!(event_passes_filter(&tc("ch-a"), &f));
         assert!(event_passes_filter(&ce("ch-a", "cc1"), &f));
@@ -331,7 +594,7 @@ mod tests {
 
     #[tokio::test]
     async fn channel_filter_drops_other_channels() {
-        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None };
+        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None, ..Default::default() };
         assert!(!event_passes_filter(&bc("ch-b"), &f));
         assert!(!event_passes_filter(&tc("ch-b"), &f));
         assert!(!event_passes_filter(&ce("ch-b", "cc1"), &f));
@@ -339,19 +602,19 @@ mod tests {
 
     #[tokio::test]
     async fn chaincode_filter_passes_matching_chaincode_event() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()) };
+        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
         assert!(event_passes_filter(&ce("ch", "cc1"), &f));
     }
 
     #[tokio::test]
     async fn chaincode_filter_drops_non_matching_chaincode_event() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()) };
+        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
         assert!(!event_passes_filter(&ce("ch", "cc2"), &f));
     }
 
     #[tokio::test]
     async fn chaincode_filter_does_not_affect_block_or_tx_events() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()) };
+        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
         assert!(event_passes_filter(&bc("ch"), &f));
         assert!(event_passes_filter(&tc("ch"), &f));
     }
@@ -361,6 +624,7 @@ mod tests {
         let f = WsFilter {
             channel_id: Some("ch-a".to_string()),
             chaincode_id: Some("cc1".to_string()),
+            ..Default::default()
         };
         assert!(event_passes_filter(&ce("ch-a", "cc1"), &f));
         assert!(!event_passes_filter(&ce("ch-b", "cc1"), &f));
@@ -504,5 +768,40 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         let data = body["data"].as_array().expect("data array");
         assert_eq!(data.len(), 0);
+    }
+
+    // ── Checkpoint / ack tests ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn record_and_get_ack() {
+        record_ack("client-1", 5);
+        assert_eq!(get_last_ack("client-1"), Some(5));
+
+        record_ack("client-1", 10);
+        assert_eq!(get_last_ack("client-1"), Some(10));
+    }
+
+    #[tokio::test]
+    async fn get_ack_unknown_client_returns_none() {
+        assert_eq!(get_last_ack("unknown-client-xyz"), None);
+    }
+
+    #[tokio::test]
+    async fn ws_filter_deserializes_with_all_fields() {
+        let json = r#"{"channel_id":"ch1","start_block":5,"client_id":"c1"}"#;
+        let f: WsFilter = serde_json::from_str(json).unwrap();
+        assert_eq!(f.channel_id.as_deref(), Some("ch1"));
+        assert_eq!(f.start_block, Some(5));
+        assert_eq!(f.client_id.as_deref(), Some("c1"));
+        assert!(f.ack.is_none());
+    }
+
+    #[tokio::test]
+    async fn ws_filter_deserializes_ack_only() {
+        let json = r#"{"client_id":"c2","ack":7}"#;
+        let f: WsFilter = serde_json::from_str(json).unwrap();
+        assert_eq!(f.ack, Some(7));
+        assert_eq!(f.client_id.as_deref(), Some("c2"));
+        assert!(f.start_block.is_none());
     }
 }

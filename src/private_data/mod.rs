@@ -226,6 +226,8 @@ impl PrivateDataStore for MemoryPrivateDataStore {
 pub trait CollectionRegistry: Send + Sync {
     fn register(&self, collection: PrivateDataCollection) -> Result<(), PrivateDataError>;
     fn get(&self, name: &str) -> Option<PrivateDataCollection>;
+    /// Return all registered collections.
+    fn list(&self) -> Vec<PrivateDataCollection>;
 }
 
 /// In-memory `CollectionRegistry` for tests and single-node dev.
@@ -253,6 +255,10 @@ impl CollectionRegistry for MemoryCollectionRegistry {
 
     fn get(&self, name: &str) -> Option<PrivateDataCollection> {
         self.inner.read().unwrap().get(name).cloned()
+    }
+
+    fn list(&self) -> Vec<PrivateDataCollection> {
+        self.inner.read().unwrap().values().cloned().collect()
     }
 }
 
