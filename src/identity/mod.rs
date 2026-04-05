@@ -6,7 +6,9 @@
 //! - Signature generation and verification
 
 pub mod did;
+pub mod hsm;
 pub mod keys;
+pub mod signing;
 
 pub use did::{DidDocument, DidStatus, DidMetadata};
 pub use keys::{KeyManager, PublicKeyInfo, KeyPair};

@@ -209,6 +209,20 @@ fn required_orgs_for_policy(
                 (Err(e), Err(_)) => Err(e),
             }
         }
+        EndorsementPolicy::OuBased { ou_ids, min_count } => {
+            // Treat OU IDs as org IDs for discovery purposes.
+            let covered: Vec<String> = ou_ids
+                .iter()
+                .filter(|o| available.contains_key(*o))
+                .take(*min_count)
+                .cloned()
+                .collect();
+            if covered.len() >= *min_count {
+                Ok(covered)
+            } else {
+                Err(DiscoveryError::InsufficientPeers)
+            }
+        }
     }
 }
 

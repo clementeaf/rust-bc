@@ -1,4 +1,5 @@
 pub mod identity;
+pub mod ou;
 
 use serde::{Deserialize, Serialize};
 use crate::storage::errors::StorageResult;

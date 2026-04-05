@@ -897,20 +897,20 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 20.1 HSM support (PKCS#11)
 
-- [ ] **20.1.1** Agregar `cryptoki = "0.7"` a `Cargo.toml` (feature-gated `hsm`)
+- [x] **20.1.1** Agregar `cryptoki = "0.7"` a `Cargo.toml` (feature-gated `hsm`)
   - `cryptoki` = binding Rust para PKCS#11, mantenido por Parallaxsecond
   - Feature flag: `[features] hsm = ["cryptoki"]`
   - Tests: compilar con `--features hsm`, import `cryptoki::context::Pkcs11`
-- [ ] **20.1.2** Crear trait `SigningProvider` en `src/identity/signing.rs`
+- [x] **20.1.2** Crear trait `SigningProvider` en `src/identity/signing.rs`
   - Métodos: `fn sign(&self, data: &[u8]) -> Result<[u8; 64], SigningError>`, `fn public_key(&self) -> [u8; 32]`, `fn verify(&self, data: &[u8], sig: &[u8; 64]) -> Result<bool, SigningError>`
   - Implementar `SoftwareSigningProvider` que wrappea `KeyManager` actual
   - Tests: sign + verify roundtrip con SoftwareSigningProvider
-- [ ] **20.1.3** Implementar `HsmSigningProvider` (bajo feature `hsm`) en `src/identity/hsm.rs`
+- [x] **20.1.3** Implementar `HsmSigningProvider` (bajo feature `hsm`) en `src/identity/hsm.rs`
   - Constructor: `fn new(pkcs11_lib: &str, slot_id: u64, pin: &str, key_label: &str) -> Result<Self, HsmError>`
   - Sign via PKCS#11: `C_SignInit` + `C_Sign` con mecanismo `CKM_EDDSA`
   - Config via env: `HSM_PKCS11_LIB`, `HSM_SLOT_ID`, `HSM_PIN`, `HSM_KEY_LABEL`
   - Tests: con SoftHSM2 (si disponible) o mock PKCS#11
-- [ ] **20.1.4** Refactorizar `KeyManager` para usar `dyn SigningProvider` internamente
+- [x] **20.1.4** Refactorizar `KeyManager` para usar `dyn SigningProvider` internamente
   - `KeyManager::new()` → usa `SoftwareSigningProvider` por defecto
   - `KeyManager::with_hsm(config)` → usa `HsmSigningProvider`
   - Backward compat total: API pública no cambia
@@ -918,45 +918,45 @@ pendientes — cada decisión técnica ya está tomada basándose en lo que exis
 
 ### 20.2 Organizational Units (OUs)
 
-- [ ] **20.2.1** Crear struct `OrganizationalUnit` en `src/msp/ou.rs`
+- [x] **20.2.1** Crear struct `OrganizationalUnit` en `src/msp/ou.rs`
   - Campos: `ou_id: String`, `org_id: String`, `description: String`, `parent_ou: Option<String>`
   - Soporte jerárquico: OU puede tener parent OU
   - Tests: crear OU, OU con parent, serde roundtrip
-- [ ] **20.2.2** Añadir campo `ou_id: Option<String>` a `MspIdentity`
+- [x] **20.2.2** Añadir campo `ou_id: Option<String>` a `MspIdentity`
   - `#[serde(default)]` para backward compat
   - Tests: identity con OU, identity sin OU (backward compat)
-- [ ] **20.2.3** Crear trait `OuRegistry` en `src/msp/ou.rs`
+- [x] **20.2.3** Crear trait `OuRegistry` en `src/msp/ou.rs`
   - Métodos: `register_ou(&self, ou: &OrganizationalUnit) -> StorageResult<()>`, `get_ou(&self, ou_id: &str) -> StorageResult<OrganizationalUnit>`, `list_ous(&self, org_id: &str) -> StorageResult<Vec<OrganizationalUnit>>`, `get_hierarchy(&self, ou_id: &str) -> StorageResult<Vec<OrganizationalUnit>>`
   - Implementar `MemoryOuRegistry` con `Mutex<HashMap<String, OrganizationalUnit>>`
   - Tests: register, get, list por org, hierarchy traversal
-- [ ] **20.2.4** Añadir CF `organizational_units` a `adapters.rs`: key = `ou_id`, value = JSON
+- [x] **20.2.4** Añadir CF `organizational_units` a `adapters.rs`: key = `ou_id`, value = JSON
   - Implementar `OuRegistry` para `RocksDbBlockStore`
   - Tests: write/read, list por org_id via prefix scan
-- [ ] **20.2.5** Extender `EndorsementPolicy` con variante `OuBased { ou_ids: Vec<String>, min_count: usize }`
+- [x] **20.2.5** Extender `EndorsementPolicy` con variante `OuBased { ou_ids: Vec<String>, min_count: usize }`
   - Evaluate: contar identities cuyo OU está en `ou_ids`, verificar >= min_count
   - Tests: policy OuBased{["manufacturing"], 2} con 3 identities de manufacturing → pass; 1 → fail
-- [ ] **20.2.6** REST API: `POST /api/v1/msp/ous`, `GET /api/v1/msp/ous?org_id={id}`, `GET /api/v1/msp/ous/{ou_id}`
+- [x] **20.2.6** REST API: `POST /api/v1/msp/ous`, `GET /api/v1/msp/ous?org_id={id}`, `GET /api/v1/msp/ous/{ou_id}`
 
 ### 20.3 External chaincode (chaincode-as-a-service)
 
-- [ ] **20.3.1** Crear enum `ChaincodeRuntime` en `src/chaincode/external.rs`
+- [x] **20.3.1** Crear enum `ChaincodeRuntime` en `src/chaincode/external.rs`
   - Variantes: `Wasm { fuel_limit: u64, memory_limit: Option<usize> }`, `External { endpoint: String, tls: bool }`
   - Añadir campo `runtime: ChaincodeRuntime` a `ChaincodeDefinition` (`#[serde(default)]` → Wasm por default)
   - Tests: serde roundtrip de ambas variantes
-- [ ] **20.3.2** Crear struct `ExternalChaincodeClient` en `src/chaincode/external.rs`
+- [x] **20.3.2** Crear struct `ExternalChaincodeClient` en `src/chaincode/external.rs`
   - Constructor: `fn new(endpoint: &str, tls: bool) -> Result<Self, ChaincodeError>`
   - Método: `async fn invoke(&self, function: &str, args: &[&str], state_context: &str) -> Result<Vec<u8>, ChaincodeError>`
   - Protocolo: HTTP POST a `{endpoint}/invoke` con body `{ "function": "...", "args": [...], "state_context": "..." }`
   - Tests: mock HTTP server, invoke → respuesta parseada
-- [ ] **20.3.3** Crear trait `ChaincodeInvoker` en `src/chaincode/invoker.rs`
+- [x] **20.3.3** Crear trait `ChaincodeInvoker` en `src/chaincode/invoker.rs`
   - Método: `fn invoke(&self, state: Arc<dyn WorldState>, func_name: &str) -> Result<Vec<u8>, ChaincodeError>`
   - Implementar `WasmInvoker` wrapping `WasmExecutor`
   - Implementar `ExternalInvoker` wrapping `ExternalChaincodeClient`
   - Tests: ambos invokers a través del trait object
-- [ ] **20.3.4** Modificar Gateway para usar `dyn ChaincodeInvoker` según `ChaincodeRuntime`
+- [x] **20.3.4** Modificar Gateway para usar `dyn ChaincodeInvoker` según `ChaincodeRuntime`
   - Si Wasm → `WasmInvoker`, si External → `ExternalInvoker`
   - Tests: gateway con chaincode externo → invoca endpoint HTTP → resultado correcto
-- [ ] **20.3.5** Handler `POST /api/v1/chaincode/install` actualizado para aceptar `runtime: "external"` + endpoint
+- [x] **20.3.5** Handler `POST /api/v1/chaincode/install` actualizado para aceptar `runtime: "external"` + endpoint
   - Si runtime=external: no almacena wasm bytes, solo registra endpoint
   - Tests: install external chaincode → definition con runtime External
 

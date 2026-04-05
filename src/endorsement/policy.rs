@@ -13,6 +13,12 @@ pub enum EndorsementPolicy {
     And(Box<EndorsementPolicy>, Box<EndorsementPolicy>),
     /// At least one sub-policy must be satisfied
     Or(Box<EndorsementPolicy>, Box<EndorsementPolicy>),
+    /// At least `min_count` signers whose OU is in `ou_ids` must sign.
+    ///
+    /// Evaluation requires an external lookup of signer → OU mapping;
+    /// the simple `evaluate(&[&str])` method treats `ou_ids` as org IDs
+    /// for compatibility. Full OU-aware evaluation is done via `evaluate_with_ous`.
+    OuBased { ou_ids: Vec<String>, min_count: usize },
 }
 
 impl EndorsementPolicy {
@@ -27,6 +33,28 @@ impl EndorsementPolicy {
             }
             EndorsementPolicy::And(a, b) => a.evaluate(signer_orgs) && b.evaluate(signer_orgs),
             EndorsementPolicy::Or(a, b) => a.evaluate(signer_orgs) || b.evaluate(signer_orgs),
+            EndorsementPolicy::OuBased { ou_ids, min_count } => {
+                // Fallback: treat ou_ids as org IDs when no OU mapping is available.
+                let count = ou_ids.iter().filter(|o| signer_orgs.contains(&o.as_str())).count();
+                count >= *min_count
+            }
+        }
+    }
+
+    /// Evaluate the policy with an explicit signer-to-OU mapping.
+    ///
+    /// `signer_ous` maps each signer org ID to its OU ID.
+    pub fn evaluate_with_ous(&self, signer_orgs: &[&str], signer_ous: &std::collections::HashMap<String, String>) -> bool {
+        match self {
+            EndorsementPolicy::OuBased { ou_ids, min_count } => {
+                let count = signer_orgs
+                    .iter()
+                    .filter(|org| signer_ous.get(**org).map(|ou| ou_ids.contains(ou)).unwrap_or(false))
+                    .count();
+                count >= *min_count
+            }
+            // For non-OU policies, delegate to the simple evaluate.
+            _ => self.evaluate(signer_orgs),
         }
     }
 }
@@ -158,5 +186,44 @@ mod tests {
             Box::new(EndorsementPolicy::AnyOf(vec!["org2".into()])),
         );
         assert!(p.evaluate(&orgs(&["org2"])));
+    }
+
+    #[test]
+    fn ou_based_serde_roundtrip() {
+        let p = EndorsementPolicy::OuBased {
+            ou_ids: vec!["manufacturing".into()],
+            min_count: 2,
+        };
+        let json = serde_json::to_string(&p).unwrap();
+        assert_eq!(serde_json::from_str::<EndorsementPolicy>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn ou_based_evaluate_with_ous_pass() {
+        use std::collections::HashMap;
+        let p = EndorsementPolicy::OuBased {
+            ou_ids: vec!["manufacturing".into()],
+            min_count: 2,
+        };
+        let mut ous = HashMap::new();
+        ous.insert("org1".to_string(), "manufacturing".to_string());
+        ous.insert("org2".to_string(), "manufacturing".to_string());
+        ous.insert("org3".to_string(), "engineering".to_string());
+
+        assert!(p.evaluate_with_ous(&["org1", "org2", "org3"], &ous));
+    }
+
+    #[test]
+    fn ou_based_evaluate_with_ous_fail() {
+        use std::collections::HashMap;
+        let p = EndorsementPolicy::OuBased {
+            ou_ids: vec!["manufacturing".into()],
+            min_count: 2,
+        };
+        let mut ous = HashMap::new();
+        ous.insert("org1".to_string(), "manufacturing".to_string());
+        ous.insert("org2".to_string(), "engineering".to_string());
+
+        assert!(!p.evaluate_with_ous(&["org1", "org2"], &ous));
     }
 }

@@ -1,6 +1,9 @@
 //! Channel model — a logical ledger scope with its own member orgs and endorsement policy.
 
 pub mod registry;
+pub mod config;
+pub mod genesis;
+pub use config::{ChannelConfig, ConfigUpdateType};
 
 use crate::endorsement::policy::EndorsementPolicy;
 

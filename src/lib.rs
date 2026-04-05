@@ -50,5 +50,6 @@ pub mod chaincode;
 pub mod gateway;
 pub mod discovery;
 pub mod events;
+pub mod acl;
 
 pub use app_state::AppState;

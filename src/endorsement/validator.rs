@@ -3,6 +3,7 @@
 use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 use thiserror::Error;
 
+use super::key_policy::KeyEndorsementStore;
 use super::policy::EndorsementPolicy;
 use super::registry::OrgRegistry;
 use super::types::Endorsement;
@@ -92,6 +93,96 @@ pub fn validate_endorsements(
     } else {
         Err(EndorsementError::PolicyNotSatisfied { got: valid_orgs.len() })
     }
+}
+
+/// Validate endorsements for a set of rwset write keys, applying key-level
+/// policy overrides where they exist.
+///
+/// For each write key the effective policy is determined as:
+/// - key-level policy (from `key_policy_store`) if one exists for the key
+/// - `chaincode_policy` otherwise
+///
+/// The endorsements must satisfy **every** distinct effective policy.
+/// Priority: key-level > chaincode-level.
+pub fn validate_endorsements_for_writes(
+    endorsements: &[Endorsement],
+    chaincode_policy: &EndorsementPolicy,
+    registry: &dyn OrgRegistry,
+    crl_store: Option<&dyn CrlStore>,
+    write_keys: &[&str],
+    key_policy_store: Option<&dyn KeyEndorsementStore>,
+) -> Result<(), EndorsementError> {
+    // Step 1: resolve the verified set of org IDs (same as validate_endorsements).
+    let mut valid_orgs: Vec<&str> = Vec::new();
+
+    for e in endorsements {
+        let org = registry
+            .get_org(&e.org_id)
+            .map_err(|_| EndorsementError::OrgNotFound(e.org_id.clone()))?;
+
+        let verified_pk = org
+            .root_public_keys
+            .iter()
+            .find(|pk| verify_endorsement(e, pk).is_ok());
+
+        let Some(pk) = verified_pk else { continue };
+
+        if let Some(store) = crl_store {
+            let serial = hex::encode(pk);
+            let revoked = store.read_crl(&org.msp_id).unwrap_or_default();
+            if revoked.contains(&serial) {
+                return Err(EndorsementError::SignerRevoked {
+                    serial,
+                    msp_id: org.msp_id.clone(),
+                });
+            }
+        }
+
+        if !valid_orgs.contains(&e.org_id.as_str()) {
+            valid_orgs.push(&e.org_id);
+        }
+    }
+
+    // Step 2: determine effective policies and validate against each.
+    //
+    // We collect unique effective policies so that multiple keys sharing the
+    // same policy are only evaluated once.
+    let mut evaluated_chaincode_policy = false;
+    let valid_org_refs: Vec<&str> = valid_orgs.clone();
+
+    for key in write_keys {
+        let effective_policy = key_policy_store
+            .and_then(|s| s.get_key_policy(key).ok().flatten());
+
+        match effective_policy {
+            Some(ref kp) => {
+                if !kp.evaluate(&valid_org_refs) {
+                    return Err(EndorsementError::PolicyNotSatisfied {
+                        got: valid_orgs.len(),
+                    });
+                }
+            }
+            None => {
+                if !evaluated_chaincode_policy {
+                    evaluated_chaincode_policy = true;
+                    if !chaincode_policy.evaluate(&valid_org_refs) {
+                        return Err(EndorsementError::PolicyNotSatisfied {
+                            got: valid_orgs.len(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // If there were no write keys, fall back to the chaincode-level policy.
+    if write_keys.is_empty() && !chaincode_policy.evaluate(&valid_org_refs) {
+        return Err(EndorsementError::PolicyNotSatisfied {
+            got: valid_orgs.len(),
+        });
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -240,5 +331,121 @@ mod tests {
 
         let result = validate_endorsements(&endorsements, &policy, &reg, Some(&crl));
         assert!(matches!(result, Err(EndorsementError::SignerRevoked { .. })));
+    }
+
+    // ── validate_endorsements_for_writes ─────────────────────────────────────
+
+    #[test]
+    fn key_level_policy_overrides_chaincode_policy() {
+        use crate::endorsement::key_policy::MemoryKeyEndorsementStore;
+
+        let (sk1, pk1) = make_keypair();
+        let (sk2, pk2) = make_keypair();
+        let payload = [10u8; 32];
+
+        let reg = setup_registry_with_orgs(&[("org1", pk1), ("org2", pk2)]);
+        // Chaincode policy requires only org1.
+        let chaincode_policy = EndorsementPolicy::AnyOf(vec!["org1".into()]);
+        // Key-level policy for "asset:x" requires BOTH org1 AND org2.
+        let kep = MemoryKeyEndorsementStore::new();
+        kep.set_key_policy(
+            "asset:x",
+            &EndorsementPolicy::AllOf(vec!["org1".into(), "org2".into()]),
+        )
+        .unwrap();
+
+        // Endorsements from org1 only — satisfies chaincode but NOT key-level.
+        let endorsements = vec![make_endorsement(&sk1, payload, "org1")];
+        let result = validate_endorsements_for_writes(
+            &endorsements,
+            &chaincode_policy,
+            &reg,
+            None,
+            &["asset:x"],
+            Some(&kep),
+        );
+        assert!(
+            result.is_err(),
+            "org1-only endorsement must fail key-level AllOf(org1,org2) policy"
+        );
+
+        // Endorsements from both org1 and org2 — satisfies key-level policy.
+        let endorsements2 = vec![
+            make_endorsement(&sk1, payload, "org1"),
+            make_endorsement(&sk2, payload, "org2"),
+        ];
+        assert!(validate_endorsements_for_writes(
+            &endorsements2,
+            &chaincode_policy,
+            &reg,
+            None,
+            &["asset:x"],
+            Some(&kep),
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn key_without_override_uses_chaincode_policy() {
+        use crate::endorsement::key_policy::MemoryKeyEndorsementStore;
+
+        let (sk1, pk1) = make_keypair();
+        let payload = [11u8; 32];
+
+        let reg = setup_registry_with_orgs(&[("org1", pk1)]);
+        let chaincode_policy = EndorsementPolicy::AnyOf(vec!["org1".into()]);
+        // No key-level policy registered.
+        let kep = MemoryKeyEndorsementStore::new();
+
+        let endorsements = vec![make_endorsement(&sk1, payload, "org1")];
+        assert!(validate_endorsements_for_writes(
+            &endorsements,
+            &chaincode_policy,
+            &reg,
+            None,
+            &["some:key"],
+            Some(&kep),
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn no_write_keys_falls_back_to_chaincode_policy() {
+        let (sk1, pk1) = make_keypair();
+        let payload = [12u8; 32];
+
+        let reg = setup_registry_with_orgs(&[("org1", pk1)]);
+        let policy = EndorsementPolicy::AnyOf(vec!["org1".into()]);
+        let endorsements = vec![make_endorsement(&sk1, payload, "org1")];
+
+        // Empty write_keys → chaincode policy governs.
+        assert!(validate_endorsements_for_writes(
+            &endorsements,
+            &policy,
+            &reg,
+            None,
+            &[],
+            None,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn no_write_keys_fails_when_chaincode_policy_not_met() {
+        let (_, pk1) = make_keypair();
+        let payload = [13u8; 32];
+
+        let reg = setup_registry_with_orgs(&[("org1", pk1)]);
+        let policy = EndorsementPolicy::AllOf(vec!["org1".into()]);
+        // No endorsements — empty valid_orgs.
+        assert!(validate_endorsements_for_writes(
+            &[],
+            &policy,
+            &reg,
+            None,
+            &[],
+            None,
+        )
+        .is_err());
     }
 }

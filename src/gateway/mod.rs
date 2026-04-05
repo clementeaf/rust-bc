@@ -4,8 +4,10 @@ use std::sync::Arc;
 
 use thiserror::Error;
 
+use crate::chaincode::executor::WasmExecutor;
 use crate::discovery::service::DiscoveryError;
 use crate::discovery::service::DiscoveryService;
+use crate::endorsement::key_policy::KeyEndorsementStore;
 use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::policy::EndorsementPolicy;
 use crate::endorsement::registry::OrgRegistry;
@@ -13,6 +15,8 @@ use crate::events::types::BlockEvent;
 use crate::events::EventBus;
 use crate::ordering::service::OrderingService;
 use crate::storage::traits::{BlockStore, Transaction};
+use crate::storage::world_state::WorldState;
+use crate::transaction::rwset::ReadWriteSet;
 
 /// Errors produced by the gateway.
 #[derive(Debug, Error)]
@@ -23,6 +27,8 @@ pub enum GatewayError {
     Ordering(String),
     #[error("storage error: {0}")]
     Storage(String),
+    #[error("chaincode simulation failed: {0}")]
+    Simulation(String),
 }
 
 /// Result returned after a transaction is fully committed.
@@ -45,6 +51,16 @@ pub struct Gateway {
     /// Optional event bus — when set, emits `BlockCommitted` and
     /// `TransactionCommitted` events after each successful commit.
     pub event_bus: Option<Arc<EventBus>>,
+    /// Optional Wasm executor for pre-ordering simulation.
+    ///
+    /// When set, `submit` runs the chaincode against `world_state` to produce
+    /// an rwset, then validates any key-level endorsement policies before
+    /// enqueuing the transaction in the ordering service.
+    pub wasm_executor: Option<Arc<WasmExecutor>>,
+    /// Base world state used as input for Wasm simulation.
+    pub world_state: Option<Arc<dyn WorldState>>,
+    /// Key-level endorsement policy store consulted after simulation.
+    pub key_endorsement_store: Option<Arc<dyn KeyEndorsementStore>>,
 }
 
 impl Gateway {
@@ -61,6 +77,9 @@ impl Gateway {
             store,
             discovery_service: None,
             event_bus: None,
+            wasm_executor: None,
+            world_state: None,
+            key_endorsement_store: None,
         }
     }
 
@@ -79,6 +98,9 @@ impl Gateway {
             store,
             discovery_service: Some(discovery_service),
             event_bus: None,
+            wasm_executor: None,
+            world_state: None,
+            key_endorsement_store: None,
         }
     }
 
@@ -97,7 +119,28 @@ impl Gateway {
             store,
             discovery_service: None,
             event_bus: Some(event_bus),
+            wasm_executor: None,
+            world_state: None,
+            key_endorsement_store: None,
         }
+    }
+
+    /// Attach a Wasm executor for pre-ordering chaincode simulation.
+    ///
+    /// When set, `submit` will:
+    /// 1. Run `executor.simulate(world_state, "invoke")` to produce an rwset.
+    /// 2. Validate any key-level endorsement policies for the write set.
+    /// 3. Only then enqueue the transaction in the ordering service.
+    pub fn with_wasm_simulation(
+        mut self,
+        executor: Arc<WasmExecutor>,
+        world_state: Arc<dyn WorldState>,
+        key_endorsement_store: Option<Arc<dyn KeyEndorsementStore>>,
+    ) -> Self {
+        self.wasm_executor = Some(executor);
+        self.world_state = Some(world_state);
+        self.key_endorsement_store = key_endorsement_store;
+        self
     }
 
     /// Submit a transaction through the full endorse → order → commit pipeline.
@@ -143,6 +186,14 @@ impl Gateway {
             self.self_endorse(chaincode_id)?;
         }
 
+        // ── Step 1.5: Wasm simulation + key-level policy validation ──────────
+        if let (Some(exec), Some(ws)) = (&self.wasm_executor, &self.world_state) {
+            let (_, rwset) = exec
+                .simulate(Arc::clone(ws), "invoke")
+                .map_err(|e| GatewayError::Simulation(e.to_string()))?;
+            self.validate_key_policies_for_rwset(chaincode_id, &rwset)?;
+        }
+
         // ── Step 2: enqueue in ordering service ───────────────────────────────
         let tx_id = tx.id.clone();
         self.ordering_service
@@ -185,6 +236,37 @@ impl Gateway {
         Ok(TxResult { tx_id, block_height })
     }
 
+    /// Validate key-level endorsement policies for every write key in `rwset`.
+    ///
+    /// For each write key that has a key-level policy in `key_endorsement_store`,
+    /// checks that the registered orgs satisfy that policy.  Keys without a
+    /// key-level policy are not checked here (the chaincode-level check in
+    /// `self_endorse` already handled that).
+    fn validate_key_policies_for_rwset(
+        &self,
+        chaincode_id: &str,
+        rwset: &ReadWriteSet,
+    ) -> Result<(), GatewayError> {
+        let Some(kep_store) = &self.key_endorsement_store else {
+            return Ok(());
+        };
+
+        let registered_orgs = self.org_registry.list_orgs().unwrap_or_default();
+        let org_ids: Vec<&str> = registered_orgs.iter().map(|o| o.org_id.as_str()).collect();
+
+        for write in &rwset.writes {
+            if let Ok(Some(policy)) = kep_store.get_key_policy(&write.key) {
+                if !policy.evaluate(&org_ids) {
+                    return Err(GatewayError::PolicyNotSatisfied(
+                        format!("{chaincode_id}/{}", write.key),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Self-endorsement check using the local org registry.
     ///
     /// Returns `Ok(())` when the registered orgs satisfy the policy for
@@ -208,6 +290,7 @@ impl Gateway {
                 EndorsementPolicy::NOutOf { n, orgs } => {
                     orgs.iter().filter(|o| org_ids.contains(&o.as_str())).count() >= *n
                 }
+                EndorsementPolicy::OuBased { .. } => p.evaluate(&org_ids),
             };
 
             if !satisfied {
@@ -532,6 +615,94 @@ mod tests {
         // Gateway without event_bus must still commit successfully.
         let gw = make_gateway();
         let result = gw.submit("cc", "", make_tx("tx-no-bus")).unwrap();
+        assert_eq!(result.block_height, 1);
+    }
+
+    // ── 14.3.1 — Wasm simulation + key-level policy tests ─────────────────────
+
+    use crate::chaincode::executor::WasmExecutor;
+    use crate::endorsement::key_policy::MemoryKeyEndorsementStore;
+    use crate::storage::world_state::MemoryWorldState;
+
+    /// WAT that writes key "asset:1" = "v" and returns empty result.
+    const WRITE_ASSET_WAT: &[u8] = br#"
+(module
+  (import "env" "put_state" (func $put_state (param i32 i32 i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "asset:1")
+  (data (i32.const 16) "v")
+  (func (export "invoke") (result i64)
+    (drop (call $put_state (i32.const 0) (i32.const 7) (i32.const 16) (i32.const 1)))
+    (i64.const 0)
+  )
+)
+"#;
+
+    fn make_gateway_with_simulation(
+        kep_store: Option<Arc<dyn crate::endorsement::key_policy::KeyEndorsementStore>>,
+    ) -> Gateway {
+        let exec = Arc::new(WasmExecutor::new(WRITE_ASSET_WAT, 10_000_000).unwrap());
+        let ws = Arc::new(MemoryWorldState::new());
+        make_gateway().with_wasm_simulation(exec, ws, kep_store)
+    }
+
+    #[test]
+    fn submit_with_wasm_simulation_no_key_policy_commits_block() {
+        let gw = make_gateway_with_simulation(None);
+        let result = gw.submit("cc", "", make_tx("tx-sim-1")).unwrap();
+        assert_eq!(result.block_height, 1);
+    }
+
+    #[test]
+    fn submit_simulation_key_policy_satisfied_commits_block() {
+        let registry = Arc::new(MemoryOrgRegistry::new());
+        registry.register_org(&make_org("org1")).unwrap();
+
+        let kep = Arc::new(MemoryKeyEndorsementStore::new());
+        kep.set_key_policy(
+            "asset:1",
+            &EndorsementPolicy::AnyOf(vec!["org1".into()]),
+        )
+        .unwrap();
+
+        let exec = Arc::new(WasmExecutor::new(WRITE_ASSET_WAT, 10_000_000).unwrap());
+        let ws = Arc::new(MemoryWorldState::new());
+
+        let gw = Gateway::new(
+            registry,
+            Arc::new(MemoryPolicyStore::new()),
+            Arc::new(OrderingService::with_config(10, 500)),
+            Arc::new(MemoryStore::new()),
+        )
+        .with_wasm_simulation(exec, ws, Some(kep));
+
+        let result = gw.submit("cc", "", make_tx("tx-kp-ok")).unwrap();
+        assert_eq!(result.block_height, 1);
+    }
+
+    #[test]
+    fn submit_simulation_key_policy_not_satisfied_returns_error() {
+        // org registry is empty → key policy AllOf(["org1"]) cannot be satisfied
+        let kep = Arc::new(MemoryKeyEndorsementStore::new());
+        kep.set_key_policy(
+            "asset:1",
+            &EndorsementPolicy::AllOf(vec!["org1".into()]),
+        )
+        .unwrap();
+
+        let gw = make_gateway_with_simulation(Some(kep));
+        let err = gw.submit("cc", "", make_tx("tx-kp-fail")).unwrap_err();
+        assert!(
+            matches!(err, GatewayError::PolicyNotSatisfied(_)),
+            "expected PolicyNotSatisfied, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn submit_simulation_key_policy_store_absent_skips_key_check() {
+        // No kep_store attached → key-level check is skipped, commit succeeds.
+        let gw = make_gateway_with_simulation(None);
+        let result = gw.submit("cc", "", make_tx("tx-no-kep")).unwrap();
         assert_eq!(result.block_height, 1);
     }
 }
