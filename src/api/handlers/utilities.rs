@@ -1,4 +1,5 @@
 use actix_web::{get, web, HttpRequest, HttpResponse};
+// Note: `get` macro still used by `get_metrics` below
 
 use crate::app_state::AppState;
 use crate::api::errors::ApiResult;
@@ -10,7 +11,6 @@ lazy_static::lazy_static! {
 }
 
 /// GET /api/v1/health — health check (NeuroAccess-style envelope + live chain/staking).
-#[get("/health")]
 pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let uptime_seconds = SCAFFOLD_HTTP_SINCE.elapsed().as_secs();
@@ -38,7 +38,6 @@ pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse>
 }
 
 /// GET /api/v1/version — API and crate version metadata with live chain height.
-#[get("/version")]
 pub async fn get_version(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
@@ -56,7 +55,6 @@ pub async fn get_version(state: web::Data<AppState>) -> ApiResult<HttpResponse> 
 }
 
 /// GET /api/v1/openapi.json — OpenAPI specification.
-#[get("/openapi.json")]
 pub async fn get_openapi(_req: HttpRequest) -> ApiResult<HttpResponse> {
     let spec = OpenApi::spec();
     Ok(HttpResponse::Ok().json(spec))

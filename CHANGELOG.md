@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-05 (Docker & Route Unification)
+
+**Docker deployment**
+- Multi-stage `Dockerfile` with nightly Rust builder + `debian:bookworm-slim` runtime
+- `docker-compose.yml`: 3 peers (node1–node3) + 1 orderer, Prometheus, Grafana
+- Self-signed TLS certificates via `deploy/generate-tls.sh` (EC P-256, per-node SANs)
+- Non-root container user, named volumes for data persistence
+
+**Bind address fix**
+- `BIND_ADDR` env var in `src/main.rs` (default `127.0.0.1`, containers use `0.0.0.0`)
+- Healthcheck uses `curl -fk https://…/api/v1/health` (self-signed TLS)
+
+**Route unification**
+- Legacy (`api_legacy.rs`) and scaffold (`api/routes.rs`) shared a duplicated `/api/v1` scope, causing scaffold routes to return 404
+- Merged into a single scope: legacy builds the scope, `ApiRoutes::register()` appends sub-scoped scaffold services
+- `health`, `version`, `openapi.json` registered as `.route()` (Actix requires this when mixed with legacy `.route()` handlers)
+
+---
+
 ### 2026-04-04 (Fase 19 — Snapshots + Pagination)
 
 **19.1 — State snapshots**

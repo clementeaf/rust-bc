@@ -1,87 +1,183 @@
 version: '3.8'
 
+x-node-defaults: &node-defaults
+  build: .
+  restart: unless-stopped
+  networks:
+    - bc-net
+  volumes:
+    - ./deploy/tls:/tls:ro
+  healthcheck:
+    test: ["CMD", "curl", "-fk", "https://localhost:8080/api/v1/health"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 services:
-  # Nodo principal (bootstrap)
+  # ── Peer nodes (org1) ──────────────────────────────────────────────────────
+
   node1:
-    build: .
+    <<: *node-defaults
     container_name: rust-bc-node1
     ports:
-      - "8080:8080"  # API
-      - "8081:8081"  # P2P
+      - "8080:8080"
+      - "8081:8081"
     environment:
-      - API_PORT=8080
-      - P2P_PORT=8081
-      - DB_NAME=blockchain
-      - DIFFICULTY=1
-      - RUST_LOG=info
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "org1"
+      NODE_ROLE: "peer_and_orderer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      # TLS
+      TLS_CERT_PATH: "/tls/node1-cert.pem"
+      TLS_KEY_PATH: "/tls/node1-key.pem"
+      TLS_CA_PATH: "/tls/ca-cert.pem"
+      # Rate limiting
+      RATE_LIMIT_RPS: "100"
+      RATE_LIMIT_BURST: "200"
+      # Bootstrap
+      BOOTSTRAP_NODES: "node2:8081,node3:8081"
+      ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
     volumes:
       - node1-data:/app/data
-    networks:
-      - blockchain-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      - ./deploy/tls:/tls:ro
 
-  # Nodo secundario
   node2:
-    build: .
+    <<: *node-defaults
     container_name: rust-bc-node2
     ports:
-      - "8082:8080"  # API
-      - "8083:8081"  # P2P
+      - "8082:8080"
+      - "8083:8081"
     environment:
-      - API_PORT=8080
-      - P2P_PORT=8081
-      - DB_NAME=blockchain
-      - DIFFICULTY=1
-      - RUST_LOG=info
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "org2"
+      NODE_ROLE: "peer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      TLS_CERT_PATH: "/tls/node2-cert.pem"
+      TLS_KEY_PATH: "/tls/node2-key.pem"
+      TLS_CA_PATH: "/tls/ca-cert.pem"
+      RATE_LIMIT_RPS: "100"
+      RATE_LIMIT_BURST: "200"
+      BOOTSTRAP_NODES: "node1:8081,node3:8081"
+      ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
     volumes:
       - node2-data:/app/data
-    networks:
-      - blockchain-network
-    restart: unless-stopped
+      - ./deploy/tls:/tls:ro
     depends_on:
       - node1
-    command: ["8080", "8081", "blockchain"]
-    # Conectar a node1 después de iniciar
-    entrypoint: ["/bin/bash", "-c", "sleep 5 && rust-bc 8080 8081 blockchain"]
 
-  # Nodo terciario
   node3:
-    build: .
+    <<: *node-defaults
     container_name: rust-bc-node3
     ports:
-      - "8084:8080"  # API
-      - "8085:8081"  # P2P
+      - "8084:8080"
+      - "8085:8081"
     environment:
-      - API_PORT=8080
-      - P2P_PORT=8081
-      - DB_NAME=blockchain
-      - DIFFICULTY=1
-      - RUST_LOG=info
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "org1"
+      NODE_ROLE: "peer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      TLS_CERT_PATH: "/tls/node3-cert.pem"
+      TLS_KEY_PATH: "/tls/node3-key.pem"
+      TLS_CA_PATH: "/tls/ca-cert.pem"
+      RATE_LIMIT_RPS: "100"
+      RATE_LIMIT_BURST: "200"
+      BOOTSTRAP_NODES: "node1:8081,node2:8081"
+      ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
     volumes:
       - node3-data:/app/data
-    networks:
-      - blockchain-network
-    restart: unless-stopped
+      - ./deploy/tls:/tls:ro
     depends_on:
       - node1
-      - node2
-    command: ["8080", "8081", "blockchain"]
+
+  # ── Orderer ────────────────────────────────────────────────────────────────
+
+  orderer1:
+    <<: *node-defaults
+    container_name: rust-bc-orderer1
+    ports:
+      - "8086:8080"
+      - "8087:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "ordererOrg"
+      NODE_ROLE: "orderer"
+      ORDERING_BACKEND: "solo"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      TLS_CERT_PATH: "/tls/orderer1-cert.pem"
+      TLS_KEY_PATH: "/tls/orderer1-key.pem"
+      TLS_CA_PATH: "/tls/ca-cert.pem"
+      RATE_LIMIT_RPS: "200"
+      RATE_LIMIT_BURST: "400"
+      BOOTSTRAP_NODES: "node1:8081"
+    volumes:
+      - orderer1-data:/app/data
+      - ./deploy/tls:/tls:ro
+
+  # ── Monitoring ─────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: rust-bc-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - bc-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: rust-bc-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - bc-net
+    depends_on:
+      - prometheus
+    restart: unless-stopped
 
 volumes:
   node1-data:
-    driver: local
   node2-data:
-    driver: local
   node3-data:
-    driver: local
+  orderer1-data:
+  prometheus-data:
+  grafana-data:
 
 networks:
-  blockchain-network:
+  bc-net:
     driver: bridge
-

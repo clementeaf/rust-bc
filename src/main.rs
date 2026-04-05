@@ -825,7 +825,8 @@ async fn main() -> std::io::Result<()> {
     // Parámetros de recarga TLS (para SIGHUP)
     let tls_reload_params = tls_reload_params_from_env();
 
-    let api_bind = format!("127.0.0.1:{}", api_port);
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let api_bind = format!("{}:{}", bind_addr, api_port);
 
     // Configurar límite de tamaño para JSON (256KB por defecto, aumentamos a 1MB)
     let json_config = web::JsonConfig::default()

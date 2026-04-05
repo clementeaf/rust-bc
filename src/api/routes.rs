@@ -9,32 +9,33 @@ impl ApiRoutes {
     pub fn configure(cfg: &mut web::ServiceConfig) {
         // Prometheus scrape endpoint — conventional path outside /api/v1
         cfg.service(utilities::get_metrics);
+    }
 
-        cfg.service(
-            web::scope("/api/v1")
-                .service(Self::identity_routes())
-                .service(Self::blocks_routes())
-                .service(Self::store_blocks_routes())
-                .service(Self::store_transactions_routes())
-                .service(Self::store_identities_routes())
-                .service(Self::store_credentials_routes())
-                .service(Self::store_organizations_routes())
-                .service(Self::store_policies_routes())
-                .service(Self::chain_routes())
-                .service(Self::credentials_routes())
-                .service(Self::transaction_routes())
-                .service(Self::proposal_routes())
-                .service(Self::channels_routes())
-                .service(Self::msp_routes())
-                .service(Self::private_data_routes())
-                .service(Self::chaincode_routes())
-                .service(Self::gateway_routes())
-                .service(Self::discovery_routes())
-                .service(Self::events_routes())
-                .service(Self::acl_routes())
-                .service(Self::snapshot_routes())
-                .service(Self::utilities_routes()),
-        );
+    /// Register all scaffold routes into an existing `/api/v1` scope.
+    pub fn register(scope: Scope) -> Scope {
+        scope
+            .service(Self::identity_routes())
+            .service(Self::blocks_routes())
+            .service(Self::store_blocks_routes())
+            .service(Self::store_transactions_routes())
+            .service(Self::store_identities_routes())
+            .service(Self::store_credentials_routes())
+            .service(Self::store_organizations_routes())
+            .service(Self::store_policies_routes())
+            .service(Self::chain_routes())
+            .service(Self::credentials_routes())
+            .service(Self::transaction_routes())
+            .service(Self::proposal_routes())
+            .service(Self::channels_routes())
+            .service(Self::msp_routes())
+            .service(Self::private_data_routes())
+            .service(Self::chaincode_routes())
+            .service(Self::gateway_routes())
+            .service(Self::discovery_routes())
+            .service(Self::events_routes())
+            .service(Self::acl_routes())
+            .service(Self::snapshot_routes())
+            // health, version, openapi registered as .route() in api_legacy
     }
 
     fn identity_routes() -> Scope {
@@ -172,12 +173,7 @@ impl ApiRoutes {
             .service(snapshots::download_snapshot)
     }
 
-    fn utilities_routes() -> Scope {
-        web::scope("")
-            .service(utilities::health_check)
-            .service(utilities::get_version)
-            .service(utilities::get_openapi)
-    }
+    // utilities (health, version, openapi) registered as .route() in register()
 }
 
 #[cfg(test)]

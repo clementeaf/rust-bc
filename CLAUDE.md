@@ -47,24 +47,20 @@ Clean trait-based persistence introduced in Fases I–VI:
 
 Storage backend is selected at runtime via `STORAGE_BACKEND=rocksdb` (path from `STORAGE_PATH`) or defaults to `MemoryStore`. Lives in `AppState.store: Option<Arc<dyn BlockStore>>`.
 
-### HTTP API (`src/api/`)
-Actix-Web 4. All routes mounted under `/api/v1` in `routes.rs`. Handlers split by domain in `handlers/`:
+### HTTP API (`src/api/` + `src/api_legacy.rs`)
+Actix-Web 4. A single `/api/v1` scope is built in `api_legacy.rs::config_routes` and extended by `ApiRoutes::register()` from `api/routes.rs`.
+
+**Routing architecture:**
+- `api_legacy.rs` creates the `/api/v1` scope with legacy `.route()` handlers (wallets, contracts, staking, airdrop, etc.) and flat utility routes (`/health`, `/version`, `/openapi.json`).
+- `ApiRoutes::register()` appends sub-scoped scaffold services (store, channels, chaincode, events, etc.) into the same scope.
+- **Important:** top-level routes in a scope that uses `.route()` must also use `.route()`. The `#[get]` macro creates service factories that are invisible to Actix when mixed with `.route()` in the same scope. Sub-scoped services (e.g. `/store/blocks`) work fine.
+
+Handlers split by domain in `handlers/`:
 - `blocks.rs` — legacy chain blocks + store-backed block endpoints
 - `transactions.rs` — mempool endpoints + store-backed transaction endpoints
 - `identity.rs`, `credentials.rs` — store-backed DID/credential endpoints
 
 Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_code, message, data?, error?, timestamp, trace_id }`.
-
-New store endpoints follow this pattern:
-```rust
-#[get("/store/...")]
-pub async fn handler(state: web::Data<AppState>, ...) -> ApiResult<HttpResponse> {
-    match &state.store {
-        None => Err(ApiError::NotFound { resource: "store".to_string() }),
-        Some(store) => { /* call store method */ }
-    }
-}
-```
 
 ### AppState (`src/app_state.rs`)
 Central shared state. Both the legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store: Option<Arc<dyn BlockStore>>` live here. They are independent — writes to one do not propagate to the other.
@@ -81,6 +77,7 @@ Central shared state. Both the legacy `blockchain: Arc<Mutex<Blockchain>>` and n
 |---|---|---|
 | `API_PORT` | 8080 | HTTP API port |
 | `P2P_PORT` | 8081 | P2P gossip port |
+| `BIND_ADDR` | `127.0.0.1` | Listen address (`0.0.0.0` in Docker) |
 | `DIFFICULTY` | 1 | Mining difficulty |
 | `STORAGE_BACKEND` | *(memory)* | Set to `rocksdb` to enable RocksDB |
 | `STORAGE_PATH` | `./data/rocksdb` | RocksDB data directory |
@@ -139,6 +136,34 @@ Persisted context that carries across sessions:
 - `wait`
 
 Any other shell command (e.g. `rm`, `git push`, `cargo publish`) will still prompt for approval.
+
+## Docker
+
+```bash
+# Build all node images
+docker compose build
+
+# Start the network (3 peers + 1 orderer + Prometheus + Grafana)
+docker compose up -d
+
+# Check health
+docker compose ps
+
+# Test from host
+curl -sk https://localhost:8080/api/v1/health
+
+# Regenerate TLS certificates
+cd deploy && ./generate-tls.sh
+```
+
+| Service | Host port | Role |
+|---|---|---|
+| node1 | 8080 (API), 8081 (P2P) | peer + orderer (org1) |
+| node2 | 8082 (API), 8083 (P2P) | peer (org2) |
+| node3 | 8084 (API), 8085 (P2P) | peer (org1) |
+| orderer1 | 8086 (API), 8087 (P2P) | orderer |
+| prometheus | 9090 | Metrics |
+| grafana | 3000 | Dashboards (admin/admin) |
 
 ## Key conventions
 

@@ -2103,8 +2103,7 @@ pub async fn get_airdrop_tiers(state: web::Data<AppState>) -> ActixResult<HttpRe
  * Configura las rutas de la API
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/api/v1")
+    let scope = web::scope("/api/v1")
             .route("/billing/create-key", web::post().to(create_api_key))
             .route(
                 "/billing/deactivate-key",
@@ -2209,6 +2208,14 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
                 web::get().to(get_eligibility_info),
             )
             .route("/airdrop/history", web::get().to(get_claim_history))
-            .route("/airdrop/tiers", web::get().to(get_airdrop_tiers)),
-    );
-}
+            .route("/airdrop/tiers", web::get().to(get_airdrop_tiers))
+            // Scaffold utility routes
+            .route("/health", web::get().to(crate::api::handlers::utilities::health_check))
+            .route("/version", web::get().to(crate::api::handlers::utilities::get_version))
+            .route("/openapi.json", web::get().to(crate::api::handlers::utilities::get_openapi));
+
+        // Merge remaining scaffold routes (sub-scoped services)
+        let scope = crate::api::routes::ApiRoutes::register(scope);
+
+        cfg.service(scope);
+    }

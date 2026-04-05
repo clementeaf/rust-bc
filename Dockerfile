@@ -1,12 +1,14 @@
 # Multi-stage build para optimizar tamaño de imagen
 # Usar versión más reciente de Rust (latest) para soportar dependencias modernas
-FROM rust:latest as builder
+FROM debian:bookworm AS builder
 
-# Instalar dependencias del sistema
+# Install Rust nightly (latest) via rustup
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+    curl pkg-config libssl-dev build-essential clang libclang-dev protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly-2024-12-18
+
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Crear directorio de trabajo
 WORKDIR /app
@@ -59,7 +61,7 @@ VOLUME ["/app/data"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${API_PORT}/api/v1/health || exit 1
+    CMD curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
 
 # Entrypoint
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
