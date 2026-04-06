@@ -21,78 +21,72 @@ impl ApiRoutes {
 
     /// Register all scaffold routes into an existing `/api/v1` scope.
     ///
-    /// Sub-scoped services (with a real path prefix) use `.service(scope)`.
-    /// Services that would use `web::scope("")` are registered directly with
-    /// `.service(handler)` because empty sub-scopes are invisible to Actix
-    /// when the parent scope also uses `.route()` (legacy router).
+    /// Uses `configure()` closures to break the type chain and avoid
+    /// stack overflow from deeply nested Actix generic wrappers.
     pub fn register(scope: Scope) -> Scope {
         scope
-            // Sub-scoped (have their own path prefix — work fine)
+            // Sub-scoped (have their own path prefix)
             .service(Self::identity_routes())
             .service(Self::blocks_routes())
             .service(Self::store_blocks_routes())
             .service(Self::chain_routes())
             .service(Self::credentials_routes())
-            // Direct service registration (would be empty sub-scopes)
-            // -- store transactions
-            .service(transactions::store_write_transaction)
+            // Break the chain with configure() to limit generic nesting depth
+            .configure(Self::register_store_handlers)
+            .configure(Self::register_tx_handlers)
+            .configure(Self::register_infra_handlers)
+    }
+
+    fn register_store_handlers(cfg: &mut web::ServiceConfig) {
+        cfg.service(transactions::store_write_transaction)
             .service(transactions::store_get_transaction)
-            // -- store identities
             .service(identity::store_write_identity)
             .service(identity::store_get_identity)
-            // -- store credentials
             .service(credentials::store_write_credential)
             .service(credentials::store_get_credential)
             .service(credentials::store_get_credentials_by_subject)
-            // -- store organizations
             .service(organizations::store_create_organization)
             .service(organizations::store_list_organizations)
             .service(organizations::store_get_organization)
-            // -- store policies
             .service(organizations::store_set_policy)
-            .service(organizations::store_get_policy)
-            // -- transactions
-            .service(transactions::create_transaction)
+            .service(organizations::store_get_policy);
+    }
+
+    fn register_tx_handlers(cfg: &mut web::ServiceConfig) {
+        cfg.service(transactions::create_transaction)
             .service(transactions::get_mempool)
-            // -- proposals
             .service(proposals::submit_proposal)
             .service(proposals::submit_endorsed_transaction)
-            // -- channels
             .service(channels::create_channel)
             .service(channels::list_channels)
             .service(channels::update_channel_config)
             .service(channels::get_channel_config)
             .service(channels::get_channel_config_history)
-            // -- msp
             .service(msp::revoke_serial)
             .service(msp::get_msp_info)
-            // -- private data
+            .service(gateway::gateway_submit);
+    }
+
+    fn register_infra_handlers(cfg: &mut web::ServiceConfig) {
+        cfg.service(private_data::register_collection)
             .service(private_data::put_private_data)
             .service(private_data::get_private_data)
-            // -- chaincode
             .service(chaincode::install_chaincode)
             .service(chaincode::approve_chaincode)
             .service(chaincode::commit_chaincode)
             .service(chaincode::simulate_chaincode)
-            // -- gateway
-            .service(gateway::gateway_submit)
-            // -- discovery
             .service(discovery::get_endorsers)
             .service(discovery::get_channel_peers)
             .service(discovery::post_register_peer)
-            // -- events
             .service(events::events_blocks)
             .service(events::events_blocks_filtered)
             .service(events::events_blocks_private)
-            // -- acls
             .service(acl::set_acl)
             .service(acl::list_acls)
             .service(acl::get_acl)
-            // -- snapshots
             .service(snapshots::create_snapshot)
             .service(snapshots::list_snapshots)
-            .service(snapshots::download_snapshot)
-            // health, version, openapi registered as .route() in api_legacy
+            .service(snapshots::download_snapshot);
     }
 
     fn identity_routes() -> Scope {

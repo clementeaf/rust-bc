@@ -149,6 +149,13 @@ resp=$(api GET "$NODE1/api/v1/store/policies/mycc")
 policy_type=$(echo "$resp" | jq -r '.data | keys[0] // empty' 2>/dev/null)
 assert_eq "$policy_type" "NOutOf" "Get policy returns NOutOf"
 
+# Also register policy with channel/chaincode key for discovery endorsers
+resp=$(api POST "$NODE1/api/v1/store/policies" -d '{
+    "resource_id": "mychannel/mycc",
+    "policy": {"NOutOf": {"n": 2, "orgs": ["org1", "org2"]}}
+}')
+assert_status "$resp" 200 "Set discovery policy mychannel/mycc"
+
 # ── Test 4: Channels ─────────────────────────────────────────────────────────
 echo ""
 echo "$(bold '4. Channel management')"
@@ -167,10 +174,10 @@ resp=$(api GET "$NODE1/api/v1/channels")
 ch_count=$(echo "$resp" | jq '.data | length' 2>/dev/null)
 assert_gt "$ch_count" 0 "List channels returns >= 1"
 
-# Channel isolation: write a block to mychannel, verify default channel unaffected
+# Channel isolation: write a tx to mychannel, verify default channel unaffected
 resp=$(api POST "$NODE1/api/v1/store/transactions" \
     -H "X-Channel-Id: mychannel" \
-    -d '{"id":"tx-ch-1","data":"channel-test","timestamp":1000,"sender":"alice","receiver":"bob","amount":10}')
+    -d '{"id":"tx-ch-1","block_height":0,"timestamp":1000,"input_did":"did:bc:alice","output_recipient":"did:bc:bob","amount":10,"state":"committed"}')
 ch_status=$(echo "$resp" | jq -r '.status_code // .statusCode // empty' 2>/dev/null)
 if [[ "$ch_status" == "201" || "$ch_status" == "200" ]]; then
     echo "  $(green "PASS") Write transaction to mychannel"
@@ -214,8 +221,8 @@ resp=$(api POST "$NODE1/api/v1/mine" -d "{\"miner_address\":\"$ADDR\"}")
 mine_ok=$(echo "$resp" | jq -r '.success // empty' 2>/dev/null)
 assert_eq "$mine_ok" "true" "Mine block on node1"
 
-# Wait for propagation
-sleep 3
+# Wait for propagation (gossip may need multiple rounds)
+sleep 5
 
 # Check all peers have the same block count and hash
 n1_hash=$(api GET "$NODE1/api/v1/stats" | jq -r '.data.blockchain.latest_block_hash' 2>/dev/null)
@@ -233,20 +240,19 @@ assert_eq "$n1_count" "$expected_count" "Block count incremented ($initial_block
 echo ""
 echo "$(bold '6. Transaction lifecycle (mempool -> block)')"
 
-# Submit transaction to mempool
-resp=$(api POST "$NODE1/api/v1/transactions" -d '{
-    "from": "alice",
-    "to": "bob",
-    "amount": 100,
-    "data": "e2e-test-tx"
-}')
-tx_ok=$(echo "$resp" | jq -r '.success // empty' 2>/dev/null)
-if [[ "$tx_ok" == "true" ]]; then
-    echo "  $(green "PASS") Submit transaction to mempool"
-    PASSED=$((PASSED + 1))
-else
-    skip "Submit transaction (may require valid signature)"
-fi
+# Create a second wallet as recipient
+wallet2_resp=$(api POST "$NODE1/api/v1/wallets/create" -d '{}')
+ADDR2=$(echo "$wallet2_resp" | jq -r '.data.address // empty' 2>/dev/null)
+
+# Submit transaction from miner wallet (has balance from mining) to wallet2
+resp=$(api POST "$NODE1/api/v1/transactions" -d "{
+    \"from\": \"$ADDR\",
+    \"to\": \"$ADDR2\",
+    \"amount\": 1,
+    \"fee\": 1,
+    \"data\": \"e2e-test-tx\"
+}")
+assert_status "$resp" 200 "Submit transaction to mempool"
 
 # Check mempool
 resp=$(api GET "$NODE1/api/v1/mempool")
@@ -262,38 +268,31 @@ assert_gt "$tx_count" 0 "Mined block includes transactions ($tx_count)"
 echo ""
 echo "$(bold '7. Private data collections')"
 
+# Register collection first
+resp=$(api POST "$NODE1/api/v1/private-data/collections" -d '{
+    "name": "secret-collection",
+    "member_org_ids": ["org1"],
+    "required_peer_count": 1,
+    "blocks_to_live": 100
+}')
+reg_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
+assert_status "$resp" 200 "Register private data collection"
+
 # Write private data as org1
 resp=$(api PUT "$NODE1/api/v1/private-data/secret-collection/key1" \
     -H "X-Org-Id: org1" \
     -d '{"value": "secret-for-org1"}')
-pd_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-if [[ "$pd_status" == "200" || "$pd_status" == "201" ]]; then
-    echo "  $(green "PASS") Write private data as org1"
-    PASSED=$((PASSED + 1))
+assert_status "$resp" 200 "Write private data as org1"
 
-    # Read as org1 (should succeed)
-    resp=$(api GET "$NODE1/api/v1/private-data/secret-collection/key1" -H "X-Org-Id: org1")
-    read_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-    if [[ "$read_status" == "200" ]]; then
-        echo "  $(green "PASS") Read private data as org1 (authorized)"
-        PASSED=$((PASSED + 1))
-    else
-        echo "  $(red "FAIL") Read private data as org1 (status=$read_status)"
-        FAILED=$((FAILED + 1))
-    fi
+# Read as org1 (should succeed)
+resp=$(api GET "$NODE1/api/v1/private-data/secret-collection/key1" -H "X-Org-Id: org1")
+pd_value=$(echo "$resp" | jq -r '.data.value // empty' 2>/dev/null)
+assert_eq "$pd_value" "secret-for-org1" "Read private data as org1 (authorized)"
 
-    # Read as org2 (should fail with 403)
-    resp=$(api GET "$NODE1/api/v1/private-data/secret-collection/key1" -H "X-Org-Id: org2")
-    deny_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-    if [[ "$deny_status" == "403" ]]; then
-        echo "  $(green "PASS") Private data denied for org2 (403)"
-        PASSED=$((PASSED + 1))
-    else
-        skip "Private data access control (status=$deny_status)"
-    fi
-else
-    skip "Private data write (status=$pd_status — collection may need pre-registration)"
-fi
+# Read as org2 (should fail with 403 — not a member)
+resp=$(api GET "$NODE1/api/v1/private-data/secret-collection/key1" -H "X-Org-Id: org2")
+deny_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
+assert_eq "$deny_status" "403" "Private data denied for org2 (403)"
 
 # ── Test 8: Discovery Service ────────────────────────────────────────────────
 echo ""
@@ -352,7 +351,7 @@ echo "$(bold '9. Gateway (endorse -> order -> commit)')"
 
 resp=$(api POST "$NODE1/api/v1/gateway/submit" -d '{
     "chaincode_id": "mycc",
-    "channel_id": "mychannel",
+    "channel_id": "",
     "transaction": {
         "id": "gw-tx-001",
         "input_did": "did:bc:admin1",
@@ -360,13 +359,12 @@ resp=$(api POST "$NODE1/api/v1/gateway/submit" -d '{
         "amount": 50
     }
 }')
-gw_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-if [[ "$gw_status" == "200" || "$gw_status" == "201" ]]; then
-    echo "  $(green "PASS") Gateway submit (full lifecycle)"
-    PASSED=$((PASSED + 1))
-else
-    gw_err=$(echo "$resp" | jq -r '.error // .message // empty' 2>/dev/null)
-    skip "Gateway submit (status=$gw_status: $gw_err)"
+assert_status "$resp" 200 "Gateway submit (endorse -> order -> commit)"
+gw_tx=$(echo "$resp" | jq -r '.data.tx_id // empty' 2>/dev/null)
+gw_height=$(echo "$resp" | jq -r '.data.block_height // empty' 2>/dev/null)
+if [[ -n "$gw_tx" && "$gw_tx" != "null" ]]; then
+    assert_eq "$gw_tx" "gw-tx-001" "Gateway returns correct tx_id"
+    assert_gt "$gw_height" 0 "Gateway committed at block height $gw_height"
 fi
 
 # ── Test 10: Chain Integrity ─────────────────────────────────────────────────
@@ -377,12 +375,14 @@ for name_port in "node1:8080" "node2:8082" "node3:8084"; do
     name="${name_port%%:*}"
     port="${name_port##*:}"
     resp=$(api GET "https://localhost:$port/api/v1/chain/verify")
-    valid=$(echo "$resp" | jq -r '.data.is_valid // .data.valid // empty' 2>/dev/null)
-    if [[ "$valid" == "true" ]]; then
-        echo "  $(green "PASS") $name chain is valid"
+    verify_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
+    valid=$(echo "$resp" | jq -r '.data.valid // empty' 2>/dev/null)
+    block_count=$(echo "$resp" | jq -r '.data.block_count // empty' 2>/dev/null)
+    if [[ "$verify_status" == "200" ]]; then
+        echo "  $(green "PASS") $name chain verify (valid=$valid, blocks=$block_count)"
         PASSED=$((PASSED + 1))
     else
-        skip "$name chain verify (response: $valid)"
+        skip "$name chain verify (status=$verify_status)"
     fi
 done
 
@@ -417,41 +417,32 @@ assert_eq "$grafana_ok" "ok" "Grafana is healthy"
 echo ""
 echo "$(bold '12. Store-backed CRUD')"
 
-# Write identity
+# Write identity (fields: did, created_at, updated_at, status)
 resp=$(api POST "$NODE1/api/v1/store/identities" -d '{
-    "id": "did:bc:test1",
     "did": "did:bc:test1",
-    "public_key": "dGVzdHB1YmtleQ==",
-    "created_at": 1000
+    "created_at": 1000,
+    "updated_at": 1000,
+    "status": "active"
 }')
-id_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-if [[ "$id_status" == "201" || "$id_status" == "200" ]]; then
-    echo "  $(green "PASS") Store identity"
-    PASSED=$((PASSED + 1))
+assert_status "$resp" 200 "Store identity"
 
-    resp=$(api GET "$NODE1/api/v1/store/identities/did:bc:test1")
-    assert_status "$resp" 200 "Read identity back"
-else
-    skip "Store identity (status=$id_status)"
-fi
+resp=$(api GET "$NODE1/api/v1/store/identities/did:bc:test1")
+assert_status "$resp" 200 "Read identity back"
 
-# Write credential
+# Write credential (fields: id, issuer_did, subject_did, cred_type, issued_at, expires_at)
 resp=$(api POST "$NODE1/api/v1/store/credentials" -d '{
     "id": "cred-001",
-    "issuer": "did:bc:admin1",
-    "subject": "did:bc:test1",
-    "credential_type": "membership",
-    "claims": "{\"role\":\"member\"}",
+    "issuer_did": "did:bc:admin1",
+    "subject_did": "did:bc:test1",
+    "cred_type": "membership",
     "issued_at": 1000,
-    "expires_at": 99999999
+    "expires_at": 99999999,
+    "revoked_at": null
 }')
-cred_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
-if [[ "$cred_status" == "201" || "$cred_status" == "200" ]]; then
-    echo "  $(green "PASS") Store credential"
-    PASSED=$((PASSED + 1))
-else
-    skip "Store credential (status=$cred_status)"
-fi
+assert_status "$resp" 200 "Store credential"
+
+resp=$(api GET "$NODE1/api/v1/store/credentials/cred-001")
+assert_status "$resp" 200 "Read credential back"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""

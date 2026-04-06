@@ -6,19 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-04-06 (E2E Tests, Operator Tooling & Service Initialization)
+### 2026-04-06 (E2E Tests, Operator Tooling & Full Service Wiring)
 
-**Scaffold services wired to startup**
-- `org_registry`, `policy_store`, `discovery_service`, `private_data_store`, `collection_registry` initialized in `main.rs` (were all `None`)
-- Scaffold handlers now return real responses instead of "resource not found"
+**All scaffold services wired to startup**
+- `org_registry`, `policy_store`, `discovery_service`, `private_data_store`, `collection_registry`, `chaincode_package_store`, `chaincode_definition_store`, `gateway` initialized in `main.rs`
+- `POST /api/v1/private-data/collections` endpoint added for collection registration
 
 **Route registration fix**
-- All `web::scope("")` sub-scopes replaced with direct `.service()` registration in `ApiRoutes::register()` — empty sub-scopes are invisible to Actix when the parent scope uses `.route()`
+- `ApiRoutes::register()` uses `.configure()` closures to break the generic type chain and prevent stack overflow from deeply nested Actix wrappers
 - `ApiRoutes::configure()` kept for integration tests, `configure_metrics()` for production
+- Main thread spawned with 32 MB stack to accommodate release + debug builds
 
-**E2E test suite** (`scripts/e2e-test.sh`)
-- 12 test categories, 33 assertions: health, orgs, policies, channels, mining, propagation, discovery, observability, store CRUD
-- 23 pass, 0 fail, 10 skip (gateway/private-data need further wiring)
+**E2E test suite** (`scripts/e2e-test.sh`) — 42 pass, 0 fail, 0 skip
+- Organizations, endorsement policies, channel isolation
+- Block mining with multi-node propagation
+- Transaction lifecycle (wallet → mempool → mine → block)
+- Private data (register collection → write → read authorized → deny unauthorized)
+- Discovery (register peers → query endorsers → query channel peers)
+- Gateway (endorse → order → commit pipeline)
+- Chain integrity, Prometheus metrics, Grafana health
+- Store CRUD (identities, credentials)
 
 **Operator CLI** (`scripts/bcctl.sh`)
 - 14 commands: `status`, `peers`, `blocks`, `mine`, `wallet create`, `channels`, `channel create`, `orgs`, `logs`, `restart`, `metrics`, `verify`, `consistency`, `env`

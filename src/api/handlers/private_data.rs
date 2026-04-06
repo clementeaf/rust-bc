@@ -130,6 +130,53 @@ pub async fn get_private_data(
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
+// ── Collection registration ──────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct RegisterCollectionBody {
+    pub name: String,
+    pub member_org_ids: Vec<String>,
+    #[serde(default = "default_peer_count")]
+    pub required_peer_count: usize,
+    #[serde(default = "default_blocks_to_live")]
+    pub blocks_to_live: u64,
+}
+
+fn default_peer_count() -> usize { 1 }
+fn default_blocks_to_live() -> u64 { 0 }
+
+/// POST /api/v1/private-data/collections — register a new private data collection.
+#[actix_web::post("/private-data/collections")]
+pub async fn register_collection(
+    state: web::Data<AppState>,
+    body: web::Json<RegisterCollectionBody>,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let req = body.into_inner();
+
+    let registry = state.collection_registry.as_ref().ok_or(ApiError::NotFound {
+        resource: "collection_registry".to_string(),
+    })?;
+
+    let collection = crate::private_data::PrivateDataCollection::new(
+        req.name.clone(),
+        req.member_org_ids,
+        req.required_peer_count,
+        req.blocks_to_live,
+    )
+    .map_err(|e| ApiError::ValidationError {
+        field: "collection".to_string(),
+        reason: e.to_string(),
+    })?;
+
+    registry.register(collection).map_err(|e| ApiError::InternalError {
+        reason: e.to_string(),
+    })?;
+
+    let response = serde_json::json!({ "name": req.name, "status": "registered" });
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

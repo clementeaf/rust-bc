@@ -68,8 +68,22 @@ use std::sync::{Arc, Mutex, RwLock};
 /**
  * Función principal - Inicia el servidor API
  */
-#[actix_rt::main]
-async fn main() -> std::io::Result<()> {
+fn main() -> std::io::Result<()> {
+    // Actix route registration creates deeply nested generic types that
+    // exceed the default 8 MB stack. Spawn the async runtime on a thread
+    // with a 16 MB stack to accommodate.
+    let builder = std::thread::Builder::new()
+        .name("main-rt".into())
+        .stack_size(32 * 1024 * 1024);
+    let handle = builder
+        .spawn(|| {
+            actix_rt::System::new().block_on(async_main())
+        })
+        .expect("failed to spawn main runtime thread");
+    handle.join().unwrap()
+}
+
+async fn async_main() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     let difficulty = env::var("DIFFICULTY")
@@ -624,6 +638,14 @@ async fn main() -> std::io::Result<()> {
         crate::discovery::service::DiscoveryService::new(org_registry.clone(), policy_store.clone())
             .with_metrics(metrics_collector.clone()),
     );
+    let ordering_service_for_gateway = Arc::new(ordering::service::OrderingService::new());
+    let gateway_store: Arc<dyn storage::BlockStore> = Arc::new(storage::MemoryStore::new());
+    let gateway = crate::gateway::Gateway::new(
+        org_registry.clone(),
+        policy_store.clone(),
+        ordering_service_for_gateway,
+        gateway_store,
+    );
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -668,9 +690,9 @@ async fn main() -> std::io::Result<()> {
         crl_store: None,
         private_data_store: Some(Arc::new(crate::private_data::MemoryPrivateDataStore::new())),
         collection_registry: Some(Arc::new(crate::private_data::MemoryCollectionRegistry::new())),
-        chaincode_package_store: None,
-        chaincode_definition_store: None,
-        gateway: None,
+        chaincode_package_store: Some(Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())),
+        chaincode_definition_store: Some(Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())),
+        gateway: Some(Arc::new(gateway)),
         discovery_service: Some(discovery_service),
         event_bus: std::sync::Arc::new(events::EventBus::new()),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),

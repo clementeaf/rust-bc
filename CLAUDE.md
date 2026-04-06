@@ -63,7 +63,14 @@ Handlers split by domain in `handlers/`:
 Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_code, message, data?, error?, timestamp, trace_id }`.
 
 ### AppState (`src/app_state.rs`)
-Central shared state. Both the legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store: Option<Arc<dyn BlockStore>>` live here. They are independent — writes to one do not propagate to the other.
+Central shared state. Legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store` coexist independently.
+
+Services initialized at startup (all use in-memory backends by default):
+- `org_registry`, `policy_store` — endorsement infrastructure
+- `discovery_service` — peer registration and endorsement plans
+- `gateway` — endorse → order → commit pipeline
+- `private_data_store`, `collection_registry` — private data collections
+- `chaincode_package_store`, `chaincode_definition_store` — chaincode lifecycle
 
 ### Other subsystems
 - `src/consensus/` — DAG, fork choice, validator scheduling
