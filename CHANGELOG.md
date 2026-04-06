@@ -6,7 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-04-06 (E2E Tests, Operator Tooling & Full Service Wiring)
+### 2026-04-06 (E2E Tests, Operator Tooling, Full Service Wiring & Gap Analysis)
 
 **All scaffold services wired to startup**
 - `org_registry`, `policy_store`, `discovery_service`, `private_data_store`, `collection_registry`, `chaincode_package_store`, `chaincode_definition_store`, `gateway` initialized in `main.rs`
@@ -29,6 +29,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 **Operator CLI** (`scripts/bcctl.sh`)
 - 14 commands: `status`, `peers`, `blocks`, `mine`, `wallet create`, `channels`, `channel create`, `orgs`, `logs`, `restart`, `metrics`, `verify`, `consistency`, `env`
+
+**Fabric 2.5 gap analysis** (`FABRIC-GAP-ANALYSIS.md`)
+- Detailed comparison: 12 verified E2E categories, 10 implemented-but-untested features, gaps vs Fabric
+- Research-backed task backlog with code change requirements, blockers, and exact E2E steps
+- Key findings: Raft is in-process only (no network transport), MVCC not wired to gateway, install doesn't create chaincode definition, world_state not initialized for snapshots
 
 ---
 
