@@ -53,7 +53,7 @@ Actix-Web 4. A single `/api/v1` scope is built in `api_legacy.rs::config_routes`
 **Routing architecture:**
 - `api_legacy.rs` creates the `/api/v1` scope with legacy `.route()` handlers (wallets, contracts, staking, airdrop, etc.) and flat utility routes (`/health`, `/version`, `/openapi.json`).
 - `ApiRoutes::register()` appends sub-scoped scaffold services (store, channels, chaincode, events, etc.) into the same scope.
-- **Important:** top-level routes in a scope that uses `.route()` must also use `.route()`. The `#[get]` macro creates service factories that are invisible to Actix when mixed with `.route()` in the same scope. Sub-scoped services (e.g. `/store/blocks`) work fine.
+- **Important:** `web::scope("")` (empty sub-scopes) are invisible to Actix when the parent scope uses `.route()`. All scaffold handlers are registered directly with `.service()` in `register()`. Only sub-scopes with a real path prefix (e.g. `/store/blocks`, `/chain`) work as nested scopes. Flat routes like `/health` use `.route()` in the legacy scope.
 
 Handlers split by domain in `handlers/`:
 - `blocks.rs` — legacy chain blocks + store-backed block endpoints
@@ -168,6 +168,21 @@ cd deploy && ./generate-tls.sh
 | orderer1 | 8086 (API), 8087 (P2P) | orderer |
 | prometheus | 9090 | Metrics |
 | grafana | 3000 | Dashboards (admin/admin) |
+
+## Operator tooling
+
+```bash
+# Operator CLI
+./scripts/bcctl.sh status          # Health, blocks, peers for all nodes
+./scripts/bcctl.sh consistency     # Compare chain tips across peers
+./scripts/bcctl.sh mine            # Create wallet + mine a block
+./scripts/bcctl.sh orgs            # List registered organizations
+./scripts/bcctl.sh logs node1 100  # Tail container logs
+
+# E2E test suite (requires running Docker network)
+./scripts/e2e-test.sh              # 33 assertions across 12 categories
+./scripts/e2e-test.sh --verbose    # Show full API responses
+```
 
 ## Key conventions
 

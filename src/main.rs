@@ -615,6 +615,16 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
+    // Initialize scaffold services
+    let org_registry: Arc<dyn crate::endorsement::registry::OrgRegistry> =
+        Arc::new(crate::endorsement::registry::MemoryOrgRegistry::new());
+    let policy_store: Arc<dyn crate::endorsement::policy_store::PolicyStore> =
+        Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new());
+    let discovery_service = Arc::new(
+        crate::discovery::service::DiscoveryService::new(org_registry.clone(), policy_store.clone())
+            .with_metrics(metrics_collector.clone()),
+    );
+
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
@@ -653,15 +663,15 @@ async fn main() -> std::io::Result<()> {
             store_map.insert("default".to_string(), default_store);
             std::sync::Arc::new(std::sync::RwLock::new(store_map))
         },
-        org_registry: None,
-        policy_store: None,
+        org_registry: Some(org_registry),
+        policy_store: Some(policy_store),
         crl_store: None,
-        private_data_store: None,
-        collection_registry: None,
+        private_data_store: Some(Arc::new(crate::private_data::MemoryPrivateDataStore::new())),
+        collection_registry: Some(Arc::new(crate::private_data::MemoryCollectionRegistry::new())),
         chaincode_package_store: None,
         chaincode_definition_store: None,
         gateway: None,
-        discovery_service: None,
+        discovery_service: Some(discovery_service),
         event_bus: std::sync::Arc::new(events::EventBus::new()),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
         acl_provider: None,

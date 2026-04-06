@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-06 (E2E Tests, Operator Tooling & Service Initialization)
+
+**Scaffold services wired to startup**
+- `org_registry`, `policy_store`, `discovery_service`, `private_data_store`, `collection_registry` initialized in `main.rs` (were all `None`)
+- Scaffold handlers now return real responses instead of "resource not found"
+
+**Route registration fix**
+- All `web::scope("")` sub-scopes replaced with direct `.service()` registration in `ApiRoutes::register()` — empty sub-scopes are invisible to Actix when the parent scope uses `.route()`
+- `ApiRoutes::configure()` kept for integration tests, `configure_metrics()` for production
+
+**E2E test suite** (`scripts/e2e-test.sh`)
+- 12 test categories, 33 assertions: health, orgs, policies, channels, mining, propagation, discovery, observability, store CRUD
+- 23 pass, 0 fail, 10 skip (gateway/private-data need further wiring)
+
+**Operator CLI** (`scripts/bcctl.sh`)
+- 14 commands: `status`, `peers`, `blocks`, `mine`, `wallet create`, `channels`, `channel create`, `orgs`, `logs`, `restart`, `metrics`, `verify`, `consistency`, `env`
+
+---
+
 ### 2026-04-05 (Docker & P2P Networking)
 
 **Docker deployment**

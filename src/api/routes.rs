@@ -20,29 +20,78 @@ impl ApiRoutes {
     }
 
     /// Register all scaffold routes into an existing `/api/v1` scope.
+    ///
+    /// Sub-scoped services (with a real path prefix) use `.service(scope)`.
+    /// Services that would use `web::scope("")` are registered directly with
+    /// `.service(handler)` because empty sub-scopes are invisible to Actix
+    /// when the parent scope also uses `.route()` (legacy router).
     pub fn register(scope: Scope) -> Scope {
         scope
+            // Sub-scoped (have their own path prefix — work fine)
             .service(Self::identity_routes())
             .service(Self::blocks_routes())
             .service(Self::store_blocks_routes())
-            .service(Self::store_transactions_routes())
-            .service(Self::store_identities_routes())
-            .service(Self::store_credentials_routes())
-            .service(Self::store_organizations_routes())
-            .service(Self::store_policies_routes())
             .service(Self::chain_routes())
             .service(Self::credentials_routes())
-            .service(Self::transaction_routes())
-            .service(Self::proposal_routes())
-            .service(Self::channels_routes())
-            .service(Self::msp_routes())
-            .service(Self::private_data_routes())
-            .service(Self::chaincode_routes())
-            .service(Self::gateway_routes())
-            .service(Self::discovery_routes())
-            .service(Self::events_routes())
-            .service(Self::acl_routes())
-            .service(Self::snapshot_routes())
+            // Direct service registration (would be empty sub-scopes)
+            // -- store transactions
+            .service(transactions::store_write_transaction)
+            .service(transactions::store_get_transaction)
+            // -- store identities
+            .service(identity::store_write_identity)
+            .service(identity::store_get_identity)
+            // -- store credentials
+            .service(credentials::store_write_credential)
+            .service(credentials::store_get_credential)
+            .service(credentials::store_get_credentials_by_subject)
+            // -- store organizations
+            .service(organizations::store_create_organization)
+            .service(organizations::store_list_organizations)
+            .service(organizations::store_get_organization)
+            // -- store policies
+            .service(organizations::store_set_policy)
+            .service(organizations::store_get_policy)
+            // -- transactions
+            .service(transactions::create_transaction)
+            .service(transactions::get_mempool)
+            // -- proposals
+            .service(proposals::submit_proposal)
+            .service(proposals::submit_endorsed_transaction)
+            // -- channels
+            .service(channels::create_channel)
+            .service(channels::list_channels)
+            .service(channels::update_channel_config)
+            .service(channels::get_channel_config)
+            .service(channels::get_channel_config_history)
+            // -- msp
+            .service(msp::revoke_serial)
+            .service(msp::get_msp_info)
+            // -- private data
+            .service(private_data::put_private_data)
+            .service(private_data::get_private_data)
+            // -- chaincode
+            .service(chaincode::install_chaincode)
+            .service(chaincode::approve_chaincode)
+            .service(chaincode::commit_chaincode)
+            .service(chaincode::simulate_chaincode)
+            // -- gateway
+            .service(gateway::gateway_submit)
+            // -- discovery
+            .service(discovery::get_endorsers)
+            .service(discovery::get_channel_peers)
+            .service(discovery::post_register_peer)
+            // -- events
+            .service(events::events_blocks)
+            .service(events::events_blocks_filtered)
+            .service(events::events_blocks_private)
+            // -- acls
+            .service(acl::set_acl)
+            .service(acl::list_acls)
+            .service(acl::get_acl)
+            // -- snapshots
+            .service(snapshots::create_snapshot)
+            .service(snapshots::list_snapshots)
+            .service(snapshots::download_snapshot)
             // health, version, openapi registered as .route() in api_legacy
     }
 
