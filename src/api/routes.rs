@@ -6,8 +6,16 @@ use crate::api::handlers::{acl, blocks, chain, chaincode, channels, credentials,
 pub struct ApiRoutes;
 
 impl ApiRoutes {
+    /// Full configuration: metrics + standalone `/api/v1` scope with scaffold routes.
+    /// Used by integration tests that don't load the legacy router.
     pub fn configure(cfg: &mut web::ServiceConfig) {
-        // Prometheus scrape endpoint — conventional path outside /api/v1
+        Self::configure_metrics(cfg);
+        cfg.service(Self::register(web::scope("/api/v1")));
+    }
+
+    /// Only register the `/metrics` endpoint (used in production where legacy
+    /// router owns the `/api/v1` scope and calls `ApiRoutes::register`).
+    pub fn configure_metrics(cfg: &mut web::ServiceConfig) {
         cfg.service(utilities::get_metrics);
     }
 

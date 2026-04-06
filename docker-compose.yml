@@ -25,6 +25,7 @@ services:
       - "8081:8081"
     environment:
       BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "node1:8081"
       API_PORT: "8080"
       P2P_PORT: "8081"
       DIFFICULTY: "1"
@@ -37,7 +38,7 @@ services:
       # TLS
       TLS_CERT_PATH: "/tls/node1-cert.pem"
       TLS_KEY_PATH: "/tls/node1-key.pem"
-      TLS_CA_PATH: "/tls/ca-cert.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
       # Rate limiting
       RATE_LIMIT_RPS: "100"
       RATE_LIMIT_BURST: "200"
@@ -56,6 +57,7 @@ services:
       - "8083:8081"
     environment:
       BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "node2:8081"
       API_PORT: "8080"
       P2P_PORT: "8081"
       DIFFICULTY: "1"
@@ -67,7 +69,7 @@ services:
       STORAGE_PATH: "/app/data/rocksdb"
       TLS_CERT_PATH: "/tls/node2-cert.pem"
       TLS_KEY_PATH: "/tls/node2-key.pem"
-      TLS_CA_PATH: "/tls/ca-cert.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
       RATE_LIMIT_RPS: "100"
       RATE_LIMIT_BURST: "200"
       BOOTSTRAP_NODES: "node1:8081,node3:8081"
@@ -86,6 +88,7 @@ services:
       - "8085:8081"
     environment:
       BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "node3:8081"
       API_PORT: "8080"
       P2P_PORT: "8081"
       DIFFICULTY: "1"
@@ -97,7 +100,7 @@ services:
       STORAGE_PATH: "/app/data/rocksdb"
       TLS_CERT_PATH: "/tls/node3-cert.pem"
       TLS_KEY_PATH: "/tls/node3-key.pem"
-      TLS_CA_PATH: "/tls/ca-cert.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
       RATE_LIMIT_RPS: "100"
       RATE_LIMIT_BURST: "200"
       BOOTSTRAP_NODES: "node1:8081,node2:8081"
@@ -118,6 +121,7 @@ services:
       - "8087:8081"
     environment:
       BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "orderer1:8081"
       API_PORT: "8080"
       P2P_PORT: "8081"
       DIFFICULTY: "1"
@@ -130,7 +134,7 @@ services:
       STORAGE_PATH: "/app/data/rocksdb"
       TLS_CERT_PATH: "/tls/orderer1-cert.pem"
       TLS_KEY_PATH: "/tls/orderer1-key.pem"
-      TLS_CA_PATH: "/tls/ca-cert.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
       RATE_LIMIT_RPS: "200"
       RATE_LIMIT_BURST: "400"
       BOOTSTRAP_NODES: "node1:8081"

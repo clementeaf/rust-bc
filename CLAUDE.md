@@ -77,11 +77,15 @@ Central shared state. Both the legacy `blockchain: Arc<Mutex<Blockchain>>` and n
 |---|---|---|
 | `API_PORT` | 8080 | HTTP API port |
 | `P2P_PORT` | 8081 | P2P gossip port |
-| `BIND_ADDR` | `127.0.0.1` | Listen address (`0.0.0.0` in Docker) |
+| `BIND_ADDR` | `127.0.0.1` | HTTP listen address (`0.0.0.0` in Docker) |
+| `P2P_EXTERNAL_ADDRESS` | — | Announce address for P2P (e.g. `node1:8081`) |
 | `DIFFICULTY` | 1 | Mining difficulty |
 | `STORAGE_BACKEND` | *(memory)* | Set to `rocksdb` to enable RocksDB |
 | `STORAGE_PATH` | `./data/rocksdb` | RocksDB data directory |
 | `NETWORK_ID` | `mainnet` | Network identifier |
+| `TLS_CERT_PATH` | — | Node TLS certificate (enables HTTPS + P2P TLS) |
+| `TLS_KEY_PATH` | — | Node TLS private key |
+| `TLS_CA_CERT_PATH` | — | CA certificate for peer verification |
 | `BOOTSTRAP_NODES` | — | Comma-separated `host:port` list |
 | `SEED_NODES` | — | Always-tried peer list |
 

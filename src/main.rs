@@ -414,7 +414,7 @@ async fn main() -> std::io::Result<()> {
     // Inicializar TransactionValidator
     let transaction_validator = Arc::new(Mutex::new(TransactionValidator::with_defaults()));
 
-    let node_address = SocketAddr::from(([127, 0, 0, 1], p2p_port));
+    let node_address = SocketAddr::from(([0, 0, 0, 0], p2p_port));
     let mut node_arc = Node::new(
         node_address,
         blockchain_for_network.clone(),
@@ -476,6 +476,10 @@ async fn main() -> std::io::Result<()> {
     node_for_server.set_transaction_validator(transaction_validator.clone());
     if let Some(ref cfg) = tls_client_cfg {
         node_for_server.set_tls_connector(tokio_rustls::TlsConnector::from(Arc::clone(cfg)));
+    }
+    // Configure TLS acceptor for incoming P2P connections
+    if let Ok(Some(server_cfg)) = load_tls_config_from_env() {
+        node_for_server.set_tls_acceptor(tokio_rustls::TlsAcceptor::from(Arc::new(server_cfg)));
     }
     // Compartir los mismos recursos compartidos
     node_for_server.peers = shared_peers;
@@ -856,7 +860,7 @@ async fn main() -> std::io::Result<()> {
                 actix_web::error::ErrorBadRequest(format!("JSON error: {}", err))
             }))
             .configure(config_routes)
-            .configure(ApiRoutes::configure)
+            .configure(ApiRoutes::configure_metrics)
     });
 
     let api_handle = match load_tls_config_from_env() {

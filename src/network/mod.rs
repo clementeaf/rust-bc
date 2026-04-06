@@ -123,6 +123,9 @@ pub struct Node {
     pub alive_sequence: Arc<Mutex<u64>>,
     /// Anchor peers for cross-org gossip discovery (parsed from `ANCHOR_PEERS` env).
     pub anchor_peers: Vec<gossip::AnchorPeer>,
+    /// Externally reachable address (from `P2P_EXTERNAL_ADDRESS` env, e.g. `node1:8081`).
+    /// Falls back to `self.address` when unset.
+    pub announce_address: Option<String>,
 }
 
 
@@ -291,7 +294,16 @@ impl Node {
             anchor_peers: std::env::var("ANCHOR_PEERS")
                 .map(|v| gossip::parse_anchor_peers(&v))
                 .unwrap_or_default(),
+            announce_address: std::env::var("P2P_EXTERNAL_ADDRESS").ok(),
         }
+    }
+
+    /// Returns the address to announce to peers. Uses `P2P_EXTERNAL_ADDRESS` if set,
+    /// otherwise falls back to `self.address`.
+    pub fn p2p_address(&self) -> String {
+        self.announce_address
+            .clone()
+            .unwrap_or_else(|| self.p2p_address())
     }
 
     /**
@@ -363,7 +375,7 @@ impl Node {
         let contract_manager = self.contract_manager.clone();
         let checkpoint_manager = self.checkpoint_manager.clone();
         let transaction_validator = self.transaction_validator.clone();
-        let my_p2p_address = format!("{}:{}", self.address.ip(), self.address.port());
+        let my_p2p_address = self.p2p_address();
         let recent_receipts = self.recent_contract_receipts.clone();
         let rate_limits = self.contract_rate_limits.clone();
         let pending_broadcasts = self.pending_contract_broadcasts.clone();
@@ -1261,7 +1273,7 @@ impl Node {
         let version_msg = {
             let blockchain = self.blockchain.lock().unwrap();
             let latest = blockchain.get_latest_block();
-            let p2p_addr = format!("{}:{}", self.address.ip(), self.address.port());
+            let p2p_addr = self.p2p_address();
             Message::Version {
                 version: "1.0.0".to_string(),
                 block_count: blockchain.chain.len(),
@@ -1442,7 +1454,7 @@ impl Node {
             return;
         }
 
-        let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+        let my_addr = self.p2p_address();
         let mut connected = 0;
 
         for anchor in &self.anchor_peers {
@@ -1489,7 +1501,7 @@ impl Node {
 
         for bootstrap_addr in &self.bootstrap_nodes {
             // Evitar conectarse a sí mismo
-            let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+            let my_addr = self.p2p_address();
             if bootstrap_addr == &my_addr {
                 continue;
             }
@@ -1593,7 +1605,7 @@ impl Node {
 
         for node_addr in &all_nodes {
             // Evitar conectarse a sí mismo
-            let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+            let my_addr = self.p2p_address();
             if node_addr == &my_addr {
                 continue;
             }
@@ -1670,7 +1682,7 @@ impl Node {
         };
 
         let mut discovered_peers = HashSet::new();
-        let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+        let my_addr = self.p2p_address();
 
         // Pedir peers a cada peer conectado
         for peer_addr in &current_peers {
@@ -1763,7 +1775,7 @@ impl Node {
             peers_guard.iter().cloned().collect()
         };
 
-        let my_addr = format!("{}:{}", self.address.ip(), self.address.port());
+        let my_addr = self.p2p_address();
         let mut connected_count = 0;
         let mut new_peers_to_try: Vec<String> = Vec::new();
 
@@ -1879,7 +1891,7 @@ impl Node {
         let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
 
         // Enviar mensaje de versión para comparar
-        let p2p_addr = format!("{}:{}", self.address.ip(), self.address.port());
+        let p2p_addr = self.p2p_address();
         let version_msg = Message::Version {
             version: "1.0.0".to_string(),
             block_count: my_count,

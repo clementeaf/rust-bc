@@ -6,22 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-04-05 (Docker & Route Unification)
+### 2026-04-05 (Docker & P2P Networking)
 
 **Docker deployment**
-- Multi-stage `Dockerfile` with nightly Rust builder + `debian:bookworm-slim` runtime
-- `docker-compose.yml`: 3 peers (node1–node3) + 1 orderer, Prometheus, Grafana
-- Self-signed TLS certificates via `deploy/generate-tls.sh` (EC P-256, per-node SANs)
-- Non-root container user, named volumes for data persistence
+- Multi-stage `Dockerfile` (nightly Rust builder + `debian:bookworm-slim` runtime)
+- `docker-compose.yml`: 3 peers + 1 orderer + Prometheus + Grafana
+- Self-signed TLS via `deploy/generate-tls.sh` (EC P-256, per-node SANs)
+- Non-root container user, named volumes for persistence
 
-**Bind address fix**
-- `BIND_ADDR` env var in `src/main.rs` (default `127.0.0.1`, containers use `0.0.0.0`)
-- Healthcheck uses `curl -fk https://…/api/v1/health` (self-signed TLS)
+**Network fixes for containerized nodes**
+- `BIND_ADDR` env var for HTTP listen address (default `127.0.0.1`, containers use `0.0.0.0`)
+- `P2P_EXTERNAL_ADDRESS` env var for announce address (e.g. `node1:8081`)
+- `Node::p2p_address()` helper replaces 8 hardcoded `self.address` formats
+- P2P TLS acceptor now configured on the server node (was missing)
+- Fixed `TLS_CA_CERT_PATH` env var name in compose (was `TLS_CA_PATH`)
 
 **Route unification**
-- Legacy (`api_legacy.rs`) and scaffold (`api/routes.rs`) shared a duplicated `/api/v1` scope, causing scaffold routes to return 404
-- Merged into a single scope: legacy builds the scope, `ApiRoutes::register()` appends sub-scoped scaffold services
-- `health`, `version`, `openapi.json` registered as `.route()` (Actix requires this when mixed with legacy `.route()` handlers)
+- Merged legacy and scaffold into a single `/api/v1` scope
+- `ApiRoutes::register()` appends scaffold sub-services into the legacy scope
+- `ApiRoutes::configure()` retained for integration tests (standalone scope)
+- `ApiRoutes::configure_metrics()` used in production (metrics only)
+- `health`, `version`, `openapi.json` registered as `.route()` in the legacy scope
+
+**E2E verified**
+- 4 nodes healthy, 3 peers each via mutual TLS
+- Block mining on node1 propagates to node2/node3 within seconds
+- 2020 unit/integration tests passing
 
 ---
 
