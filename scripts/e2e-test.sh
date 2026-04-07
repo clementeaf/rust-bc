@@ -7,10 +7,11 @@
 set -uo pipefail
 
 # ── Config ───────────────────────────────────────────────────────────────────
-NODE1="https://localhost:8080"
-NODE2="https://localhost:8082"
-NODE3="https://localhost:8084"
-ORDERER="https://localhost:8086"
+# Use 127.0.0.1 so behavior matches Docker port maps on CI (avoids localhost → ::1 mismatches).
+NODE1="https://127.0.0.1:8080"
+NODE2="https://127.0.0.1:8082"
+NODE3="https://127.0.0.1:8084"
+ORDERER="https://127.0.0.1:8086"
 CURL="curl -sk --max-time 10"
 VERBOSE="${1:-}"
 
@@ -97,7 +98,7 @@ echo "$(bold '1. Pre-flight checks')"
 for name_port in "node1:8080" "node2:8082" "node3:8084" "orderer1:8086"; do
     name="${name_port%%:*}"
     port="${name_port##*:}"
-    resp=$(api GET "https://localhost:$port/api/v1/health")
+    resp=$(api GET "https://127.0.0.1:$port/api/v1/health")
     status=$(echo "$resp" | jq -r '.data.status // empty' 2>/dev/null)
     assert_eq "$status" "healthy" "$name is healthy"
 done
@@ -374,7 +375,7 @@ echo "$(bold '10. Chain integrity verification')"
 for name_port in "node1:8080" "node2:8082" "node3:8084"; do
     name="${name_port%%:*}"
     port="${name_port##*:}"
-    resp=$(api GET "https://localhost:$port/api/v1/chain/verify")
+    resp=$(api GET "https://127.0.0.1:$port/api/v1/chain/verify")
     verify_status=$(echo "$resp" | jq -r '.status_code // empty' 2>/dev/null)
     valid=$(echo "$resp" | jq -r '.data.valid // empty' 2>/dev/null)
     block_count=$(echo "$resp" | jq -r '.data.block_count // empty' 2>/dev/null)
@@ -391,7 +392,7 @@ echo ""
 echo "$(bold '11. Observability')"
 
 # Prometheus metrics
-resp=$($CURL "https://localhost:8080/metrics" 2>&1)
+resp=$($CURL "https://127.0.0.1:8080/metrics" 2>&1)
 if echo "$resp" | grep -q "endorsement_validations_total\|ordering_blocks_cut_total\|rust_bc"; then
     echo "  $(green "PASS") Prometheus metrics endpoint returns metrics"
     PASSED=$((PASSED + 1))
@@ -400,7 +401,7 @@ else
 fi
 
 # Prometheus scrape target
-resp=$($CURL "http://localhost:9090/api/v1/targets" 2>&1)
+resp=$($CURL "http://127.0.0.1:9090/api/v1/targets" 2>&1)
 if echo "$resp" | grep -q "rust-bc\|node1"; then
     echo "  $(green "PASS") Prometheus scraping nodes"
     PASSED=$((PASSED + 1))
@@ -409,7 +410,7 @@ else
 fi
 
 # Grafana health
-resp=$($CURL "http://localhost:3000/api/health" 2>&1)
+resp=$($CURL "http://127.0.0.1:3000/api/health" 2>&1)
 grafana_ok=$(echo "$resp" | jq -r '.database // empty' 2>/dev/null)
 assert_eq "$grafana_ok" "ok" "Grafana is healthy"
 

@@ -98,15 +98,29 @@ jobs:
 
       - name: Health check
         run: |
+          set -euo pipefail
+          # Same envelope as scripts/e2e-test.sh (.data.status == "healthy"); fail if any port never becomes ready.
           for port in 8080 8082 8084 8086; do
-            for i in $(seq 1 10); do
-              if curl -sk https://localhost:$port/api/v1/health | grep -q healthy; then
-                echo "Port $port healthy"
+            ok=0
+            for i in $(seq 1 30); do
+              resp=$(curl -sk --max-time 10 "https://127.0.0.1:${port}/api/v1/health" || true)
+              if echo "$resp" | jq -e '.status_code == 200 and .data.status == "healthy"' >/dev/null 2>&1; then
+                echo "Port ${port} healthy (attempt ${i})"
+                ok=1
                 break
               fi
               sleep 2
             done
+            if [[ "$ok" -ne 1 ]]; then
+              echo "::error::Timed out waiting for healthy API on port ${port}"
+              resp=$(curl -sk --max-time 10 "https://127.0.0.1:${port}/api/v1/health" || true)
+              echo "Last response (first 800 chars):"
+              echo "$resp" | head -c 800
+              echo
+              exit 1
+            fi
           done
+          echo "All nodes passed health check."
 
       - name: Run E2E tests
         run: ./scripts/e2e-test.sh
