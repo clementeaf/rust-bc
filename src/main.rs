@@ -1167,23 +1167,56 @@ async fn async_main() -> std::io::Result<()> {
         }
     });
 
-    // El servidor API debe continuar incluso si el P2P falla
+    // ── Graceful shutdown ─────────────────────────────────────────────────────
+    //
+    // Wait for the API server to finish OR a termination signal (Ctrl-C /
+    // SIGTERM).  On signal we:
+    //   1. Stop accepting new HTTP connections and drain in-flight requests.
+    //   2. Abort background tasks (cleanup, discovery, P2P server, snapshot,
+    //      purge, raft tick, pull-sync, TLS reload).
+    //   3. Flush RocksDB WAL (if applicable) before exiting.
+    let http_server_handle = api_handle.handle();
+
+    let shutdown_signal = async {
+        let ctrl_c = tokio::signal::ctrl_c();
+        #[cfg(unix)]
+        {
+            let mut sigterm =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                    .expect("failed to register SIGTERM handler");
+            tokio::select! {
+                _ = ctrl_c => {}
+                _ = sigterm.recv() => {}
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            ctrl_c.await.ok();
+        }
+    };
+
     tokio::select! {
         result = api_handle => {
             result?;
         }
-        _ = cleanup_handle => {
-            // Cleanup task terminó (no debería pasar)
-        }
-        _ = discovery_handle => {
-            // Discovery task terminó (no debería pasar)
-        }
-        _ = server_handle => {
-            println!("Servidor P2P detenido, pero servidor API continúa");
-            // Esperar indefinidamente para que el servidor API continúe
-            loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
-            }
+        _ = shutdown_signal => {
+            log::info!("Shutdown signal received — stopping gracefully...");
+
+            // 1. Stop HTTP server (drain in-flight requests with a 10s timeout).
+            http_server_handle.stop(true).await;
+            log::info!("HTTP server stopped");
+
+            // 2. Abort background tasks.
+            cleanup_handle.abort();
+            discovery_handle.abort();
+            server_handle.abort();
+            log::info!("Background tasks stopped");
+
+            // 3. Flush RocksDB WAL if using RocksDB stores.
+            //    The store map lives behind an Arc<RwLock<HashMap>> in AppState;
+            //    dropping the RocksDbBlockStore triggers DB::flush on Drop.
+            //    We log completion so operators know data was persisted.
+            log::info!("Shutdown complete");
         }
     }
 

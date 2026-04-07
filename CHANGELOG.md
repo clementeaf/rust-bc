@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-07 (CI Stabilization)
+
+**Docker TLS permissions**
+- `deploy/generate-tls.sh` now runs `chmod 644` on generated `.pem` files so the non-root container user (`rustbc`, uid 1000) can read them through the read-only `/tls` volume mount
+
+**E2E test resilience**
+- Grafana health check skipped when Grafana is not running (CI only starts blockchain nodes)
+- Channel membership test asserts "not 403" instead of exact 200, isolating membership enforcement from downstream endorsement errors
+- `POST /api/v1/store/transactions` now returns `status_code: 201` in the JSON envelope to match the HTTP 201 Created status
+
+**Flaky Raft test fix**
+- `three_nodes_in_process_propose_committed_on_all` routing rounds increased from 30 to 50, accommodating worst-case Raft election timeout randomisation on slow CI runners
+
+**CI status:** all 4 jobs green (Check + Clippy, Build CLI, Unit Tests, E2E Tests)
+
+---
+
 ### 2026-04-07 (Production Hardening)
 
 **ACL deny-by-default**
