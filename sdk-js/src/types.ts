@@ -197,3 +197,71 @@ export interface ExecuteContractRequest {
   };
 }
 
+// ── Fabric-style types ───────────────────────────────────────────────────────
+
+/** POST /gateway/submit request body. */
+export interface GatewaySubmitRequest {
+  chaincode_id: string;
+  channel_id?: string;
+  transaction: {
+    id: string;
+    input_did: string;
+    output_recipient: string;
+    amount: number;
+  };
+}
+
+/** POST /gateway/submit response payload. */
+export interface GatewaySubmitResponse {
+  tx_id: string;
+  block_height: number;
+  valid?: boolean;
+}
+
+/** POST /chaincode/{id}/simulate request body. */
+export interface SimulateRequest {
+  function: string;
+  version?: string;
+}
+
+/** POST /chaincode/{id}/simulate response payload. */
+export interface SimulateResponse {
+  result: string;
+  rwset: {
+    reads: { key: string; version: number }[];
+    writes: { key: string; value: string }[];
+  };
+}
+
+/** Organization registration. */
+export interface Organization {
+  org_id: string;
+  name: string;
+  msp_id: string;
+  root_cert?: string;
+}
+
+/** Endorsement policy. */
+export type EndorsementPolicy =
+  | { AnyOf: string[] }
+  | { AllOf: string[] }
+  | { NOutOf: { n: number; orgs: string[] } };
+
+/** Channel creation request. */
+export interface CreateChannelRequest {
+  channel_id: string;
+  member_orgs?: string[];
+}
+
+/** Channel info response. */
+export interface ChannelInfo {
+  channel_id: string;
+}
+
+/** Private data hash response from PUT. */
+export interface PrivateDataWriteResponse {
+  collection: string;
+  key: string;
+  hash: string;
+}
+

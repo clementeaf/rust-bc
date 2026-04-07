@@ -24,6 +24,15 @@ import {
   ExecuteContractRequest,
   MempoolListResponse,
   MineBlockResponse,
+  GatewaySubmitRequest,
+  GatewaySubmitResponse,
+  SimulateRequest,
+  SimulateResponse,
+  Organization,
+  EndorsementPolicy,
+  CreateChannelRequest,
+  ChannelInfo,
+  PrivateDataWriteResponse,
 } from './types';
 
 export class BlockchainClient {
@@ -404,6 +413,134 @@ export class BlockchainClient {
         `/contracts/${contractAddress}/balance/${walletAddress}`
       );
       return unwrapGatewayData<number>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // ── Fabric-style operations ──────────────────────────────────────────────
+
+  /**
+   * Submit a transaction through the gateway pipeline (endorse -> order -> commit).
+   */
+  async submitTransaction(
+    chaincodeId: string,
+    channelId: string,
+    tx: { id: string; inputDid: string; outputRecipient: string; amount: number }
+  ): Promise<GatewaySubmitResponse> {
+    try {
+      const body: GatewaySubmitRequest = {
+        chaincode_id: chaincodeId,
+        channel_id: channelId,
+        transaction: {
+          id: tx.id,
+          input_did: tx.inputDid,
+          output_recipient: tx.outputRecipient,
+          amount: tx.amount,
+        },
+      };
+      const response = await this.client.post<unknown>('/gateway/submit', body);
+      return unwrapGatewayData<GatewaySubmitResponse>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Simulate a chaincode invocation (read-only, no state changes).
+   */
+  async evaluate(chaincodeId: string, fn: string, version?: string): Promise<SimulateResponse> {
+    try {
+      const body: SimulateRequest = { function: fn, version };
+      const url = version
+        ? `/chaincode/${chaincodeId}/simulate?version=${version}`
+        : `/chaincode/${chaincodeId}/simulate`;
+      const response = await this.client.post<unknown>(url, body);
+      return unwrapGatewayData<SimulateResponse>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Register an organization.
+   */
+  async registerOrg(org: Organization): Promise<Organization> {
+    try {
+      const response = await this.client.post<unknown>('/store/organizations', org);
+      return unwrapGatewayData<Organization>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Set an endorsement policy for a resource.
+   */
+  async setPolicy(resourceId: string, policy: EndorsementPolicy): Promise<void> {
+    try {
+      await this.client.post<unknown>(`/store/policies/${resourceId}`, policy);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Create a new channel.
+   */
+  async createChannel(channelId: string, memberOrgs?: string[]): Promise<ChannelInfo> {
+    try {
+      const body: CreateChannelRequest = { channel_id: channelId, member_orgs: memberOrgs };
+      const response = await this.client.post<unknown>('/chain/channels', body);
+      return unwrapGatewayData<ChannelInfo>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * List channels.
+   */
+  async listChannels(): Promise<ChannelInfo[]> {
+    try {
+      const response = await this.client.get<unknown>('/chain/channels');
+      return unwrapGatewayData<ChannelInfo[]>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Write private data to a collection (requires org membership).
+   */
+  async putPrivateData(
+    collection: string,
+    key: string,
+    value: string,
+    orgId: string
+  ): Promise<PrivateDataWriteResponse> {
+    try {
+      const response = await this.client.put<unknown>(
+        `/private-data/${collection}/${key}`,
+        { value },
+        { headers: { 'X-Org-Id': orgId } }
+      );
+      return unwrapGatewayData<PrivateDataWriteResponse>(response.data);
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
+   * Read private data from a collection (requires org membership).
+   */
+  async getPrivateData(collection: string, key: string, orgId: string): Promise<string> {
+    try {
+      const response = await this.client.get<unknown>(
+        `/private-data/${collection}/${key}`,
+        { headers: { 'X-Org-Id': orgId } }
+      );
+      return unwrapGatewayData<string>(response.data);
     } catch (error) {
       this.handleError(error);
     }
