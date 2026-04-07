@@ -2,7 +2,7 @@ use actix_web::{get, web, HttpRequest, HttpResponse};
 // Note: `get` macro still used by `get_metrics` below
 
 use crate::api::errors::ApiResult;
-use crate::api::models::{BlockchainHealthResponse, HealthResponse, VersionResponse};
+use crate::api::models::{BlockchainHealthResponse, HealthChecks, HealthResponse, VersionResponse};
 use crate::api::openapi::OpenApi;
 use crate::app_state::AppState;
 
@@ -23,14 +23,49 @@ pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse>
 
     let validators_count = state.staking_manager.get_active_validators().len();
 
+    // Check storage health
+    let storage_ok = {
+        let stores = state.store.read().unwrap_or_else(|e| e.into_inner());
+        stores
+            .get("default")
+            .and_then(|s| s.get_latest_height().ok())
+            .is_some()
+    };
+
+    // Check peer connectivity
+    let peer_count = state
+        .node
+        .as_ref()
+        .map(|n| n.peers.lock().unwrap_or_else(|e| e.into_inner()).len())
+        .unwrap_or(0);
+
+    // Check ordering service
+    let ordering_ok = state.ordering_backend.is_some();
+
+    let storage_status = if storage_ok { "ok" } else { "unavailable" };
+    let peers_status = if peer_count > 0 {
+        format!("ok ({peer_count} connected)")
+    } else {
+        "none".to_string()
+    };
+    let ordering_status = if ordering_ok { "ok" } else { "unavailable" };
+
+    let degraded = !storage_ok || !ordering_ok;
+    let overall_status = if degraded { "degraded" } else { "healthy" };
+
     let response = HealthResponse {
-        status: "healthy".to_string(),
+        status: overall_status.to_string(),
         uptime_seconds,
         blockchain: BlockchainHealthResponse {
             height,
             last_block_hash,
             validators_count,
         },
+        checks: Some(HealthChecks {
+            storage: storage_status.to_string(),
+            peers: peers_status,
+            ordering: ordering_status.to_string(),
+        }),
     };
 
     let api_response = crate::api::errors::ApiResponse::success(response, trace_id);

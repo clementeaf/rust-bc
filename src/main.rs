@@ -668,8 +668,11 @@ async fn async_main() -> std::io::Result<()> {
                 Some(Arc::new(store))
             }
             Err(e) => {
-                log::error!("Failed to open RocksDB at {path}: {e}. Falling back to in-memory.");
-                None
+                log::error!("STORAGE_BACKEND=rocksdb but failed to open RocksDB at {path}: {e}");
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("RocksDB failed to open at {path}: {e}"),
+                ));
             }
         }
     } else {

@@ -201,6 +201,16 @@ pub struct HealthResponse {
     pub status: String,
     pub uptime_seconds: u64,
     pub blockchain: BlockchainHealthResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checks: Option<HealthChecks>,
+}
+
+/// Dependency health checks
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthChecks {
+    pub storage: String,
+    pub peers: String,
+    pub ordering: String,
 }
 
 /// Blockchain health response
