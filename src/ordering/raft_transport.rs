@@ -169,8 +169,10 @@ mod tests {
             .map(|&id| RaftNode::new(id, peers.clone()).unwrap())
             .collect();
 
-        // Elect leader.
-        route_bytes(&mut nodes, 30);
+        // Elect leader — Raft randomises the election timeout between
+        // [election_tick, 2*election_tick] (i.e. [10, 20]).  With three nodes
+        // and possible split votes, the worst case needs ~40+ ticks.
+        route_bytes(&mut nodes, 50);
         let leader_id = nodes.iter().find(|n| n.is_leader()).expect("no leader").id;
 
         // Propose on leader.
@@ -178,7 +180,7 @@ mod tests {
         leader.propose(b"transport-test".to_vec()).unwrap();
 
         // Route until committed on all.
-        route_bytes(&mut nodes, 30);
+        route_bytes(&mut nodes, 50);
 
         // All nodes should have the entry.
         for node in &nodes {
