@@ -45,8 +45,8 @@ COPY --from=builder /app/target/release/rust-bc /usr/local/bin/rust-bc
 COPY --chown=rustbc:rustbc scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Cambiar a usuario no-root
-USER rustbc
+# Entrypoint fixes ownership of /app/data then drops to rustbc (see docker-entrypoint.sh).
+USER root
 
 # Variables de entorno por defecto
 ENV API_PORT=8080

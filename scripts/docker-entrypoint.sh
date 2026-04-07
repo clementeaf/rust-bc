@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+# Named Docker volumes are often root-owned on first mount; RocksDB then fails as uid 1000 and the API never binds.
+# Run one level as root to chown /app/data, then continue as rustbc.
+if [ "$(id -u)" = "0" ]; then
+    mkdir -p /app/data
+    chown -R rustbc:rustbc /app/data
+    exec runuser -u rustbc -- /bin/bash /app/docker-entrypoint.sh "$@"
+fi
+
 # Función para mostrar ayuda
 show_help() {
     cat << EOF

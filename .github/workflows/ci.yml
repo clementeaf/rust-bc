@@ -102,9 +102,12 @@ jobs:
           # Same envelope as scripts/e2e-test.sh (.data.status == "healthy"); fail if any port never becomes ready.
           for port in 8080 8082 8084 8086; do
             ok=0
-            for i in $(seq 1 30); do
-              resp=$(curl -sk --max-time 10 "https://127.0.0.1:${port}/api/v1/health" || true)
-              if echo "$resp" | jq -e '.status_code == 200 and .data.status == "healthy"' >/dev/null 2>&1; then
+            for i in $(seq 1 45); do
+              code=""
+              resp=$(curl -sk --max-time 10 -w "\n%{http_code}" "https://127.0.0.1:${port}/api/v1/health" 2>/dev/null || true)
+              code=$(echo "$resp" | tail -n1)
+              body=$(echo "$resp" | sed '$d')
+              if [[ "$code" == "200" ]] && echo "$body" | jq -e '.status_code == 200 and .data.status == "healthy"' >/dev/null 2>&1; then
                 echo "Port ${port} healthy (attempt ${i})"
                 ok=1
                 break
@@ -113,10 +116,13 @@ jobs:
             done
             if [[ "$ok" -ne 1 ]]; then
               echo "::error::Timed out waiting for healthy API on port ${port}"
-              resp=$(curl -sk --max-time 10 "https://127.0.0.1:${port}/api/v1/health" || true)
-              echo "Last response (first 800 chars):"
-              echo "$resp" | head -c 800
+              echo "docker compose ps -a:"
+              docker compose ps -a || true
+              echo "curl probe (http code + body snippet):"
+              curl -sS -k --max-time 10 -w "\nHTTP_CODE:%{http_code}\n" "https://127.0.0.1:${port}/api/v1/health" 2>&1 | head -c 2000 || true
               echo
+              echo "Recent node1 logs:"
+              docker compose logs node1 --tail 120 2>&1 || true
               exit 1
             fi
           done
