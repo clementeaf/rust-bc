@@ -658,11 +658,42 @@ async fn async_main() -> std::io::Result<()> {
         }
     };
 
-    // Initialize scaffold services
+    // Initialize scaffold services — use RocksDB-backed impls when STORAGE_BACKEND=rocksdb.
+    let storage_backend_env = env::var("STORAGE_BACKEND").unwrap_or_default();
+    let shared_rocksdb: Option<Arc<RocksDbBlockStore>> = if storage_backend_env == "rocksdb" {
+        let path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./data/blocks".to_string());
+        match RocksDbBlockStore::new(&path) {
+            Ok(store) => {
+                log::info!("Storage backend: RocksDB at {path}");
+                Some(Arc::new(store))
+            }
+            Err(e) => {
+                log::error!("Failed to open RocksDB at {path}: {e}. Falling back to in-memory.");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    if shared_rocksdb.is_some() {
+        log::info!("Services: persistent (RocksDB) — orgs, policies, ACLs, CRL, chaincode, collections, private data");
+    } else {
+        log::info!("Services: in-memory — data will be lost on restart");
+    }
+
     let org_registry: Arc<dyn crate::endorsement::registry::OrgRegistry> =
-        Arc::new(crate::endorsement::registry::MemoryOrgRegistry::new());
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(crate::endorsement::registry::MemoryOrgRegistry::new())
+        };
     let policy_store: Arc<dyn crate::endorsement::policy_store::PolicyStore> =
-        Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new());
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new())
+        };
     let discovery_service = Arc::new(
         crate::discovery::service::DiscoveryService::new(
             org_registry.clone(),
@@ -694,13 +725,21 @@ async fn async_main() -> std::io::Result<()> {
         }
     };
     let chaincode_package_store: Arc<dyn crate::chaincode::ChaincodePackageStore> =
-        Arc::new(crate::chaincode::MemoryChaincodePackageStore::new());
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
+        };
     let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> =
         Arc::new(crate::identity::signing::SoftwareSigningProvider::generate());
     let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> = ordering_backend
         .clone()
         .unwrap_or_else(|| Arc::new(ordering::service::OrderingService::new()));
-    let gateway_store: Arc<dyn storage::BlockStore> = Arc::new(storage::MemoryStore::new());
+    let gateway_store: Arc<dyn storage::BlockStore> = if let Some(ref db) = shared_rocksdb {
+        db.clone()
+    } else {
+        Arc::new(storage::MemoryStore::new())
+    };
     let mut gateway = crate::gateway::Gateway::new(
         org_registry.clone(),
         policy_store.clone(),
@@ -727,9 +766,17 @@ async fn async_main() -> std::io::Result<()> {
     }
     // Wire private data resources for PrivateDataPush handling.
     let private_data_store: Arc<dyn crate::private_data::PrivateDataStore> =
-        Arc::new(crate::private_data::MemoryPrivateDataStore::new());
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(crate::private_data::MemoryPrivateDataStore::new())
+        };
     let collection_registry: Arc<dyn crate::private_data::CollectionRegistry> =
-        Arc::new(crate::private_data::MemoryCollectionRegistry::new());
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(crate::private_data::MemoryCollectionRegistry::new())
+        };
     node_for_server.private_data_store = Some(private_data_store.clone());
     node_for_server.collection_registry = Some(collection_registry.clone());
 
@@ -749,21 +796,8 @@ async fn async_main() -> std::io::Result<()> {
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),
         store: {
-            let backend = env::var("STORAGE_BACKEND").unwrap_or_default();
-            let default_store: Arc<dyn storage::BlockStore> = if backend == "rocksdb" {
-                let path = env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./data/blocks".to_string());
-                match RocksDbBlockStore::new(&path) {
-                    Ok(s) => {
-                        log::info!("Storage backend: RocksDB at {path}");
-                        Arc::new(s)
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "Failed to open RocksDB at {path}: {e}. Falling back to MemoryStore."
-                        );
-                        Arc::new(MemoryStore::new())
-                    }
-                }
+            let default_store: Arc<dyn storage::BlockStore> = if let Some(ref db) = shared_rocksdb {
+                db.clone()
             } else {
                 log::info!("Storage backend: MemoryStore");
                 Arc::new(MemoryStore::new())
@@ -785,20 +819,30 @@ async fn async_main() -> std::io::Result<()> {
         },
         org_registry: Some(org_registry),
         policy_store: Some(policy_store),
-        crl_store: Some(Arc::new(crate::msp::MemoryCrlStore::new())),
+        crl_store: Some(if let Some(ref db) = shared_rocksdb {
+            db.clone() as Arc<dyn crate::msp::CrlStore>
+        } else {
+            Arc::new(crate::msp::MemoryCrlStore::new())
+        }),
         private_data_store: Some(private_data_store.clone()),
         collection_registry: Some(collection_registry.clone()),
         chaincode_package_store: Some(chaincode_package_store.clone()),
-        chaincode_definition_store: Some(Arc::new(
-            crate::chaincode::MemoryChaincodeDefinitionStore::new(),
-        )),
+        chaincode_definition_store: Some(if let Some(ref db) = shared_rocksdb {
+            db.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>
+        } else {
+            Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())
+        }),
         gateway: Some(Arc::new(gateway)),
         discovery_service: Some(discovery_service),
         event_bus: event_bus.clone(),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
             std::collections::HashMap::new(),
         )),
-        acl_provider: Some(Arc::new(crate::acl::MemoryAclProvider::new())),
+        acl_provider: Some(if let Some(ref db) = shared_rocksdb {
+            db.clone() as Arc<dyn crate::acl::AclProvider>
+        } else {
+            Arc::new(crate::acl::MemoryAclProvider::new())
+        }),
         ordering_backend,
         world_state: Some(world_state.clone()),
     };

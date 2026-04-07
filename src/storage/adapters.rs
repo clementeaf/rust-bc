@@ -51,6 +51,12 @@ const CF_ACLS: &str = "acls";
 const CF_CHANNEL_CONFIGS: &str = "channel_configs";
 /// Key-level endorsement policies: key = state key string, value = JSON endorsement policy expression
 const CF_KEY_ENDORSEMENT_POLICIES: &str = "key_endorsement_policies";
+/// Endorsement policies: key = resource_id, value = JSON EndorsementPolicy
+const CF_ENDORSEMENT_POLICIES: &str = "endorsement_policies";
+/// Private data collection definitions: key = collection name, value = JSON PrivateDataCollection
+const CF_COLLECTIONS: &str = "collections";
+/// Chaincode definitions: key = `{chaincode_id}:{version}`, value = JSON ChaincodeDefinition
+const CF_CHAINCODE_DEFINITIONS: &str = "chaincode_definitions";
 /// Key history: key = `{state_key}\x00{version:012}`, value = JSON HistoryEntry
 const CF_KEY_HISTORY: &str = "key_history";
 
@@ -72,6 +78,9 @@ const ALL_CFS: &[&str] = &[
     CF_CHANNEL_CONFIGS,
     CF_KEY_ENDORSEMENT_POLICIES,
     CF_KEY_HISTORY,
+    CF_ENDORSEMENT_POLICIES,
+    CF_COLLECTIONS,
+    CF_CHAINCODE_DEFINITIONS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -946,6 +955,146 @@ impl RocksDbBlockStore {
             versions.push(version);
         }
         Ok(versions)
+    }
+}
+
+// ── CF helpers for new persistent stores ─────────────────────────────────────
+
+impl RocksDbBlockStore {
+    fn cf_endorsement_policies(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_ENDORSEMENT_POLICIES)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ENDORSEMENT_POLICIES.to_string()))
+    }
+
+    fn cf_collections(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_COLLECTIONS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_COLLECTIONS.to_string()))
+    }
+
+    fn cf_chaincode_definitions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+        self.db
+            .cf_handle(CF_CHAINCODE_DEFINITIONS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHAINCODE_DEFINITIONS.to_string()))
+    }
+}
+
+// ── PolicyStore ──────────────────────────────────────────────────────────────
+
+impl crate::endorsement::policy_store::PolicyStore for RocksDbBlockStore {
+    fn set_policy(
+        &self,
+        resource_id: &str,
+        policy: &crate::endorsement::policy::EndorsementPolicy,
+    ) -> StorageResult<()> {
+        let cf = self.cf_endorsement_policies()?;
+        let value = serde_json::to_vec(policy)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, resource_id.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn get_policy(
+        &self,
+        resource_id: &str,
+    ) -> StorageResult<crate::endorsement::policy::EndorsementPolicy> {
+        let cf = self.cf_endorsement_policies()?;
+        match self
+            .db
+            .get_cf(&cf, resource_id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Err(StorageError::KeyNotFound(resource_id.to_string())),
+        }
+    }
+}
+
+// ── CollectionRegistry ───────────────────────────────────────────────────────
+
+impl crate::private_data::CollectionRegistry for RocksDbBlockStore {
+    fn register(
+        &self,
+        collection: crate::private_data::PrivateDataCollection,
+    ) -> Result<(), crate::private_data::PrivateDataError> {
+        let cf = self
+            .cf_collections()
+            .map_err(|e| crate::private_data::PrivateDataError::InvalidCollection(e.to_string()))?;
+        let value = serde_json::to_vec(&collection)
+            .map_err(|e| crate::private_data::PrivateDataError::InvalidCollection(e.to_string()))?;
+        self.db
+            .put_cf(&cf, collection.name.as_bytes(), &value)
+            .map_err(|e| crate::private_data::PrivateDataError::InvalidCollection(e.to_string()))
+    }
+
+    fn get(&self, name: &str) -> Option<crate::private_data::PrivateDataCollection> {
+        let cf = self.cf_collections().ok()?;
+        let bytes = self.db.get_cf(&cf, name.as_bytes()).ok()??;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    fn list(&self) -> Vec<crate::private_data::PrivateDataCollection> {
+        let cf = match self.cf_collections() {
+            Ok(cf) => cf,
+            Err(_) => return Vec::new(),
+        };
+        let mut result = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            if let Ok((_, value)) = item {
+                if let Ok(col) = serde_json::from_slice(&value) {
+                    result.push(col);
+                }
+            }
+        }
+        result
+    }
+}
+
+// ── ChaincodeDefinitionStore ─────────────────────────────────────────────────
+
+impl crate::chaincode::ChaincodeDefinitionStore for RocksDbBlockStore {
+    fn upsert_definition(
+        &self,
+        def: crate::chaincode::definition::ChaincodeDefinition,
+    ) -> Result<(), crate::chaincode::ChaincodeError> {
+        let cf = self
+            .cf_chaincode_definitions()
+            .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))?;
+        let key = format!("{}:{}", def.chaincode_id, def.version);
+        let value = serde_json::to_vec(&def)
+            .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))
+    }
+
+    fn get_definition(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<
+        Option<crate::chaincode::definition::ChaincodeDefinition>,
+        crate::chaincode::ChaincodeError,
+    > {
+        let cf = self
+            .cf_chaincode_definitions()
+            .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))?;
+        let key = format!("{chaincode_id}:{version}");
+        match self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))?
+        {
+            Some(bytes) => {
+                let def = serde_json::from_slice(&bytes)
+                    .map_err(|e| crate::chaincode::ChaincodeError::Execution(e.to_string()))?;
+                Ok(Some(def))
+            }
+            None => Ok(None),
+        }
     }
 }
 

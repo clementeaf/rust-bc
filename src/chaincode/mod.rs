@@ -20,7 +20,7 @@ use crate::chaincode::definition::ChaincodeDefinition;
 ///   `Installed` → `Approved` → `Committed`
 ///
 /// `Deprecated` is a terminal state reachable from `Committed`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ChaincodeStatus {
     Installed,
     Approved,

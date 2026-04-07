@@ -8,7 +8,7 @@ use crate::storage::errors::{StorageError, StorageResult};
 
 // ── Collection struct ─────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PrivateDataCollection {
     pub name: String,
     pub member_org_ids: Vec<String>,

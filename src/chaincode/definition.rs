@@ -5,7 +5,7 @@ use crate::endorsement::EndorsementPolicy;
 
 // ── ChaincodeDefinition ───────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ChaincodeDefinition {
     pub chaincode_id: String,
     pub version: String,
