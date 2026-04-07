@@ -83,10 +83,7 @@ pub fn create_snapshot(
 ///
 /// Reads each line, decodes `{key}\t{version}\t{base64(data)}`, and calls
 /// `state.put(key, data)`. Verifies the SHA-256 hash matches after reading.
-pub fn restore_snapshot(
-    path: &Path,
-    state: &dyn WorldState,
-) -> StorageResult<StateSnapshot> {
+pub fn restore_snapshot(path: &Path, state: &dyn WorldState) -> StorageResult<StateSnapshot> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| StorageError::Other(format!("failed to read snapshot: {e}")))?;
 
@@ -103,7 +100,8 @@ pub fn restore_snapshot(
             continue;
         }
         let key = parts[0];
-        let data = b64.decode(parts[2])
+        let data = b64
+            .decode(parts[2])
             .map_err(|e| StorageError::Other(format!("base64 decode error: {e}")))?;
         state.put(key, &data)?;
         count += 1;
@@ -225,7 +223,9 @@ mod tests {
 
         // Populate world state with 100 keys.
         for i in 0..100u32 {
-            state.put(&format!("key{i:04}"), format!("val{i}").as_bytes()).unwrap();
+            state
+                .put(&format!("key{i:04}"), format!("val{i}").as_bytes())
+                .unwrap();
         }
 
         let snap = create_snapshot(&store, &state, "ch1", tmp.path()).unwrap();
@@ -260,7 +260,9 @@ mod tests {
 
         // Populate 10 keys.
         for i in 0..10u32 {
-            original.put(&format!("k{i}"), format!("v{i}").as_bytes()).unwrap();
+            original
+                .put(&format!("k{i}"), format!("v{i}").as_bytes())
+                .unwrap();
         }
 
         let snap = create_snapshot(&store, &original, "ch1", tmp.path()).unwrap();
@@ -276,7 +278,10 @@ mod tests {
 
         // Verify all keys are present.
         for i in 0..10u32 {
-            let vv = restored.get(&format!("k{i}")).unwrap().expect("key must exist");
+            let vv = restored
+                .get(&format!("k{i}"))
+                .unwrap()
+                .expect("key must exist");
             assert_eq!(vv.data, format!("v{i}").as_bytes());
         }
     }
@@ -293,11 +298,7 @@ mod tests {
                 timestamp: h * 100,
                 parent_hash: [0u8; 32],
                 merkle_root: [0u8; 32],
-                transactions: vec![
-                    format!("tx{h}_0"),
-                    format!("tx{h}_1"),
-                    format!("tx{h}_2"),
-                ],
+                transactions: vec![format!("tx{h}_0"), format!("tx{h}_1"), format!("tx{h}_2")],
                 proposer: "p".into(),
                 signature: [0u8; 64],
                 endorsements: vec![],

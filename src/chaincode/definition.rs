@@ -71,10 +71,16 @@ mod tests {
             "1.0",
             EndorsementPolicy::AnyOf(vec!["org1".to_string()]),
         );
-        def.status = def.status.transition_to(&ChaincodeStatus::Approved).unwrap();
+        def.status = def
+            .status
+            .transition_to(&ChaincodeStatus::Approved)
+            .unwrap();
         assert_eq!(def.status, ChaincodeStatus::Approved);
 
-        def.status = def.status.transition_to(&ChaincodeStatus::Committed).unwrap();
+        def.status = def
+            .status
+            .transition_to(&ChaincodeStatus::Committed)
+            .unwrap();
         assert_eq!(def.status, ChaincodeStatus::Committed);
     }
 }

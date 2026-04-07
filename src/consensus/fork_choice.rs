@@ -149,7 +149,15 @@ mod tests {
     }
 
     fn block(hash: u8, parent: u8, height: u64) -> DagBlock {
-        DagBlock::new(mk(hash), mk(parent), height, 0, 1000, "p".to_string(), [2u8; 64])
+        DagBlock::new(
+            mk(hash),
+            mk(parent),
+            height,
+            0,
+            1000,
+            "p".to_string(),
+            [2u8; 64],
+        )
     }
 
     fn forked_dag() -> Dag {

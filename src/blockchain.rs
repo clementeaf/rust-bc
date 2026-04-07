@@ -148,7 +148,7 @@ impl Block {
     /**
      * Minería paralela - busca nonce usando múltiples threads
      * Particiona el espacio de nonce entre threads para máxima eficiencia
-     * 
+     *
      * PERFORMANCE:
      * - En 4 cores: ~3.5x más rápido que secuencial
      * - En 8 cores: ~6.5x más rápido que secuencial

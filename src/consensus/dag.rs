@@ -253,11 +253,8 @@ impl Dag {
         let canonical = self.canonical_chain();
 
         // Build a position map: hash → index in canonical chain
-        let positions: HashMap<[u8; 32], usize> = canonical
-            .iter()
-            .enumerate()
-            .map(|(i, h)| (*h, i))
-            .collect();
+        let positions: HashMap<[u8; 32], usize> =
+            canonical.iter().enumerate().map(|(i, h)| (*h, i)).collect();
 
         candidates
             .iter()
@@ -478,15 +475,7 @@ mod tests {
     #[test]
     fn test_dag_is_linear() {
         let mut dag = Dag::new();
-        let block = DagBlock::new(
-            [1u8; 32],
-            [0u8; 32],
-            0,
-            0,
-            1000,
-            "p".to_string(),
-            [2u8; 64],
-        );
+        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), [2u8; 64]);
         dag.add_block(block).unwrap();
         assert!(dag.is_linear());
     }
@@ -494,15 +483,7 @@ mod tests {
     #[test]
     fn test_dag_chain_height() {
         let mut dag = Dag::new();
-        let block = DagBlock::new(
-            [1u8; 32],
-            [0u8; 32],
-            0,
-            0,
-            1000,
-            "p".to_string(),
-            [2u8; 64],
-        );
+        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), [2u8; 64]);
         dag.add_block(block).unwrap();
         assert_eq!(dag.chain_height(), 1);
     }
@@ -516,7 +497,15 @@ mod tests {
     }
 
     fn block(hash: u8, parent: u8, height: u64) -> DagBlock {
-        DagBlock::new(mk(hash), mk(parent), height, 0, 1000, "p".to_string(), [2u8; 64])
+        DagBlock::new(
+            mk(hash),
+            mk(parent),
+            height,
+            0,
+            1000,
+            "p".to_string(),
+            [2u8; 64],
+        )
     }
 
     #[test]

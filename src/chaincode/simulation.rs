@@ -50,7 +50,10 @@ impl SimulationWorldState {
             .lock()
             .unwrap()
             .iter()
-            .map(|(k, v)| KVWrite { key: k.clone(), value: v.clone() })
+            .map(|(k, v)| KVWrite {
+                key: k.clone(),
+                value: v.clone(),
+            })
             .collect();
 
         ReadWriteSet { reads, writes }
@@ -67,21 +70,30 @@ impl WorldState for SimulationWorldState {
     fn get(&self, key: &str) -> StorageResult<Option<VersionedValue>> {
         // Check delete set first.
         if self.delete_set.lock().unwrap().iter().any(|k| k == key) {
-            self.read_set.lock().unwrap().push(KVRead { key: key.to_string(), version: 0 });
+            self.read_set.lock().unwrap().push(KVRead {
+                key: key.to_string(),
+                version: 0,
+            });
             return Ok(None);
         }
 
         // Check local write buffer.
         if let Some(data) = self.write_buffer.lock().unwrap().get(key).cloned() {
             // Local writes have no committed version — record version 0.
-            self.read_set.lock().unwrap().push(KVRead { key: key.to_string(), version: 0 });
+            self.read_set.lock().unwrap().push(KVRead {
+                key: key.to_string(),
+                version: 0,
+            });
             return Ok(Some(VersionedValue { version: 0, data }));
         }
 
         // Fall through to base state.
         let result = self.base_state.get(key)?;
         let version = result.as_ref().map(|vv| vv.version).unwrap_or(0);
-        self.read_set.lock().unwrap().push(KVRead { key: key.to_string(), version });
+        self.read_set.lock().unwrap().push(KVRead {
+            key: key.to_string(),
+            version,
+        });
         Ok(result)
     }
 
@@ -91,7 +103,10 @@ impl WorldState for SimulationWorldState {
     fn put(&self, key: &str, data: &[u8]) -> StorageResult<u64> {
         // If the key was previously deleted in this simulation, un-delete it.
         self.delete_set.lock().unwrap().retain(|k| k != key);
-        self.write_buffer.lock().unwrap().insert(key.to_string(), data.to_vec());
+        self.write_buffer
+            .lock()
+            .unwrap()
+            .insert(key.to_string(), data.to_vec());
         Ok(0)
     }
 
@@ -118,7 +133,13 @@ impl WorldState for SimulationWorldState {
         // Add local writes that fall in [start, end).
         for (k, v) in write_buf.iter() {
             if k.as_str() >= start && k.as_str() < end {
-                base.push((k.clone(), VersionedValue { version: 0, data: v.clone() }));
+                base.push((
+                    k.clone(),
+                    VersionedValue {
+                        version: 0,
+                        data: v.clone(),
+                    },
+                ));
             }
         }
 

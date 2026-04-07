@@ -34,8 +34,7 @@ mod config_tests {
             TestConfig {
                 api_url: env::var("MINER_API_URL")
                     .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string()),
-                miner_address: env::var("MINER_ADDRESS")
-                    .unwrap_or_else(|_| "MINER".to_string()),
+                miner_address: env::var("MINER_ADDRESS").unwrap_or_else(|_| "MINER".to_string()),
                 poll_interval: env::var("MINER_POLL_INTERVAL")
                     .ok()
                     .and_then(|s| s.parse().ok())
@@ -53,7 +52,10 @@ mod config_tests {
 
         fn assert_valid(&self) {
             assert!(!self.api_url.is_empty(), "API URL cannot be empty");
-            assert!(!self.miner_address.is_empty(), "Miner address cannot be empty");
+            assert!(
+                !self.miner_address.is_empty(),
+                "Miner address cannot be empty"
+            );
             assert!(self.tx_batch_size > 0, "Batch size must be > 0");
             assert!(self.tx_batch_size <= 10000, "Batch size must be <= 10000");
         }
@@ -217,10 +219,7 @@ mod backoff_tests {
 
         let delay = tracker.calculate_delay();
         assert!(delay.as_millis() <= 5000);
-        println!(
-            "✅ Backoff max cap works correctly (capped at {:?})",
-            delay
-        );
+        println!("✅ Backoff max cap works correctly (capped at {:?})", delay);
     }
 }
 
@@ -248,7 +247,8 @@ mod metrics_tests {
 
         fn record_block(&self, tx_count: u64) {
             self.blocks_mined.fetch_add(1, Ordering::Relaxed);
-            self.transactions_mined.fetch_add(tx_count, Ordering::Relaxed);
+            self.transactions_mined
+                .fetch_add(tx_count, Ordering::Relaxed);
         }
 
         fn get_blocks(&self) -> u64 {
@@ -309,11 +309,7 @@ mod request_tests {
     }
 
     pub fn test_request_serialization() {
-        let request_data = vec![
-            ("tx1", 10u64),
-            ("tx2", 5u64),
-            ("tx3", 20u64),
-        ];
+        let request_data = vec![("tx1", 10u64), ("tx2", 5u64), ("tx3", 20u64)];
 
         // Simulate JSON serialization by collecting into a map
         let mut map = HashMap::new();

@@ -18,24 +18,37 @@ pub enum EndorsementPolicy {
     /// Evaluation requires an external lookup of signer → OU mapping;
     /// the simple `evaluate(&[&str])` method treats `ou_ids` as org IDs
     /// for compatibility. Full OU-aware evaluation is done via `evaluate_with_ous`.
-    OuBased { ou_ids: Vec<String>, min_count: usize },
+    OuBased {
+        ou_ids: Vec<String>,
+        min_count: usize,
+    },
 }
 
 impl EndorsementPolicy {
     /// Evaluate the policy against a set of signer org IDs.
     pub fn evaluate(&self, signer_orgs: &[&str]) -> bool {
         match self {
-            EndorsementPolicy::AnyOf(orgs) => orgs.iter().any(|o| signer_orgs.contains(&o.as_str())),
-            EndorsementPolicy::AllOf(orgs) => orgs.iter().all(|o| signer_orgs.contains(&o.as_str())),
+            EndorsementPolicy::AnyOf(orgs) => {
+                orgs.iter().any(|o| signer_orgs.contains(&o.as_str()))
+            }
+            EndorsementPolicy::AllOf(orgs) => {
+                orgs.iter().all(|o| signer_orgs.contains(&o.as_str()))
+            }
             EndorsementPolicy::NOutOf { n, orgs } => {
-                let count = orgs.iter().filter(|o| signer_orgs.contains(&o.as_str())).count();
+                let count = orgs
+                    .iter()
+                    .filter(|o| signer_orgs.contains(&o.as_str()))
+                    .count();
                 count >= *n
             }
             EndorsementPolicy::And(a, b) => a.evaluate(signer_orgs) && b.evaluate(signer_orgs),
             EndorsementPolicy::Or(a, b) => a.evaluate(signer_orgs) || b.evaluate(signer_orgs),
             EndorsementPolicy::OuBased { ou_ids, min_count } => {
                 // Fallback: treat ou_ids as org IDs when no OU mapping is available.
-                let count = ou_ids.iter().filter(|o| signer_orgs.contains(&o.as_str())).count();
+                let count = ou_ids
+                    .iter()
+                    .filter(|o| signer_orgs.contains(&o.as_str()))
+                    .count();
                 count >= *min_count
             }
         }
@@ -44,12 +57,21 @@ impl EndorsementPolicy {
     /// Evaluate the policy with an explicit signer-to-OU mapping.
     ///
     /// `signer_ous` maps each signer org ID to its OU ID.
-    pub fn evaluate_with_ous(&self, signer_orgs: &[&str], signer_ous: &std::collections::HashMap<String, String>) -> bool {
+    pub fn evaluate_with_ous(
+        &self,
+        signer_orgs: &[&str],
+        signer_ous: &std::collections::HashMap<String, String>,
+    ) -> bool {
         match self {
             EndorsementPolicy::OuBased { ou_ids, min_count } => {
                 let count = signer_orgs
                     .iter()
-                    .filter(|org| signer_ous.get(**org).map(|ou| ou_ids.contains(ou)).unwrap_or(false))
+                    .filter(|org| {
+                        signer_ous
+                            .get(**org)
+                            .map(|ou| ou_ids.contains(ou))
+                            .unwrap_or(false)
+                    })
                     .count();
                 count >= *min_count
             }
@@ -84,7 +106,10 @@ mod tests {
 
     #[test]
     fn serde_roundtrip_n_out_of() {
-        let p = EndorsementPolicy::NOutOf { n: 2, orgs: vec!["org1".into(), "org2".into(), "org3".into()] };
+        let p = EndorsementPolicy::NOutOf {
+            n: 2,
+            orgs: vec!["org1".into(), "org2".into(), "org3".into()],
+        };
         let json = serde_json::to_string(&p).unwrap();
         assert_eq!(serde_json::from_str::<EndorsementPolicy>(&json).unwrap(), p);
     }
@@ -136,19 +161,28 @@ mod tests {
 
     #[test]
     fn n_out_of_below_n() {
-        let p = EndorsementPolicy::NOutOf { n: 2, orgs: vec!["org1".into(), "org2".into(), "org3".into()] };
+        let p = EndorsementPolicy::NOutOf {
+            n: 2,
+            orgs: vec!["org1".into(), "org2".into(), "org3".into()],
+        };
         assert!(!p.evaluate(&orgs(&["org1"])));
     }
 
     #[test]
     fn n_out_of_exact_n() {
-        let p = EndorsementPolicy::NOutOf { n: 2, orgs: vec!["org1".into(), "org2".into(), "org3".into()] };
+        let p = EndorsementPolicy::NOutOf {
+            n: 2,
+            orgs: vec!["org1".into(), "org2".into(), "org3".into()],
+        };
         assert!(p.evaluate(&orgs(&["org1", "org2"])));
     }
 
     #[test]
     fn n_out_of_above_n() {
-        let p = EndorsementPolicy::NOutOf { n: 2, orgs: vec!["org1".into(), "org2".into(), "org3".into()] };
+        let p = EndorsementPolicy::NOutOf {
+            n: 2,
+            orgs: vec!["org1".into(), "org2".into(), "org3".into()],
+        };
         assert!(p.evaluate(&orgs(&["org1", "org2", "org3"])));
     }
 

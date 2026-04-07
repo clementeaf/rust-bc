@@ -1,6 +1,4 @@
-use prometheus::{
-    Counter, CounterVec, HistogramVec, IntGauge, Registry,
-};
+use prometheus::{Counter, CounterVec, HistogramVec, IntGauge, Registry};
 
 /// Prometheus metrics for rust-bc API
 #[derive(Clone)]
@@ -52,10 +50,8 @@ impl ApiMetrics {
         )?;
         registry.register(Box::new(mempool_pending_transactions.clone()))?;
 
-        let identity_dids_total = Counter::new(
-            "rust_bc_identity_dids_total",
-            "Total DIDs created",
-        )?;
+        let identity_dids_total =
+            Counter::new("rust_bc_identity_dids_total", "Total DIDs created")?;
         registry.register(Box::new(identity_dids_total.clone()))?;
 
         let credentials_issued_total = Counter::new(
@@ -85,7 +81,13 @@ impl ApiMetrics {
     }
 
     /// Record a failed HTTP request
-    pub fn record_request_error(&self, method: &str, path: &str, status_code: &str, duration_secs: f64) {
+    pub fn record_request_error(
+        &self,
+        method: &str,
+        path: &str,
+        status_code: &str,
+        duration_secs: f64,
+    ) {
         self.http_requests_total
             .with_label_values(&[method, path, status_code])
             .inc();
@@ -131,7 +133,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.record_request_success("GET", "/health", 0.010);
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -148,7 +150,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.record_request_error("POST", "/identity/create", "500", 0.050);
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -165,7 +167,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.set_fork_count(5);
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -182,7 +184,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.set_pending_tx_count(100);
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -200,7 +202,7 @@ mod tests {
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.increment_dids_created();
         metrics.increment_dids_created();
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -217,7 +219,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.increment_credentials_issued();
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -233,10 +235,13 @@ mod tests {
     fn test_multiple_metrics_registered() {
         let registry = Registry::new();
         let _metrics = ApiMetrics::new(&registry).unwrap();
-        
+
         let gathered = registry.gather();
         // Each metric family is registered, so we should have at least 6
-        assert!(gathered.len() >= 4, "Should have at least 4 metric families registered");
+        assert!(
+            gathered.len() >= 4,
+            "Should have at least 4 metric families registered"
+        );
     }
 
     #[test]
@@ -244,7 +249,7 @@ mod tests {
         let registry = Registry::new();
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.record_request_success("GET", "/version", 0.025);
-        
+
         let gathered = registry.gather();
         let mut found = false;
         for mf in gathered {
@@ -262,7 +267,7 @@ mod tests {
         let metrics = ApiMetrics::new(&registry).unwrap();
         metrics.record_request_success("POST", "/blocks/propose", 0.045);
         metrics.record_request_error("GET", "/consensus/state", "404", 0.008);
-        
+
         let gathered = registry.gather();
         let mut counter_found = false;
         for mf in gathered {

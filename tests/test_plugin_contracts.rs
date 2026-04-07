@@ -165,7 +165,9 @@ fn test_install_plugin_duplicate() {
         "A test plugin".to_string(),
     );
 
-    registry.install_plugin("owner", plugin.clone(), 100).unwrap();
+    registry
+        .install_plugin("owner", plugin.clone(), 100)
+        .unwrap();
 
     let result = registry.install_plugin("owner", plugin, 100);
 

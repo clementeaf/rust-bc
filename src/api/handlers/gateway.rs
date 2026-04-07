@@ -108,7 +108,9 @@ pub async fn gateway_submit(
     let result = gw
         .submit(&req.chaincode_id, &req.channel_id, tx)
         .await
-        .map_err(|e| ApiError::InternalError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::InternalError {
+            reason: e.to_string(),
+        })?;
 
     let trace_id = uuid::Uuid::new_v4().to_string();
     Ok(HttpResponse::Ok().json(ApiResponse::success(
@@ -129,13 +131,13 @@ mod tests {
     use crate::billing::BillingManager;
     use crate::blockchain::Blockchain;
     use crate::cache::BalanceCache;
-    use crate::smart_contracts::ContractManager;
     use crate::endorsement::policy_store::MemoryPolicyStore;
     use crate::endorsement::registry::MemoryOrgRegistry;
     use crate::gateway::Gateway;
     use crate::metrics::MetricsCollector;
     use crate::models::{Mempool, WalletManager};
     use crate::ordering::service::OrderingService;
+    use crate::smart_contracts::ContractManager;
     use crate::staking::StakingManager;
     use crate::storage::memory::MemoryStore;
     use crate::storage::traits::BlockStore;
@@ -175,8 +177,12 @@ mod tests {
             gateway,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 

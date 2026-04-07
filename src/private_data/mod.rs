@@ -96,11 +96,7 @@ pub trait PrivateDataStore: Send + Sync {
     }
 
     /// Retrieve the bytes previously stored under `(collection_name, key)`.
-    fn get_private_data(
-        &self,
-        collection_name: &str,
-        key: &str,
-    ) -> StorageResult<Option<Vec<u8>>>;
+    fn get_private_data(&self, collection_name: &str, key: &str) -> StorageResult<Option<Vec<u8>>>;
 
     /// Remove all entries whose TTL has expired.
     ///
@@ -160,7 +156,10 @@ impl PrivateDataStore for MemoryPrivateDataStore {
         self.data
             .lock()
             .map_err(|_| StorageError::Other("mutex poisoned".to_string()))?
-            .insert((collection_name.to_string(), key.to_string()), value.to_vec());
+            .insert(
+                (collection_name.to_string(), key.to_string()),
+                value.to_vec(),
+            );
         Ok(hash)
     }
 
@@ -185,16 +184,14 @@ impl PrivateDataStore for MemoryPrivateDataStore {
         Ok(hash)
     }
 
-    fn get_private_data(
-        &self,
-        collection_name: &str,
-        key: &str,
-    ) -> StorageResult<Option<Vec<u8>>> {
+    fn get_private_data(&self, collection_name: &str, key: &str) -> StorageResult<Option<Vec<u8>>> {
         let map = self
             .data
             .lock()
             .map_err(|_| StorageError::Other("mutex poisoned".to_string()))?;
-        Ok(map.get(&(collection_name.to_string(), key.to_string())).cloned())
+        Ok(map
+            .get(&(collection_name.to_string(), key.to_string()))
+            .cloned())
     }
 
     /// Remove all entries whose `blocks_to_live` window has closed.
@@ -237,7 +234,9 @@ pub struct MemoryCollectionRegistry {
 
 impl MemoryCollectionRegistry {
     pub fn new() -> Self {
-        Self { inner: RwLock::new(HashMap::new()) }
+        Self {
+            inner: RwLock::new(HashMap::new()),
+        }
     }
 }
 
@@ -249,7 +248,10 @@ impl Default for MemoryCollectionRegistry {
 
 impl CollectionRegistry for MemoryCollectionRegistry {
     fn register(&self, collection: PrivateDataCollection) -> Result<(), PrivateDataError> {
-        self.inner.write().unwrap().insert(collection.name.clone(), collection);
+        self.inner
+            .write()
+            .unwrap()
+            .insert(collection.name.clone(), collection);
         Ok(())
     }
 
@@ -277,13 +279,8 @@ mod tests {
     use super::*;
 
     fn make_collection() -> PrivateDataCollection {
-        PrivateDataCollection::new(
-            "col1",
-            vec!["org1".to_string(), "org2".to_string()],
-            1,
-            100,
-        )
-        .unwrap()
+        PrivateDataCollection::new("col1", vec!["org1".to_string(), "org2".to_string()], 1, 100)
+            .unwrap()
     }
 
     // ── PrivateDataCollection tests ───────────────────────────────────────────
@@ -301,28 +298,40 @@ mod tests {
     fn rejects_empty_name() {
         let result = PrivateDataCollection::new("", vec!["org1".to_string()], 1, 10);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("name cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("name cannot be empty"));
     }
 
     #[test]
     fn rejects_empty_member_list() {
         let result = PrivateDataCollection::new("col1", vec![], 1, 10);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("member_org_ids cannot be empty"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("member_org_ids cannot be empty"));
     }
 
     #[test]
     fn rejects_zero_required_peer_count() {
         let result = PrivateDataCollection::new("col1", vec!["org1".to_string()], 0, 10);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("required_peer_count must be > 0"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("required_peer_count must be > 0"));
     }
 
     #[test]
     fn rejects_required_peer_count_exceeding_members() {
         let result = PrivateDataCollection::new("col1", vec!["org1".to_string()], 3, 10);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("exceeds member count"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds member count"));
     }
 
     #[test]
@@ -399,7 +408,9 @@ mod tests {
         let value = b"sensitive payload";
 
         // Write at height 1 with blocks_to_live = 5 → expires when height >= 6.
-        let hash = store.put_private_data_at("col1", "k1", value, 1, 5).unwrap();
+        let hash = store
+            .put_private_data_at("col1", "k1", value, 1, 5)
+            .unwrap();
         assert_eq!(hash, sha256(value));
 
         // Still present before expiry.
@@ -426,13 +437,19 @@ mod tests {
 
         // The hash is only on-chain (in the TX data field), not in the store;
         // verify it matches the original value for integrity proof.
-        assert_eq!(hash, sha256(value), "on-chain hash must still match original value");
+        assert_eq!(
+            hash,
+            sha256(value),
+            "on-chain hash must still match original value"
+        );
     }
 
     #[test]
     fn purge_does_not_remove_unexpired_entry() {
         let store = MemoryPrivateDataStore::new();
-        store.put_private_data_at("col1", "k", b"data", 1, 100).unwrap();
+        store
+            .put_private_data_at("col1", "k", b"data", 1, 100)
+            .unwrap();
         store.purge_expired(50);
         assert!(store.get_private_data("col1", "k").unwrap().is_some());
     }
@@ -441,9 +458,13 @@ mod tests {
     fn purge_removes_only_expired_leaves_others() {
         let store = MemoryPrivateDataStore::new();
         // Expires at height 6.
-        store.put_private_data_at("col1", "short", b"short-lived", 1, 5).unwrap();
+        store
+            .put_private_data_at("col1", "short", b"short-lived", 1, 5)
+            .unwrap();
         // Expires at height 101.
-        store.put_private_data_at("col1", "long", b"long-lived", 1, 100).unwrap();
+        store
+            .put_private_data_at("col1", "long", b"long-lived", 1, 100)
+            .unwrap();
 
         store.purge_expired(6);
 
@@ -468,7 +489,9 @@ mod tests {
     #[test]
     fn zero_blocks_to_live_never_expires() {
         let store = MemoryPrivateDataStore::new();
-        store.put_private_data_at("col1", "k", b"no-ttl", 1, 0).unwrap();
+        store
+            .put_private_data_at("col1", "k", b"no-ttl", 1, 0)
+            .unwrap();
         store.purge_expired(u64::MAX);
         assert_eq!(
             store.get_private_data("col1", "k").unwrap(),

@@ -1,5 +1,5 @@
 //! Comprehensive test suite for storage layer (Week 2)
-//! 
+//!
 //! This module contains 80+ unit tests covering:
 //! - CRUD operations (20 tests)
 //! - Batch operations (15 tests)
@@ -27,7 +27,8 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -117,7 +118,8 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             };
             assert!(store.write_block(&block).is_ok());
         }
@@ -153,7 +155,8 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_batch(&[block], &[]).is_ok());
     }
@@ -184,7 +187,8 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         let tx = Transaction {
             id: "tx1".to_string(),
@@ -216,7 +220,8 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -248,12 +253,11 @@ mod comprehensive_storage_tests {
                 timestamp: 1000 + i,
                 parent_hash: [0u8; 32],
                 merkle_root: [1u8; 32],
-                transactions: (1..=10)
-                    .map(|j| format!("tx{}_{}", i, j))
-                    .collect(),
+                transactions: (1..=10).map(|j| format!("tx{}_{}", i, j)).collect(),
                 proposer: format!("proposer{}", i),
                 signature: [2u8; 64],
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -270,7 +274,8 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         }];
         let txs = vec![Transaction {
             id: "tx1".to_string(),
@@ -296,7 +301,8 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "proposer".to_string(),
                 signature: [2u8; 64],
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             };
             assert!(store.write_batch(&[block], &[]).is_ok());
         }
@@ -338,7 +344,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         let block2 = Block {
             height: 2,
@@ -348,7 +355,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p2".to_string(),
             signature: [3u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_batch(&[block1, block2], &[]).is_ok());
     }
@@ -363,12 +371,11 @@ mod comprehensive_storage_tests {
             timestamp: 1000,
             parent_hash: [0u8; 32],
             merkle_root: [1u8; 32],
-            transactions: (1..=1000)
-                .map(|i| format!("tx{:04}", i))
-                .collect(),
+            transactions: (1..=1000).map(|i| format!("tx{:04}", i)).collect(),
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -384,7 +391,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "genesis".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -400,7 +408,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "max".to_string(),
             signature: [255u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -416,7 +425,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -445,7 +455,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-!@#$%^&*()".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -461,7 +472,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-🚀-✅".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -593,7 +605,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -609,28 +622,45 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
 
     // ... (10 more migration tests would go here)
     #[test]
-    fn test_migration_placeholder_1() { assert!(true); }
+    fn test_migration_placeholder_1() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_2() { assert!(true); }
+    fn test_migration_placeholder_2() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_3() { assert!(true); }
+    fn test_migration_placeholder_3() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_4() { assert!(true); }
+    fn test_migration_placeholder_4() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_5() { assert!(true); }
+    fn test_migration_placeholder_5() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_6() { assert!(true); }
+    fn test_migration_placeholder_6() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_7() { assert!(true); }
+    fn test_migration_placeholder_7() {
+        assert!(true);
+    }
     #[test]
-    fn test_migration_placeholder_8() { assert!(true); }
+    fn test_migration_placeholder_8() {
+        assert!(true);
+    }
 
     // ========== PERFORMANCE VALIDATION (15 tests) ==========
 
@@ -645,7 +675,8 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         let start = Instant::now();
         let _ = store.write_block(&block);
@@ -667,7 +698,8 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "p".to_string(),
                 signature: [0u8; 64],
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             };
             let _ = store.write_block(&block);
         }
@@ -697,27 +729,51 @@ mod comprehensive_storage_tests {
 
     // ... (12 more perf tests as placeholders)
     #[test]
-    fn test_perf_placeholder_1() { assert!(true); }
+    fn test_perf_placeholder_1() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_2() { assert!(true); }
+    fn test_perf_placeholder_2() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_3() { assert!(true); }
+    fn test_perf_placeholder_3() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_4() { assert!(true); }
+    fn test_perf_placeholder_4() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_5() { assert!(true); }
+    fn test_perf_placeholder_5() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_6() { assert!(true); }
+    fn test_perf_placeholder_6() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_7() { assert!(true); }
+    fn test_perf_placeholder_7() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_8() { assert!(true); }
+    fn test_perf_placeholder_8() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_9() { assert!(true); }
+    fn test_perf_placeholder_9() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_10() { assert!(true); }
+    fn test_perf_placeholder_10() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_11() { assert!(true); }
+    fn test_perf_placeholder_11() {
+        assert!(true);
+    }
     #[test]
-    fn test_perf_placeholder_12() { assert!(true); }
+    fn test_perf_placeholder_12() {
+        assert!(true);
+    }
 }

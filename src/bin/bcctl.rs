@@ -115,12 +115,7 @@ async fn api_get(client: &Client, node: &str, path: &str) -> Result<Value, Strin
         .map_err(|e| format!("{node}: {e}"))
 }
 
-async fn api_post(
-    client: &Client,
-    node: &str,
-    path: &str,
-    body: &Value,
-) -> Result<Value, String> {
+async fn api_post(client: &Client, node: &str, path: &str, body: &Value) -> Result<Value, String> {
     let url = format!("{}/{}", base_url(node), path);
     let resp = client
         .post(&url)
@@ -134,7 +129,10 @@ async fn api_post(
 }
 
 fn print_json(value: &Value) {
-    println!("{}", serde_json::to_string_pretty(value).unwrap_or_default());
+    println!(
+        "{}",
+        serde_json::to_string_pretty(value).unwrap_or_default()
+    );
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────────
@@ -335,7 +333,10 @@ async fn cmd_metrics(client: &Client, node: &str, json: bool) {
             if json {
                 print_json(&resp["data"]);
             } else {
-                println!("{}", serde_json::to_string_pretty(&resp["data"]).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&resp["data"]).unwrap_or_default()
+                );
             }
         }
         Err(e) => eprintln!("Error: {e}"),
@@ -379,8 +380,16 @@ async fn cmd_consistency(client: &Client, json: bool) {
         return;
     }
 
-    let all_same_height = heights.values().collect::<std::collections::HashSet<_>>().len() <= 1;
-    let all_same_hash = hashes.values().collect::<std::collections::HashSet<_>>().len() <= 1;
+    let all_same_height = heights
+        .values()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        <= 1;
+    let all_same_hash = hashes
+        .values()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        <= 1;
 
     for (node, h) in &heights {
         let hash = hashes.get(node).map(|s| s.as_str()).unwrap_or("-");
@@ -397,7 +406,11 @@ async fn cmd_consistency(client: &Client, json: bool) {
 async fn cmd_env() {
     println!("Network configuration:");
     for &node in ALL_NODES {
-        println!("  {node}: https://localhost:{} (P2P: {})", port_for(node), port_for(node) + 1);
+        println!(
+            "  {node}: https://localhost:{} (P2P: {})",
+            port_for(node),
+            port_for(node) + 1
+        );
     }
 }
 

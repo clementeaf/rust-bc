@@ -2,7 +2,10 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::metrics::MetricsCollector;
-use crate::storage::{errors::StorageResult, traits::{Block, BlockStore, Transaction}};
+use crate::storage::{
+    errors::StorageResult,
+    traits::{Block, BlockStore, Transaction},
+};
 
 /// Collects endorsed transactions and cuts them into ordered blocks.
 pub struct OrderingService {

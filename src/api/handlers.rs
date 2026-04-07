@@ -1,20 +1,19 @@
 //! API Handler functions for endpoints
 
-
-pub mod identity;
+pub mod acl;
 pub mod blocks;
 pub mod chain;
-pub mod credentials;
-pub mod proposals;
-pub mod transactions;
-pub mod utilities;
-pub mod organizations;
-pub mod channels;
-pub mod msp;
-pub mod private_data;
 pub mod chaincode;
-pub mod gateway;
+pub mod channels;
+pub mod credentials;
 pub mod discovery;
 pub mod events;
-pub mod acl;
+pub mod gateway;
+pub mod identity;
+pub mod msp;
+pub mod organizations;
+pub mod private_data;
+pub mod proposals;
 pub mod snapshots;
+pub mod transactions;
+pub mod utilities;

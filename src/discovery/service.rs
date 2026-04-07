@@ -28,10 +28,7 @@ pub struct DiscoveryService {
 }
 
 impl DiscoveryService {
-    pub fn new(
-        org_registry: Arc<dyn OrgRegistry>,
-        policy_store: Arc<dyn PolicyStore>,
-    ) -> Self {
+    pub fn new(org_registry: Arc<dyn OrgRegistry>, policy_store: Arc<dyn PolicyStore>) -> Self {
         Self {
             peers: Mutex::new(HashMap::new()),
             org_registry,
@@ -131,7 +128,9 @@ impl DiscoveryService {
         // Group one representative peer per org.
         let mut org_to_peer: HashMap<String, PeerDescriptor> = HashMap::new();
         for p in &candidates {
-            org_to_peer.entry(p.org_id.clone()).or_insert_with(|| p.clone());
+            org_to_peer
+                .entry(p.org_id.clone())
+                .or_insert_with(|| p.clone());
         }
 
         // Determine the orgs we need to cover to satisfy the policy.
@@ -304,7 +303,12 @@ mod tests {
         DiscoveryService::new(Arc::new(MemoryOrgRegistry::new()), ps)
     }
 
-    fn peer_cc(address: &str, org: &str, chaincodes: Vec<&str>, channels: Vec<&str>) -> PeerDescriptor {
+    fn peer_cc(
+        address: &str,
+        org: &str,
+        chaincodes: Vec<&str>,
+        channels: Vec<&str>,
+    ) -> PeerDescriptor {
         PeerDescriptor {
             peer_address: address.to_string(),
             org_id: org.to_string(),
@@ -323,11 +327,36 @@ mod tests {
         };
         let svc = make_service_with_policy(policy);
         // 5 peers across 3 orgs, all with the chaincode on the channel
-        svc.register_peer(peer_cc("peer1:7051", "Org1MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer2:7051", "Org1MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer3:7051", "Org2MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer4:7051", "Org3MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer5:7051", "Org3MSP", vec!["basic"], vec!["mychannel"]));
+        svc.register_peer(peer_cc(
+            "peer1:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer2:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer3:7051",
+            "Org2MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer4:7051",
+            "Org3MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer5:7051",
+            "Org3MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
 
         let plan = svc.endorsement_plan("basic", "mychannel").unwrap();
         assert_eq!(plan.len(), 2, "should return exactly 2 peers");
@@ -340,7 +369,12 @@ mod tests {
         let policy = EndorsementPolicy::AnyOf(vec!["Org1MSP".into()]);
         let svc = make_service_with_policy(policy);
         // peer without the chaincode
-        svc.register_peer(peer_cc("peer1:7051", "Org1MSP", vec!["other"], vec!["mychannel"]));
+        svc.register_peer(peer_cc(
+            "peer1:7051",
+            "Org1MSP",
+            vec!["other"],
+            vec!["mychannel"],
+        ));
 
         let result = svc.endorsement_plan("basic", "mychannel");
         assert!(matches!(result, Err(DiscoveryError::InsufficientPeers)));
@@ -350,7 +384,12 @@ mod tests {
     fn endorsement_plan_filters_out_peers_on_wrong_channel() {
         let policy = EndorsementPolicy::AnyOf(vec!["Org1MSP".into()]);
         let svc = make_service_with_policy(policy);
-        svc.register_peer(peer_cc("peer1:7051", "Org1MSP", vec!["basic"], vec!["otherchannel"]));
+        svc.register_peer(peer_cc(
+            "peer1:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["otherchannel"],
+        ));
 
         let result = svc.endorsement_plan("basic", "mychannel");
         assert!(matches!(result, Err(DiscoveryError::InsufficientPeers)));
@@ -361,21 +400,53 @@ mod tests {
     #[test]
     fn channel_peers_returns_only_peers_on_channel() {
         let svc = make_service();
-        svc.register_peer(peer_cc("peer1:7051", "Org1MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer2:7051", "Org2MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer3:7051", "Org3MSP", vec!["basic"], vec!["mychannel"]));
-        svc.register_peer(peer_cc("peer4:7051", "Org1MSP", vec!["basic"], vec!["otherchannel"]));
-        svc.register_peer(peer_cc("peer5:7051", "Org2MSP", vec!["basic"], vec!["otherchannel"]));
+        svc.register_peer(peer_cc(
+            "peer1:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer2:7051",
+            "Org2MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer3:7051",
+            "Org3MSP",
+            vec!["basic"],
+            vec!["mychannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer4:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["otherchannel"],
+        ));
+        svc.register_peer(peer_cc(
+            "peer5:7051",
+            "Org2MSP",
+            vec!["basic"],
+            vec!["otherchannel"],
+        ));
 
         let result = svc.channel_peers("mychannel");
         assert_eq!(result.len(), 3);
-        assert!(result.iter().all(|p| p.channels.contains(&"mychannel".to_string())));
+        assert!(result
+            .iter()
+            .all(|p| p.channels.contains(&"mychannel".to_string())));
     }
 
     #[test]
     fn channel_peers_empty_when_no_match() {
         let svc = make_service();
-        svc.register_peer(peer_cc("peer1:7051", "Org1MSP", vec!["basic"], vec!["otherchannel"]));
+        svc.register_peer(peer_cc(
+            "peer1:7051",
+            "Org1MSP",
+            vec!["basic"],
+            vec!["otherchannel"],
+        ));
         assert!(svc.channel_peers("mychannel").is_empty());
     }
 

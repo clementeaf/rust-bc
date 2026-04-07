@@ -10,7 +10,6 @@
  * Usage:
  *   cargo run --release --bin test_metrics
  */
-
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -97,11 +96,7 @@ fn main() {
         ];
 
         for metric in required_metrics {
-            assert!(
-                output.contains(metric),
-                "Metric {} not found",
-                metric
-            );
+            assert!(output.contains(metric), "Metric {} not found", metric);
             println!("✅ Metric found: {}", metric);
         }
     }

@@ -112,11 +112,7 @@ impl CorsPolicy {
             ));
         }
 
-        let methods: Vec<String> = self
-            .allowed_methods
-            .iter()
-            .map(|m| m.to_string())
-            .collect();
+        let methods: Vec<String> = self.allowed_methods.iter().map(|m| m.to_string()).collect();
         headers.push((
             "Access-Control-Allow-Methods".to_string(),
             methods.join(", "),
@@ -224,8 +220,9 @@ mod tests {
         let policy = CorsPolicy::new().with_origins(vec!["https://example.com".to_string()]);
         let headers = policy.build_headers("https://example.com");
 
-        assert!(headers.iter().any(|(k, v)| k == "Access-Control-Allow-Origin"
-            && v == "https://example.com"));
+        assert!(headers
+            .iter()
+            .any(|(k, v)| k == "Access-Control-Allow-Origin" && v == "https://example.com"));
     }
 
     #[test]
@@ -249,8 +246,9 @@ mod tests {
         let policy = CorsPolicy::new().allow_credentials(true);
         let headers = policy.build_headers("https://example.com");
 
-        assert!(headers.iter().any(|(k, v)| k == "Access-Control-Allow-Credentials"
-            && v == "true"));
+        assert!(headers
+            .iter()
+            .any(|(k, v)| k == "Access-Control-Allow-Credentials" && v == "true"));
     }
 
     #[test]

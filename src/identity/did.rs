@@ -3,8 +3,8 @@
 //! Implements W3C-compatible DIDs with rust-bc specific format:
 //! did:bc:<pubkey_hash>
 
-use sha2::{Sha256, Digest};
 use hex;
+use sha2::{Digest, Sha256};
 
 /// DID representation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +51,7 @@ impl DidDocument {
     /// Create a new DID document
     pub fn new(public_key_hash: String, timestamp: u64) -> Self {
         let did = Self::create_did(&public_key_hash);
-        
+
         DidDocument {
             did,
             created_at: timestamp,

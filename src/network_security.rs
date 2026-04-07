@@ -2,7 +2,7 @@
 
 /**
  * Network Security Layer
- * 
+ *
  * Implements protection against network-level attacks:
  * - Peer scoring and reputation system
  * - Rate limiting per peer
@@ -10,7 +10,6 @@
  * - Message validation and size limits
  * - Peer blacklisting
  */
-
 use std::collections::HashMap;
 use std::time::SystemTime;
 
@@ -160,8 +159,10 @@ impl NetworkSecurityManager {
         }
 
         if !self.peer_scores.contains_key(&address) {
-            self.peer_scores.insert(address.clone(), PeerScore::new(address.clone()));
-            self.rate_limits.insert(address.clone(), PeerRateLimit::new(address));
+            self.peer_scores
+                .insert(address.clone(), PeerScore::new(address.clone()));
+            self.rate_limits
+                .insert(address.clone(), PeerRateLimit::new(address));
         }
 
         self.active_connections += 1;
@@ -213,16 +214,21 @@ impl NetworkSecurityManager {
         }
 
         // Get or create rate limit entry
-        let rate_limit = self.rate_limits.entry(address.to_string()).or_insert_with(|| {
-            PeerRateLimit::new(address.to_string())
-        });
+        let rate_limit = self
+            .rate_limits
+            .entry(address.to_string())
+            .or_insert_with(|| PeerRateLimit::new(address.to_string()));
 
         // Reset if needed
         rate_limit.reset_if_needed();
 
         // Check message rate
         if rate_limit.messages_this_second >= self.config.max_messages_per_second {
-            self.penalize_peer(address, 5, Some("Rate limit exceeded: messages".to_string()));
+            self.penalize_peer(
+                address,
+                5,
+                Some("Rate limit exceeded: messages".to_string()),
+            );
             return Err("Rate limit exceeded: too many messages".to_string());
         }
 
@@ -355,9 +361,8 @@ impl NetworkSecurityManager {
             now - score.last_seen < max_inactive_seconds || score.is_blacklisted
         });
 
-        self.rate_limits.retain(|address, _| {
-            self.peer_scores.contains_key(address)
-        });
+        self.rate_limits
+            .retain(|address, _| self.peer_scores.contains_key(address));
     }
 }
 

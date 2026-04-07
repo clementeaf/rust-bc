@@ -129,8 +129,16 @@ mod tests {
             channel_id: "ch1".into(),
             height: 10,
             tx_summaries: vec![
-                FilteredTx { tx_id: "t1".into(), validation_code: "VALID".into(), chaincode_id: Some("basic".into()) },
-                FilteredTx { tx_id: "t2".into(), validation_code: "PHANTOM_READ".into(), chaincode_id: None },
+                FilteredTx {
+                    tx_id: "t1".into(),
+                    validation_code: "VALID".into(),
+                    chaincode_id: Some("basic".into()),
+                },
+                FilteredTx {
+                    tx_id: "t2".into(),
+                    validation_code: "PHANTOM_READ".into(),
+                    chaincode_id: None,
+                },
             ],
         };
 

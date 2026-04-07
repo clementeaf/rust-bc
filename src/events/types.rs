@@ -41,7 +41,11 @@ mod tests {
 
     #[test]
     fn block_committed_roundtrip() {
-        let event = BlockEvent::BlockCommitted { channel_id: "ch1".to_string(), height: 7, tx_count: 3 };
+        let event = BlockEvent::BlockCommitted {
+            channel_id: "ch1".to_string(),
+            height: 7,
+            tx_count: 3,
+        };
         assert_eq!(roundtrip(&event), event);
     }
 
@@ -69,7 +73,11 @@ mod tests {
 
     #[test]
     fn block_committed_json_contains_type_tag() {
-        let event = BlockEvent::BlockCommitted { channel_id: "".to_string(), height: 1, tx_count: 0 };
+        let event = BlockEvent::BlockCommitted {
+            channel_id: "".to_string(),
+            height: 1,
+            tx_count: 0,
+        };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"type\":\"block_committed\""));
     }

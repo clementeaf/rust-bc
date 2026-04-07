@@ -1,8 +1,8 @@
 /**
  * Network Security Testing Tool
- * 
+ *
  * Tests DoS protection, peer scoring, rate limiting, and blacklisting
- * 
+ *
  * Uso: cargo run --bin test_network_security --release
  */
 use rust_bc::network_security::NetworkSecurityManager;
@@ -41,7 +41,10 @@ fn main() {
     println!();
 
     manager = NetworkSecurityManager::with_defaults();
-    println!("Max message size: {} bytes", manager.config.message_size_limit);
+    println!(
+        "Max message size: {} bytes",
+        manager.config.message_size_limit
+    );
 
     let test_cases = vec![
         (1_000, "Small message"),
@@ -70,7 +73,10 @@ fn main() {
     let peer = "127.0.0.1:8081".to_string();
     manager.register_peer(peer.clone()).unwrap();
 
-    println!("Sending {} messages per second (limit: {})", 7, manager.config.max_messages_per_second);
+    println!(
+        "Sending {} messages per second (limit: {})",
+        7, manager.config.max_messages_per_second
+    );
     for i in 1..=7 {
         match manager.check_rate_limit(&peer, 1000) {
             Ok(_) => println!("  ✅ Message {} - ALLOWED", i),
@@ -133,7 +139,10 @@ fn main() {
 
     let stats = manager.get_peer_stats(&peer).unwrap();
     println!("  Status: {}", stats.status);
-    println!("  Reason: {:?}", manager.peer_scores.get(&peer).map(|p| &p.blacklist_reason));
+    println!(
+        "  Reason: {:?}",
+        manager.peer_scores.get(&peer).map(|p| &p.blacklist_reason)
+    );
 
     println!();
     println!("Attempting to send message from blacklisted peer:");
@@ -174,9 +183,9 @@ fn main() {
     }
 
     println!();
-    println!("Active connections: {}/{}", 
-        manager.active_connections, 
-        manager.config.max_concurrent_connections
+    println!(
+        "Active connections: {}/{}",
+        manager.active_connections, manager.config.max_concurrent_connections
     );
     println!();
 

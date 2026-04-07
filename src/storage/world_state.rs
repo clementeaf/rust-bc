@@ -344,12 +344,18 @@ mod tests {
         // owner0 has 3 assets, owner1 has 2
         for i in 0..3u8 {
             state
-                .put(&composite_key("Asset", &["owner0", &format!("id{i}")]), &[i])
+                .put(
+                    &composite_key("Asset", &["owner0", &format!("id{i}")]),
+                    &[i],
+                )
                 .unwrap();
         }
         for i in 0..2u8 {
             state
-                .put(&composite_key("Asset", &["owner1", &format!("id{i}")]), &[i])
+                .put(
+                    &composite_key("Asset", &["owner1", &format!("id{i}")]),
+                    &[i],
+                )
                 .unwrap();
         }
 
@@ -363,7 +369,9 @@ mod tests {
     #[test]
     fn get_by_partial_key_empty_when_no_match() {
         let state = ws();
-        state.put(&composite_key("Asset", &["ownerA"]), b"v").unwrap();
+        state
+            .put(&composite_key("Asset", &["ownerA"]), b"v")
+            .unwrap();
         let results = get_by_partial_key(&state, "Token", &[]).unwrap();
         assert!(results.is_empty());
     }

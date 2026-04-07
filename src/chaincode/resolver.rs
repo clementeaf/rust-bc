@@ -27,7 +27,9 @@ impl ChaincodeResolver for StoreBackedResolver {
     fn resolve(&self, chaincode_id: &str) -> Result<Vec<u8>, ChaincodeError> {
         self.store
             .get_package(chaincode_id, "latest")?
-            .ok_or_else(|| ChaincodeError::NotFound(format!("chaincode '{}' not found", chaincode_id)))
+            .ok_or_else(|| {
+                ChaincodeError::NotFound(format!("chaincode '{}' not found", chaincode_id))
+            })
     }
 }
 

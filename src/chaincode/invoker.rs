@@ -62,8 +62,7 @@ impl ChaincodeInvoker for ExternalInvoker {
         // External chaincode receives state context as a string identifier;
         // the actual state operations happen on the external service side.
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.client.invoke(func_name, &[], ""))
+            tokio::runtime::Handle::current().block_on(self.client.invoke(func_name, &[], ""))
         })
     }
 }

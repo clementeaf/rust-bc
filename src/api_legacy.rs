@@ -2104,118 +2104,127 @@ pub async fn get_airdrop_tiers(state: web::Data<AppState>) -> ActixResult<HttpRe
  */
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
     let scope = web::scope("/api/v1")
-            .route("/billing/create-key", web::post().to(create_api_key))
-            .route(
-                "/billing/deactivate-key",
-                web::post().to(deactivate_api_key),
-            )
-            .route("/billing/usage", web::get().to(get_billing_usage))
-            // GET/POST /api/v1/blocks — api::handlers::blocks (gateway)
-            // POST /api/v1/transactions, GET /api/v1/mempool — api::handlers::transactions (gateway)
-            .route("/wallets/{address}", web::get().to(get_wallet_balance))
-            .route("/wallets/create", web::post().to(create_wallet))
-            .route(
-                "/wallets/{address}/transactions",
-                web::get().to(get_wallet_transactions),
-            )
-            // GET /api/v1/chain/verify, /chain/info — api::handlers::chain
-            .route("/peers", web::get().to(get_peers))
-            .route("/peers/{address}/connect", web::post().to(connect_peer))
-            .route("/sync", web::post().to(sync_blockchain))
-            .route("/mine", web::post().to(mine_block))
-            .route("/metrics", web::get().to(get_metrics))
-            .route("/stats", web::get().to(get_stats))
-            // GET /api/v1/health — served by `api::handlers::utilities` (scaffold)
-            // IMPORTANTE: Rutas exactas ANTES de rutas con parámetros
-            .route("/contracts/debug", web::post().to(deploy_contract_debug))
-            .route("/contracts", web::get().to(get_all_contracts))
-            .route("/contracts", web::post().to(deploy_contract))
-            // Rutas con parámetros DESPUÉS de rutas exactas
-            .route("/contracts/{address}", web::get().to(get_contract))
-            .route(
-                "/contracts/{address}/execute",
-                web::post().to(execute_contract_function),
-            )
-            .route(
-                "/contracts/{address}/balance/{wallet}",
-                web::get().to(get_contract_balance),
-            )
-            .route(
-                "/contracts/{address}/allowance/{owner}/{spender}",
-                web::get().to(get_contract_allowance),
-            )
-            .route(
-                "/contracts/{address}/totalSupply",
-                web::get().to(get_contract_total_supply),
-            )
-            // NFT endpoints
-            .route(
-                "/contracts/{address}/nft/{token_id}/owner",
-                web::get().to(get_nft_owner),
-            )
-            .route(
-                "/contracts/{address}/nft/{token_id}/uri",
-                web::get().to(get_nft_token_uri),
-            )
-            .route(
-                "/contracts/{address}/nft/{token_id}/approved",
-                web::get().to(get_nft_approved),
-            )
-            .route(
-                "/contracts/{address}/nft/{token_id}/metadata",
-                web::get().to(get_nft_metadata),
-            )
-            .route(
-                "/contracts/{address}/nft/{token_id}/metadata",
-                web::post().to(set_nft_metadata),
-            )
-            .route(
-                "/contracts/{address}/nft/balance/{wallet}",
-                web::get().to(get_nft_balance),
-            )
-            .route(
-                "/contracts/{address}/nft/totalSupply",
-                web::get().to(get_nft_total_supply),
-            )
-            .route(
-                "/contracts/{address}/nft/tokens/{owner}",
-                web::get().to(get_nft_tokens_of_owner),
-            )
-            .route(
-                "/contracts/{address}/nft/index/{index}",
-                web::get().to(get_nft_token_by_index),
-            )
-            // Staking endpoints
-            .route("/staking/stake", web::post().to(stake))
-            .route("/staking/unstake", web::post().to(request_unstake))
-            .route(
-                "/staking/complete-unstake/{address}",
-                web::post().to(complete_unstake),
-            )
-            .route("/staking/validators", web::get().to(get_validators))
-            .route("/staking/validator/{address}", web::get().to(get_validator))
-            .route("/staking/my-stake/{address}", web::get().to(get_my_stake))
-            // Airdrop endpoints
-            .route("/airdrop/claim", web::post().to(claim_airdrop))
-            .route(
-                "/airdrop/tracking/{address}",
-                web::get().to(get_node_tracking),
-            )
-            .route("/airdrop/statistics", web::get().to(get_airdrop_statistics))
-            .route("/airdrop/eligible", web::get().to(get_eligible_nodes))
-            .route(
-                "/airdrop/eligibility/{address}",
-                web::get().to(get_eligibility_info),
-            )
-            .route("/airdrop/history", web::get().to(get_claim_history))
-            .route("/airdrop/tiers", web::get().to(get_airdrop_tiers))
-            // Scaffold utility routes
-            .route("/health", web::get().to(crate::api::handlers::utilities::health_check))
-            .route("/version", web::get().to(crate::api::handlers::utilities::get_version))
-            .route("/openapi.json", web::get().to(crate::api::handlers::utilities::get_openapi));
+        .route("/billing/create-key", web::post().to(create_api_key))
+        .route(
+            "/billing/deactivate-key",
+            web::post().to(deactivate_api_key),
+        )
+        .route("/billing/usage", web::get().to(get_billing_usage))
+        // GET/POST /api/v1/blocks — api::handlers::blocks (gateway)
+        // POST /api/v1/transactions, GET /api/v1/mempool — api::handlers::transactions (gateway)
+        .route("/wallets/{address}", web::get().to(get_wallet_balance))
+        .route("/wallets/create", web::post().to(create_wallet))
+        .route(
+            "/wallets/{address}/transactions",
+            web::get().to(get_wallet_transactions),
+        )
+        // GET /api/v1/chain/verify, /chain/info — api::handlers::chain
+        .route("/peers", web::get().to(get_peers))
+        .route("/peers/{address}/connect", web::post().to(connect_peer))
+        .route("/sync", web::post().to(sync_blockchain))
+        .route("/mine", web::post().to(mine_block))
+        .route("/metrics", web::get().to(get_metrics))
+        .route("/stats", web::get().to(get_stats))
+        // GET /api/v1/health — served by `api::handlers::utilities` (scaffold)
+        // IMPORTANTE: Rutas exactas ANTES de rutas con parámetros
+        .route("/contracts/debug", web::post().to(deploy_contract_debug))
+        .route("/contracts", web::get().to(get_all_contracts))
+        .route("/contracts", web::post().to(deploy_contract))
+        // Rutas con parámetros DESPUÉS de rutas exactas
+        .route("/contracts/{address}", web::get().to(get_contract))
+        .route(
+            "/contracts/{address}/execute",
+            web::post().to(execute_contract_function),
+        )
+        .route(
+            "/contracts/{address}/balance/{wallet}",
+            web::get().to(get_contract_balance),
+        )
+        .route(
+            "/contracts/{address}/allowance/{owner}/{spender}",
+            web::get().to(get_contract_allowance),
+        )
+        .route(
+            "/contracts/{address}/totalSupply",
+            web::get().to(get_contract_total_supply),
+        )
+        // NFT endpoints
+        .route(
+            "/contracts/{address}/nft/{token_id}/owner",
+            web::get().to(get_nft_owner),
+        )
+        .route(
+            "/contracts/{address}/nft/{token_id}/uri",
+            web::get().to(get_nft_token_uri),
+        )
+        .route(
+            "/contracts/{address}/nft/{token_id}/approved",
+            web::get().to(get_nft_approved),
+        )
+        .route(
+            "/contracts/{address}/nft/{token_id}/metadata",
+            web::get().to(get_nft_metadata),
+        )
+        .route(
+            "/contracts/{address}/nft/{token_id}/metadata",
+            web::post().to(set_nft_metadata),
+        )
+        .route(
+            "/contracts/{address}/nft/balance/{wallet}",
+            web::get().to(get_nft_balance),
+        )
+        .route(
+            "/contracts/{address}/nft/totalSupply",
+            web::get().to(get_nft_total_supply),
+        )
+        .route(
+            "/contracts/{address}/nft/tokens/{owner}",
+            web::get().to(get_nft_tokens_of_owner),
+        )
+        .route(
+            "/contracts/{address}/nft/index/{index}",
+            web::get().to(get_nft_token_by_index),
+        )
+        // Staking endpoints
+        .route("/staking/stake", web::post().to(stake))
+        .route("/staking/unstake", web::post().to(request_unstake))
+        .route(
+            "/staking/complete-unstake/{address}",
+            web::post().to(complete_unstake),
+        )
+        .route("/staking/validators", web::get().to(get_validators))
+        .route("/staking/validator/{address}", web::get().to(get_validator))
+        .route("/staking/my-stake/{address}", web::get().to(get_my_stake))
+        // Airdrop endpoints
+        .route("/airdrop/claim", web::post().to(claim_airdrop))
+        .route(
+            "/airdrop/tracking/{address}",
+            web::get().to(get_node_tracking),
+        )
+        .route("/airdrop/statistics", web::get().to(get_airdrop_statistics))
+        .route("/airdrop/eligible", web::get().to(get_eligible_nodes))
+        .route(
+            "/airdrop/eligibility/{address}",
+            web::get().to(get_eligibility_info),
+        )
+        .route("/airdrop/history", web::get().to(get_claim_history))
+        .route("/airdrop/tiers", web::get().to(get_airdrop_tiers))
+        // Scaffold utility routes
+        .route(
+            "/health",
+            web::get().to(crate::api::handlers::utilities::health_check),
+        )
+        .route(
+            "/version",
+            web::get().to(crate::api::handlers::utilities::get_version),
+        )
+        .route(
+            "/openapi.json",
+            web::get().to(crate::api::handlers::utilities::get_openapi),
+        );
 
-        // Merge remaining scaffold routes (sub-scoped services)
-        let scope = crate::api::routes::ApiRoutes::register(scope);
+    // Merge remaining scaffold routes (sub-scoped services)
+    let scope = crate::api::routes::ApiRoutes::register(scope);
 
-        cfg.service(scope);
-    }
+    cfg.service(scope);
+}

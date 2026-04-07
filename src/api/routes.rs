@@ -1,6 +1,9 @@
 use actix_web::{web, Scope};
 
-use crate::api::handlers::{acl, blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity, msp, organizations, private_data, proposals, snapshots, transactions, utilities};
+use crate::api::handlers::{
+    acl, blocks, chain, chaincode, channels, credentials, discovery, events, gateway, identity,
+    msp, organizations, private_data, proposals, snapshots, transactions, utilities,
+};
 
 /// API routes configuration
 pub struct ApiRoutes;

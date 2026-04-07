@@ -16,7 +16,12 @@ pub struct RaftOrderingService {
 }
 
 impl RaftOrderingService {
-    pub fn new(id: u64, peers: Vec<u64>, max_batch_size: usize, batch_timeout_ms: u64) -> Result<Self, RaftError> {
+    pub fn new(
+        id: u64,
+        peers: Vec<u64>,
+        max_batch_size: usize,
+        batch_timeout_ms: u64,
+    ) -> Result<Self, RaftError> {
         let node = RaftNode::new(id, peers)?;
         Ok(Self {
             raft_node: Arc::new(Mutex::new(node)),
@@ -169,7 +174,10 @@ mod tests {
             node.advance();
         }
 
-        let block = svc.cut_block(1, "orderer").unwrap().expect("expected a block");
+        let block = svc
+            .cut_block(1, "orderer")
+            .unwrap()
+            .expect("expected a block");
         assert_eq!(block.height, 1);
         assert_eq!(block.proposer, "orderer");
         assert_eq!(block.transactions, vec!["tx1", "tx2", "tx3"]);

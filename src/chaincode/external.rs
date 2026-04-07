@@ -16,10 +16,7 @@ pub enum ChaincodeRuntime {
         memory_limit: Option<usize>,
     },
     /// External HTTP service.
-    External {
-        endpoint: String,
-        tls: bool,
-    },
+    External { endpoint: String, tls: bool },
 }
 
 impl Default for ChaincodeRuntime {
@@ -101,10 +98,7 @@ impl ExternalChaincodeClient {
             ));
         }
 
-        Ok(resp_body
-            .result
-            .unwrap_or_default()
-            .into_bytes())
+        Ok(resp_body.result.unwrap_or_default().into_bytes())
     }
 }
 

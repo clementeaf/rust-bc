@@ -12,7 +12,11 @@ pub struct ApiVersion {
 impl ApiVersion {
     /// Create a new API version
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse version from string (e.g., "1.0.0")
@@ -35,7 +39,11 @@ impl ApiVersion {
             .parse::<u32>()
             .map_err(|_| format!("Invalid patch version: {}", parts[2]))?;
 
-        Ok(Self { major, minor, patch })
+        Ok(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 
     /// Check if this version is compatible with a minimum required version
@@ -152,9 +160,7 @@ impl VersionNegotiation {
             Some(req_str) => {
                 let requested_version = ApiVersion::parse(req_str)?;
 
-                if !requested_version.is_compatible_with(minimum)
-                    || requested_version > current
-                {
+                if !requested_version.is_compatible_with(minimum) || requested_version > current {
                     return Err(format!(
                         "Requested version {} not supported. Supported range: {}-{}",
                         requested_version, minimum, current
@@ -167,13 +173,11 @@ impl VersionNegotiation {
                     exact_match: true,
                 })
             }
-            None => {
-                Ok(Self {
-                    requested: None,
-                    negotiated: current,
-                    exact_match: false,
-                })
-            }
+            None => Ok(Self {
+                requested: None,
+                negotiated: current,
+                exact_match: false,
+            }),
         }
     }
 
@@ -184,32 +188,29 @@ impl VersionNegotiation {
         minimum: ApiVersion,
     ) -> Self {
         match requested {
-            Some(req_str) => {
-                match ApiVersion::parse(req_str) {
-                    Ok(requested_version) => {
-                        if requested_version.is_compatible_with(minimum)
-                            && requested_version <= current
-                        {
-                            Self {
-                                requested: Some(requested_version),
-                                negotiated: requested_version,
-                                exact_match: true,
-                            }
-                        } else {
-                            Self {
-                                requested: Some(requested_version),
-                                negotiated: current,
-                                exact_match: false,
-                            }
+            Some(req_str) => match ApiVersion::parse(req_str) {
+                Ok(requested_version) => {
+                    if requested_version.is_compatible_with(minimum) && requested_version <= current
+                    {
+                        Self {
+                            requested: Some(requested_version),
+                            negotiated: requested_version,
+                            exact_match: true,
+                        }
+                    } else {
+                        Self {
+                            requested: Some(requested_version),
+                            negotiated: current,
+                            exact_match: false,
                         }
                     }
-                    Err(_) => Self {
-                        requested: None,
-                        negotiated: current,
-                        exact_match: false,
-                    },
                 }
-            }
+                Err(_) => Self {
+                    requested: None,
+                    negotiated: current,
+                    exact_match: false,
+                },
+            },
             None => Self {
                 requested: None,
                 negotiated: current,
@@ -346,8 +347,7 @@ mod tests {
 
     #[test]
     fn test_feature_matrix_is_version_supported() {
-        let matrix =
-            ApiFeatureMatrix::new(ApiVersion::new(1, 2, 0), ApiVersion::new(1, 5, 0));
+        let matrix = ApiFeatureMatrix::new(ApiVersion::new(1, 2, 0), ApiVersion::new(1, 5, 0));
 
         assert!(!matrix.is_version_supported(ApiVersion::new(1, 1, 9)));
         assert!(matrix.is_version_supported(ApiVersion::new(1, 2, 0)));
@@ -394,11 +394,7 @@ mod tests {
         let current = ApiVersion::new(1, 5, 0);
         let minimum = ApiVersion::new(1, 0, 0);
 
-        let result = VersionNegotiation::negotiate_with_fallback(
-            Some("1.3.0"),
-            current,
-            minimum,
-        );
+        let result = VersionNegotiation::negotiate_with_fallback(Some("1.3.0"), current, minimum);
         assert_eq!(result.negotiated, ApiVersion::new(1, 3, 0));
         assert!(result.exact_match);
     }
@@ -408,11 +404,7 @@ mod tests {
         let current = ApiVersion::new(1, 5, 0);
         let minimum = ApiVersion::new(1, 0, 0);
 
-        let result = VersionNegotiation::negotiate_with_fallback(
-            Some("1.6.0"),
-            current,
-            minimum,
-        );
+        let result = VersionNegotiation::negotiate_with_fallback(Some("1.6.0"), current, minimum);
         assert_eq!(result.negotiated, current);
         assert!(!result.exact_match);
     }
@@ -422,11 +414,7 @@ mod tests {
         let current = ApiVersion::new(1, 5, 0);
         let minimum = ApiVersion::new(1, 0, 0);
 
-        let result = VersionNegotiation::negotiate_with_fallback(
-            Some("invalid"),
-            current,
-            minimum,
-        );
+        let result = VersionNegotiation::negotiate_with_fallback(Some("invalid"), current, minimum);
         assert_eq!(result.negotiated, current);
         assert!(!result.exact_match);
     }

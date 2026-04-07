@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use tracing::{debug, warn, info};
+use std::collections::HashMap;
+use tracing::{debug, info, warn};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -96,7 +96,13 @@ pub struct PriceData {
 }
 
 impl PriceData {
-    pub fn new(symbol: String, price: u64, timestamp: u64, source_count: u64, confidence: u8) -> Self {
+    pub fn new(
+        symbol: String,
+        price: u64,
+        timestamp: u64,
+        source_count: u64,
+        confidence: u8,
+    ) -> Self {
         PriceData {
             symbol,
             price,
@@ -123,8 +129,8 @@ pub struct OracleRegistry {
     pub nodes: HashMap<String, OracleNode>,
     pub price_cache: HashMap<String, PriceData>,
     pub pending_reports: Vec<OracleData>,
-    pub voting_threshold: u64,        // Percentage agreement needed (e.g., 66 = 66%)
-    pub max_data_age_ms: u64,         // Maximum allowed age for data
+    pub voting_threshold: u64, // Percentage agreement needed (e.g., 66 = 66%)
+    pub max_data_age_ms: u64,  // Maximum allowed age for data
     pub outlier_threshold_percent: u64, // Max deviation from median (e.g., 10 = 10%)
 }
 
@@ -136,8 +142,7 @@ impl OracleRegistry {
         data.extend_from_slice(&price.to_le_bytes());
         data.extend_from_slice(&timestamp.to_le_bytes());
 
-        let mut mac = HmacSha256::new_from_slice(Self::SIGNING_KEY)
-            .expect("HMAC key length valid");
+        let mut mac = HmacSha256::new_from_slice(Self::SIGNING_KEY).expect("HMAC key length valid");
         mac.update(&data);
         mac.finalize().into_bytes().to_vec()
     }
@@ -180,8 +185,7 @@ impl OracleRegistry {
 
     /// Verify signature using HMAC-SHA256
     fn verify_signature(data: &[u8], provided_signature: &[u8]) -> bool {
-        let mut mac = HmacSha256::new_from_slice(Self::SIGNING_KEY)
-            .expect("HMAC key length valid");
+        let mut mac = HmacSha256::new_from_slice(Self::SIGNING_KEY).expect("HMAC key length valid");
         mac.update(data);
         let computed = mac.finalize();
         let computed_bytes = computed.into_bytes();
@@ -201,10 +205,15 @@ impl OracleRegistry {
         if timestamp > current_time {
             let drift = timestamp - current_time;
             if drift > Self::MAX_FUTURE_DRIFT_MS {
-                warn!(drift_ms = drift, max_allowed = Self::MAX_FUTURE_DRIFT_MS, "Timestamp too far in future");
+                warn!(
+                    drift_ms = drift,
+                    max_allowed = Self::MAX_FUTURE_DRIFT_MS,
+                    "Timestamp too far in future"
+                );
                 return Err(format!(
                     "Timestamp too far in future: {} > {} ms drift allowed",
-                    drift, Self::MAX_FUTURE_DRIFT_MS
+                    drift,
+                    Self::MAX_FUTURE_DRIFT_MS
                 ));
             }
         }
@@ -212,10 +221,15 @@ impl OracleRegistry {
         if current_time > timestamp {
             let drift = current_time - timestamp;
             if drift > Self::MAX_PAST_DRIFT_MS {
-                warn!(drift_ms = drift, max_allowed = Self::MAX_PAST_DRIFT_MS, "Timestamp too old");
+                warn!(
+                    drift_ms = drift,
+                    max_allowed = Self::MAX_PAST_DRIFT_MS,
+                    "Timestamp too old"
+                );
                 return Err(format!(
                     "Timestamp too old: {} > {} ms allowed",
-                    drift, Self::MAX_PAST_DRIFT_MS
+                    drift,
+                    Self::MAX_PAST_DRIFT_MS
                 ));
             }
         }
@@ -235,7 +249,10 @@ impl OracleRegistry {
     ) -> Result<(), String> {
         // Verify oracle is registered
         if !self.nodes.contains_key(oracle_id) {
-            warn!(oracle_id, "Oracle not registered when submitting price report");
+            warn!(
+                oracle_id,
+                "Oracle not registered when submitting price report"
+            );
             return Err("Oracle not registered".to_string());
         }
         debug!(oracle_id, price, confidence, "Processing price report");
@@ -245,7 +262,7 @@ impl OracleRegistry {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        
+
         // For testing purposes, allow timestamps near the provided timestamp
         // In production, this would strictly validate against current_time
         let validation_time = if timestamp < 100_000_000 {
@@ -254,7 +271,7 @@ impl OracleRegistry {
             if timestamp < 10000 {
                 timestamp + 2000
             } else {
-                timestamp + 5000  // Allow 5 second window for test assertions
+                timestamp + 5000 // Allow 5 second window for test assertions
             }
         } else {
             current_time
@@ -268,11 +285,14 @@ impl OracleRegistry {
             data.extend_from_slice(&price.to_le_bytes());
             data.extend_from_slice(&timestamp.to_le_bytes());
 
-        if !Self::verify_signature(&data, &signature) {
-            warn!(oracle_id, "Signature verification failed for price report");
-            return Err("Invalid signature - verification failed".to_string());
-        }
-        info!(oracle_id, price, "Price report accepted with valid signature");
+            if !Self::verify_signature(&data, &signature) {
+                warn!(oracle_id, "Signature verification failed for price report");
+                return Err("Invalid signature - verification failed".to_string());
+            }
+            info!(
+                oracle_id,
+                price, "Price report accepted with valid signature"
+            );
         }
 
         // Add to pending reports
@@ -315,7 +335,11 @@ impl OracleRegistry {
     }
 
     /// Aggregate pending reports for a symbol
-    pub fn aggregate_reports(&mut self, symbol: &str, current_time: u64) -> Result<PriceData, String> {
+    pub fn aggregate_reports(
+        &mut self,
+        symbol: &str,
+        current_time: u64,
+    ) -> Result<PriceData, String> {
         // Filter reports for this symbol
         let reports: Vec<OracleData> = self
             .pending_reports
@@ -450,7 +474,13 @@ impl OracleRegistry {
     /// Get oracle statistics
     pub fn get_oracle_stats(&self, oracle_id: &str) -> Result<(u64, u64, u64), String> {
         self.get_oracle(oracle_id)
-            .map(|oracle| (oracle.reputation_score, oracle.accuracy_rate(), oracle.fee_balance))
+            .map(|oracle| {
+                (
+                    oracle.reputation_score,
+                    oracle.accuracy_rate(),
+                    oracle.fee_balance,
+                )
+            })
             .ok_or_else(|| "Oracle not found".to_string())
     }
 
@@ -1018,7 +1048,7 @@ mod tests {
         let oracle_id = "oracle1";
         let price = 50000u64;
         let timestamp = 5000u64;
-        
+
         let signature = OracleRegistry::generate_signature(oracle_id, price, timestamp);
         assert!(!signature.is_empty());
         assert_eq!(signature.len(), 32); // HMAC-SHA256 produces 32 bytes
@@ -1028,13 +1058,13 @@ mod tests {
     fn test_valid_signature_accepts_report() {
         let mut registry = OracleRegistry::new(66, 5000);
         registry.register_oracle("oracle1".to_string()).unwrap();
-        
+
         // Generate a valid signature in test mode (timestamp < 100M)
         let oracle_id = "oracle1";
         let price = 50000u64;
         let timestamp = 5000u64;
         let signature = OracleRegistry::generate_signature(oracle_id, price, timestamp);
-        
+
         let result = registry.submit_price_report(
             oracle_id,
             "BTC".to_string(),
@@ -1043,7 +1073,7 @@ mod tests {
             signature,
             95,
         );
-        
+
         assert!(result.is_ok());
         assert_eq!(registry.pending_report_count(), 1);
     }
@@ -1052,7 +1082,7 @@ mod tests {
     fn test_invalid_signature_rejects_report() {
         let mut registry = OracleRegistry::new(66, 5000);
         registry.register_oracle("oracle1".to_string()).unwrap();
-        
+
         // Use wrong price to mismatch signature but ensure verification runs by using real-time timestamp
         let oracle_id = "oracle1";
         let price = 50000u64;
@@ -1061,20 +1091,20 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        
+
         // Generate signature with wrong price
         let signature = OracleRegistry::generate_signature(oracle_id, wrong_price, timestamp);
-        
+
         // Try to submit with different price - signature won't match
         let result = registry.submit_price_report(
             oracle_id,
             "BTC".to_string(),
-            price,  // Different from what signature was generated for
+            price, // Different from what signature was generated for
             timestamp,
             signature,
             95,
         );
-        
+
         assert!(result.is_err());
     }
 
@@ -1082,18 +1112,18 @@ mod tests {
     fn test_generate_signature_matches_submission() {
         let mut registry = OracleRegistry::new(66, 5000);
         registry.register_oracle("oracle1".to_string()).unwrap();
-        
+
         let oracle_id = "oracle1";
         let price = 75000u64;
         let timestamp = 7000u64;
-        
+
         // Generate valid signature
         let signature = OracleRegistry::generate_signature(oracle_id, price, timestamp);
-        
+
         // Signature should be deterministic for same inputs
         let signature2 = OracleRegistry::generate_signature(oracle_id, price, timestamp);
         assert_eq!(signature, signature2);
-        
+
         // Should accept valid signature
         let result = registry.submit_price_report(
             oracle_id,
@@ -1103,7 +1133,7 @@ mod tests {
             signature,
             90,
         );
-        
+
         assert!(result.is_ok());
     }
 
@@ -1111,16 +1141,16 @@ mod tests {
     fn test_timestamp_within_acceptable_range() {
         let mut registry = OracleRegistry::new(66, 5000);
         registry.register_oracle("oracle1".to_string()).unwrap();
-        
+
         // Use small timestamps that stay in test mode range
         let base = 5000u64;
-        let acceptable_future = base + 100000;  // 100 seconds in future
-        let acceptable_past = base.saturating_sub(100000);  // 100 seconds in past
-        
+        let acceptable_future = base + 100000; // 100 seconds in future
+        let acceptable_past = base.saturating_sub(100000); // 100 seconds in past
+
         // Both should be accepted in test mode with proper spacing
         let sig_future = OracleRegistry::generate_signature("oracle1", 50000, acceptable_future);
         let sig_past = OracleRegistry::generate_signature("oracle1", 50000, acceptable_past);
-        
+
         let result1 = registry.submit_price_report(
             "oracle1",
             "BTC".to_string(),
@@ -1129,7 +1159,7 @@ mod tests {
             sig_future,
             90,
         );
-        
+
         assert!(result1.is_ok());
     }
 }

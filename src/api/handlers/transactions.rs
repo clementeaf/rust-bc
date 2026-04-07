@@ -3,7 +3,9 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
+use crate::api::handlers::channels::{
+    channel_id_from_req, enforce_channel_membership, get_channel_store,
+};
 use crate::api::models::{CreateTransactionRequest, MempoolResponse};
 use crate::app_state::AppState;
 use crate::models::Transaction;
@@ -15,7 +17,12 @@ pub async fn create_transaction(
     req: web::Json<CreateTransactionRequest>,
     http_req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Propose", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &http_req,
+    )?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let api_key = http_req
         .headers()
@@ -186,14 +193,21 @@ pub async fn store_write_transaction(
     body: web::Json<crate::storage::traits::Transaction>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Propose", &req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;
     let store = get_channel_store(&state, _channel)?;
     store
         .write_transaction(&body)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 
@@ -211,7 +225,9 @@ pub async fn store_get_transaction(
     let store = get_channel_store(&state, _channel)?;
     match store.read_transaction(&tx_id) {
         Ok(tx) => Ok(HttpResponse::Ok().json(ApiResponse::success(tx, trace_id))),
-        Err(_) => Err(ApiError::NotFound { resource: format!("transaction {tx_id}") }),
+        Err(_) => Err(ApiError::NotFound {
+            resource: format!("transaction {tx_id}"),
+        }),
     }
 }
 
@@ -229,7 +245,9 @@ pub async fn store_get_transactions_by_block(
     let store = get_channel_store(&state, _channel)?;
     let txs = store
         .transactions_by_block_height(height)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(txs, trace_id)))
 }
 

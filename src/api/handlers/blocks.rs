@@ -1,7 +1,9 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
+use crate::api::handlers::channels::{
+    channel_id_from_req, enforce_channel_membership, get_channel_store,
+};
 use crate::api::models::CreateBlockRequest;
 use crate::app_state::AppState;
 use crate::block_creation;
@@ -94,7 +96,9 @@ pub async fn store_list_blocks(
     let store = get_channel_store(&state, _channel)?;
     let (blocks, total) = store
         .list_blocks(query.offset(), query.limit())
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     let resp = crate::api::pagination::PaginatedResponse::new(blocks, total, &query);
     Ok(HttpResponse::Ok().json(ApiResponse::success(resp, trace_id)))
 }
@@ -110,7 +114,9 @@ pub async fn store_latest_height(
     let store = get_channel_store(&state, _channel)?;
     let height = store
         .get_latest_height()
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(height, trace_id)))
 }
 

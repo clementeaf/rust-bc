@@ -128,7 +128,13 @@ fn test_voting() {
 
     // Vote against
     contract
-        .vote(proposal_id, "voter2".to_string(), VoteType::Against, 30, 100)
+        .vote(
+            proposal_id,
+            "voter2".to_string(),
+            VoteType::Against,
+            30,
+            100,
+        )
         .unwrap();
 
     let proposal = contract.get_proposal(proposal_id).unwrap();
@@ -168,7 +174,13 @@ fn test_vote_change() {
 
     // Change to against
     contract
-        .vote(proposal_id, "voter1".to_string(), VoteType::Against, 50, 100)
+        .vote(
+            proposal_id,
+            "voter1".to_string(),
+            VoteType::Against,
+            50,
+            100,
+        )
         .unwrap();
 
     let proposal = contract.get_proposal(proposal_id).unwrap();
@@ -266,7 +278,13 @@ fn test_finalize_voting_success() {
         .vote(proposal_id, "voter1".to_string(), VoteType::For, 60, 100)
         .unwrap();
     contract
-        .vote(proposal_id, "voter2".to_string(), VoteType::Against, 30, 100)
+        .vote(
+            proposal_id,
+            "voter2".to_string(),
+            VoteType::Against,
+            30,
+            100,
+        )
         .unwrap();
 
     // Finalize after voting period ends
@@ -348,7 +366,13 @@ fn test_finalize_voting_fail_majority() {
         .vote(proposal_id, "voter1".to_string(), VoteType::For, 40, 100)
         .unwrap();
     contract
-        .vote(proposal_id, "voter2".to_string(), VoteType::Against, 50, 100)
+        .vote(
+            proposal_id,
+            "voter2".to_string(),
+            VoteType::Against,
+            50,
+            100,
+        )
         .unwrap();
 
     contract.finalize_voting(proposal_id, 1200).unwrap();
@@ -392,7 +416,13 @@ fn test_execute_proposal_success() {
         .vote(proposal_id, "voter1".to_string(), VoteType::For, 60, 100)
         .unwrap();
     contract
-        .vote(proposal_id, "voter2".to_string(), VoteType::Against, 30, 100)
+        .vote(
+            proposal_id,
+            "voter2".to_string(),
+            VoteType::Against,
+            30,
+            100,
+        )
         .unwrap();
 
     contract.finalize_voting(proposal_id, 1200).unwrap();
@@ -470,7 +500,13 @@ fn test_execute_proposal_not_succeeded() {
     contract.activate_proposal(proposal_id, 100).unwrap();
 
     contract
-        .vote(proposal_id, "voter1".to_string(), VoteType::Against, 80, 100)
+        .vote(
+            proposal_id,
+            "voter1".to_string(),
+            VoteType::Against,
+            80,
+            100,
+        )
         .unwrap();
 
     contract.finalize_voting(proposal_id, 1200).unwrap();
@@ -570,7 +606,9 @@ fn test_cancel_executed_proposal() {
     let result = contract.cancel_proposal(proposal_id, "owner");
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Cannot cancel executed proposal"));
+    assert!(result
+        .unwrap_err()
+        .contains("Cannot cancel executed proposal"));
 }
 
 #[test]
@@ -726,10 +764,22 @@ fn test_abstain_votes() {
         .vote(proposal_id, "voter1".to_string(), VoteType::For, 40, 100)
         .unwrap();
     contract
-        .vote(proposal_id, "voter2".to_string(), VoteType::Against, 30, 100)
+        .vote(
+            proposal_id,
+            "voter2".to_string(),
+            VoteType::Against,
+            30,
+            100,
+        )
         .unwrap();
     contract
-        .vote(proposal_id, "voter3".to_string(), VoteType::Abstain, 30, 100)
+        .vote(
+            proposal_id,
+            "voter3".to_string(),
+            VoteType::Abstain,
+            30,
+            100,
+        )
         .unwrap();
 
     contract.finalize_voting(proposal_id, 1200).unwrap();

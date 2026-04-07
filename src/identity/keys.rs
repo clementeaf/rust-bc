@@ -2,7 +2,7 @@
 //!
 //! Supports Ed25519 keypair generation, storage, and rotation
 
-use ed25519_dalek::{SigningKey, VerifyingKey, Verifier, Signer};
+use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 
 /// Public key information

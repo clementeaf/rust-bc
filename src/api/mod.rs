@@ -7,18 +7,17 @@
 //! - JWT authentication and rate limiting
 //! - API versioning and backward compatibility
 
-
+pub mod cors;
 pub mod errors;
-pub mod models;
-pub mod middleware;
-pub mod routes;
-pub mod traits;
-pub mod openapi;
 pub mod handlers;
 pub mod metrics;
-pub mod rate_limit;
-pub mod cors;
+pub mod middleware;
+pub mod models;
+pub mod openapi;
 pub mod pagination;
+pub mod rate_limit;
+pub mod routes;
+pub mod traits;
 pub mod versioning;
 
 /// API configuration

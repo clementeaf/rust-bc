@@ -1,8 +1,10 @@
-use actix_web::{web, HttpRequest, HttpResponse, post, get};
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
+use crate::api::handlers::channels::{
+    channel_id_from_req, enforce_channel_membership, get_channel_store,
+};
 use crate::api::models::*;
 use crate::app_state::AppState;
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
 
 /// POST /credentials/issue - Issue a credential
@@ -12,11 +14,11 @@ async fn issue_credential(
     body: web::Json<IssueCredentialRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
+
     // TODO: Generate Ed25519 proof
     // TODO: Create VerifiableCredential
     // TODO: Store in blockchain
-    
+
     let response = IssueCredentialResponse {
         credential_id: uuid::Uuid::new_v4().to_string(),
         issuer_did: body.issuer_did.clone(),
@@ -35,15 +37,12 @@ async fn issue_credential(
 
 /// GET /credentials/{id} - Fetch credential
 #[get("/credentials/{id}")]
-async fn get_credential(
-    _req: HttpRequest,
-    path: web::Path<String>,
-) -> ApiResult<HttpResponse> {
+async fn get_credential(_req: HttpRequest, path: web::Path<String>) -> ApiResult<HttpResponse> {
     let id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
+
     // TODO: Query storage for credential
-    
+
     let response = CredentialResponse {
         id,
         issuer_did: "did:bc:issuer".to_string(),
@@ -71,10 +70,10 @@ async fn verify_credential(
 ) -> ApiResult<HttpResponse> {
     let _id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
+
     // TODO: Lookup credential + issuer DID
     // TODO: Verify Ed25519 signature + timestamp + expiration
-    
+
     let response = VerifyCredentialResponse {
         valid: true,
         issuer_did: "did:bc:issuer".to_string(),
@@ -95,9 +94,9 @@ async fn revoke_credential(
 ) -> ApiResult<HttpResponse> {
     let id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
-    
+
     // TODO: Mark in revocation registry
-    
+
     let response = RevokeCredentialResponse {
         credential_id: id,
         revoked: true,
@@ -123,7 +122,9 @@ pub async fn store_write_credential(
     let store = get_channel_store(&state, _channel)?;
     store
         .write_credential(&body)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 
@@ -141,7 +142,9 @@ pub async fn store_get_credential(
     let store = get_channel_store(&state, _channel)?;
     match store.read_credential(&cred_id) {
         Ok(cred) => Ok(HttpResponse::Ok().json(ApiResponse::success(cred, trace_id))),
-        Err(_) => Err(ApiError::NotFound { resource: format!("credential {cred_id}") }),
+        Err(_) => Err(ApiError::NotFound {
+            resource: format!("credential {cred_id}"),
+        }),
     }
 }
 
@@ -160,7 +163,9 @@ pub async fn store_get_credentials_by_subject(
     let store = get_channel_store(&state, _channel)?;
     let creds = store
         .credentials_by_subject_did(&subject_did)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 

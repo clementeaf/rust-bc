@@ -6,7 +6,6 @@
  * - Hooks system (before/after transfer, etc.)
  * - Plugin permissions (what state can access)
  */
-
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -193,10 +192,7 @@ impl PluginRegistry {
             return Err("Only owner can enable plugins".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         if plugin.enabled {
             return Err("Plugin already enabled".to_string());
@@ -222,10 +218,7 @@ impl PluginRegistry {
             return Err("Only owner can disable plugins".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         if !plugin.enabled {
             return Err("Plugin already disabled".to_string());
@@ -250,10 +243,7 @@ impl PluginRegistry {
             return Err("Only owner can uninstall plugins".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get(plugin_id).ok_or("Plugin not found")?;
 
         if plugin.enabled {
             return Err("Cannot uninstall enabled plugin - disable first".to_string());
@@ -296,10 +286,7 @@ impl PluginRegistry {
             return Err("Only owner can grant permissions".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         plugin.permissions.insert(permission);
         Ok(())
@@ -316,10 +303,7 @@ impl PluginRegistry {
             return Err("Only owner can revoke permissions".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         plugin.permissions.remove(&permission);
         Ok(())
@@ -336,10 +320,7 @@ impl PluginRegistry {
             return Err("Only owner can register hooks".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         plugin.hooks.insert(hook);
 
@@ -365,10 +346,7 @@ impl PluginRegistry {
             return Err("Only owner can unregister hooks".to_string());
         }
 
-        let plugin = self
-            .plugins
-            .get_mut(plugin_id)
-            .ok_or("Plugin not found")?;
+        let plugin = self.plugins.get_mut(plugin_id).ok_or("Plugin not found")?;
 
         plugin.hooks.remove(&hook);
 

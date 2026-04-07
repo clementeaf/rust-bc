@@ -27,7 +27,9 @@ fn test_register_staker() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     let staker = contract.get_staker("staker1").unwrap();
     assert_eq!(staker.address, "staker1");
@@ -62,7 +64,9 @@ fn test_register_staker_duplicate() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     let result = contract.register_staker("staker1".to_string(), 1000, 100);
 
@@ -158,7 +162,9 @@ fn test_update_stake() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     // Move forward 100_000 blocks and update stake
     contract.update_stake("staker1", 2000, 100_100).unwrap();
@@ -185,8 +191,12 @@ fn test_distribute_rewards() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
-    contract.register_staker("staker2".to_string(), 2000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker2".to_string(), 2000, 100)
+        .unwrap();
 
     // Distribute after interval - need enough blocks elapsed for measurable rewards
     // 100_000 blocks = 10% of year = 1% rewards = 10 tokens per 1000 staked
@@ -213,7 +223,9 @@ fn test_distribute_rewards_too_early() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     // Try to distribute before interval
     let result = contract.distribute_rewards(500);
@@ -238,7 +250,9 @@ fn test_claim_rewards() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
     // Distribute with enough blocks elapsed
     contract.distribute_rewards(100_100).unwrap();
 
@@ -260,7 +274,9 @@ fn test_claim_rewards_no_pending() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     let result = contract.claim_rewards("staker1");
 
@@ -284,7 +300,9 @@ fn test_claim_rewards_insufficient_treasury() {
         1, // Very small treasury
     );
 
-    contract.register_staker("staker1".to_string(), 1_000_000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1_000_000, 100)
+        .unwrap();
     // Don't distribute - just try to claim when there's no treasury and no rewards
     let result = contract.claim_rewards("staker1");
 
@@ -302,9 +320,15 @@ fn test_total_staked() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
-    contract.register_staker("staker2".to_string(), 2000, 100).unwrap();
-    contract.register_staker("staker3".to_string(), 3000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker2".to_string(), 2000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker3".to_string(), 3000, 100)
+        .unwrap();
 
     assert_eq!(contract.total_staked(), 6000);
 }
@@ -319,8 +343,12 @@ fn test_active_stakers_count() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
-    contract.register_staker("staker2".to_string(), 2000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker2".to_string(), 2000, 100)
+        .unwrap();
 
     assert_eq!(contract.active_stakers_count(), 2);
 }
@@ -492,7 +520,9 @@ fn test_unstake_staker() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     let unstaked = contract.unstake_staker("staker1", 100_100).unwrap();
 
@@ -534,8 +564,12 @@ fn test_get_statistics() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
-    contract.register_staker("staker2".to_string(), 2000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker2".to_string(), 2000, 100)
+        .unwrap();
 
     let stats = contract.get_statistics();
 
@@ -561,7 +595,9 @@ fn test_pending_rewards_calculation() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
     contract.distribute_rewards(1100).unwrap();
 
     let staker = contract.get_staker("staker1").unwrap();
@@ -586,7 +622,9 @@ fn test_multiple_distributions() {
         10_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
 
     let dist1 = contract.distribute_rewards(100_100).unwrap();
     let dist2 = contract.distribute_rewards(200_100).unwrap();
@@ -632,8 +670,12 @@ fn test_reward_distribution_proportional() {
         1_000_000,
     );
 
-    contract.register_staker("staker1".to_string(), 1000, 100).unwrap();
-    contract.register_staker("staker2".to_string(), 2000, 100).unwrap();
+    contract
+        .register_staker("staker1".to_string(), 1000, 100)
+        .unwrap();
+    contract
+        .register_staker("staker2".to_string(), 2000, 100)
+        .unwrap();
 
     contract.distribute_rewards(1100).unwrap();
 

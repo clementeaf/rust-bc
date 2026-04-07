@@ -2,7 +2,7 @@
 
 /**
  * Transaction Validation Gate
- * 
+ *
  * Implements comprehensive pre-mempool validation:
  * - Signature verification
  * - Sender sequence number tracking (replay attack prevention)
@@ -10,7 +10,6 @@
  * - Double-spend prevention
  * - Amount and format validation
  */
-
 use crate::models::Transaction;
 use std::collections::HashMap;
 use std::time::SystemTime;
@@ -36,7 +35,7 @@ impl Default for ValidationConfig {
             min_fee: 0,
             min_amount: 0,
             max_amount: u64::MAX,
-            min_address_length: 5,  // Minimum 5 chars (e.g., "addr1")
+            min_address_length: 5, // Minimum 5 chars (e.g., "addr1")
             max_address_length: 256,
             fee_multiplier: 1.0,
             enable_sequence_tracking: true,
@@ -73,8 +72,7 @@ impl SenderState {
 
     pub fn is_valid_sequence(&self, sequence: u64) -> bool {
         // Sequence must be > last confirmed OR in pending range
-        sequence > self.last_confirmed_sequence
-            || self.pending_transactions.contains(&sequence)
+        sequence > self.last_confirmed_sequence || self.pending_transactions.contains(&sequence)
     }
 
     pub fn add_pending(&mut self, sequence: u64) -> Result<(), String> {
@@ -165,7 +163,9 @@ impl TransactionValidator {
         // 2. Duplicate check
         if self.seen_transaction_ids.contains_key(&tx.id) {
             result.is_valid = false;
-            result.errors.push("Transaction already seen (duplicate)".to_string());
+            result
+                .errors
+                .push("Transaction already seen (duplicate)".to_string());
             return result;
         }
 
@@ -212,10 +212,11 @@ impl TransactionValidator {
             .unwrap_or_default()
             .as_secs();
         self.seen_transaction_ids.insert(tx.id.clone(), now);
-        
+
         // Initialize sender state if needed
         if !self.sender_states.contains_key(&tx.from) {
-            self.sender_states.insert(tx.from.clone(), SenderState::new(tx.from.clone()));
+            self.sender_states
+                .insert(tx.from.clone(), SenderState::new(tx.from.clone()));
         }
 
         // Update sender state
@@ -348,7 +349,8 @@ impl TransactionValidator {
     fn validate_sequence(&self, tx: &Transaction) -> Result<(), String> {
         let sender_state = self
             .sender_states
-            .get(&tx.from).cloned()
+            .get(&tx.from)
+            .cloned()
             .unwrap_or_else(|| SenderState::new(tx.from.clone()));
 
         if !sender_state.is_valid_sequence(tx.timestamp) {
@@ -404,9 +406,8 @@ impl TransactionValidator {
             .unwrap_or_default()
             .as_secs();
 
-        self.seen_transaction_ids.retain(|_, &mut timestamp| {
-            now - timestamp < max_age_seconds
-        });
+        self.seen_transaction_ids
+            .retain(|_, &mut timestamp| now - timestamp < max_age_seconds);
     }
 
     /**

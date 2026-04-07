@@ -72,11 +72,11 @@ pub fn enforce_channel_membership(
 
     if let Some(history) = configs.get(channel_id) {
         if let Some(latest) = history.last() {
-            if !latest.member_orgs.is_empty() && !latest.member_orgs.contains(&caller_org.to_string()) {
+            if !latest.member_orgs.is_empty()
+                && !latest.member_orgs.contains(&caller_org.to_string())
+            {
                 return Err(ApiError::Forbidden {
-                    reason: format!(
-                        "org '{caller_org}' is not a member of channel '{channel_id}'"
-                    ),
+                    reason: format!("org '{caller_org}' is not a member of channel '{channel_id}'"),
                 });
             }
         }
@@ -116,7 +116,12 @@ pub async fn create_channel(
     state: web::Data<AppState>,
     body: web::Json<CreateChannelRequest>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChannelConfig", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChannelConfig",
+        &http_req,
+    )?;
     let channel_id = body.into_inner().channel_id;
     let trace_id = uuid::Uuid::new_v4().to_string();
 
@@ -144,9 +149,11 @@ pub async fn create_channel(
 
     let genesis_config = ChannelConfig::default();
     let genesis = create_genesis_block(&channel_id, &genesis_config);
-    new_store.write_block(&genesis).map_err(|e| ApiError::InternalError {
-        reason: format!("failed to write genesis block for channel '{channel_id}': {e}"),
-    })?;
+    new_store
+        .write_block(&genesis)
+        .map_err(|e| ApiError::InternalError {
+            reason: format!("failed to write genesis block for channel '{channel_id}': {e}"),
+        })?;
 
     map.insert(channel_id.clone(), new_store);
     drop(map);
@@ -158,8 +165,10 @@ pub async fn create_channel(
         .unwrap_or_else(|e| e.into_inner())
         .insert(channel_id.clone(), vec![genesis_config]);
 
-    Ok(HttpResponse::Created()
-        .json(ApiResponse::success(ChannelCreatedResponse { channel_id }, trace_id)))
+    Ok(HttpResponse::Created().json(ApiResponse::success(
+        ChannelCreatedResponse { channel_id },
+        trace_id,
+    )))
 }
 
 /// POST /api/v1/channels/{channel_id}/config — submit a config-update transaction.
@@ -174,7 +183,12 @@ pub async fn update_channel_config(
     path: web::Path<String>,
     body: web::Json<ConfigTransaction>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChannelConfig", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChannelConfig",
+        &http_req,
+    )?;
     let channel_id = path.into_inner();
     let tx = body.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
@@ -184,7 +198,10 @@ pub async fn update_channel_config(
 
     // Get current config (last entry in history).
     let current = {
-        let configs = state.channel_configs.read().unwrap_or_else(|e| e.into_inner());
+        let configs = state
+            .channel_configs
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         configs
             .get(&channel_id)
             .and_then(|v| v.last().cloned())
@@ -206,19 +223,19 @@ pub async fn update_channel_config(
         .as_deref()
         .unwrap_or(&fallback_org_registry);
 
-    crate::channel::config::validate_config_tx(&tx, &current, policy_store, org_registry)
-        .map_err(|e| ApiError::ValidationError {
+    crate::channel::config::validate_config_tx(&tx, &current, policy_store, org_registry).map_err(
+        |e| ApiError::ValidationError {
             field: "signatures".to_string(),
             reason: e.to_string(),
-        })?;
+        },
+    )?;
 
     // Apply updates and persist new version.
-    let new_config = apply_config_update(&current, &tx.updates).map_err(|e| {
-        ApiError::ValidationError {
+    let new_config =
+        apply_config_update(&current, &tx.updates).map_err(|e| ApiError::ValidationError {
             field: "updates".to_string(),
             reason: e.to_string(),
-        }
-    })?;
+        })?;
 
     state
         .channel_configs
@@ -347,7 +364,9 @@ mod tests {
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
             channel_configs: Arc::new(RwLock::new(HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         }
     }
 
@@ -401,8 +420,14 @@ mod tests {
     #[test]
     fn create_channel_conflict_detected() {
         let state = make_state(vec![
-            ("default", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
-            ("ch-dup", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
+            (
+                "default",
+                Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
+            ),
+            (
+                "ch-dup",
+                Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
+            ),
         ]);
         let map = state.store.read().unwrap();
         assert!(map.contains_key("ch-dup"));
@@ -418,7 +443,10 @@ mod tests {
     #[test]
     fn list_channels_returns_all_keys() {
         let state = make_state(vec![
-            ("default", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
+            (
+                "default",
+                Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
+            ),
             ("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
             ("ch2", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
         ]);
@@ -476,8 +504,14 @@ mod tests {
     fn get_channel_config_returns_current_config() {
         use crate::channel::config::ChannelConfig;
 
-        let state = make_state(vec![("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>)]);
-        let config = ChannelConfig { batch_size: 42, ..ChannelConfig::default() };
+        let state = make_state(vec![(
+            "ch1",
+            Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
+        )]);
+        let config = ChannelConfig {
+            batch_size: 42,
+            ..ChannelConfig::default()
+        };
         state
             .channel_configs
             .write()
@@ -515,9 +549,19 @@ mod tests {
     fn get_channel_config_history_returns_all_versions() {
         use crate::channel::config::ChannelConfig;
 
-        let state = make_state(vec![("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>)]);
-        let v0 = ChannelConfig { batch_size: 10, ..ChannelConfig::default() };
-        let v1 = ChannelConfig { batch_size: 20, version: 1, ..ChannelConfig::default() };
+        let state = make_state(vec![(
+            "ch1",
+            Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
+        )]);
+        let v0 = ChannelConfig {
+            batch_size: 10,
+            ..ChannelConfig::default()
+        };
+        let v1 = ChannelConfig {
+            batch_size: 20,
+            version: 1,
+            ..ChannelConfig::default()
+        };
         state
             .channel_configs
             .write()
@@ -542,12 +586,7 @@ mod tests {
     fn get_channel_config_history_unknown_channel_returns_none() {
         let state = make_state(vec![]);
 
-        let result = state
-            .channel_configs
-            .read()
-            .unwrap()
-            .get("ghost")
-            .cloned();
+        let result = state.channel_configs.read().unwrap().get("ghost").cloned();
 
         assert!(result.is_none());
     }
@@ -598,8 +637,8 @@ mod tests {
 
     #[test]
     fn update_channel_config_unknown_channel_returns_not_found() {
-        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
         use crate::api::errors::ApiError;
+        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
 
         let state = make_state(vec![]);
         let tx = ConfigTransaction {
@@ -615,8 +654,8 @@ mod tests {
 
     #[test]
     fn update_channel_config_missing_config_history_returns_not_found() {
-        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
         use crate::api::errors::ApiError;
+        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
 
         // Store exists but no config history seeded.
         let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
@@ -667,11 +706,12 @@ mod tests {
         let ps = state.policy_store.as_deref().unwrap_or(&fallback_policy);
         let or_ = state.org_registry.as_deref().unwrap_or(&fallback_orgs);
 
-        validate_config_tx(&tx, &current, ps, or_)
-            .map_err(|e| crate::api::errors::ApiError::ValidationError {
+        validate_config_tx(&tx, &current, ps, or_).map_err(|e| {
+            crate::api::errors::ApiError::ValidationError {
                 field: "signatures".to_string(),
                 reason: e.to_string(),
-            })?;
+            }
+        })?;
 
         let new_config = apply_config_update(&current, &tx.updates).map_err(|e| {
             crate::api::errors::ApiError::ValidationError {

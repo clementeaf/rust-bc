@@ -62,52 +62,63 @@ impl MetricsCollector {
         let registry = Registry::new();
 
         // ── Blockchain ────────────────────────────────────────────────────────
-        let blocks_total = IntCounter::with_opts(
-            Opts::new("blockchain_blocks_total", "Total number of blocks in the chain"),
-        )
+        let blocks_total = IntCounter::with_opts(Opts::new(
+            "blockchain_blocks_total",
+            "Total number of blocks in the chain",
+        ))
         .expect("metric creation failed");
-        registry.register(Box::new(blocks_total.clone())).expect("register failed");
+        registry
+            .register(Box::new(blocks_total.clone()))
+            .expect("register failed");
 
-        let blockchain_transactions_total = IntCounter::with_opts(
-            Opts::new("blockchain_transactions_total", "Total transactions committed to blocks"),
-        )
+        let blockchain_transactions_total = IntCounter::with_opts(Opts::new(
+            "blockchain_transactions_total",
+            "Total transactions committed to blocks",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(blockchain_transactions_total.clone()))
             .expect("register failed");
 
-        let chain_height = IntGauge::with_opts(
-            Opts::new("blockchain_height", "Current blockchain height"),
-        )
-        .expect("metric creation failed");
-        registry.register(Box::new(chain_height.clone())).expect("register failed");
+        let chain_height =
+            IntGauge::with_opts(Opts::new("blockchain_height", "Current blockchain height"))
+                .expect("metric creation failed");
+        registry
+            .register(Box::new(chain_height.clone()))
+            .expect("register failed");
 
-        let difficulty = IntGauge::with_opts(
-            Opts::new("blockchain_difficulty", "Current mining difficulty"),
-        )
+        let difficulty = IntGauge::with_opts(Opts::new(
+            "blockchain_difficulty",
+            "Current mining difficulty",
+        ))
         .expect("metric creation failed");
-        registry.register(Box::new(difficulty.clone())).expect("register failed");
+        registry
+            .register(Box::new(difficulty.clone()))
+            .expect("register failed");
 
         // ── Transaction pipeline ──────────────────────────────────────────────
-        let transactions_validated_total = IntCounter::with_opts(
-            Opts::new("transactions_validated_total", "Total validated transactions"),
-        )
+        let transactions_validated_total = IntCounter::with_opts(Opts::new(
+            "transactions_validated_total",
+            "Total validated transactions",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(transactions_validated_total.clone()))
             .expect("register failed");
 
-        let transactions_rejected_total = IntCounter::with_opts(
-            Opts::new("transactions_rejected_total", "Total rejected transactions"),
-        )
+        let transactions_rejected_total = IntCounter::with_opts(Opts::new(
+            "transactions_rejected_total",
+            "Total rejected transactions",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(transactions_rejected_total.clone()))
             .expect("register failed");
 
-        let transactions_total_fees = IntCounter::with_opts(
-            Opts::new("transactions_total_fees_collected", "Total fees collected (in base units)"),
-        )
+        let transactions_total_fees = IntCounter::with_opts(Opts::new(
+            "transactions_total_fees_collected",
+            "Total fees collected (in base units)",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(transactions_total_fees.clone()))
@@ -118,7 +129,9 @@ impl MetricsCollector {
                 "transaction_validation_duration_ms",
                 "Transaction validation latency in milliseconds",
             )
-            .buckets(vec![0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0]),
+            .buckets(vec![
+                0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0,
+            ]),
         )
         .expect("metric creation failed");
         registry
@@ -126,92 +139,107 @@ impl MetricsCollector {
             .expect("register failed");
 
         // ── Mempool ───────────────────────────────────────────────────────────
-        let mempool_pending = IntGauge::with_opts(
-            Opts::new("mempool_pending_transactions", "Pending transactions in mempool"),
-        )
+        let mempool_pending = IntGauge::with_opts(Opts::new(
+            "mempool_pending_transactions",
+            "Pending transactions in mempool",
+        ))
         .expect("metric creation failed");
-        registry.register(Box::new(mempool_pending.clone())).expect("register failed");
+        registry
+            .register(Box::new(mempool_pending.clone()))
+            .expect("register failed");
 
-        let mempool_fees_pending = IntGauge::with_opts(
-            Opts::new("mempool_total_fees_pending", "Total fees of pending transactions"),
-        )
+        let mempool_fees_pending = IntGauge::with_opts(Opts::new(
+            "mempool_total_fees_pending",
+            "Total fees of pending transactions",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(mempool_fees_pending.clone()))
             .expect("register failed");
 
         // ── Network ───────────────────────────────────────────────────────────
-        let network_peers = IntGauge::with_opts(
-            Opts::new("network_connected_peers", "Number of connected P2P peers"),
-        )
+        let network_peers = IntGauge::with_opts(Opts::new(
+            "network_connected_peers",
+            "Number of connected P2P peers",
+        ))
         .expect("metric creation failed");
-        registry.register(Box::new(network_peers.clone())).expect("register failed");
+        registry
+            .register(Box::new(network_peers.clone()))
+            .expect("register failed");
 
-        let network_messages_received = IntCounter::with_opts(
-            Opts::new("network_messages_received_total", "Total P2P messages received"),
-        )
+        let network_messages_received = IntCounter::with_opts(Opts::new(
+            "network_messages_received_total",
+            "Total P2P messages received",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(network_messages_received.clone()))
             .expect("register failed");
 
-        let network_messages_sent = IntCounter::with_opts(
-            Opts::new("network_messages_sent_total", "Total P2P messages sent"),
-        )
+        let network_messages_sent = IntCounter::with_opts(Opts::new(
+            "network_messages_sent_total",
+            "Total P2P messages sent",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(network_messages_sent.clone()))
             .expect("register failed");
 
         // ── Gossip ────────────────────────────────────────────────────────────
-        let gossip_blocks_gossiped = IntCounter::with_opts(
-            Opts::new("gossip_blocks_gossiped_total", "Blocks sent to gossip fanout peers"),
-        )
+        let gossip_blocks_gossiped = IntCounter::with_opts(Opts::new(
+            "gossip_blocks_gossiped_total",
+            "Blocks sent to gossip fanout peers",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(gossip_blocks_gossiped.clone()))
             .expect("register failed");
 
         // ── Endorsement ───────────────────────────────────────────────────────
-        let endorsement_validations_total = IntCounter::with_opts(
-            Opts::new("endorsement_validations_total", "Total endorsement policy validations"),
-        )
+        let endorsement_validations_total = IntCounter::with_opts(Opts::new(
+            "endorsement_validations_total",
+            "Total endorsement policy validations",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(endorsement_validations_total.clone()))
             .expect("register failed");
 
         // ── Ordering ─────────────────────────────────────────────────────────
-        let ordering_blocks_cut_total = IntCounter::with_opts(
-            Opts::new("ordering_blocks_cut_total", "Total ordered blocks cut"),
-        )
+        let ordering_blocks_cut_total = IntCounter::with_opts(Opts::new(
+            "ordering_blocks_cut_total",
+            "Total ordered blocks cut",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(ordering_blocks_cut_total.clone()))
             .expect("register failed");
 
         // ── MVCC ──────────────────────────────────────────────────────────────
-        let mvcc_conflicts_total = IntCounter::with_opts(
-            Opts::new("mvcc_conflicts_total", "Total MVCC read-set conflicts"),
-        )
+        let mvcc_conflicts_total = IntCounter::with_opts(Opts::new(
+            "mvcc_conflicts_total",
+            "Total MVCC read-set conflicts",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(mvcc_conflicts_total.clone()))
             .expect("register failed");
 
         // ── Events ────────────────────────────────────────────────────────────
-        let event_subscriptions_active = IntGauge::with_opts(
-            Opts::new("event_subscriptions_active", "Active event bus subscriptions"),
-        )
+        let event_subscriptions_active = IntGauge::with_opts(Opts::new(
+            "event_subscriptions_active",
+            "Active event bus subscriptions",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(event_subscriptions_active.clone()))
             .expect("register failed");
 
         // ── Discovery ─────────────────────────────────────────────────────────
-        let discovery_peers_registered = IntGauge::with_opts(
-            Opts::new("discovery_peers_registered", "Registered peers in discovery service"),
-        )
+        let discovery_peers_registered = IntGauge::with_opts(Opts::new(
+            "discovery_peers_registered",
+            "Registered peers in discovery service",
+        ))
         .expect("metric creation failed");
         registry
             .register(Box::new(discovery_peers_registered.clone()))
@@ -263,7 +291,8 @@ impl MetricsCollector {
     pub fn record_validated(&self, fee: u64, validation_time_ms: f64) {
         self.transactions_validated_total.inc();
         self.transactions_total_fees.inc_by(fee);
-        self.transaction_validation_duration_ms.observe(validation_time_ms);
+        self.transaction_validation_duration_ms
+            .observe(validation_time_ms);
     }
 
     pub fn record_rejected(&self, _reason: &str) {

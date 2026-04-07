@@ -3,11 +3,11 @@
 //! Each [`AclEntry`] maps a resource name to a named [`EndorsementPolicy`]
 //! that governs who may access that resource.
 
-pub mod provider;
 pub mod checker;
+pub mod provider;
 pub mod resources;
-pub use provider::{AclProvider, MemoryAclProvider};
 pub use checker::{check_access, AclError};
+pub use provider::{AclProvider, MemoryAclProvider};
 pub use resources::AclResource;
 
 use serde::{Deserialize, Serialize};

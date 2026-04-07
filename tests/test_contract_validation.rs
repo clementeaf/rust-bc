@@ -236,7 +236,14 @@ fn test_audit_trail_record() {
     let mut details = HashMap::new();
     details.insert("key".to_string(), "value".to_string());
 
-    trail.record(1000, 100, "transfer".to_string(), "user1".to_string(), details, true);
+    trail.record(
+        1000,
+        100,
+        "transfer".to_string(),
+        "user1".to_string(),
+        details,
+        true,
+    );
 
     assert_eq!(trail.entries.len(), 1);
     assert_eq!(trail.entries[0].actor, "user1");
@@ -412,9 +419,8 @@ fn test_comprehensive_validator_creation() {
 fn test_comprehensive_validator_no_role() {
     let mut validator = ComprehensiveValidator::new(10000, 100, 1000, 10, 5000);
 
-    let result = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "admin", 1000, 100,
-    );
+    let result =
+        validator.validate_transaction_comprehensive("user1", "recipient", 100, "admin", 1000, 100);
 
     assert!(!result.valid);
 }
@@ -426,9 +432,8 @@ fn test_comprehensive_validator_with_role() {
         .access_control
         .grant_role("user".to_string(), "user1".to_string());
 
-    let result = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "user", 1000, 100,
-    );
+    let result =
+        validator.validate_transaction_comprehensive("user1", "recipient", 100, "user", 1000, 100);
 
     assert!(result.valid);
 }
@@ -441,18 +446,15 @@ fn test_comprehensive_validator_rate_limited() {
         .grant_role("user".to_string(), "user1".to_string());
 
     // Fill rate limit
-    let _r1 = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "user", 1000, 100,
-    );
+    let _r1 =
+        validator.validate_transaction_comprehensive("user1", "recipient", 100, "user", 1000, 100);
 
-    let _r2 = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "user", 1010, 100,
-    );
+    let _r2 =
+        validator.validate_transaction_comprehensive("user1", "recipient", 100, "user", 1010, 100);
 
     // This should exceed rate limit
-    let result = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "user", 1020, 100,
-    );
+    let result =
+        validator.validate_transaction_comprehensive("user1", "recipient", 100, "user", 1020, 100);
 
     assert!(!result.valid);
 }
@@ -465,7 +467,12 @@ fn test_comprehensive_validator_invalid_amount() {
         .grant_role("user".to_string(), "user1".to_string());
 
     let result = validator.validate_transaction_comprehensive(
-        "user1", "recipient", 50, "user", 1000, 100, // 50 < min 100
+        "user1",
+        "recipient",
+        50,
+        "user",
+        1000,
+        100, // 50 < min 100
     );
 
     assert!(!result.valid);
@@ -478,9 +485,7 @@ fn test_comprehensive_validator_audit_trail_recorded() {
         .access_control
         .grant_role("user".to_string(), "user1".to_string());
 
-    validator.validate_transaction_comprehensive(
-        "user1", "recipient", 100, "user", 1000, 100,
-    );
+    validator.validate_transaction_comprehensive("user1", "recipient", 100, "user", 1000, 100);
 
     let history = validator.audit_trail.get_actor_history("user1");
     assert_eq!(history.len(), 1);
@@ -532,7 +537,8 @@ fn test_security_report_generation() {
 #[test]
 fn test_transaction_validator_with_whitelist() {
     let mut validator = TransactionValidator::new(100, 10000);
-    validator.allowed_recipients_whitelist = Some(vec!["recipient1".to_string(), "recipient2".to_string()]);
+    validator.allowed_recipients_whitelist =
+        Some(vec!["recipient1".to_string(), "recipient2".to_string()]);
 
     let result_allowed = validator.validate_transaction(500, "recipient1");
     assert!(result_allowed.valid);

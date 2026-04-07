@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse, get, post};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
@@ -24,20 +24,31 @@ pub async fn revoke_serial(
     path: web::Path<String>,
     body: web::Json<RevokeBody>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/MSP.Admin", &req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/MSP.Admin",
+        &req,
+    )?;
     let msp_id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
     let store = state.crl_store.as_ref().ok_or(ApiError::NotFound {
         resource: "crl_store".to_string(),
     })?;
 
-    let mut serials = store.read_crl(&msp_id)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    let mut serials = store
+        .read_crl(&msp_id)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
     if !serials.contains(&body.serial) {
         serials.push(body.serial.clone());
-        store.write_crl(&msp_id, &serials)
-            .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        store
+            .write_crl(&msp_id, &serials)
+            .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
     }
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(
@@ -58,10 +69,16 @@ pub async fn get_msp_info(
         resource: "crl_store".to_string(),
     })?;
 
-    let serials = store.read_crl(&msp_id)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    let serials = store
+        .read_crl(&msp_id)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
-    let info = MspInfo { msp_id, crl_size: serials.len() };
+    let info = MspInfo {
+        msp_id,
+        crl_size: serials.len(),
+    };
     Ok(HttpResponse::Ok().json(ApiResponse::success(info, trace_id)))
 }
 
@@ -87,11 +104,20 @@ mod tests {
     struct MemCrl(Mutex<HashMap<String, Vec<String>>>);
     impl CrlStore for MemCrl {
         fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
-            self.0.lock().unwrap().insert(msp_id.to_string(), serials.to_vec());
+            self.0
+                .lock()
+                .unwrap()
+                .insert(msp_id.to_string(), serials.to_vec());
             Ok(())
         }
         fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
-            Ok(self.0.lock().unwrap().get(msp_id).cloned().unwrap_or_default())
+            Ok(self
+                .0
+                .lock()
+                .unwrap()
+                .get(msp_id)
+                .cloned()
+                .unwrap_or_default())
         }
     }
 
@@ -122,8 +148,12 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 
@@ -140,7 +170,9 @@ mod tests {
 
         let req = test::TestRequest::post()
             .uri("/api/v1/msp/Org1MSP/revoke")
-            .set_json(RevokeBody { serial: "abc123".to_string() })
+            .set_json(RevokeBody {
+                serial: "abc123".to_string(),
+            })
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
@@ -152,7 +184,8 @@ mod tests {
     #[actix_web::test]
     async fn get_msp_info_returns_crl_size() {
         let crl: Arc<dyn CrlStore> = Arc::new(MemCrl(Mutex::new(HashMap::new())));
-        crl.write_crl("Org2MSP", &["s1".to_string(), "s2".to_string()]).unwrap();
+        crl.write_crl("Org2MSP", &["s1".to_string(), "s2".to_string()])
+            .unwrap();
         let state = make_state(crl);
         let app = test::init_service(
             App::new()

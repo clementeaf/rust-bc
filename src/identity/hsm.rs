@@ -46,10 +46,8 @@ impl HsmConfig {
                 .unwrap_or_else(|_| "0".into())
                 .parse()
                 .unwrap_or(0),
-            pin: std::env::var("HSM_PIN")
-                .map_err(|_| HsmError::AuthFailed)?,
-            key_label: std::env::var("HSM_KEY_LABEL")
-                .unwrap_or_else(|_| "ed25519-key".into()),
+            pin: std::env::var("HSM_PIN").map_err(|_| HsmError::AuthFailed)?,
+            key_label: std::env::var("HSM_KEY_LABEL").unwrap_or_else(|_| "ed25519-key".into()),
         })
     }
 }
@@ -88,12 +86,12 @@ impl HsmSigningProvider {
     ) -> Result<Self, HsmError> {
         use cryptoki::context::{CInitializeArgs, Pkcs11};
 
-        let ctx = Pkcs11::new(pkcs11_lib)
-            .map_err(|e| HsmError::LibraryNotFound(e.to_string()))?;
+        let ctx = Pkcs11::new(pkcs11_lib).map_err(|e| HsmError::LibraryNotFound(e.to_string()))?;
         ctx.initialize(CInitializeArgs::OsThreads)
             .map_err(|e| HsmError::LibraryNotFound(e.to_string()))?;
 
-        let slots = ctx.get_slots_with_token()
+        let slots = ctx
+            .get_slots_with_token()
             .map_err(|e| HsmError::SlotNotFound(slot_id))?;
         let slot = slots
             .into_iter()
@@ -101,9 +99,11 @@ impl HsmSigningProvider {
             .ok_or(HsmError::SlotNotFound(slot_id))?;
 
         // Open session and login.
-        let session = ctx.open_rw_session(slot)
+        let session = ctx
+            .open_rw_session(slot)
             .map_err(|e| HsmError::AuthFailed)?;
-        session.login(cryptoki::session::UserType::User, Some(pin))
+        session
+            .login(cryptoki::session::UserType::User, Some(pin))
             .map_err(|_| HsmError::AuthFailed)?;
 
         // For now, return a placeholder public key — full PKCS#11 key lookup

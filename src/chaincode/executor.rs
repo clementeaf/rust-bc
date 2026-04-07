@@ -3,8 +3,8 @@ use std::sync::Arc;
 use wasmtime::{Caller, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 
 use crate::acl::provider::AclProvider;
-use crate::chaincode::ChaincodeError;
 use crate::chaincode::resolver::ChaincodeResolver;
+use crate::chaincode::ChaincodeError;
 use crate::endorsement::key_policy::KeyEndorsementStore;
 use crate::events::{BlockEvent, EventBus};
 use crate::storage::world_state::WorldState;
@@ -53,13 +53,24 @@ impl WasmExecutor {
         let mut config = Config::new();
         config.consume_fuel(true);
 
-        let engine = Engine::new(&config)
-            .map_err(|e| ChaincodeError::Execution(e.to_string()))?;
+        let engine = Engine::new(&config).map_err(|e| ChaincodeError::Execution(e.to_string()))?;
 
         let module = Module::new(&engine, wasm_bytes)
             .map_err(|e| ChaincodeError::Execution(e.to_string()))?;
 
-        Ok(Self { engine, module, fuel_limit, memory_limit: None, event_bus: None, chaincode_id: String::new(), channel_id: String::new(), key_endorsement_store: None, chaincode_resolver: None, acl_provider: None, invocation_depth: 0 })
+        Ok(Self {
+            engine,
+            module,
+            fuel_limit,
+            memory_limit: None,
+            event_bus: None,
+            chaincode_id: String::new(),
+            channel_id: String::new(),
+            key_endorsement_store: None,
+            chaincode_resolver: None,
+            acl_provider: None,
+            invocation_depth: 0,
+        })
     }
 
     /// Attach an [`EventBus`] so chaincode can emit [`BlockEvent::ChaincodeEvent`]s
@@ -171,10 +182,7 @@ impl WasmExecutor {
                  val_ptr: i32,
                  val_len: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -212,10 +220,7 @@ impl WasmExecutor {
                  out_ptr: i32,
                  out_cap: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -254,10 +259,7 @@ impl WasmExecutor {
                  payload_ptr: i32,
                  payload_len: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -278,7 +280,12 @@ impl WasmExecutor {
                     if let Some(bus) = &caller.data().event_bus {
                         let chaincode_id = caller.data().chaincode_id.clone();
                         let channel_id = caller.data().channel_id.clone();
-                        bus.publish(BlockEvent::ChaincodeEvent { channel_id, chaincode_id, event_name, payload });
+                        bus.publish(BlockEvent::ChaincodeEvent {
+                            channel_id,
+                            chaincode_id,
+                            event_name,
+                            payload,
+                        });
                     }
                     0
                 },
@@ -296,10 +303,7 @@ impl WasmExecutor {
                  policy_ptr: i32,
                  policy_len: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -350,10 +354,7 @@ impl WasmExecutor {
                  out_ptr: i32,
                  out_cap: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -402,10 +403,7 @@ impl WasmExecutor {
                  out_ptr: i32,
                  out_cap: i32|
                  -> i32 {
-                    let mem = match caller
-                        .get_export("memory")
-                        .and_then(|e| e.into_memory())
-                    {
+                    let mem = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
                     };
@@ -433,9 +431,9 @@ impl WasmExecutor {
                     if let Some(acl) = &host.acl_provider {
                         let resource = format!("chaincode/{}/invoke", cc_id);
                         match acl.get_acl(&resource) {
-                            Ok(None) => return -1,  // No ACL entry → denied
+                            Ok(None) => return -1, // No ACL entry → denied
                             Err(_) => return -1,
-                            Ok(Some(_)) => {}       // ACL entry exists → allowed
+                            Ok(Some(_)) => {} // ACL entry exists → allowed
                         }
                     }
 
@@ -644,7 +642,8 @@ mod tests {
     fn invoke_writes_to_world_state() {
         let state = Arc::new(MemoryWorldState::new());
         let ex = WasmExecutor::new(CHAINCODE_WAT, 10_000_000).unwrap();
-        ex.invoke(Arc::clone(&state) as Arc<dyn WorldState>, "run").unwrap();
+        ex.invoke(Arc::clone(&state) as Arc<dyn WorldState>, "run")
+            .unwrap();
         let stored = state.get("x").unwrap().unwrap();
         assert_eq!(stored.data, b"1");
     }
@@ -797,7 +796,10 @@ mod tests {
         ex.invoke(make_state(), "run").unwrap();
 
         let policy = kep_store.get_key_policy("asset:1").unwrap();
-        assert_eq!(policy, Some(EndorsementPolicy::AnyOf(vec!["org1".to_string()])));
+        assert_eq!(
+            policy,
+            Some(EndorsementPolicy::AnyOf(vec!["org1".to_string()]))
+        );
     }
 
     #[test]
@@ -812,7 +814,10 @@ mod tests {
         // invoke succeeds (chaincode itself does not abort)
         let result = ex.invoke(make_state(), "run").unwrap();
         // the byte stored at offset 64 is the return code (cast to u8, -1i32 wraps to 0xFF)
-        assert_eq!(result[0], 0xFF_u8, "expected -1 (0xFF) return code from host");
+        assert_eq!(
+            result[0], 0xFF_u8,
+            "expected -1 (0xFF) return code from host"
+        );
 
         // no policy must have been stored
         assert!(kep_store.get_key_policy("asset:1").unwrap().is_none());
@@ -889,8 +894,8 @@ mod tests {
 
     #[test]
     fn invoke_chaincode_cross_call_shares_world_state() {
-        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
         use crate::chaincode::resolver::StoreBackedResolver;
+        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
 
         // Chaincode B: puts "x" = "1" and returns empty.
         let cc_b_wat: &[u8] = br#"
@@ -955,8 +960,8 @@ mod tests {
     #[test]
     fn invoke_chaincode_acl_allowed() {
         use crate::acl::provider::{AclProvider, MemoryAclProvider};
-        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
         use crate::chaincode::resolver::StoreBackedResolver;
+        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
 
         // Chaincode B: puts "y" = "ok"
         let cc_b_wat: &[u8] = br#"
@@ -1011,8 +1016,8 @@ mod tests {
     #[test]
     fn invoke_chaincode_acl_denied() {
         use crate::acl::provider::MemoryAclProvider;
-        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
         use crate::chaincode::resolver::StoreBackedResolver;
+        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
 
         let cc_b_wat: &[u8] = br#"
 (module
@@ -1057,13 +1062,17 @@ mod tests {
 
         let result = ex.invoke(state, "run").unwrap();
         // -1 as i32 stored as u8 = 255
-        assert_eq!(result, &[255u8], "invoke_chaincode should return -1 when ACL denies");
+        assert_eq!(
+            result,
+            &[255u8],
+            "invoke_chaincode should return -1 when ACL denies"
+        );
     }
 
     #[test]
     fn invoke_chaincode_depth_limit() {
-        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
         use crate::chaincode::resolver::StoreBackedResolver;
+        use crate::chaincode::{ChaincodePackageStore, MemoryChaincodePackageStore};
 
         // Self-recursive chaincode: invokes itself.
         let recursive_wat: &[u8] = br#"

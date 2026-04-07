@@ -7,7 +7,6 @@
  * - Risk assessment
  * - Audit trail
  */
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -22,16 +21,48 @@ pub enum ValidationSeverity {
 /// Validation error types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ValidationError {
-    BalanceMismatch { expected: u64, actual: u64 },
-    InsufficientBalance { required: u64, available: u64 },
-    OperationLimitExceeded { limit: u64, current: u64 },
-    UnauthorizedAccess { caller: String, required_role: String },
-    InvalidTransition { from_state: String, to_state: String },
-    RateLimitExceeded { limit: u64, period_ms: u64 },
-    CircularDependency { from: String, to: String },
-    InvalidAmount { amount: u64, min: u64, max: u64 },
-    ExternalDataMismatch { source: String, expected: String, actual: String },
-    Custom { code: u32, message: String },
+    BalanceMismatch {
+        expected: u64,
+        actual: u64,
+    },
+    InsufficientBalance {
+        required: u64,
+        available: u64,
+    },
+    OperationLimitExceeded {
+        limit: u64,
+        current: u64,
+    },
+    UnauthorizedAccess {
+        caller: String,
+        required_role: String,
+    },
+    InvalidTransition {
+        from_state: String,
+        to_state: String,
+    },
+    RateLimitExceeded {
+        limit: u64,
+        period_ms: u64,
+    },
+    CircularDependency {
+        from: String,
+        to: String,
+    },
+    InvalidAmount {
+        amount: u64,
+        min: u64,
+        max: u64,
+    },
+    ExternalDataMismatch {
+        source: String,
+        expected: String,
+        actual: String,
+    },
+    Custom {
+        code: u32,
+        message: String,
+    },
 }
 
 /// Validation result with detailed information
@@ -119,11 +150,7 @@ impl StateValidator {
     }
 
     /// Validate a transfer operation
-    pub fn validate_transfer(
-        &self,
-        from_balance: u64,
-        amount: u64,
-    ) -> ValidationResult {
+    pub fn validate_transfer(&self, from_balance: u64, amount: u64) -> ValidationResult {
         if amount == 0 {
             return ValidationResult::failure(ValidationError::InvalidAmount {
                 amount: 0,
@@ -182,14 +209,11 @@ impl RateLimiter {
     }
 
     /// Check if operation is allowed and record it
-    pub fn check_and_record(
-        &mut self,
-        op_type: String,
-        current_time_ms: u64,
-    ) -> ValidationResult {
+    pub fn check_and_record(&mut self, op_type: String, current_time_ms: u64) -> ValidationResult {
         // Clean up old operations
         let cutoff_time = current_time_ms.saturating_sub(self.period_ms);
-        self.operations.retain(|(timestamp, _)| *timestamp > cutoff_time);
+        self.operations
+            .retain(|(timestamp, _)| *timestamp > cutoff_time);
 
         // Check if limit exceeded
         if self.operations.len() >= self.max_ops_per_period as usize {
@@ -238,10 +262,7 @@ impl AccessControl {
 
     /// Grant role to address
     pub fn grant_role(&mut self, role: String, address: String) {
-        self.roles
-            .entry(role)
-            .or_default()
-            .push(address);
+        self.roles.entry(role).or_default().push(address);
     }
 
     /// Revoke role from address
@@ -260,11 +281,7 @@ impl AccessControl {
     }
 
     /// Validate access
-    pub fn validate_access(
-        &self,
-        caller: &str,
-        required_role: &str,
-    ) -> ValidationResult {
+    pub fn validate_access(&self, caller: &str, required_role: &str) -> ValidationResult {
         if self.has_role(required_role, caller) {
             ValidationResult::success()
         } else {
@@ -294,11 +311,7 @@ impl TransactionValidator {
     }
 
     /// Validate transaction parameters
-    pub fn validate_transaction(
-        &self,
-        amount: u64,
-        recipient: &str,
-    ) -> ValidationResult {
+    pub fn validate_transaction(&self, amount: u64, recipient: &str) -> ValidationResult {
         if amount < self.min_transaction_amount || amount > self.max_transaction_amount {
             return ValidationResult::failure(ValidationError::InvalidAmount {
                 amount,
@@ -392,11 +405,7 @@ impl AuditTrail {
 
     /// Get failed operations
     pub fn get_failed_operations(&self) -> Vec<AuditEntry> {
-        self.entries
-            .iter()
-            .filter(|e| !e.result)
-            .cloned()
-            .collect()
+        self.entries.iter().filter(|e| !e.result).cloned().collect()
     }
 }
 
@@ -521,7 +530,9 @@ impl ComprehensiveValidator {
         }
 
         // Check transaction validity
-        let tx_result = self.transaction_validator.validate_transaction(amount, recipient);
+        let tx_result = self
+            .transaction_validator
+            .validate_transaction(amount, recipient);
         if !tx_result.valid {
             return tx_result;
         }

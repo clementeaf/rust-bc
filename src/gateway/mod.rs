@@ -8,8 +8,8 @@ use crate::chaincode::executor::WasmExecutor;
 use crate::discovery::service::DiscoveryError;
 use crate::discovery::service::DiscoveryService;
 use crate::endorsement::key_policy::KeyEndorsementStore;
-use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::policy::EndorsementPolicy;
+use crate::endorsement::policy_store::PolicyStore;
 use crate::endorsement::registry::OrgRegistry;
 use crate::endorsement::types::Endorsement;
 use crate::events::types::BlockEvent;
@@ -182,11 +182,13 @@ impl Gateway {
         //   A) Multi-peer: p2p_node + discovery → collect remote endorsements
         //   B) Local simulation: wasm_executor + world_state → simulate locally
         //   C) Policy-only: self_endorse check against org registry
-        let simulation_rwset = if self.p2p_node.is_some() && self.discovery_service.is_some() && !channel_id.is_empty() {
+        let simulation_rwset = if self.p2p_node.is_some()
+            && self.discovery_service.is_some()
+            && !channel_id.is_empty()
+        {
             // Path A: multi-peer endorsement via P2P
-            let (rwset, _endorsements) = self
-                .collect_endorsements(chaincode_id, channel_id)
-                .await?;
+            let (rwset, _endorsements) =
+                self.collect_endorsements(chaincode_id, channel_id).await?;
             Some(rwset)
         } else if let (Some(svc), false) = (&self.discovery_service, channel_id.is_empty()) {
             // Discovery available but no P2P node: check policy locally, then simulate.
@@ -199,9 +201,9 @@ impl Gateway {
                     return Err(GatewayError::PolicyNotSatisfied(chaincode_id.to_string()));
                 }
                 Err(DiscoveryError::PeerNotFound(addr)) => {
-                    return Err(GatewayError::PolicyNotSatisfied(
-                        format!("peer not found: {addr}"),
-                    ));
+                    return Err(GatewayError::PolicyNotSatisfied(format!(
+                        "peer not found: {addr}"
+                    )));
                 }
             }
             // Path B: local simulation
@@ -250,23 +252,24 @@ impl Gateway {
             .map_err(|e| GatewayError::Storage(e.to_string()))?;
 
         // ── Step 3.5: MVCC validate + apply write-set to world state ────────
-        let tx_valid = if let (Some(ref rwset), Some(ref ws)) = (&simulation_rwset, &self.world_state) {
-            match mvcc::validate_rwset(rwset, ws.as_ref()) {
-                Ok(()) => {
-                    for write in &rwset.writes {
-                        let _ = ws.put(&write.key, &write.value);
+        let tx_valid =
+            if let (Some(ref rwset), Some(ref ws)) = (&simulation_rwset, &self.world_state) {
+                match mvcc::validate_rwset(rwset, ws.as_ref()) {
+                    Ok(()) => {
+                        for write in &rwset.writes {
+                            let _ = ws.put(&write.key, &write.value);
+                        }
+                        true
                     }
-                    true
+                    Err(_conflict) => {
+                        // Fabric behavior: block is persisted, but TX writes are NOT applied.
+                        false
+                    }
                 }
-                Err(_conflict) => {
-                    // Fabric behavior: block is persisted, but TX writes are NOT applied.
-                    false
-                }
-            }
-        } else {
-            // No simulation rwset — treat as valid (non-Wasm transactions).
-            true
-        };
+            } else {
+                // No simulation rwset — treat as valid (non-Wasm transactions).
+                true
+            };
 
         // ── Step 4: emit events ───────────────────────────────────────────────
         if let Some(ref bus) = self.event_bus {
@@ -286,7 +289,11 @@ impl Gateway {
         }
 
         // ── Step 5: return result ─────────────────────────────────────────────
-        Ok(TxResult { tx_id, block_height, valid: tx_valid })
+        Ok(TxResult {
+            tx_id,
+            block_height,
+            valid: tx_valid,
+        })
     }
 
     /// Collect endorsements from remote peers for a transaction proposal.
@@ -300,15 +307,15 @@ impl Gateway {
         chaincode_id: &str,
         channel_id: &str,
     ) -> Result<(ReadWriteSet, Vec<Endorsement>), GatewayError> {
-        let discovery = self.discovery_service.as_ref()
-            .ok_or_else(|| GatewayError::PolicyNotSatisfied(
+        let discovery = self.discovery_service.as_ref().ok_or_else(|| {
+            GatewayError::PolicyNotSatisfied(
                 "no discovery service for multi-peer endorsement".into(),
-            ))?;
+            )
+        })?;
 
-        let p2p = self.p2p_node.as_ref()
-            .ok_or_else(|| GatewayError::PolicyNotSatisfied(
-                "no P2P node for multi-peer endorsement".into(),
-            ))?;
+        let p2p = self.p2p_node.as_ref().ok_or_else(|| {
+            GatewayError::PolicyNotSatisfied("no P2P node for multi-peer endorsement".into())
+        })?;
 
         let endorsers = discovery
             .endorsement_plan(chaincode_id, channel_id)
@@ -341,21 +348,28 @@ impl Gateway {
                 },
             };
 
-            let response = p2p.send_and_wait(&peer.peer_address, msg, ENDORSEMENT_TIMEOUT)
+            let response = p2p
+                .send_and_wait(&peer.peer_address, msg, ENDORSEMENT_TIMEOUT)
                 .await
-                .map_err(|e| GatewayError::PolicyNotSatisfied(
-                    format!("peer {} failed: {}", peer.peer_address, e),
-                ))?;
+                .map_err(|e| {
+                    GatewayError::PolicyNotSatisfied(format!(
+                        "peer {} failed: {}",
+                        peer.peer_address, e
+                    ))
+                })?;
 
             match response {
-                Message::ProposalResponse { rwset, endorsement, .. } => {
+                Message::ProposalResponse {
+                    rwset, endorsement, ..
+                } => {
                     rwsets.push(rwset);
                     endorsements.push(endorsement);
                 }
                 _ => {
-                    return Err(GatewayError::PolicyNotSatisfied(
-                        format!("unexpected response from {}", peer.peer_address),
-                    ));
+                    return Err(GatewayError::PolicyNotSatisfied(format!(
+                        "unexpected response from {}",
+                        peer.peer_address
+                    )));
                 }
             }
         }
@@ -397,9 +411,10 @@ impl Gateway {
         for write in &rwset.writes {
             if let Ok(Some(policy)) = kep_store.get_key_policy(&write.key) {
                 if !policy.evaluate(&org_ids) {
-                    return Err(GatewayError::PolicyNotSatisfied(
-                        format!("{chaincode_id}/{}", write.key),
-                    ));
+                    return Err(GatewayError::PolicyNotSatisfied(format!(
+                        "{chaincode_id}/{}",
+                        write.key
+                    )));
                 }
             }
         }
@@ -416,8 +431,7 @@ impl Gateway {
 
         if let Some(ref p) = policy {
             let registered_orgs = self.org_registry.list_orgs().unwrap_or_default();
-            let org_ids: Vec<&str> =
-                registered_orgs.iter().map(|o| o.org_id.as_str()).collect();
+            let org_ids: Vec<&str> = registered_orgs.iter().map(|o| o.org_id.as_str()).collect();
 
             let satisfied = match p {
                 EndorsementPolicy::And(_, _) | EndorsementPolicy::Or(_, _) => p.evaluate(&org_ids),
@@ -428,7 +442,10 @@ impl Gateway {
                     orgs.iter().all(|o| org_ids.contains(&o.as_str()))
                 }
                 EndorsementPolicy::NOutOf { n, orgs } => {
-                    orgs.iter().filter(|o| org_ids.contains(&o.as_str())).count() >= *n
+                    orgs.iter()
+                        .filter(|o| org_ids.contains(&o.as_str()))
+                        .count()
+                        >= *n
                 }
                 EndorsementPolicy::OuBased { .. } => p.evaluate(&org_ids),
             };
@@ -547,10 +564,16 @@ mod tests {
         let gw_no_orgs = make_gateway(); // registry is empty
         gw_no_orgs
             .policy_store
-            .set_policy("cc-strict", &EndorsementPolicy::AllOf(vec!["org1".into(), "org2".into()]))
+            .set_policy(
+                "cc-strict",
+                &EndorsementPolicy::AllOf(vec!["org1".into(), "org2".into()]),
+            )
             .unwrap();
 
-        let err = gw_no_orgs.submit("cc-strict", "", make_tx("tx-3")).await.unwrap_err();
+        let err = gw_no_orgs
+            .submit("cc-strict", "", make_tx("tx-3"))
+            .await
+            .unwrap_err();
         assert!(matches!(err, GatewayError::PolicyNotSatisfied(_)));
     }
 
@@ -579,7 +602,10 @@ mod tests {
     ) -> Arc<DiscoveryService> {
         let ps = Arc::new(MemoryPolicyStore::new());
         ps.set_policy(policy_key, &policy).unwrap();
-        let svc = Arc::new(DiscoveryService::new(Arc::new(MemoryOrgRegistry::new()), ps));
+        let svc = Arc::new(DiscoveryService::new(
+            Arc::new(MemoryOrgRegistry::new()),
+            ps,
+        ));
         for (addr, org) in peers {
             svc.register_peer(PeerDescriptor {
                 peer_address: addr.to_string(),
@@ -612,7 +638,10 @@ mod tests {
             disc,
         );
 
-        let result = gw.submit("basic", "mychannel", make_tx("tx-disc-1")).await.unwrap();
+        let result = gw
+            .submit("basic", "mychannel", make_tx("tx-disc-1"))
+            .await
+            .unwrap();
         assert_eq!(result.tx_id, "tx-disc-1");
         assert_eq!(result.block_height, 1);
         let block = gw.store.read_block(1).unwrap();
@@ -639,7 +668,10 @@ mod tests {
             disc,
         );
 
-        let err = gw.submit("basic", "mychannel", make_tx("tx-fail")).await.unwrap_err();
+        let err = gw
+            .submit("basic", "mychannel", make_tx("tx-fail"))
+            .await
+            .unwrap_err();
         assert!(matches!(err, GatewayError::PolicyNotSatisfied(_)));
     }
 
@@ -661,14 +693,17 @@ mod tests {
         );
 
         // No policy configured anywhere → should commit successfully
-        let result = gw.submit("unknown-cc", "mychannel", make_tx("tx-fallback")).await.unwrap();
+        let result = gw
+            .submit("unknown-cc", "mychannel", make_tx("tx-fallback"))
+            .await
+            .unwrap();
         assert_eq!(result.block_height, 1);
     }
 
     // ── 11.2.1 — Event emission tests ─────────────────────────────────────────
 
-    use crate::events::EventBus;
     use crate::events::types::BlockEvent;
+    use crate::events::EventBus;
 
     fn make_gateway_with_events() -> (Gateway, Arc<EventBus>) {
         let bus = Arc::new(EventBus::new());
@@ -707,7 +742,11 @@ mod tests {
         assert_eq!(block_events.len(), 1);
         assert_eq!(
             block_events[0],
-            &BlockEvent::BlockCommitted { channel_id: "".to_string(), height: 1, tx_count: 3 }
+            &BlockEvent::BlockCommitted {
+                channel_id: "".to_string(),
+                height: 1,
+                tx_count: 3
+            }
         );
 
         let tx_events: Vec<_> = events
@@ -737,7 +776,14 @@ mod tests {
         let e1 = rx.try_recv().unwrap();
         let e2 = rx.try_recv().unwrap();
 
-        assert_eq!(e1, BlockEvent::BlockCommitted { channel_id: "".to_string(), height: 1, tx_count: 1 });
+        assert_eq!(
+            e1,
+            BlockEvent::BlockCommitted {
+                channel_id: "".to_string(),
+                height: 1,
+                tx_count: 1
+            }
+        );
         assert_eq!(
             e2,
             BlockEvent::TransactionCommitted {
@@ -799,11 +845,8 @@ mod tests {
         registry.register_org(&make_org("org1")).unwrap();
 
         let kep = Arc::new(MemoryKeyEndorsementStore::new());
-        kep.set_key_policy(
-            "asset:1",
-            &EndorsementPolicy::AnyOf(vec!["org1".into()]),
-        )
-        .unwrap();
+        kep.set_key_policy("asset:1", &EndorsementPolicy::AnyOf(vec!["org1".into()]))
+            .unwrap();
 
         let exec = Arc::new(WasmExecutor::new(WRITE_ASSET_WAT, 10_000_000).unwrap());
         let ws = Arc::new(MemoryWorldState::new());
@@ -824,14 +867,14 @@ mod tests {
     async fn submit_simulation_key_policy_not_satisfied_returns_error() {
         // org registry is empty → key policy AllOf(["org1"]) cannot be satisfied
         let kep = Arc::new(MemoryKeyEndorsementStore::new());
-        kep.set_key_policy(
-            "asset:1",
-            &EndorsementPolicy::AllOf(vec!["org1".into()]),
-        )
-        .unwrap();
+        kep.set_key_policy("asset:1", &EndorsementPolicy::AllOf(vec!["org1".into()]))
+            .unwrap();
 
         let gw = make_gateway_with_simulation(Some(kep));
-        let err = gw.submit("cc", "", make_tx("tx-kp-fail")).await.unwrap_err();
+        let err = gw
+            .submit("cc", "", make_tx("tx-kp-fail"))
+            .await
+            .unwrap_err();
         assert!(
             matches!(err, GatewayError::PolicyNotSatisfied(_)),
             "expected PolicyNotSatisfied, got {err:?}"
@@ -857,7 +900,10 @@ mod tests {
         // World state should contain the key written by WRITE_ASSET_WAT.
         let ws = gw.world_state.as_ref().unwrap();
         let val = ws.get("asset:1").unwrap();
-        assert!(val.is_some(), "key 'asset:1' should exist in world state after commit");
+        assert!(
+            val.is_some(),
+            "key 'asset:1' should exist in world state after commit"
+        );
         assert_eq!(val.unwrap().version, 1);
     }
 
@@ -882,7 +928,10 @@ mod tests {
         // committed version 1 → valid again.  Both should succeed because each
         // simulation sees the latest state.
         let r2 = gw.submit("cc", "", make_tx("tx-2")).await.unwrap();
-        assert!(r2.valid, "sequential non-conflicting TXs should both be valid");
+        assert!(
+            r2.valid,
+            "sequential non-conflicting TXs should both be valid"
+        );
         assert_eq!(ws.get("asset:1").unwrap().unwrap().version, 2);
     }
 }

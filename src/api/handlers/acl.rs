@@ -29,9 +29,12 @@ pub async fn set_acl(
     let trace_id = uuid::Uuid::new_v4().to_string();
     let req = body.into_inner();
 
-    let provider = state.acl_provider.as_deref().ok_or_else(|| ApiError::InternalError {
-        reason: "ACL provider not configured".to_string(),
-    })?;
+    let provider = state
+        .acl_provider
+        .as_deref()
+        .ok_or_else(|| ApiError::InternalError {
+            reason: "ACL provider not configured".to_string(),
+        })?;
 
     if req.resource.is_empty() {
         return Err(ApiError::ValidationError {
@@ -46,9 +49,11 @@ pub async fn set_acl(
         });
     }
 
-    provider.set_acl(&req.resource, &req.policy_ref).map_err(|e| ApiError::InternalError {
-        reason: e.to_string(),
-    })?;
+    provider
+        .set_acl(&req.resource, &req.policy_ref)
+        .map_err(|e| ApiError::InternalError {
+            reason: e.to_string(),
+        })?;
 
     let entry = AclEntry::new(req.resource, req.policy_ref);
     Ok(HttpResponse::Ok().json(ApiResponse::success(entry, trace_id)))
@@ -59,9 +64,12 @@ pub async fn set_acl(
 pub async fn list_acls(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
 
-    let provider = state.acl_provider.as_deref().ok_or_else(|| ApiError::InternalError {
-        reason: "ACL provider not configured".to_string(),
-    })?;
+    let provider = state
+        .acl_provider
+        .as_deref()
+        .ok_or_else(|| ApiError::InternalError {
+            reason: "ACL provider not configured".to_string(),
+        })?;
 
     let mut entries = provider.list_acls().map_err(|e| ApiError::InternalError {
         reason: e.to_string(),
@@ -83,15 +91,21 @@ pub async fn get_acl(
     let resource = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
 
-    let provider = state.acl_provider.as_deref().ok_or_else(|| ApiError::InternalError {
-        reason: "ACL provider not configured".to_string(),
-    })?;
+    let provider = state
+        .acl_provider
+        .as_deref()
+        .ok_or_else(|| ApiError::InternalError {
+            reason: "ACL provider not configured".to_string(),
+        })?;
 
-    let entry = provider.get_acl(&resource).map_err(|e| ApiError::InternalError {
-        reason: e.to_string(),
-    })?.ok_or_else(|| ApiError::NotFound {
-        resource: format!("ACL for '{resource}'"),
-    })?;
+    let entry = provider
+        .get_acl(&resource)
+        .map_err(|e| ApiError::InternalError {
+            reason: e.to_string(),
+        })?
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("ACL for '{resource}'"),
+        })?;
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(entry, trace_id)))
 }
@@ -107,11 +121,7 @@ mod tests {
         Arc::new(MemoryAclProvider::new())
     }
 
-    fn call_set_acl(
-        p: &dyn AclProvider,
-        resource: &str,
-        policy_ref: &str,
-    ) -> Result<(), ApiError> {
+    fn call_set_acl(p: &dyn AclProvider, resource: &str, policy_ref: &str) -> Result<(), ApiError> {
         if resource.is_empty() {
             return Err(ApiError::ValidationError {
                 field: "resource".to_string(),
@@ -124,7 +134,10 @@ mod tests {
                 reason: "must be non-empty".to_string(),
             });
         }
-        p.set_acl(resource, policy_ref).map_err(|e| ApiError::InternalError { reason: e.to_string() })
+        p.set_acl(resource, policy_ref)
+            .map_err(|e| ApiError::InternalError {
+                reason: e.to_string(),
+            })
     }
 
     // ── set_acl ───────────────────────────────────────────────────────────────

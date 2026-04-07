@@ -30,7 +30,8 @@ mod sig_bytes {
 
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
         let v: Vec<u8> = serde::Deserialize::deserialize(d)?;
-        v.try_into().map_err(|_| serde::de::Error::custom("expected 64 bytes"))
+        v.try_into()
+            .map_err(|_| serde::de::Error::custom("expected 64 bytes"))
     }
 }
 
@@ -53,8 +54,14 @@ mod tests {
 
     fn sample_rwset() -> ReadWriteSet {
         ReadWriteSet {
-            reads: vec![KVRead { key: "k".to_string(), version: 1 }],
-            writes: vec![KVWrite { key: "k".to_string(), value: vec![1] }],
+            reads: vec![KVRead {
+                key: "k".to_string(),
+                version: 1,
+            }],
+            writes: vec![KVWrite {
+                key: "k".to_string(),
+                value: vec![1],
+            }],
         }
     }
 

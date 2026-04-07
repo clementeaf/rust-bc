@@ -24,7 +24,9 @@ use actix_ws::Message;
 use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
+use crate::api::handlers::channels::{
+    channel_id_from_req, enforce_channel_membership, get_channel_store,
+};
 use crate::app_state::AppState;
 use crate::events::BlockEvent;
 
@@ -58,7 +60,10 @@ fn checkpoints() -> &'static Mutex<HashMap<String, u64>> {
 
 /// Record an ack for a client.
 fn record_ack(client_id: &str, height: u64) {
-    checkpoints().lock().unwrap().insert(client_id.to_string(), height);
+    checkpoints()
+        .lock()
+        .unwrap()
+        .insert(client_id.to_string(), height);
 }
 
 /// Get the last acked height for a client.
@@ -134,7 +139,9 @@ async fn poll_blocks(
 
     let latest = store
         .get_latest_height()
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
     let mut blocks = Vec::new();
     for h in from_height..=latest {
@@ -259,8 +266,8 @@ pub async fn events_blocks_filtered(
     stream: web::Payload,
     state: web::Data<AppState>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    use std::collections::HashMap;
     use crate::events::filtered::to_filtered_block;
+    use std::collections::HashMap;
 
     let (response, mut session, mut msg_stream) = actix_ws::handle(&req, stream)?;
 
@@ -340,8 +347,8 @@ pub async fn events_blocks_private(
     stream: web::Payload,
     state: web::Data<AppState>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    use std::collections::HashMap;
     use crate::events::private_delivery::BlockWithPrivateData;
+    use std::collections::HashMap;
 
     let org_id = req
         .headers()
@@ -466,7 +473,8 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         }
     }
 
@@ -501,8 +509,12 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: bus,
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         }
     }
 
@@ -538,7 +550,11 @@ mod tests {
         let bus = Arc::new(EventBus::new());
         let mut rx = bus.subscribe();
 
-        let event = BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 7, tx_count: 2 };
+        let event = BlockEvent::BlockCommitted {
+            channel_id: "ch".to_string(),
+            height: 7,
+            tx_count: 2,
+        };
         bus.publish(event.clone());
 
         let received = rx.recv().await.expect("recv");
@@ -547,7 +563,11 @@ mod tests {
 
     #[actix_web::test]
     async fn block_event_serialises_to_valid_json() {
-        let event = BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 3, tx_count: 5 };
+        let event = BlockEvent::BlockCommitted {
+            channel_id: "ch".to_string(),
+            height: 3,
+            tx_count: 5,
+        };
         let json = serde_json::to_string(&event).expect("serialize");
         let back: BlockEvent = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, event);
@@ -556,7 +576,11 @@ mod tests {
     // ── Filter unit tests ─────────────────────────────────────────────────────
 
     fn bc(channel_id: &str) -> BlockEvent {
-        BlockEvent::BlockCommitted { channel_id: channel_id.to_string(), height: 1, tx_count: 0 }
+        BlockEvent::BlockCommitted {
+            channel_id: channel_id.to_string(),
+            height: 1,
+            tx_count: 0,
+        }
     }
 
     fn tc(channel_id: &str) -> BlockEvent {
@@ -587,7 +611,11 @@ mod tests {
 
     #[tokio::test]
     async fn channel_filter_passes_matching_channel() {
-        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None, ..Default::default() };
+        let f = WsFilter {
+            channel_id: Some("ch-a".to_string()),
+            chaincode_id: None,
+            ..Default::default()
+        };
         assert!(event_passes_filter(&bc("ch-a"), &f));
         assert!(event_passes_filter(&tc("ch-a"), &f));
         assert!(event_passes_filter(&ce("ch-a", "cc1"), &f));
@@ -595,7 +623,11 @@ mod tests {
 
     #[tokio::test]
     async fn channel_filter_drops_other_channels() {
-        let f = WsFilter { channel_id: Some("ch-a".to_string()), chaincode_id: None, ..Default::default() };
+        let f = WsFilter {
+            channel_id: Some("ch-a".to_string()),
+            chaincode_id: None,
+            ..Default::default()
+        };
         assert!(!event_passes_filter(&bc("ch-b"), &f));
         assert!(!event_passes_filter(&tc("ch-b"), &f));
         assert!(!event_passes_filter(&ce("ch-b", "cc1"), &f));
@@ -603,19 +635,31 @@ mod tests {
 
     #[tokio::test]
     async fn chaincode_filter_passes_matching_chaincode_event() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
+        let f = WsFilter {
+            channel_id: None,
+            chaincode_id: Some("cc1".to_string()),
+            ..Default::default()
+        };
         assert!(event_passes_filter(&ce("ch", "cc1"), &f));
     }
 
     #[tokio::test]
     async fn chaincode_filter_drops_non_matching_chaincode_event() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
+        let f = WsFilter {
+            channel_id: None,
+            chaincode_id: Some("cc1".to_string()),
+            ..Default::default()
+        };
         assert!(!event_passes_filter(&ce("ch", "cc2"), &f));
     }
 
     #[tokio::test]
     async fn chaincode_filter_does_not_affect_block_or_tx_events() {
-        let f = WsFilter { channel_id: None, chaincode_id: Some("cc1".to_string()), ..Default::default() };
+        let f = WsFilter {
+            channel_id: None,
+            chaincode_id: Some("cc1".to_string()),
+            ..Default::default()
+        };
         assert!(event_passes_filter(&bc("ch"), &f));
         assert!(event_passes_filter(&tc("ch"), &f));
     }
@@ -672,8 +716,12 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: bus,
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         }
     }
 

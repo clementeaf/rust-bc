@@ -13,10 +13,7 @@ pub async fn verify_chain(state: web::Data<AppState>) -> ApiResult<HttpResponse>
     let block_count = blockchain.chain.len();
     drop(blockchain);
 
-    let data = ChainVerifyResponse {
-        valid,
-        block_count,
-    };
+    let data = ChainVerifyResponse { valid, block_count };
     let body = ApiResponse::success(data, trace_id);
     Ok(HttpResponse::Ok().json(body))
 }

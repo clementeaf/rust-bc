@@ -32,8 +32,14 @@ mod tests {
 
     fn sample_rwset() -> ReadWriteSet {
         ReadWriteSet {
-            reads: vec![KVRead { key: "k".to_string(), version: 1 }],
-            writes: vec![KVWrite { key: "k".to_string(), value: vec![1] }],
+            reads: vec![KVRead {
+                key: "k".to_string(),
+                version: 1,
+            }],
+            writes: vec![KVWrite {
+                key: "k".to_string(),
+                value: vec![1],
+            }],
         }
     }
 

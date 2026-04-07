@@ -28,23 +28,35 @@ impl MemoryAclProvider {
 
 impl AclProvider for MemoryAclProvider {
     fn set_acl(&self, resource: &str, policy_ref: &str) -> StorageResult<()> {
-        let mut map = self.entries.lock().map_err(|e| StorageError::Other(e.to_string()))?;
+        let mut map = self
+            .entries
+            .lock()
+            .map_err(|e| StorageError::Other(e.to_string()))?;
         map.insert(resource.to_string(), AclEntry::new(resource, policy_ref));
         Ok(())
     }
 
     fn get_acl(&self, resource: &str) -> StorageResult<Option<AclEntry>> {
-        let map = self.entries.lock().map_err(|e| StorageError::Other(e.to_string()))?;
+        let map = self
+            .entries
+            .lock()
+            .map_err(|e| StorageError::Other(e.to_string()))?;
         Ok(map.get(resource).cloned())
     }
 
     fn list_acls(&self) -> StorageResult<Vec<AclEntry>> {
-        let map = self.entries.lock().map_err(|e| StorageError::Other(e.to_string()))?;
+        let map = self
+            .entries
+            .lock()
+            .map_err(|e| StorageError::Other(e.to_string()))?;
         Ok(map.values().cloned().collect())
     }
 
     fn remove_acl(&self, resource: &str) -> StorageResult<()> {
-        let mut map = self.entries.lock().map_err(|e| StorageError::Other(e.to_string()))?;
+        let mut map = self
+            .entries
+            .lock()
+            .map_err(|e| StorageError::Other(e.to_string()))?;
         map.remove(resource);
         Ok(())
     }

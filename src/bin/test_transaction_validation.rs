@@ -1,17 +1,17 @@
+use rust_bc::models::Transaction;
 /**
  * Transaction Validation Gate Testing Tool
- * 
+ *
  * Tests pre-mempool transaction validation including:
  * - Format validation
  * - Amount and fee checking
  * - Address validation
  * - Sequence number tracking (replay attack prevention)
  * - Double-spend detection
- * 
+ *
  * Uso: cargo run --bin test_transaction_validation --release
  */
 use rust_bc::transaction_validation::TransactionValidator;
-use rust_bc::models::Transaction;
 
 fn main() {
     println!("╔════════════════════════════════════════════════════════╗");
@@ -75,7 +75,11 @@ fn main() {
 
     for (tx, desc, should_pass) in test_cases {
         let result = validator.validate(&tx);
-        let status = if result.is_valid == should_pass { "✅ PASS" } else { "❌ FAIL" };
+        let status = if result.is_valid == should_pass {
+            "✅ PASS"
+        } else {
+            "❌ FAIL"
+        };
         println!("{}: {}", status, desc);
         if !result.is_valid {
             println!("  Error: {}", result.errors.join(", "));
@@ -111,7 +115,11 @@ fn main() {
         };
 
         let result = validator.validate(&tx);
-        let status = if result.is_valid == should_pass { "✅ PASS" } else { "❌ FAIL" };
+        let status = if result.is_valid == should_pass {
+            "✅ PASS"
+        } else {
+            "❌ FAIL"
+        };
         println!("{}: {} (amount={}, fee={})", status, desc, amount, fee);
         if !result.is_valid && !result.errors.is_empty() {
             println!("  Error: {}", result.errors[0]);
@@ -126,14 +134,35 @@ fn main() {
     println!();
 
     validator = TransactionValidator::with_defaults();
-    println!("Min address length: {}", validator.config.min_address_length);
-    println!("Max address length: {}", validator.config.max_address_length);
+    println!(
+        "Min address length: {}",
+        validator.config.min_address_length
+    );
+    println!(
+        "Max address length: {}",
+        validator.config.max_address_length
+    );
     println!();
 
     let addr_tests = vec![
-        ("valid_sender_minlength_32chars_ok", "valid_receiver_minlength32chars_ok", "Valid addresses", true),
-        ("short", "valid_receiver_minlength32chars_ok", "Sender too short", false),
-        ("valid_sender_minlength_32chars_ok", "rec", "Receiver too short", false),
+        (
+            "valid_sender_minlength_32chars_ok",
+            "valid_receiver_minlength32chars_ok",
+            "Valid addresses",
+            true,
+        ),
+        (
+            "short",
+            "valid_receiver_minlength32chars_ok",
+            "Sender too short",
+            false,
+        ),
+        (
+            "valid_sender_minlength_32chars_ok",
+            "rec",
+            "Receiver too short",
+            false,
+        ),
     ];
 
     for (sender, receiver, desc, should_pass) in addr_tests {
@@ -149,7 +178,11 @@ fn main() {
         };
 
         let result = validator.validate(&tx);
-        let status = if result.is_valid == should_pass { "✅ PASS" } else { "❌ FAIL" };
+        let status = if result.is_valid == should_pass {
+            "✅ PASS"
+        } else {
+            "❌ FAIL"
+        };
         println!("{}: {}", status, desc);
     }
     println!();
@@ -203,7 +236,10 @@ fn main() {
 
     let result3 = validator.validate(&tx3_replay);
     let replay_blocked = !result3.is_valid;
-    println!("🛡️  Replay attack (sequence=50): {} (BLOCKED)", replay_blocked);
+    println!(
+        "🛡️  Replay attack (sequence=50): {} (BLOCKED)",
+        replay_blocked
+    );
     if !result3.is_valid {
         println!("   Error: {}", result3.errors[0]);
     }
@@ -267,7 +303,10 @@ fn main() {
     let stats = validator.get_stats();
     println!("Tracked senders: {}", stats.tracked_senders);
     println!("Seen transactions: {}", stats.seen_transactions);
-    println!("Avg pending per sender: {:.2}", stats.average_pending_per_sender);
+    println!(
+        "Avg pending per sender: {:.2}",
+        stats.average_pending_per_sender
+    );
     println!();
 
     // Summary
@@ -292,9 +331,10 @@ fn main() {
     println!("  6. Sequence tracking (replay prevention)");
     println!("  7. Double-spend check (pending transaction limits)");
     println!();
-    
+
     // Final verification
-    let all_critical_pass = result1.is_valid && result2.is_valid && replay_blocked && duplicate_blocked;
+    let all_critical_pass =
+        result1.is_valid && result2.is_valid && replay_blocked && duplicate_blocked;
     if all_critical_pass {
         println!("🎯 ALL CRITICAL PROTECTIONS VERIFIED ✅");
     }

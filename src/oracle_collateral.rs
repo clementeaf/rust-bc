@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, warn, info};
+use tracing::{debug, info, warn};
 
 /// Status of a bonding request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,8 +182,10 @@ impl BondingRegistry {
         if self.pools.contains_key(&oracle_id) {
             return Err("Pool already exists".to_string());
         }
-        self.pools
-            .insert(oracle_id.clone(), CollateralPool::new(oracle_id, self.min_collateral));
+        self.pools.insert(
+            oracle_id.clone(),
+            CollateralPool::new(oracle_id, self.min_collateral),
+        );
         Ok(())
     }
 
@@ -202,9 +204,17 @@ impl BondingRegistry {
     }
 
     /// Request to lock collateral for bonding
-    pub fn lock_collateral(&mut self, oracle_id: &str, amount: u64, timestamp: u64) -> Result<(), String> {
+    pub fn lock_collateral(
+        &mut self,
+        oracle_id: &str,
+        amount: u64,
+        timestamp: u64,
+    ) -> Result<(), String> {
         if amount < self.min_collateral {
-            return Err(format!("Amount {} below minimum {}", amount, self.min_collateral));
+            return Err(format!(
+                "Amount {} below minimum {}",
+                amount, self.min_collateral
+            ));
         }
 
         if let Some(pool) = self.pools.get_mut(oracle_id) {
@@ -223,7 +233,11 @@ impl BondingRegistry {
 
     /// Activate a pending bond
     pub fn activate_bond(&mut self, oracle_id: &str) -> Result<(), String> {
-        if let Some(bond) = self.pending_bonds.iter_mut().find(|b| b.oracle_id == oracle_id) {
+        if let Some(bond) = self
+            .pending_bonds
+            .iter_mut()
+            .find(|b| b.oracle_id == oracle_id)
+        {
             bond.status = BondingStatus::Active;
             Ok(())
         } else {
@@ -235,7 +249,13 @@ impl BondingRegistry {
     pub fn get_collateral_status(&self, oracle_id: &str) -> Result<(u64, u64, u64), String> {
         self.pools
             .get(oracle_id)
-            .map(|pool| (pool.locked_balance, pool.available_balance, pool.in_dispute_balance))
+            .map(|pool| {
+                (
+                    pool.locked_balance,
+                    pool.available_balance,
+                    pool.in_dispute_balance,
+                )
+            })
             .ok_or_else(|| "Pool not found".to_string())
     }
 
@@ -273,11 +293,18 @@ impl BondingRegistry {
             warn!(oracle_id, "Challenge attempted on non-bonded oracle");
             return Err("Oracle not bonded".to_string());
         }
-        
-        info!(oracle_id, challenger_id, "Challenge initiated against oracle");
+
+        info!(
+            oracle_id,
+            challenger_id, "Challenge initiated against oracle"
+        );
 
         // Check oracle doesn't already have an active challenge
-        if self.challenges.iter().any(|c| c.oracle_id == oracle_id && c.status == ChallengeStatus::Voting) {
+        if self
+            .challenges
+            .iter()
+            .any(|c| c.oracle_id == oracle_id && c.status == ChallengeStatus::Voting)
+        {
             return Err("Oracle already has an active challenge".to_string());
         }
 
@@ -321,11 +348,15 @@ impl BondingRegistry {
     }
 
     /// Vote on a challenge with reputation-weighted voting
-    pub fn vote_on_challenge(&mut self, challenge_id: &str, voter_id: &str, vote_yes: bool) -> Result<(), String> {
+    pub fn vote_on_challenge(
+        &mut self,
+        challenge_id: &str,
+        voter_id: &str,
+        vote_yes: bool,
+    ) -> Result<(), String> {
         // First check status and calculate weight without holding mutable reference
         let challenge_status = {
-            self
-                .challenges
+            self.challenges
                 .iter()
                 .find(|c| c.id == challenge_id)
                 .ok_or("Challenge not found")?
@@ -359,7 +390,11 @@ impl BondingRegistry {
     }
 
     /// Resolve a challenge (check if voting period ended)
-    pub fn resolve_challenge(&mut self, challenge_id: &str, _current_time: u64) -> Result<ChallengeOutcome, String> {
+    pub fn resolve_challenge(
+        &mut self,
+        challenge_id: &str,
+        _current_time: u64,
+    ) -> Result<ChallengeOutcome, String> {
         // Extract data from challenge without holding mutable reference
         let (oracle_id, challenger_id, votes_for, votes_against) = {
             let challenge = self
@@ -397,11 +432,17 @@ impl BondingRegistry {
 
         // Execute slashing if challenge accepted
         if outcome == ChallengeOutcome::ChallengeAccepted {
-            warn!(oracle_id, votes_for, votes_against, "Challenge accepted - executing slash");
+            warn!(
+                oracle_id,
+                votes_for, votes_against, "Challenge accepted - executing slash"
+            );
             self.execute_slashing(&oracle_id, &challenger_id)?
         } else {
             // Restore collateral if challenge rejected
-            info!(oracle_id, votes_for, votes_against, "Challenge rejected - restoring collateral");
+            info!(
+                oracle_id,
+                votes_for, votes_against, "Challenge rejected - restoring collateral"
+            );
             if let Some(pool) = self.pools.get_mut(&oracle_id) {
                 pool.restore_collateral(pool.in_dispute_balance)?
             }
@@ -417,7 +458,10 @@ impl BondingRegistry {
 
             // Reward the slasher (5% of slashed amount)
             let reward = (slash_amount * 5) / 100;
-            *self.slasher_rewards.entry(challenger_id.to_string()).or_insert(0) += reward;
+            *self
+                .slasher_rewards
+                .entry(challenger_id.to_string())
+                .or_insert(0) += reward;
 
             self.slashed_total += slash_amount;
         }
@@ -433,7 +477,11 @@ impl BondingRegistry {
     }
 
     /// Release collateral after dispute period
-    pub fn release_collateral(&mut self, oracle_id: &str, _current_time: u64) -> Result<(), String> {
+    pub fn release_collateral(
+        &mut self,
+        oracle_id: &str,
+        _current_time: u64,
+    ) -> Result<(), String> {
         // Check if there are active disputes
         let has_active_disputes = self
             .challenges
@@ -457,7 +505,9 @@ impl BondingRegistry {
     pub fn withdraw_collateral(&mut self, oracle_id: &str, amount: u64) -> Result<u64, String> {
         if let Some(pool) = self.pools.get_mut(oracle_id) {
             if !pool.can_withdraw(amount) {
-                return Err("Cannot withdraw now (disputes pending or insufficient balance)".to_string());
+                return Err(
+                    "Cannot withdraw now (disputes pending or insufficient balance)".to_string(),
+                );
             }
             pool.available_balance -= amount;
             Ok(amount)
@@ -485,12 +535,18 @@ impl BondingRegistry {
 
     /// Get all challenges for an oracle
     pub fn get_oracle_challenges(&self, oracle_id: &str) -> Vec<&DisputeChallenge> {
-        self.challenges.iter().filter(|c| c.oracle_id == oracle_id).collect()
+        self.challenges
+            .iter()
+            .filter(|c| c.oracle_id == oracle_id)
+            .collect()
     }
 
     /// Get pending challenges count
     pub fn pending_challenges_count(&self) -> usize {
-        self.challenges.iter().filter(|c| c.status == ChallengeStatus::Voting).count()
+        self.challenges
+            .iter()
+            .filter(|c| c.status == ChallengeStatus::Voting)
+            .count()
     }
 
     /// Update voting period
@@ -682,11 +738,21 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
-        registry.vote_on_challenge(&challenge_id, "voter1", true).unwrap();
-        registry.vote_on_challenge(&challenge_id, "voter2", false).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter1", true)
+            .unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter2", false)
+            .unwrap();
 
         let challenge = registry.get_challenge(&challenge_id).unwrap();
         assert!(challenge.votes_for > 0);
@@ -702,15 +768,27 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         // Vote for challenge
-        registry.vote_on_challenge(&challenge_id, "voter1", true).unwrap();
-        registry.vote_on_challenge(&challenge_id, "voter2", true).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter1", true)
+            .unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter2", true)
+            .unwrap();
 
         // Resolve after voting period
-        let outcome = registry.resolve_challenge(&challenge_id, 3000000000).unwrap();
+        let outcome = registry
+            .resolve_challenge(&challenge_id, 3000000000)
+            .unwrap();
         assert_eq!(outcome, ChallengeOutcome::ChallengeAccepted);
 
         // Check slasher got rewarded
@@ -727,15 +805,27 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         // Vote against challenge
-        registry.vote_on_challenge(&challenge_id, "voter1", false).unwrap();
-        registry.vote_on_challenge(&challenge_id, "voter2", false).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter1", false)
+            .unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter2", false)
+            .unwrap();
 
         // Resolve after voting period
-        let outcome = registry.resolve_challenge(&challenge_id, 3000000000).unwrap();
+        let outcome = registry
+            .resolve_challenge(&challenge_id, 3000000000)
+            .unwrap();
         assert_eq!(outcome, ChallengeOutcome::ChallengeRejected);
 
         // Collateral should be restored
@@ -765,7 +855,13 @@ mod tests {
         registry.lock_collateral("oracle1", 1500, 1000).unwrap();
         registry.activate_bond("oracle1").unwrap();
         registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         let result = registry.withdraw_collateral("oracle1", 1000);
@@ -781,11 +877,21 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
-        registry.vote_on_challenge(&challenge_id, "voter1", true).unwrap();
-        registry.resolve_challenge(&challenge_id, 3000000000).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter1", true)
+            .unwrap();
+        registry
+            .resolve_challenge(&challenge_id, 3000000000)
+            .unwrap();
 
         let reward = registry.claim_slasher_reward("challenger1").unwrap();
         assert!(reward > 0);
@@ -804,16 +910,28 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let c1 = registry
-            .challenge_oracle("oracle1", "challenger1", "hash1".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash1".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
-        
+
         // Resolve first challenge
         registry.vote_on_challenge(&c1, "voter1", false).unwrap();
         registry.resolve_challenge(&c1, 3000000000).unwrap();
-        
+
         // Now create second challenge
         registry
-            .challenge_oracle("oracle1", "challenger2", "hash2".to_string(), "evidence".to_string(), 3000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger2",
+                "hash2".to_string(),
+                "evidence".to_string(),
+                3000,
+            )
             .unwrap();
 
         let challenges = registry.get_oracle_challenges("oracle1");
@@ -829,7 +947,13 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         registry
-            .challenge_oracle("oracle1", "challenger1", "hash1".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash1".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         assert_eq!(registry.pending_challenges_count(), 1);
@@ -883,7 +1007,13 @@ mod tests {
         let mut registry = BondingRegistry::new(1000);
         registry.create_pool("oracle1".to_string()).unwrap();
 
-        let result = registry.challenge_oracle("oracle1", "challenger1", "hash".to_string(), "evidence".to_string(), 2000);
+        let result = registry.challenge_oracle(
+            "oracle1",
+            "challenger1",
+            "hash".to_string(),
+            "evidence".to_string(),
+            2000,
+        );
         assert!(result.is_err());
     }
 
@@ -896,12 +1026,22 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         // Voter with longer ID gets more weight
-        registry.vote_on_challenge(&challenge_id, "v1", true).unwrap();
-        registry.vote_on_challenge(&challenge_id, "very_long_voter_name", true).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "v1", true)
+            .unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "very_long_voter_name", true)
+            .unwrap();
 
         let challenge = registry.get_challenge(&challenge_id).unwrap();
         assert!(challenge.votes_for >= 2); // At least 2 votes
@@ -916,7 +1056,13 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
         let result = registry.release_collateral("oracle1", 3000);
@@ -945,11 +1091,23 @@ mod tests {
 
         // First challenge
         let _c1 = registry
-            .challenge_oracle("oracle1", "challenger1", "hash1".to_string(), "evidence1".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash1".to_string(),
+                "evidence1".to_string(),
+                2000,
+            )
             .unwrap();
 
         // Second challenge should fail because oracle is disputed
-        let c2 = registry.challenge_oracle("oracle1", "challenger2", "hash2".to_string(), "evidence2".to_string(), 3000);
+        let c2 = registry.challenge_oracle(
+            "oracle1",
+            "challenger2",
+            "hash2".to_string(),
+            "evidence2".to_string(),
+            3000,
+        );
 
         assert!(c2.is_err()); // Can't challenge if already disputed
     }
@@ -963,11 +1121,21 @@ mod tests {
         registry.activate_bond("oracle1").unwrap();
 
         let challenge_id = registry
-            .challenge_oracle("oracle1", "challenger1", "hash123".to_string(), "evidence".to_string(), 2000)
+            .challenge_oracle(
+                "oracle1",
+                "challenger1",
+                "hash123".to_string(),
+                "evidence".to_string(),
+                2000,
+            )
             .unwrap();
 
-        registry.vote_on_challenge(&challenge_id, "voter1", true).unwrap();
-        registry.resolve_challenge(&challenge_id, 3000000000).unwrap();
+        registry
+            .vote_on_challenge(&challenge_id, "voter1", true)
+            .unwrap();
+        registry
+            .resolve_challenge(&challenge_id, 3000000000)
+            .unwrap();
 
         let reward = registry.get_slasher_rewards("challenger1");
         // 10% of 2000 = 200 slash, 5% of 200 = 10 reward

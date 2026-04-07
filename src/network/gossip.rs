@@ -269,13 +269,15 @@ impl MembershipTable {
         latest_height: u64,
     ) {
         let mut table = self.inner.lock().unwrap();
-        let entry = table.entry(peer_address.to_string()).or_insert(PeerLiveness {
-            status: PeerStatus::Alive,
-            org_id: org_id.to_string(),
-            last_sequence: 0,
-            last_seen_ms: now_ms,
-            latest_height: 0,
-        });
+        let entry = table
+            .entry(peer_address.to_string())
+            .or_insert(PeerLiveness {
+                status: PeerStatus::Alive,
+                org_id: org_id.to_string(),
+                last_sequence: 0,
+                last_seen_ms: now_ms,
+                latest_height: 0,
+            });
         if sequence >= entry.last_sequence {
             entry.last_sequence = sequence;
             entry.last_seen_ms = now_ms;
@@ -490,10 +492,7 @@ mod tests {
     fn state_response_limits_to_batch_size() {
         // Simulate building a StateResponse: clamp to STATE_BATCH_SIZE.
         let all_blocks: Vec<u64> = (0..100).collect();
-        let batch: Vec<u64> = all_blocks
-            .into_iter()
-            .take(STATE_BATCH_SIZE)
-            .collect();
+        let batch: Vec<u64> = all_blocks.into_iter().take(STATE_BATCH_SIZE).collect();
         assert_eq!(batch.len(), STATE_BATCH_SIZE);
         assert_eq!(*batch.last().unwrap(), 49);
     }

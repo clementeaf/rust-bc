@@ -140,14 +140,11 @@ impl ConsensusEngine {
                 timestamp: block.timestamp,
                 parent_hash: block.parent_hash,
                 merkle_root: block.hash,
-                transactions: block
-                    .transactions
-                    .iter()
-                    .map(|h| hex::encode(h))
-                    .collect(),
+                transactions: block.transactions.iter().map(|h| hex::encode(h)).collect(),
                 proposer: block.proposer.clone(),
                 signature: block.signature,
-                endorsements: vec![],orderer_signature: None,
+                endorsements: vec![],
+                orderer_signature: None,
             };
             store
                 .write_block(&storage_block)
@@ -167,7 +164,10 @@ impl ConsensusEngine {
     /// Return the canonical tip hash, i.e. the last block in the canonical
     /// chain.  Returns `None` when the DAG is empty.
     pub fn canonical_tip(&self) -> Option<[u8; 32]> {
-        self.fork_choice.canonical_chain(&self.dag).into_iter().last()
+        self.fork_choice
+            .canonical_chain(&self.dag)
+            .into_iter()
+            .last()
     }
 
     /// Total number of blocks in the DAG (including stale branches).
@@ -215,7 +215,15 @@ mod tests {
     /// Build a block that passes full validation:
     /// slot 0, timestamp within [0,6), proposer "v1".
     fn valid_block(hash: u8, parent: u8, height: u64) -> DagBlock {
-        DagBlock::new(mk(hash), mk(parent), height, 0, 0, "v1".to_string(), [2u8; 64])
+        DagBlock::new(
+            mk(hash),
+            mk(parent),
+            height,
+            0,
+            0,
+            "v1".to_string(),
+            [2u8; 64],
+        )
     }
 
     // --- accept_block: happy path ---
@@ -243,7 +251,10 @@ mod tests {
         let mut e = engine();
         let mut b = valid_block(1, 0, 0);
         b.hash = [0u8; 32];
-        assert!(matches!(e.accept_block(b), Err(ConsensusError::InvalidBlock(_))));
+        assert!(matches!(
+            e.accept_block(b),
+            Err(ConsensusError::InvalidBlock(_))
+        ));
     }
 
     #[test]
@@ -251,7 +262,10 @@ mod tests {
         let mut e = engine();
         let mut b = valid_block(1, 0, 0);
         b.proposer = String::new();
-        assert!(matches!(e.accept_block(b), Err(ConsensusError::InvalidBlock(_))));
+        assert!(matches!(
+            e.accept_block(b),
+            Err(ConsensusError::InvalidBlock(_))
+        ));
     }
 
     #[test]
@@ -259,7 +273,10 @@ mod tests {
         let mut e = engine();
         let mut b = valid_block(1, 0, 0);
         b.signature = [0u8; 64];
-        assert!(matches!(e.accept_block(b), Err(ConsensusError::InvalidBlock(_))));
+        assert!(matches!(
+            e.accept_block(b),
+            Err(ConsensusError::InvalidBlock(_))
+        ));
     }
 
     #[test]
@@ -267,7 +284,10 @@ mod tests {
         let mut e = engine();
         let mut b = valid_block(1, 0, 0);
         b.proposer = "intruder".to_string();
-        assert!(matches!(e.accept_block(b), Err(ConsensusError::InvalidBlock(_))));
+        assert!(matches!(
+            e.accept_block(b),
+            Err(ConsensusError::InvalidBlock(_))
+        ));
     }
 
     #[test]
@@ -384,11 +404,8 @@ mod tests {
         use crate::endorsement::registry::MemoryOrgRegistry;
 
         let ps = MemoryPolicyStore::new();
-        ps.set_policy(
-            "block",
-            &EndorsementPolicy::AnyOf(vec!["org1".to_string()]),
-        )
-        .unwrap();
+        ps.set_policy("block", &EndorsementPolicy::AnyOf(vec!["org1".to_string()]))
+            .unwrap();
 
         let mut e = ConsensusEngine::new(
             ConsensusConfig::default(),

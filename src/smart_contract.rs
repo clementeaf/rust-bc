@@ -1,5 +1,5 @@
 /// Smart Contract Integration Module
-/// 
+///
 /// This module provides interfaces for interacting with Ethereum smart contracts,
 /// specifically ERC-20 tokens and ERC-721 NFTs. It abstracts away the complexity
 /// of ethers-rs and provides a clean API for the oracle system to use.
@@ -9,9 +9,8 @@
 /// - ERC20Contract: Token operations (transfer, balance, approve)
 /// - ERC721Contract: NFT operations (transfer, mint, burn, ownership)
 /// - ContractError: Custom error types for contract operations
-
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn, info};
+use tracing::{debug, info, warn};
 
 /// Type alias for Ethereum addresses as strings
 pub type EthereumAddress = String;
@@ -49,7 +48,7 @@ impl std::error::Error for ContractError {}
 
 /// Represents a U256 (256-bit unsigned integer) for token amounts
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct U256(pub u128);  // Simplified: in production, use full u256
+pub struct U256(pub u128); // Simplified: in production, use full u256
 
 impl U256 {
     /// Create a new U256 from u128
@@ -113,15 +112,18 @@ impl SmartContractConfig {
     pub fn validate(&self) -> Result<(), ContractError> {
         Self::validate_address(&self.erc20_address)?;
         Self::validate_address(&self.erc721_address)?;
-        
+
         // Check private key is valid hex
         if self.private_key.len() != 64 {
-            warn!("Private key length incorrect: expected 64 chars, got {}", self.private_key.len());
+            warn!(
+                "Private key length incorrect: expected 64 chars, got {}",
+                self.private_key.len()
+            );
             return Err(ContractError::InvalidAddress(
                 "Private key must be 64 hex characters".to_string(),
             ));
         }
-        
+
         debug!("Smart contract configuration validated");
         Ok(())
     }
@@ -135,7 +137,7 @@ impl SmartContractConfig {
                 address
             )));
         }
-        
+
         if address.len() != 42 {
             return Err(ContractError::InvalidAddress(format!(
                 "Invalid address length {} (expected 42): {}",
@@ -143,7 +145,7 @@ impl SmartContractConfig {
                 address
             )));
         }
-        
+
         // Check if hex (allow uppercase and lowercase)
         let hex_part = &address[2..];
         for c in hex_part.chars() {
@@ -154,7 +156,7 @@ impl SmartContractConfig {
                 )));
             }
         }
-        
+
         Ok(())
     }
 }
@@ -170,12 +172,7 @@ pub struct ERC20Contract {
 
 impl ERC20Contract {
     /// Create a new ERC-20 contract reference
-    pub fn new(
-        address: EthereumAddress,
-        name: String,
-        symbol: String,
-        decimals: u8,
-    ) -> Self {
+    pub fn new(address: EthereumAddress, name: String, symbol: String, decimals: u8) -> Self {
         ERC20Contract {
             address,
             name,
@@ -189,34 +186,44 @@ impl ERC20Contract {
         SmartContractConfig::validate_address(account)?;
         debug!(account, token = &self.symbol, "Querying balance");
         // In production, this would make an ethers-rs call to the contract
-        Ok(U256::new(0))  // Mock implementation
+        Ok(U256::new(0)) // Mock implementation
     }
 
     /// Transfer tokens to recipient
     pub fn transfer(&self, to: &str, amount: U256) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(to)?;
-        
+
         if amount.is_zero() {
             warn!("Transfer with zero amount attempted");
             return Err(ContractError::InvalidAmount);
         }
-        
-        info!(token = &self.symbol, to, amount = amount.0, "Executing token transfer");
+
+        info!(
+            token = &self.symbol,
+            to,
+            amount = amount.0,
+            "Executing token transfer"
+        );
         // In production, this would sign and send a transaction via ethers-rs
-        Ok(format!("0x{:064x}", 0))  // Mock transaction hash
+        Ok(format!("0x{:064x}", 0)) // Mock transaction hash
     }
 
     /// Approve spender to spend tokens on behalf of owner
     pub fn approve(&self, spender: &str, amount: U256) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(spender)?;
-        
+
         if amount.is_zero() {
             warn!("Approval with zero amount attempted");
             return Err(ContractError::InvalidAmount);
         }
-        
-        info!(token = &self.symbol, spender, amount = amount.0, "Executing approval");
-        Ok(format!("0x{:064x}", 1))  // Mock transaction hash
+
+        info!(
+            token = &self.symbol,
+            spender,
+            amount = amount.0,
+            "Executing approval"
+        );
+        Ok(format!("0x{:064x}", 1)) // Mock transaction hash
     }
 
     /// Transfer tokens from one address to another (requires prior approval)
@@ -228,20 +235,26 @@ impl ERC20Contract {
     ) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(from)?;
         SmartContractConfig::validate_address(to)?;
-        
+
         if amount.is_zero() {
             warn!("TransferFrom with zero amount attempted");
             return Err(ContractError::InvalidAmount);
         }
-        
-        info!(token = &self.symbol, from, to, amount = amount.0, "Executing transferFrom");
-        Ok(format!("0x{:064x}", 2))  // Mock transaction hash
+
+        info!(
+            token = &self.symbol,
+            from,
+            to,
+            amount = amount.0,
+            "Executing transferFrom"
+        );
+        Ok(format!("0x{:064x}", 2)) // Mock transaction hash
     }
 
     /// Get total supply of tokens
     pub fn total_supply(&self) -> Result<U256, ContractError> {
         debug!(token = &self.symbol, "Querying total supply");
-        Ok(U256::new(1_000_000 * 10u128.pow(self.decimals as u32)))  // Mock
+        Ok(U256::new(1_000_000 * 10u128.pow(self.decimals as u32))) // Mock
     }
 }
 
@@ -267,13 +280,17 @@ impl ERC721Contract {
     pub fn balance_of(&self, owner: &str) -> Result<U256, ContractError> {
         SmartContractConfig::validate_address(owner)?;
         debug!(owner, nft = &self.symbol, "Querying NFT balance");
-        Ok(U256::new(0))  // Mock implementation
+        Ok(U256::new(0)) // Mock implementation
     }
 
     /// Get the owner of an NFT token
     pub fn owner_of(&self, token_id: U256) -> Result<EthereumAddress, ContractError> {
-        debug!(token_id = token_id.0, nft = &self.symbol, "Querying NFT owner");
-        Ok("0x0000000000000000000000000000000000000000".to_string())  // Mock
+        debug!(
+            token_id = token_id.0,
+            nft = &self.symbol,
+            "Querying NFT owner"
+        );
+        Ok("0x0000000000000000000000000000000000000000".to_string()) // Mock
     }
 
     /// Transfer NFT from one address to another
@@ -285,9 +302,15 @@ impl ERC721Contract {
     ) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(from)?;
         SmartContractConfig::validate_address(to)?;
-        
-        info!(nft = &self.symbol, from, to, token_id = token_id.0, "Transferring NFT");
-        Ok(format!("0x{:064x}", 3))  // Mock transaction hash
+
+        info!(
+            nft = &self.symbol,
+            from,
+            to,
+            token_id = token_id.0,
+            "Transferring NFT"
+        );
+        Ok(format!("0x{:064x}", 3)) // Mock transaction hash
     }
 
     /// Safely transfer NFT with onERC721Received callback
@@ -299,42 +322,62 @@ impl ERC721Contract {
     ) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(from)?;
         SmartContractConfig::validate_address(to)?;
-        
-        info!(nft = &self.symbol, from, to, token_id = token_id.0, "Safely transferring NFT");
-        Ok(format!("0x{:064x}", 4))  // Mock transaction hash
+
+        info!(
+            nft = &self.symbol,
+            from,
+            to,
+            token_id = token_id.0,
+            "Safely transferring NFT"
+        );
+        Ok(format!("0x{:064x}", 4)) // Mock transaction hash
     }
 
     /// Approve an address to spend a specific NFT
     pub fn approve(&self, to: &str, token_id: U256) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(to)?;
-        
-        info!(nft = &self.symbol, to, token_id = token_id.0, "Approving NFT transfer");
-        Ok(format!("0x{:064x}", 5))  // Mock transaction hash
+
+        info!(
+            nft = &self.symbol,
+            to,
+            token_id = token_id.0,
+            "Approving NFT transfer"
+        );
+        Ok(format!("0x{:064x}", 5)) // Mock transaction hash
     }
 
     /// Mint a new NFT (requires appropriate permissions)
     pub fn mint(&self, to: &str, token_id: U256) -> Result<TransactionHash, ContractError> {
         SmartContractConfig::validate_address(to)?;
-        
-        info!(nft = &self.symbol, to, token_id = token_id.0, "Minting new NFT");
-        Ok(format!("0x{:064x}", 6))  // Mock transaction hash
+
+        info!(
+            nft = &self.symbol,
+            to,
+            token_id = token_id.0,
+            "Minting new NFT"
+        );
+        Ok(format!("0x{:064x}", 6)) // Mock transaction hash
     }
 
     /// Burn (destroy) an NFT
     pub fn burn(&self, token_id: U256) -> Result<TransactionHash, ContractError> {
         info!(nft = &self.symbol, token_id = token_id.0, "Burning NFT");
-        Ok(format!("0x{:064x}", 7))  // Mock transaction hash
+        Ok(format!("0x{:064x}", 7)) // Mock transaction hash
     }
 
     /// Get total supply of NFTs
     pub fn total_supply(&self) -> Result<U256, ContractError> {
         debug!(nft = &self.symbol, "Querying total NFT supply");
-        Ok(U256::new(10000))  // Mock
+        Ok(U256::new(10000)) // Mock
     }
 
     /// Get metadata URI for a token
     pub fn token_uri(&self, token_id: U256) -> Result<String, ContractError> {
-        debug!(token_id = token_id.0, nft = &self.symbol, "Querying token URI");
+        debug!(
+            token_id = token_id.0,
+            nft = &self.symbol,
+            "Querying token URI"
+        );
         Ok(format!(
             "https://metadata.example.com/nft/{}/{}",
             &self.symbol, token_id.0
@@ -354,22 +397,25 @@ impl SmartContractProvider {
     /// Create a new smart contract provider
     pub fn new(config: SmartContractConfig) -> Result<Self, ContractError> {
         config.validate()?;
-        
+
         let erc20 = ERC20Contract::new(
             config.erc20_address.clone(),
             "TokenName".to_string(),
             "TKN".to_string(),
             18,
         );
-        
+
         let erc721 = ERC721Contract::new(
             config.erc721_address.clone(),
             "NFTName".to_string(),
             "NFT".to_string(),
         );
-        
-        info!("Smart contract provider initialized with {} and {}", erc20.symbol, erc721.symbol);
-        
+
+        info!(
+            "Smart contract provider initialized with {} and {}",
+            erc20.symbol, erc721.symbol
+        );
+
         Ok(SmartContractProvider {
             config,
             erc20,
@@ -378,12 +424,7 @@ impl SmartContractProvider {
     }
 
     /// Update contract metadata (name, symbol, decimals)
-    pub fn update_erc20_metadata(
-        &mut self,
-        name: String,
-        symbol: String,
-        decimals: u8,
-    ) {
+    pub fn update_erc20_metadata(&mut self, name: String, symbol: String, decimals: u8) {
         self.erc20.name = name;
         self.erc20.symbol = symbol;
         self.erc20.decimals = decimals;
@@ -436,7 +477,8 @@ mod tests {
 
     #[test]
     fn test_invalid_ethereum_address_no_prefix() {
-        let result = SmartContractConfig::validate_address("742d35Cc6634C0532925a3b844Bc9e7595f42bE0");
+        let result =
+            SmartContractConfig::validate_address("742d35Cc6634C0532925a3b844Bc9e7595f42bE0");
         assert!(result.is_err());
     }
 
@@ -470,10 +512,7 @@ mod tests {
             "TKN".to_string(),
             18,
         );
-        let result = erc20.transfer(
-            "0x742d35Cc6634C0532925a3b844Bc9e7595f42bE1",
-            U256::new(0),
-        );
+        let result = erc20.transfer("0x742d35Cc6634C0532925a3b844Bc9e7595f42bE1", U256::new(0));
         assert!(result.is_err());
     }
 
@@ -500,10 +539,7 @@ mod tests {
             "NFT".to_string(),
             "NFT".to_string(),
         );
-        let result = erc721.mint(
-            "0x742d35Cc6634C0532925a3b844Bc9e7595f42bE1",
-            U256::new(1),
-        );
+        let result = erc721.mint("0x742d35Cc6634C0532925a3b844Bc9e7595f42bE1", U256::new(1));
         assert!(result.is_ok());
     }
 
@@ -545,10 +581,7 @@ mod tests {
     #[test]
     fn test_contract_error_display() {
         let err = ContractError::InvalidAddress("bad_address".to_string());
-        assert_eq!(
-            err.to_string(),
-            "Invalid address: bad_address"
-        );
+        assert_eq!(err.to_string(), "Invalid address: bad_address");
     }
 
     #[test]

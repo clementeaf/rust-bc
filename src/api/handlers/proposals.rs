@@ -28,7 +28,10 @@ pub async fn submit_proposal(
         .rwset
         .reads
         .iter()
-        .map(|r| KVRead { key: r.key.clone(), version: r.version })
+        .map(|r| KVRead {
+            key: r.key.clone(),
+            version: r.version,
+        })
         .collect();
 
     let response_rwset = ReadWriteSet {
@@ -56,10 +59,19 @@ pub async fn submit_proposal(
             .as_secs(),
     };
 
-    let response = ProposalResponse { rwset: response_rwset, endorsement };
+    let response = ProposalResponse {
+        rwset: response_rwset,
+        endorsement,
+    };
 
     // Persist the original tx to the store if available.
-    if let Some(store) = state.store.read().unwrap_or_else(|e| e.into_inner()).get("default").cloned() {
+    if let Some(store) = state
+        .store
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get("default")
+        .cloned()
+    {
         let _ = store.write_transaction(&proposal.tx);
     }
 
@@ -97,9 +109,11 @@ pub async fn submit_endorsed_transaction(
     // Forward to ordering service via node if available.
     if let Some(node) = &state.node {
         if let Some(ordering) = &node.ordering_service {
-            ordering.submit_tx(endorsed.proposal.tx.clone()).map_err(|e| {
-                ApiError::InternalError { reason: e.to_string() }
-            })?;
+            ordering
+                .submit_tx(endorsed.proposal.tx.clone())
+                .map_err(|e| ApiError::InternalError {
+                    reason: e.to_string(),
+                })?;
         }
     }
 
@@ -168,8 +182,12 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 
@@ -187,8 +205,14 @@ mod tests {
 
     fn sample_rwset() -> ReadWriteSet {
         ReadWriteSet {
-            reads: vec![KVRead { key: "k".to_string(), version: 1 }],
-            writes: vec![KVWrite { key: "k".to_string(), value: vec![1] }],
+            reads: vec![KVRead {
+                key: "k".to_string(),
+                version: 1,
+            }],
+            writes: vec![KVWrite {
+                key: "k".to_string(),
+                value: vec![1],
+            }],
         }
     }
 

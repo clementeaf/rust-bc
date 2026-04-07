@@ -33,7 +33,15 @@ fn mk(id: u8) -> [u8; 32] {
 /// Build a DagBlock that passes ConsensusEngine validation:
 /// slot=0, timestamp in [0,6), proposer="v1".
 fn dag_block(hash: u8, parent: u8, height: u64) -> DagBlock {
-    DagBlock::new(mk(hash), mk(parent), height, 0, 0, "v1".to_string(), [2u8; 64])
+    DagBlock::new(
+        mk(hash),
+        mk(parent),
+        height,
+        0,
+        0,
+        "v1".to_string(),
+        [2u8; 64],
+    )
 }
 
 /// Minimal AppState wired to the given store.
@@ -68,8 +76,12 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         gateway: None,
         discovery_service: None,
         event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
-        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        acl_provider: None, ordering_backend: None, world_state: None,
+        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+            std::collections::HashMap::new(),
+        )),
+        acl_provider: None,
+        ordering_backend: None,
+        world_state: None,
     }
 }
 
@@ -101,8 +113,12 @@ fn make_state_no_store() -> AppState {
         gateway: None,
         discovery_service: None,
         event_bus: std::sync::Arc::new(rust_bc::events::EventBus::new()),
-        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        acl_provider: None, ordering_backend: None, world_state: None,
+        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+            std::collections::HashMap::new(),
+        )),
+        acl_provider: None,
+        ordering_backend: None,
+        world_state: None,
     }
 }
 
@@ -117,8 +133,12 @@ fn store_with_two_blocks() -> Arc<MemoryStore> {
     )
     .with_store(Box::new(Arc::clone(&store)));
 
-    engine.accept_block(dag_block(1, 0, 0)).expect("height 0 accepted");
-    engine.accept_block(dag_block(2, 1, 1)).expect("height 1 accepted");
+    engine
+        .accept_block(dag_block(1, 0, 0))
+        .expect("height 0 accepted");
+    engine
+        .accept_block(dag_block(2, 1, 1))
+        .expect("height 1 accepted");
     store
 }
 
@@ -273,5 +293,9 @@ async fn latest_route_not_confused_with_height_param() {
     let resp = test::call_service(&app, req).await;
 
     // Must be the /latest handler, not the /{height} handler trying to parse "latest"
-    assert_eq!(resp.status().as_u16(), 200, "latest route must resolve before /{{height}}");
+    assert_eq!(
+        resp.status().as_u16(),
+        200,
+        "latest route must resolve before /{{height}}"
+    );
 }

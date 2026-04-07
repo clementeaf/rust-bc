@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse, post};
+use actix_web::{post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
@@ -58,7 +58,12 @@ pub async fn install_chaincode(
     query: web::Query<InstallQuery>,
     body: web::Bytes,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &http_req,
+    )?;
     let trace_id = uuid::Uuid::new_v4().to_string();
 
     if query.chaincode_id.is_empty() {
@@ -80,20 +85,27 @@ pub async fn install_chaincode(
         });
     }
 
-    let store = state.chaincode_package_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "chaincode_package_store".to_string(),
-    })?;
+    let store = state
+        .chaincode_package_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "chaincode_package_store".to_string(),
+        })?;
 
     store
         .store_package(&query.chaincode_id, &query.version, &body)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
     // Auto-create a ChaincodeDefinition with Installed status so the full
     // lifecycle (approve → commit) works without a separate seeding step.
     if let Some(def_store) = state.chaincode_definition_store.as_ref() {
         let existing = def_store
             .get_definition(&query.chaincode_id, &query.version)
-            .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+            .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
         if existing.is_none() {
             let def = crate::chaincode::definition::ChaincodeDefinition::new(
                 &query.chaincode_id,
@@ -102,7 +114,9 @@ pub async fn install_chaincode(
             );
             def_store
                 .upsert_definition(def)
-                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+                .map_err(|e| ApiError::StorageError {
+                    reason: e.to_string(),
+                })?;
         }
     }
 
@@ -127,7 +141,12 @@ pub async fn approve_chaincode(
     path: web::Path<String>,
     query: web::Query<ApproveQuery>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &req,
+    )?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let chaincode_id = path.into_inner();
 
@@ -155,13 +174,18 @@ pub async fn approve_chaincode(
         });
     }
 
-    let def_store = state.chaincode_definition_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "chaincode_definition_store".to_string(),
-    })?;
+    let def_store = state
+        .chaincode_definition_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "chaincode_definition_store".to_string(),
+        })?;
 
     let mut def = def_store
         .get_definition(&chaincode_id, &query.version)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?
         .ok_or_else(|| ApiError::NotFound {
             resource: format!("chaincode definition '{chaincode_id}:{}'", query.version),
         })?;
@@ -178,14 +202,19 @@ pub async fn approve_chaincode(
     let policy_satisfied = def.endorsement_policy.evaluate(&approved_orgs);
 
     if policy_satisfied {
-        if let Ok(next_status) = def.status.transition_to(&crate::chaincode::ChaincodeStatus::Approved) {
+        if let Ok(next_status) = def
+            .status
+            .transition_to(&crate::chaincode::ChaincodeStatus::Approved)
+        {
             def.status = next_status;
         }
     }
 
     def_store
         .upsert_definition(def)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
     let response = ApproveResponse {
         chaincode_id,
@@ -208,7 +237,12 @@ pub async fn commit_chaincode(
     path: web::Path<String>,
     query: web::Query<CommitQuery>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &http_req,
+    )?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let chaincode_id = path.into_inner();
 
@@ -219,13 +253,18 @@ pub async fn commit_chaincode(
         });
     }
 
-    let def_store = state.chaincode_definition_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "chaincode_definition_store".to_string(),
-    })?;
+    let def_store = state
+        .chaincode_definition_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "chaincode_definition_store".to_string(),
+        })?;
 
     let mut def = def_store
         .get_definition(&chaincode_id, &query.version)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?
         .ok_or_else(|| ApiError::NotFound {
             resource: format!("chaincode definition '{chaincode_id}:{}'", query.version),
         })?;
@@ -249,13 +288,20 @@ pub async fn commit_chaincode(
     def.status = def
         .status
         .transition_to(&crate::chaincode::ChaincodeStatus::Committed)
-        .map_err(|e| ApiError::Conflict { reason: e.to_string() })?;
+        .map_err(|e| ApiError::Conflict {
+            reason: e.to_string(),
+        })?;
 
     def_store
         .upsert_definition(def)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
-    let response = CommitResponse { chaincode_id, version: query.version.clone() };
+    let response = CommitResponse {
+        chaincode_id,
+        version: query.version.clone(),
+    };
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
@@ -272,7 +318,12 @@ pub async fn simulate_chaincode(
     query: web::Query<SimulateQuery>,
     body: web::Json<SimulateRequest>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &http_req,
+    )?;
     use crate::chaincode::executor::WasmExecutor;
     use crate::storage::MemoryWorldState;
 
@@ -292,32 +343,55 @@ pub async fn simulate_chaincode(
         });
     }
 
-    let pkg_store = state.chaincode_package_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "chaincode_package_store".to_string(),
-    })?;
+    let pkg_store = state
+        .chaincode_package_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "chaincode_package_store".to_string(),
+        })?;
 
     let wasm = pkg_store
         .get_package(&chaincode_id, &query.version)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?
         .ok_or_else(|| ApiError::NotFound {
             resource: format!("chaincode package '{chaincode_id}:{}'", query.version),
         })?;
 
-    let executor = WasmExecutor::new(&wasm, 10_000_000)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    let executor = WasmExecutor::new(&wasm, 10_000_000).map_err(|e| ApiError::StorageError {
+        reason: e.to_string(),
+    })?;
 
     let base: std::sync::Arc<dyn crate::storage::WorldState> =
         std::sync::Arc::new(MemoryWorldState::new());
 
-    let (result_bytes, rwset) = executor
-        .simulate(base, &body.function)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+    let (result_bytes, rwset) =
+        executor
+            .simulate(base, &body.function)
+            .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
 
     let response = SimulateResponse {
         result: base64_encode(&result_bytes),
         rwset: RwSetResponse {
-            reads: rwset.reads.into_iter().map(|r| KVReadDto { key: r.key, version: r.version }).collect(),
-            writes: rwset.writes.into_iter().map(|w| KVWriteDto { key: w.key, value: base64_encode(&w.value) }).collect(),
+            reads: rwset
+                .reads
+                .into_iter()
+                .map(|r| KVReadDto {
+                    key: r.key,
+                    version: r.version,
+                })
+                .collect(),
+            writes: rwset
+                .writes
+                .into_iter()
+                .map(|w| KVWriteDto {
+                    key: w.key,
+                    value: base64_encode(&w.value),
+                })
+                .collect(),
         },
     };
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
@@ -325,7 +399,10 @@ pub async fn simulate_chaincode(
 
 fn base64_encode(bytes: &[u8]) -> String {
     use std::fmt::Write;
-    bytes.iter().fold(String::new(), |mut s, b| { let _ = write!(s, "{:02x}", b); s })
+    bytes.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{:02x}", b);
+        s
+    })
 }
 
 // ── Request / Response types for simulate ─────────────────────────────────────
@@ -380,9 +457,8 @@ mod tests {
     use crate::blockchain::Blockchain;
     use crate::cache::BalanceCache;
     use crate::chaincode::{
-        ChaincodeDefinitionStore, ChaincodePackageStore,
+        definition::ChaincodeDefinition, ChaincodeDefinitionStore, ChaincodePackageStore,
         MemoryChaincodeDefinitionStore, MemoryChaincodePackageStore,
-        definition::ChaincodeDefinition,
     };
     use crate::endorsement::EndorsementPolicy;
     use crate::metrics::MetricsCollector;
@@ -421,8 +497,12 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 
@@ -504,12 +584,24 @@ mod tests {
     #[actix_web::test]
     async fn approve_records_org_approval() {
         let def_store = Arc::new(MemoryChaincodeDefinitionStore::new());
-        seed_definition(&def_store, "cc1", "1.0", EndorsementPolicy::AllOf(vec!["org1".to_string(), "org2".to_string()])).await;
+        seed_definition(
+            &def_store,
+            "cc1",
+            "1.0",
+            EndorsementPolicy::AllOf(vec!["org1".to_string(), "org2".to_string()]),
+        )
+        .await;
 
-        let state = make_state(None, Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(approve_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(approve_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc1/approve?version=1.0")
             .insert_header(("X-Org-Id", "org1"))
@@ -529,12 +621,24 @@ mod tests {
     #[actix_web::test]
     async fn approve_transitions_to_approved_when_policy_satisfied() {
         let def_store = Arc::new(MemoryChaincodeDefinitionStore::new());
-        seed_definition(&def_store, "cc2", "2.0", EndorsementPolicy::AnyOf(vec!["org1".to_string()])).await;
+        seed_definition(
+            &def_store,
+            "cc2",
+            "2.0",
+            EndorsementPolicy::AnyOf(vec!["org1".to_string()]),
+        )
+        .await;
 
-        let state = make_state(None, Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(approve_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(approve_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc2/approve?version=2.0")
             .insert_header(("X-Org-Id", "org1"))
@@ -551,12 +655,24 @@ mod tests {
     #[actix_web::test]
     async fn approve_missing_org_id_header_is_bad_request() {
         let def_store = Arc::new(MemoryChaincodeDefinitionStore::new());
-        seed_definition(&def_store, "cc3", "1.0", EndorsementPolicy::AnyOf(vec!["org1".to_string()])).await;
+        seed_definition(
+            &def_store,
+            "cc3",
+            "1.0",
+            EndorsementPolicy::AnyOf(vec!["org1".to_string()]),
+        )
+        .await;
 
-        let state = make_state(None, Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(approve_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(approve_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc3/approve?version=1.0")
             .to_request();
@@ -566,10 +682,17 @@ mod tests {
 
     #[actix_web::test]
     async fn approve_unknown_definition_is_not_found() {
-        let state = make_state(None, Some(Arc::new(MemoryChaincodeDefinitionStore::new()) as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(Arc::new(MemoryChaincodeDefinitionStore::new())
+                as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(approve_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(approve_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/unknown/approve?version=1.0")
             .insert_header(("X-Org-Id", "org1"))
@@ -582,8 +705,11 @@ mod tests {
     async fn approve_without_definition_store_is_not_found() {
         let state = make_state(None, None);
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(approve_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(approve_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc/approve?version=1.0")
             .insert_header(("X-Org-Id", "org1"))
@@ -615,10 +741,16 @@ mod tests {
         let def_store = Arc::new(MemoryChaincodeDefinitionStore::new());
         seed_approved_definition(&def_store, "cc_commit", "1.0").await;
 
-        let state = make_state(None, Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(commit_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(commit_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc_commit/commit?version=1.0")
             .to_request();
@@ -628,7 +760,10 @@ mod tests {
         assert_eq!(body["data"]["chaincode_id"], "cc_commit");
         assert_eq!(body["data"]["version"], "1.0");
 
-        let def = def_store.get_definition("cc_commit", "1.0").unwrap().unwrap();
+        let def = def_store
+            .get_definition("cc_commit", "1.0")
+            .unwrap()
+            .unwrap();
         assert_eq!(def.status, crate::chaincode::ChaincodeStatus::Committed);
     }
 
@@ -636,17 +771,34 @@ mod tests {
     async fn commit_fails_when_policy_not_satisfied() {
         let def_store = Arc::new(MemoryChaincodeDefinitionStore::new());
         // AllOf(org1, org2) — only org1 has approved
-        seed_definition(&def_store, "cc_partial", "1.0", EndorsementPolicy::AllOf(vec!["org1".to_string(), "org2".to_string()])).await;
-        def_store.upsert_definition({
-            let mut def = def_store.get_definition("cc_partial", "1.0").unwrap().unwrap();
-            def.approvals.insert("org1".to_string(), true);
-            def
-        }).unwrap();
+        seed_definition(
+            &def_store,
+            "cc_partial",
+            "1.0",
+            EndorsementPolicy::AllOf(vec!["org1".to_string(), "org2".to_string()]),
+        )
+        .await;
+        def_store
+            .upsert_definition({
+                let mut def = def_store
+                    .get_definition("cc_partial", "1.0")
+                    .unwrap()
+                    .unwrap();
+                def.approvals.insert("org1".to_string(), true);
+                def
+            })
+            .unwrap();
 
-        let state = make_state(None, Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(commit_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(commit_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc_partial/commit?version=1.0")
             .to_request();
@@ -666,10 +818,16 @@ mod tests {
         def.status = crate::chaincode::ChaincodeStatus::Committed;
         def_store.upsert_definition(def).unwrap();
 
-        let state = make_state(None, Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(def_store as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(commit_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(commit_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc_done/commit?version=1.0")
             .to_request();
@@ -679,10 +837,17 @@ mod tests {
 
     #[actix_web::test]
     async fn commit_unknown_definition_is_not_found() {
-        let state = make_state(None, Some(Arc::new(MemoryChaincodeDefinitionStore::new()) as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>));
+        let state = make_state(
+            None,
+            Some(Arc::new(MemoryChaincodeDefinitionStore::new())
+                as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>),
+        );
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(commit_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(commit_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/unknown/commit?version=1.0")
             .to_request();
@@ -694,8 +859,11 @@ mod tests {
     async fn commit_without_definition_store_is_not_found() {
         let state = make_state(None, None);
         let app = test::init_service(
-            App::new().app_data(state).service(web::scope("/api/v1").service(commit_chaincode)),
-        ).await;
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(commit_chaincode)),
+        )
+        .await;
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/cc/commit?version=1.0")
             .to_request();
@@ -726,7 +894,9 @@ mod tests {
     fn make_app_with_simulate_wasm() -> (web::Data<AppState>, Arc<MemoryChaincodePackageStore>) {
         let pkg_store = Arc::new(MemoryChaincodePackageStore::new());
         // Store the WAT bytes as "wasm" — WasmExecutor::new accepts WAT too.
-        pkg_store.store_package("mycc", "1.0", SIMULATE_WAT).unwrap();
+        pkg_store
+            .store_package("mycc", "1.0", SIMULATE_WAT)
+            .unwrap();
         let state = make_state(Some(pkg_store.clone()), None);
         (state, pkg_store)
     }

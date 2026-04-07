@@ -160,7 +160,11 @@ pub trait BlockStore: Send + Sync {
     /// Default implementation iterates `[offset, offset+limit)` by height.
     fn list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)> {
         let latest = self.get_latest_height().unwrap_or(0) as usize;
-        let total = if latest == 0 && self.read_block(0).is_err() { 0 } else { latest + 1 };
+        let total = if latest == 0 && self.read_block(0).is_err() {
+            0
+        } else {
+            latest + 1
+        };
         let mut blocks = Vec::new();
         let start = offset;
         let end = (offset + limit).min(total);
@@ -242,7 +246,8 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         }
     }
 

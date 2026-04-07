@@ -1,8 +1,8 @@
 pub mod identity;
 pub mod ou;
 
-use serde::{Deserialize, Serialize};
 use crate::storage::errors::StorageResult;
+use serde::{Deserialize, Serialize};
 
 /// Persistent CRL store — abstracts over MemoryStore / RocksDb.
 /// key = `msp_id`, value = list of revoked serials.
@@ -68,22 +68,35 @@ pub struct MemoryCrlStore {
 
 impl MemoryCrlStore {
     pub fn new() -> Self {
-        Self { inner: std::sync::Mutex::new(std::collections::HashMap::new()) }
+        Self {
+            inner: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
     }
 }
 
 impl Default for MemoryCrlStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CrlStore for MemoryCrlStore {
     fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
-        self.inner.lock().unwrap().insert(msp_id.to_string(), serials.to_vec());
+        self.inner
+            .lock()
+            .unwrap()
+            .insert(msp_id.to_string(), serials.to_vec());
         Ok(())
     }
 
     fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
-        Ok(self.inner.lock().unwrap().get(msp_id).cloned().unwrap_or_default())
+        Ok(self
+            .inner
+            .lock()
+            .unwrap()
+            .get(msp_id)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 
@@ -166,7 +179,10 @@ mod tests {
     fn validate_identity_unknown_key_fails() {
         let msp = Msp::new("Org1MSP", "Org1");
         let foreign_key = [2u8; 32];
-        assert_eq!(msp.validate_identity(&foreign_key), Err(MspError::UnknownKey));
+        assert_eq!(
+            msp.validate_identity(&foreign_key),
+            Err(MspError::UnknownKey)
+        );
     }
 
     #[test]
@@ -201,6 +217,9 @@ mod tests {
     #[test]
     fn msp_role_serializes_snake_case() {
         assert_eq!(serde_json::to_string(&MspRole::Admin).unwrap(), "\"admin\"");
-        assert_eq!(serde_json::to_string(&MspRole::Orderer).unwrap(), "\"orderer\"");
+        assert_eq!(
+            serde_json::to_string(&MspRole::Orderer).unwrap(),
+            "\"orderer\""
+        );
     }
 }

@@ -52,8 +52,17 @@ impl ChaincodeStatus {
 
 /// Persistence for raw Wasm chaincode packages.
 pub trait ChaincodePackageStore: Send + Sync {
-    fn store_package(&self, chaincode_id: &str, version: &str, wasm_bytes: &[u8]) -> Result<(), ChaincodeError>;
-    fn get_package(&self, chaincode_id: &str, version: &str) -> Result<Option<Vec<u8>>, ChaincodeError>;
+    fn store_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+        wasm_bytes: &[u8],
+    ) -> Result<(), ChaincodeError>;
+    fn get_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<Vec<u8>>, ChaincodeError>;
 }
 
 /// In-memory implementation for testing.
@@ -63,7 +72,9 @@ pub struct MemoryChaincodePackageStore {
 
 impl MemoryChaincodePackageStore {
     pub fn new() -> Self {
-        Self { packages: Mutex::new(HashMap::new()) }
+        Self {
+            packages: Mutex::new(HashMap::new()),
+        }
     }
 
     fn key(chaincode_id: &str, version: &str) -> String {
@@ -78,13 +89,30 @@ impl Default for MemoryChaincodePackageStore {
 }
 
 impl ChaincodePackageStore for MemoryChaincodePackageStore {
-    fn store_package(&self, chaincode_id: &str, version: &str, wasm_bytes: &[u8]) -> Result<(), ChaincodeError> {
-        self.packages.lock().unwrap().insert(Self::key(chaincode_id, version), wasm_bytes.to_vec());
+    fn store_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+        wasm_bytes: &[u8],
+    ) -> Result<(), ChaincodeError> {
+        self.packages
+            .lock()
+            .unwrap()
+            .insert(Self::key(chaincode_id, version), wasm_bytes.to_vec());
         Ok(())
     }
 
-    fn get_package(&self, chaincode_id: &str, version: &str) -> Result<Option<Vec<u8>>, ChaincodeError> {
-        Ok(self.packages.lock().unwrap().get(&Self::key(chaincode_id, version)).cloned())
+    fn get_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<Vec<u8>>, ChaincodeError> {
+        Ok(self
+            .packages
+            .lock()
+            .unwrap()
+            .get(&Self::key(chaincode_id, version))
+            .cloned())
     }
 }
 
@@ -93,7 +121,11 @@ impl ChaincodePackageStore for MemoryChaincodePackageStore {
 /// Persistence for chaincode lifecycle definitions.
 pub trait ChaincodeDefinitionStore: Send + Sync {
     fn upsert_definition(&self, def: ChaincodeDefinition) -> Result<(), ChaincodeError>;
-    fn get_definition(&self, chaincode_id: &str, version: &str) -> Result<Option<ChaincodeDefinition>, ChaincodeError>;
+    fn get_definition(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<ChaincodeDefinition>, ChaincodeError>;
 }
 
 /// In-memory implementation for testing.
@@ -103,7 +135,9 @@ pub struct MemoryChaincodeDefinitionStore {
 
 impl MemoryChaincodeDefinitionStore {
     pub fn new() -> Self {
-        Self { defs: Mutex::new(HashMap::new()) }
+        Self {
+            defs: Mutex::new(HashMap::new()),
+        }
     }
 
     fn key(chaincode_id: &str, version: &str) -> String {
@@ -124,8 +158,17 @@ impl ChaincodeDefinitionStore for MemoryChaincodeDefinitionStore {
         Ok(())
     }
 
-    fn get_definition(&self, chaincode_id: &str, version: &str) -> Result<Option<ChaincodeDefinition>, ChaincodeError> {
-        Ok(self.defs.lock().unwrap().get(&Self::key(chaincode_id, version)).cloned())
+    fn get_definition(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<ChaincodeDefinition>, ChaincodeError> {
+        Ok(self
+            .defs
+            .lock()
+            .unwrap()
+            .get(&Self::key(chaincode_id, version))
+            .cloned())
     }
 }
 
@@ -134,7 +177,11 @@ impl<T: ChaincodeDefinitionStore> ChaincodeDefinitionStore for std::sync::Arc<T>
         (**self).upsert_definition(def)
     }
 
-    fn get_definition(&self, chaincode_id: &str, version: &str) -> Result<Option<ChaincodeDefinition>, ChaincodeError> {
+    fn get_definition(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<ChaincodeDefinition>, ChaincodeError> {
         (**self).get_definition(chaincode_id, version)
     }
 }
@@ -212,7 +259,10 @@ mod tests {
             ChaincodeStatus::Committed,
         ] {
             let result = ChaincodeStatus::Deprecated.transition_to(&next);
-            assert!(result.is_err(), "expected error transitioning from Deprecated to {next:?}");
+            assert!(
+                result.is_err(),
+                "expected error transitioning from Deprecated to {next:?}"
+            );
         }
     }
 }

@@ -6,19 +6,33 @@
  * - Pending operations queue
  * - Timeout for unsigned operations
  */
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Operation that requires signatures
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MultiSigOperation {
-    Transfer { to: String, amount: u64 },
-    ConfigUpdate { key: String, value: String },
-    MemberAdd { address: String },
-    MemberRemove { address: String },
-    ThresholdChange { new_threshold: u8 },
-    Custom { op_type: String, params: Vec<String> },
+    Transfer {
+        to: String,
+        amount: u64,
+    },
+    ConfigUpdate {
+        key: String,
+        value: String,
+    },
+    MemberAdd {
+        address: String,
+    },
+    MemberRemove {
+        address: String,
+    },
+    ThresholdChange {
+        new_threshold: u8,
+    },
+    Custom {
+        op_type: String,
+        params: Vec<String>,
+    },
 }
 
 /// Signature record
@@ -41,7 +55,12 @@ pub struct PendingOperation {
 }
 
 impl PendingOperation {
-    pub fn new(id: u64, operation: MultiSigOperation, created_block: u64, timeout_blocks: u64) -> Self {
+    pub fn new(
+        id: u64,
+        operation: MultiSigOperation,
+        created_block: u64,
+        timeout_blocks: u64,
+    ) -> Self {
         PendingOperation {
             id,
             operation,
@@ -63,7 +82,12 @@ impl PendingOperation {
     }
 
     /// Add a signature
-    pub fn add_signature(&mut self, signer: String, signature_hash: String, signed_at: u64) -> Result<(), String> {
+    pub fn add_signature(
+        &mut self,
+        signer: String,
+        signature_hash: String,
+        signed_at: u64,
+    ) -> Result<(), String> {
         if self.signatures.contains_key(&signer) {
             return Err("Signer already signed this operation".to_string());
         }
@@ -181,7 +205,11 @@ impl MultiSigContract {
     }
 
     /// Execute an operation if it has enough signatures
-    pub fn execute_operation(&mut self, operation_id: u64, current_block: u64) -> Result<String, String> {
+    pub fn execute_operation(
+        &mut self,
+        operation_id: u64,
+        current_block: u64,
+    ) -> Result<String, String> {
         let operation = self
             .pending_operations
             .get_mut(&operation_id)
@@ -223,7 +251,11 @@ impl MultiSigContract {
                 format!("Threshold changed to {}", new_threshold)
             }
             MultiSigOperation::Custom { op_type, params } => {
-                format!("Custom operation executed: {} with params: {}", op_type, params.join(", "))
+                format!(
+                    "Custom operation executed: {} with params: {}",
+                    op_type,
+                    params.join(", ")
+                )
             }
         };
 
@@ -350,7 +382,11 @@ impl MultiSigContract {
     /// Get statistics
     pub fn get_statistics(&self) -> MultiSigStatistics {
         let total_operations = self.next_operation_id - 1;
-        let pending_count = self.pending_operations.iter().filter(|(_, op)| !op.executed).count() as u64;
+        let pending_count = self
+            .pending_operations
+            .iter()
+            .filter(|(_, op)| !op.executed)
+            .count() as u64;
 
         MultiSigStatistics {
             members: self.members.len() as u64,

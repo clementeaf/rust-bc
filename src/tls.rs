@@ -21,8 +21,8 @@ fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsConfigErro
 
 /// Carga la primera clave privada PEM (RSA, PKCS8 o EC) desde un archivo.
 fn load_private_key(path: &Path) -> Result<PrivateKeyDer<'static>, TlsConfigError> {
-    let file = fs::File::open(path)
-        .map_err(|e| TlsConfigError::KeyFile(path.display().to_string(), e))?;
+    let file =
+        fs::File::open(path).map_err(|e| TlsConfigError::KeyFile(path.display().to_string(), e))?;
     let mut reader = BufReader::new(file);
     rustls_pemfile::private_key(&mut reader)
         .map_err(|e| TlsConfigError::KeyParse(path.display().to_string(), e))?
@@ -75,8 +75,8 @@ pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError
         (Some(cert), Some(key)) => {
             let ocsp = OcspStaple::from_env().map_err(TlsConfigError::OcspStaple)?;
             let config = if mtls {
-                let ca = std::env::var("TLS_CA_CERT_PATH")
-                    .map_err(|_| TlsConfigError::MtlsMissingCa)?;
+                let ca =
+                    std::env::var("TLS_CA_CERT_PATH").map_err(|_| TlsConfigError::MtlsMissingCa)?;
                 let pins = CertPinConfig::from_env().map_err(TlsConfigError::PinConfig)?;
                 if pins.is_disabled() {
                     build_server_config_mtls_with_ocsp(
@@ -109,11 +109,7 @@ pub fn load_tls_config_from_env() -> Result<Option<ServerConfig>, TlsConfigError
                     }
                 }
             } else {
-                build_server_config_with_ocsp(
-                    Path::new(&cert),
-                    Path::new(&key),
-                    ocsp.as_ref(),
-                )?
+                build_server_config_with_ocsp(Path::new(&cert), Path::new(&key), ocsp.as_ref())?
             };
             Ok(Some(config))
         }
@@ -357,8 +353,7 @@ pub fn load_client_config_from_env() -> Result<Option<ClientConfig>, TlsConfigEr
     if mtls {
         let cert = cert_path.unwrap();
         let key = key_path.unwrap();
-        let ca = std::env::var("TLS_CA_CERT_PATH")
-            .map_err(|_| TlsConfigError::MtlsMissingCa)?;
+        let ca = std::env::var("TLS_CA_CERT_PATH").map_err(|_| TlsConfigError::MtlsMissingCa)?;
 
         if pins.is_disabled() {
             return build_client_config_mtls(Path::new(&cert), Path::new(&key), Path::new(&ca))
@@ -454,8 +449,7 @@ impl CertPinConfig {
             if s.len() != 64 {
                 return Err(PinConfigError::InvalidLength(s.to_string()));
             }
-            let bytes = hex::decode(s)
-                .map_err(|e| PinConfigError::InvalidHex(s.to_string(), e))?;
+            let bytes = hex::decode(s).map_err(|e| PinConfigError::InvalidHex(s.to_string(), e))?;
             let arr: [u8; 32] = bytes.try_into().expect("hex::decode returned 32 bytes");
             fingerprints.insert(arr);
         }
@@ -471,7 +465,11 @@ impl CertPinConfig {
             Ok(v) => v,
             Err(_) => return Ok(Self::empty()),
         };
-        let parts: Vec<&str> = raw.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+        let parts: Vec<&str> = raw
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
         if parts.is_empty() {
             return Ok(Self::empty());
         }
@@ -525,8 +523,13 @@ impl rustls::client::danger::ServerCertVerifier for PinningServerCertVerifier {
         ocsp_response: &[u8],
         now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        self.inner
-            .verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)?;
+        self.inner.verify_server_cert(
+            end_entity,
+            intermediates,
+            server_name,
+            ocsp_response,
+            now,
+        )?;
         if !self.pins.is_allowed(end_entity) {
             return Err(rustls::Error::General(format!(
                 "server cert fingerprint not in allowlist: {}",
@@ -587,7 +590,8 @@ impl rustls::server::danger::ClientCertVerifier for PinningClientCertVerifier {
         intermediates: &[CertificateDer<'_>],
         now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
-        self.inner.verify_client_cert(end_entity, intermediates, now)?;
+        self.inner
+            .verify_client_cert(end_entity, intermediates, now)?;
         if !self.pins.is_allowed(end_entity) {
             return Err(rustls::Error::General(format!(
                 "client cert fingerprint not in allowlist: {}",
@@ -656,8 +660,8 @@ pub struct OcspStaple(Vec<u8>);
 impl OcspStaple {
     /// Load a DER-encoded OCSP response from `path`.
     pub fn from_der_file(path: &Path) -> Result<Self, OcspStapleError> {
-        let bytes = fs::read(path)
-            .map_err(|e| OcspStapleError::ReadFile(path.display().to_string(), e))?;
+        let bytes =
+            fs::read(path).map_err(|e| OcspStapleError::ReadFile(path.display().to_string(), e))?;
         if bytes.is_empty() {
             return Err(OcspStapleError::EmptyFile(path.display().to_string()));
         }
@@ -693,8 +697,8 @@ pub fn build_certified_key(
     key_der: PrivateKeyDer<'static>,
     ocsp: Option<&OcspStaple>,
 ) -> Result<Arc<rustls::sign::CertifiedKey>, TlsConfigError> {
-    let signing_key = rustls::crypto::aws_lc_rs::sign::any_supported_type(&key_der)
-        .map_err(|_| {
+    let signing_key =
+        rustls::crypto::aws_lc_rs::sign::any_supported_type(&key_der).map_err(|_| {
             TlsConfigError::Rustls(rustls::Error::General(
                 "unsupported private key type".into(),
             ))
@@ -942,11 +946,8 @@ mod tests {
     fn build_server_config_mtls_fails_with_missing_ca() {
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
-        let result = build_server_config_mtls(
-            cert.path(),
-            key.path(),
-            Path::new("/nonexistent/ca.pem"),
-        );
+        let result =
+            build_server_config_mtls(cert.path(), key.path(), Path::new("/nonexistent/ca.pem"));
         assert!(matches!(result, Err(TlsConfigError::CertFile(..))));
     }
 
@@ -963,11 +964,8 @@ mod tests {
     fn build_client_config_mtls_fails_with_missing_ca() {
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
-        let result = build_client_config_mtls(
-            cert.path(),
-            key.path(),
-            Path::new("/nonexistent/ca.pem"),
-        );
+        let result =
+            build_client_config_mtls(cert.path(), key.path(), Path::new("/nonexistent/ca.pem"));
         assert!(matches!(result, Err(TlsConfigError::CertFile(..))));
     }
 
@@ -1086,7 +1084,9 @@ mod tests {
 
     #[test]
     fn cert_pin_config_rejects_invalid_hex() {
-        let result = CertPinConfig::from_fingerprints(["zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"]);
+        let result = CertPinConfig::from_fingerprints([
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ]);
         assert!(matches!(result, Err(PinConfigError::InvalidHex(..))));
     }
 
@@ -1409,8 +1409,7 @@ mod tests {
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
-        let result =
-            build_server_config_mtls_with_ocsp(cert.path(), key.path(), ca.path(), None);
+        let result = build_server_config_mtls_with_ocsp(cert.path(), key.path(), ca.path(), None);
         assert!(result.is_ok());
     }
 
@@ -1421,12 +1420,8 @@ mod tests {
         let ca = write_temp(TEST_CERT_PEM);
         let staple_file = write_temp_bytes(b"\x30\x03\x0a\x01\x00");
         let staple = OcspStaple::from_der_file(staple_file.path()).unwrap();
-        let result = build_server_config_mtls_with_ocsp(
-            cert.path(),
-            key.path(),
-            ca.path(),
-            Some(&staple),
-        );
+        let result =
+            build_server_config_mtls_with_ocsp(cert.path(), key.path(), ca.path(), Some(&staple));
         assert!(result.is_ok());
     }
 

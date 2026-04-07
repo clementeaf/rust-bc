@@ -8,13 +8,13 @@
 //! - Error handling with exponential backoff
 
 pub mod adapters;
+pub mod comprehensive_tests;
 pub mod couchdb;
 pub mod errors;
 pub mod memory;
 pub mod snapshot;
 pub mod traits;
 pub mod world_state;
-pub mod comprehensive_tests;
 
 pub use adapters::RocksDbBlockStore;
 pub use errors::{StorageError, StorageResult};

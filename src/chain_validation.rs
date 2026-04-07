@@ -2,14 +2,13 @@
 
 /**
  * Chain Validation and Fork Resolution Module
- * 
+ *
  * Handles:
  * - Full chain history validation
  * - Fork detection and resolution using cumulative difficulty
  * - Chain reorganization (reorg) safety
  * - Longest chain rule enforcement
  */
-
 use crate::blockchain::{Block, Blockchain};
 
 /**

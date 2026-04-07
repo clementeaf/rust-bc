@@ -1,6 +1,6 @@
 /**
  * Enhanced Mining Benchmark Tool
- * 
+ *
  * Tests mining performance across difficulty levels 1-10
  * Measures:
  * - Hash rate (H/s)
@@ -8,13 +8,13 @@
  * - Memory usage
  * - Batch mining performance
  * - JSON export of results
- * 
+ *
  * Uso: cargo run --bin benchmark_mining --release
  */
-use rust_bc::blockchain::{Blockchain, Block};
+use rust_bc::blockchain::{Block, Blockchain};
 use rust_bc::models::WalletManager;
+use serde::{Deserialize, Serialize};
 use std::time::Instant;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct BenchmarkResult {
@@ -70,7 +70,7 @@ fn main() {
 
     for difficulty in 1..=10 {
         let result = benchmark_single_difficulty(difficulty);
-        
+
         println!(
             "✓ Difficulty {:<2}: {:>10} H/s | {:>10.4}s | {:>15} hashes | nonce: {}",
             difficulty,
@@ -91,7 +91,7 @@ fn main() {
 
     for difficulty in [1, 2, 3, 5, 7, 10] {
         let batch_result = benchmark_batch_mining(difficulty, 3);
-        
+
         println!(
             "✓ Difficulty {:<2}: {:>6.2}s total | {:.0} H/s avg | {:.4}s per block",
             difficulty,
@@ -114,15 +114,24 @@ fn main() {
     let scaling_factor_10_to_1 = results[9].time_seconds / results[0].time_seconds;
 
     println!("📊 SCALING ANALYSIS:");
-    println!("   • Difficulty 2 is {:.1}x slower than Difficulty 1", scaling_factor_2_to_1);
-    println!("   • Difficulty 10 is {:.1}x slower than Difficulty 1", scaling_factor_10_to_1);
-    
+    println!(
+        "   • Difficulty 2 is {:.1}x slower than Difficulty 1",
+        scaling_factor_2_to_1
+    );
+    println!(
+        "   • Difficulty 10 is {:.1}x slower than Difficulty 1",
+        scaling_factor_10_to_1
+    );
+
     // Expected time calculation for 1-minute blocks
     let target_block_time_seconds = 60.0;
     let optimal_difficulty = find_optimal_difficulty(&results, target_block_time_seconds);
-    
+
     println!();
-    println!("🎯 TARGET BLOCK TIME: {} seconds", target_block_time_seconds);
+    println!(
+        "🎯 TARGET BLOCK TIME: {} seconds",
+        target_block_time_seconds
+    );
     println!("   • Recommended Difficulty: {}", optimal_difficulty);
     if let Some(result) = results.iter().find(|r| r.difficulty == optimal_difficulty) {
         println!("   • Expected Block Time: {:.2}s", result.time_seconds);
@@ -131,13 +140,14 @@ fn main() {
 
     println!();
     println!("💡 RECOMMENDATIONS:");
-    
+
     let mut recommendations = Vec::new();
-    
+
     // Recommendation 1: Development vs Production
     if scaling_factor_10_to_1 < 5.0 {
         recommendations.push(
-            "✓ GOOD: Scaling is linear. Sequential mining performs well up to difficulty 10".to_string()
+            "✓ GOOD: Scaling is linear. Sequential mining performs well up to difficulty 10"
+                .to_string(),
         );
     } else {
         recommendations.push(
@@ -148,12 +158,11 @@ fn main() {
     // Recommendation 2: Hash rate observation
     if results[0].hash_rate > 1_000_000.0 {
         recommendations.push(
-            "✓ EXCELLENT: Hash rate > 1M H/s. CPU can handle high-frequency mining".to_string()
+            "✓ EXCELLENT: Hash rate > 1M H/s. CPU can handle high-frequency mining".to_string(),
         );
     } else if results[0].hash_rate > 100_000.0 {
-        recommendations.push(
-            "✓ GOOD: Hash rate in expected range. Suitable for stable networks".to_string()
-        );
+        recommendations
+            .push("✓ GOOD: Hash rate in expected range. Suitable for stable networks".to_string());
     }
 
     // Recommendation 3: Batch mining consistency
@@ -161,15 +170,16 @@ fn main() {
         let single_diff1 = results[0].time_seconds;
         let batch_single = batch.avg_time_per_block;
         let efficiency = (single_diff1 / batch_single) * 100.0;
-        
+
         println!("   • Batch mining efficiency: {:.1}%", efficiency);
         if efficiency > 90.0 {
             recommendations.push(
-                "✓ OPTIMAL: Batch mining maintains efficiency. Good for production nodes".to_string()
+                "✓ OPTIMAL: Batch mining maintains efficiency. Good for production nodes"
+                    .to_string(),
             );
         } else {
             recommendations.push(
-                "⚠ NOTE: Batch mining has overhead. Consider for async processing".to_string()
+                "⚠ NOTE: Batch mining has overhead. Consider for async processing".to_string(),
             );
         }
     }
@@ -184,8 +194,10 @@ fn main() {
     println!("DETAILED PERFORMANCE TABLE:");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!();
-    println!("{:>4} {:>12} {:>12} {:>15} {:>12} {:>12}",
-        "Diff", "Time(s)", "Hash Rate", "Total Hashes", "Nonce", "Expected");
+    println!(
+        "{:>4} {:>12} {:>12} {:>15} {:>12} {:>12}",
+        "Diff", "Time(s)", "Hash Rate", "Total Hashes", "Nonce", "Expected"
+    );
     println!("{}", "─".repeat(70));
 
     for (i, result) in results.iter().enumerate() {
@@ -194,8 +206,9 @@ fn main() {
         } else {
             results[0].time_seconds * (2.0_f64).powi(i as i32)
         };
-        
-        println!("{:>4} {:>12.4} {:>12.0} {:>15} {:>12} {:>12.4}s",
+
+        println!(
+            "{:>4} {:>12.4} {:>12.0} {:>15} {:>12} {:>12.4}s",
             result.difficulty,
             result.time_seconds,
             result.hash_rate,

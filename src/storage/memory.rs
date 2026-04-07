@@ -106,7 +106,9 @@ impl BlockStore for MemoryStore {
 
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()> {
         if blocks.is_empty() && txs.is_empty() {
-            return Err(StorageError::BatchOperationFailed("Empty batch".to_string()));
+            return Err(StorageError::BatchOperationFailed(
+                "Empty batch".to_string(),
+            ));
         }
         for block in blocks {
             self.write_block(block)?;
@@ -163,7 +165,8 @@ mod tests {
             transactions: vec![format!("tx-{}", height)],
             proposer: "node-1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         }
     }
 
@@ -336,15 +339,24 @@ mod tests {
     #[test]
     fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
         let store = MemoryStore::new();
-        assert!(store.credentials_by_subject_did("did:bc:ghost").unwrap().is_empty());
+        assert!(store
+            .credentials_by_subject_did("did:bc:ghost")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
     fn credentials_by_subject_did_filters_correctly() {
         let store = MemoryStore::new();
-        store.write_credential(&sample_cred("cred-1", "did:bc:alice")).unwrap();
-        store.write_credential(&sample_cred("cred-2", "did:bc:alice")).unwrap();
-        store.write_credential(&sample_cred("cred-3", "did:bc:bob")).unwrap();
+        store
+            .write_credential(&sample_cred("cred-1", "did:bc:alice"))
+            .unwrap();
+        store
+            .write_credential(&sample_cred("cred-2", "did:bc:alice"))
+            .unwrap();
+        store
+            .write_credential(&sample_cred("cred-3", "did:bc:bob"))
+            .unwrap();
 
         let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
         assert_eq!(alice.len(), 2);

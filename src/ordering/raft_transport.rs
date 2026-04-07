@@ -102,11 +102,9 @@ pub fn start_raft_tick_loop(
                 let node = p2p_node.clone();
                 // Fire-and-forget: send raft message, ignore response.
                 tokio::spawn(async move {
-                    let _ = node.send_and_wait(
-                        &addr,
-                        msg,
-                        std::time::Duration::from_secs(2),
-                    ).await;
+                    let _ = node
+                        .send_and_wait(&addr, msg, std::time::Duration::from_secs(2))
+                        .await;
                 });
             }
         }
@@ -131,7 +129,9 @@ mod tests {
     /// Collect advance output as serialized bytes.
     fn collect_bytes(node: &mut RaftNode) -> Vec<(u64, Vec<u8>)> {
         let (msgs, _) = node.advance();
-        msgs.into_iter().map(|m| (m.to, encode_raft_msg(&m))).collect()
+        msgs.into_iter()
+            .map(|m| (m.to, encode_raft_msg(&m)))
+            .collect()
     }
 
     /// Deliver serialized messages, recursively delivering responses.

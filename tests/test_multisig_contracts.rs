@@ -43,13 +43,7 @@ fn test_multisig_contract_invalid_threshold() {
 fn test_multisig_contract_empty_members() {
     let members = vec![];
 
-    let result = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        1,
-        1000,
-    );
+    let result = MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 1, 1000);
 
     assert!(result.is_err());
     assert!(result.unwrap_err().contains("at least one member"));
@@ -59,14 +53,8 @@ fn test_multisig_contract_empty_members() {
 fn test_propose_operation() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -91,14 +79,8 @@ fn test_propose_operation() {
 fn test_propose_operation_not_owner() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.propose_operation(
         "not_owner",
@@ -117,14 +99,8 @@ fn test_propose_operation_not_owner() {
 fn test_sign_operation() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -150,14 +126,8 @@ fn test_sign_operation() {
 fn test_sign_operation_non_member() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -180,14 +150,8 @@ fn test_sign_operation_non_member() {
 fn test_sign_operation_duplicate() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -214,14 +178,8 @@ fn test_sign_operation_duplicate() {
 fn test_execute_operation_success() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -253,14 +211,8 @@ fn test_execute_operation_success() {
 fn test_execute_operation_insufficient_signatures() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -287,14 +239,8 @@ fn test_execute_operation_insufficient_signatures() {
 fn test_execute_operation_expired() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -324,14 +270,8 @@ fn test_execute_operation_expired() {
 fn test_revoke_signature() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -358,14 +298,8 @@ fn test_revoke_signature() {
 fn test_revoke_signature_not_signed() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -388,14 +322,8 @@ fn test_revoke_signature_not_signed() {
 fn test_add_member() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     contract.add_member("owner", "member3".to_string()).unwrap();
 
@@ -407,14 +335,8 @@ fn test_add_member() {
 fn test_add_member_not_owner() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.add_member("member1", "member3".to_string());
 
@@ -426,14 +348,8 @@ fn test_add_member_not_owner() {
 fn test_add_member_duplicate() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.add_member("owner", "member1".to_string());
 
@@ -445,14 +361,8 @@ fn test_add_member_duplicate() {
 fn test_remove_member() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     contract.remove_member("owner", "member1").unwrap();
 
@@ -464,14 +374,8 @@ fn test_remove_member() {
 fn test_remove_member_owner() {
     let members = vec!["owner".to_string(), "member1".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.remove_member("owner", "owner");
 
@@ -481,16 +385,14 @@ fn test_remove_member_owner() {
 
 #[test]
 fn test_change_threshold() {
-    let members = vec!["member1".to_string(), "member2".to_string(), "member3".to_string()];
+    let members = vec![
+        "member1".to_string(),
+        "member2".to_string(),
+        "member3".to_string(),
+    ];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     contract.change_threshold("owner", 3).unwrap();
 
@@ -501,14 +403,8 @@ fn test_change_threshold() {
 fn test_change_threshold_not_owner() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.change_threshold("member1", 2);
 
@@ -520,14 +416,8 @@ fn test_change_threshold_not_owner() {
 fn test_change_threshold_invalid() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let result = contract.change_threshold("owner", 5);
 
@@ -539,14 +429,8 @@ fn test_change_threshold_invalid() {
 fn test_cleanup_expired() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        100,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 100).unwrap();
 
     let op_id1 = contract
         .propose_operation(
@@ -591,14 +475,8 @@ fn test_cleanup_expired() {
 fn test_config_update_operation() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -627,14 +505,8 @@ fn test_config_update_operation() {
 fn test_member_add_operation() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -661,14 +533,8 @@ fn test_member_add_operation() {
 fn test_custom_operation() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -697,14 +563,8 @@ fn test_custom_operation() {
 fn test_get_pending_operations() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id1 = contract
         .propose_operation(
@@ -745,16 +605,14 @@ fn test_get_pending_operations() {
 
 #[test]
 fn test_get_statistics() {
-    let members = vec!["member1".to_string(), "member2".to_string(), "member3".to_string()];
+    let members = vec![
+        "member1".to_string(),
+        "member2".to_string(),
+        "member3".to_string(),
+    ];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -787,16 +645,14 @@ fn test_get_statistics() {
 
 #[test]
 fn test_threshold_adjustment_on_member_removal() {
-    let members = vec!["member1".to_string(), "member2".to_string(), "member3".to_string()];
+    let members = vec![
+        "member1".to_string(),
+        "member2".to_string(),
+        "member3".to_string(),
+    ];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        3,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 3, 1000).unwrap();
 
     contract.remove_member("owner", "member1").unwrap();
     contract.remove_member("owner", "member2").unwrap();
@@ -809,14 +665,8 @@ fn test_threshold_adjustment_on_member_removal() {
 fn test_signature_expiry() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        100,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 100).unwrap();
 
     let op_id = contract
         .propose_operation(
@@ -844,14 +694,8 @@ fn test_signature_expiry() {
 fn test_execute_already_executed() {
     let members = vec!["member1".to_string(), "member2".to_string()];
 
-    let mut contract = MultiSigContract::new(
-        "0x123".to_string(),
-        "owner".to_string(),
-        members,
-        2,
-        1000,
-    )
-    .unwrap();
+    let mut contract =
+        MultiSigContract::new("0x123".to_string(), "owner".to_string(), members, 2, 1000).unwrap();
 
     let op_id = contract
         .propose_operation(

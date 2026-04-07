@@ -52,7 +52,9 @@ impl BlockValidator {
             }
         } else {
             if block.parent_hash == [0u8; 32] {
-                return ValidityResult::Invalid("Non-genesis block cannot have zero parent".to_string());
+                return ValidityResult::Invalid(
+                    "Non-genesis block cannot have zero parent".to_string(),
+                );
             }
         }
 
@@ -141,40 +143,58 @@ mod tests {
     #[test]
     fn test_validate_format_valid() {
         let block = create_valid_block();
-        assert_eq!(BlockValidator::validate_format(&block), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate_format(&block),
+            ValidityResult::Valid
+        );
     }
 
     #[test]
     fn test_validate_format_zero_hash() {
         let mut block = create_valid_block();
         block.hash = [0u8; 32];
-        assert!(matches!(BlockValidator::validate_format(&block), ValidityResult::Invalid(_)));
+        assert!(matches!(
+            BlockValidator::validate_format(&block),
+            ValidityResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_validate_format_empty_proposer() {
         let mut block = create_valid_block();
         block.proposer = "".to_string();
-        assert!(matches!(BlockValidator::validate_format(&block), ValidityResult::Invalid(_)));
+        assert!(matches!(
+            BlockValidator::validate_format(&block),
+            ValidityResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_validate_signature_valid() {
         let block = create_valid_block();
-        assert_eq!(BlockValidator::validate_signature(&block), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate_signature(&block),
+            ValidityResult::Valid
+        );
     }
 
     #[test]
     fn test_validate_signature_zero() {
         let mut block = create_valid_block();
         block.signature = [0u8; 64];
-        assert!(matches!(BlockValidator::validate_signature(&block), ValidityResult::Invalid(_)));
+        assert!(matches!(
+            BlockValidator::validate_signature(&block),
+            ValidityResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_validate_parent_genesis() {
         let block = create_valid_block();
-        assert_eq!(BlockValidator::validate_parent(&block), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate_parent(&block),
+            ValidityResult::Valid
+        );
     }
 
     // test_validate_parent_non_genesis_invalid removed:
@@ -186,7 +206,10 @@ mod tests {
     fn test_validate_slot_valid() {
         let block = create_valid_block();
         let scheduler = create_test_scheduler();
-        assert_eq!(BlockValidator::validate_slot(&block, &scheduler), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate_slot(&block, &scheduler),
+            ValidityResult::Valid
+        );
     }
 
     #[test]
@@ -194,19 +217,28 @@ mod tests {
         let mut block = create_valid_block();
         block.proposer = "validator2".to_string();
         let scheduler = create_test_scheduler();
-        assert!(matches!(BlockValidator::validate_slot(&block, &scheduler), ValidityResult::Invalid(_)));
+        assert!(matches!(
+            BlockValidator::validate_slot(&block, &scheduler),
+            ValidityResult::Invalid(_)
+        ));
     }
 
     #[test]
     fn test_validate_height() {
         let block = create_valid_block();
-        assert_eq!(BlockValidator::validate_height(&block, 0), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate_height(&block, 0),
+            ValidityResult::Valid
+        );
     }
 
     #[test]
     fn test_full_validation() {
         let block = create_valid_block();
         let scheduler = create_test_scheduler();
-        assert_eq!(BlockValidator::validate(&block, &scheduler), ValidityResult::Valid);
+        assert_eq!(
+            BlockValidator::validate(&block, &scheduler),
+            ValidityResult::Valid
+        );
     }
 }

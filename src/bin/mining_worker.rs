@@ -20,7 +20,6 @@
  *   MINER_WORKER_THREADS: Parallel mining threads (default: CPU count)
  *   RUST_LOG: Logging level (default: info)
  */
-
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -111,8 +110,7 @@ impl MiningConfig {
         MiningConfig {
             api_url: env::var("MINER_API_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string()),
-            miner_address: env::var("MINER_ADDRESS")
-                .unwrap_or_else(|_| "MINER".to_string()),
+            miner_address: env::var("MINER_ADDRESS").unwrap_or_else(|_| "MINER".to_string()),
             poll_interval: env::var("MINER_POLL_INTERVAL")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -154,7 +152,8 @@ impl MiningMetrics {
 
     fn record_block(&self, tx_count: u64) {
         self.blocks_mined.fetch_add(1, Ordering::Relaxed);
-        self.transactions_mined.fetch_add(tx_count, Ordering::Relaxed);
+        self.transactions_mined
+            .fetch_add(tx_count, Ordering::Relaxed);
     }
 
     fn record_error(&self) {
@@ -205,24 +204,19 @@ impl MiningWorker {
         let url = format!("{}/api/v1/mempool", self.config.api_url);
 
         match self.client.get(&url).send().await {
-            Ok(response) => {
-                match response.json::<ApiResponse<MempoolData>>().await {
-                    Ok(api_resp) => {
-                        if api_resp.success {
-                            Ok(api_resp
-                                .data
-                                .map(|d| d.transactions)
-                                .unwrap_or_default())
-                        } else {
-                            Err(format!(
-                                "API error: {}",
-                                api_resp.message.unwrap_or_default()
-                            ))
-                        }
+            Ok(response) => match response.json::<ApiResponse<MempoolData>>().await {
+                Ok(api_resp) => {
+                    if api_resp.success {
+                        Ok(api_resp.data.map(|d| d.transactions).unwrap_or_default())
+                    } else {
+                        Err(format!(
+                            "API error: {}",
+                            api_resp.message.unwrap_or_default()
+                        ))
                     }
-                    Err(e) => Err(format!("JSON parse error: {}", e)),
                 }
-            }
+                Err(e) => Err(format!("JSON parse error: {}", e)),
+            },
             Err(e) => Err(format!("Request failed: {}", e)),
         }
     }
@@ -258,25 +252,26 @@ impl MiningWorker {
     }
 
     /// Submit block to API for mining
-    async fn submit_block(&self, block_request: CreateBlockRequest) -> Result<BlockResponse, String> {
+    async fn submit_block(
+        &self,
+        block_request: CreateBlockRequest,
+    ) -> Result<BlockResponse, String> {
         let url = format!("{}/api/v1/blocks", self.config.api_url);
 
         match self.client.post(&url).json(&block_request).send().await {
-            Ok(response) => {
-                match response.json::<ApiResponse<BlockResponse>>().await {
-                    Ok(api_resp) => {
-                        if api_resp.success {
-                            Ok(api_resp.data.ok_or_else(|| "No block data".to_string())?)
-                        } else {
-                            Err(format!(
-                                "API error: {}",
-                                api_resp.message.unwrap_or_default()
-                            ))
-                        }
+            Ok(response) => match response.json::<ApiResponse<BlockResponse>>().await {
+                Ok(api_resp) => {
+                    if api_resp.success {
+                        Ok(api_resp.data.ok_or_else(|| "No block data".to_string())?)
+                    } else {
+                        Err(format!(
+                            "API error: {}",
+                            api_resp.message.unwrap_or_default()
+                        ))
                     }
-                    Err(e) => Err(format!("JSON parse error: {}", e)),
                 }
-            }
+                Err(e) => Err(format!("JSON parse error: {}", e)),
+            },
             Err(e) => Err(format!("Request failed: {}", e)),
         }
     }
@@ -294,7 +289,10 @@ impl MiningWorker {
         println!("   Miner Address: {}", self.config.miner_address);
         println!("   Batch Size: {}", self.config.tx_batch_size);
         println!("   Poll Interval: {} seconds", self.config.poll_interval);
-        println!("   Min Block Interval: {} seconds", self.config.min_block_interval);
+        println!(
+            "   Min Block Interval: {} seconds",
+            self.config.min_block_interval
+        );
         println!("   Worker Threads: {}", self.config.worker_threads);
         println!();
 
@@ -310,10 +308,7 @@ impl MiningWorker {
                         let time_since_last = last_block_time.elapsed().as_secs();
                         if time_since_last < self.config.min_block_interval {
                             let wait_time = self.config.min_block_interval - time_since_last;
-                            log::debug!(
-                                "Min block interval not met, waiting {}s",
-                                wait_time
-                            );
+                            log::debug!("Min block interval not met, waiting {}s", wait_time);
                             sleep(Duration::from_secs(wait_time)).await;
                         }
 

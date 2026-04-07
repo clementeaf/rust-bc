@@ -62,7 +62,11 @@ impl SigningProvider for SoftwareSigningProvider {
     fn verify(&self, data: &[u8], sig: &[u8; 64]) -> Result<bool, SigningError> {
         use ed25519_dalek::{Signature, Verifier};
         let signature = Signature::from_bytes(sig);
-        Ok(self.signing_key.verifying_key().verify(data, &signature).is_ok())
+        Ok(self
+            .signing_key
+            .verifying_key()
+            .verify(data, &signature)
+            .is_ok())
     }
 }
 

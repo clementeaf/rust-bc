@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
-use crate::discovery::PeerDescriptor;
 use crate::discovery::service::DiscoveryError;
+use crate::discovery::PeerDescriptor;
 
 // ── Query params ──────────────────────────────────────────────────────────────
 
@@ -53,7 +53,9 @@ pub async fn get_endorsers(
     let svc = state
         .discovery_service
         .as_ref()
-        .ok_or_else(|| ApiError::NotFound { resource: "discovery_service".to_string() })?;
+        .ok_or_else(|| ApiError::NotFound {
+            resource: "discovery_service".to_string(),
+        })?;
 
     let peers = svc
         .endorsement_plan(&query.chaincode, &query.channel)
@@ -103,12 +105,17 @@ pub async fn get_channel_peers(
     let svc = state
         .discovery_service
         .as_ref()
-        .ok_or_else(|| ApiError::NotFound { resource: "discovery_service".to_string() })?;
+        .ok_or_else(|| ApiError::NotFound {
+            resource: "discovery_service".to_string(),
+        })?;
 
     let peers = svc.channel_peers(&query.channel);
 
     let trace_id = uuid::Uuid::new_v4().to_string();
-    Ok(HttpResponse::Ok().json(ApiResponse::success(ChannelPeersResponse { peers }, trace_id)))
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        ChannelPeersResponse { peers },
+        trace_id,
+    )))
 }
 
 // ── register ──────────────────────────────────────────────────────────────────
@@ -130,7 +137,12 @@ pub async fn post_register_peer(
     state: web::Data<AppState>,
     body: web::Json<PeerDescriptor>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Discovery.Admin", &req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Discovery.Admin",
+        &req,
+    )?;
     if body.peer_address.is_empty() {
         return Err(ApiError::ValidationError {
             field: "peer_address".to_string(),
@@ -147,14 +159,18 @@ pub async fn post_register_peer(
     let svc = state
         .discovery_service
         .as_ref()
-        .ok_or_else(|| ApiError::NotFound { resource: "discovery_service".to_string() })?;
+        .ok_or_else(|| ApiError::NotFound {
+            resource: "discovery_service".to_string(),
+        })?;
 
     let peer_address = body.peer_address.clone();
     svc.register_peer(body.into_inner());
 
     let trace_id = uuid::Uuid::new_v4().to_string();
-    Ok(HttpResponse::Created()
-        .json(ApiResponse::success(RegisterResponse { peer_address }, trace_id)))
+    Ok(HttpResponse::Created().json(ApiResponse::success(
+        RegisterResponse { peer_address },
+        trace_id,
+    )))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -217,8 +233,12 @@ mod tests {
             gateway: None,
             discovery_service,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 
@@ -412,11 +432,11 @@ mod tests {
         ));
         let state = base_state(Some(svc));
         let app = test::init_service(
-            App::new()
-                .app_data(state.clone())
-                .service(web::scope("/api/v1")
+            App::new().app_data(state.clone()).service(
+                web::scope("/api/v1")
                     .service(post_register_peer)
-                    .service(get_channel_peers)),
+                    .service(get_channel_peers),
+            ),
         )
         .await;
 

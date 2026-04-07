@@ -78,7 +78,11 @@ mod tests {
         let mut rx2 = bus.subscribe();
         let mut rx3 = bus.subscribe();
 
-        let event = BlockEvent::BlockCommitted { channel_id: "ch1".to_string(), height: 42, tx_count: 3 };
+        let event = BlockEvent::BlockCommitted {
+            channel_id: "ch1".to_string(),
+            height: 42,
+            tx_count: 3,
+        };
         let sent = bus.publish(event.clone());
         assert_eq!(sent, 3, "should report 3 receivers");
 
@@ -94,7 +98,11 @@ mod tests {
     #[tokio::test]
     async fn publish_with_no_subscribers_returns_zero() {
         let bus = EventBus::new();
-        let sent = bus.publish(BlockEvent::BlockCommitted { channel_id: "".to_string(), height: 1, tx_count: 0 });
+        let sent = bus.publish(BlockEvent::BlockCommitted {
+            channel_id: "".to_string(),
+            height: 1,
+            tx_count: 0,
+        });
         assert_eq!(sent, 0);
     }
 
@@ -103,21 +111,50 @@ mod tests {
         let bus = EventBus::new();
 
         let mut rx_early = bus.subscribe();
-        bus.publish(BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 1, tx_count: 1 });
+        bus.publish(BlockEvent::BlockCommitted {
+            channel_id: "ch".to_string(),
+            height: 1,
+            tx_count: 1,
+        });
 
         // Subscribe after the first event was published
         let mut rx_late = bus.subscribe();
-        bus.publish(BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 2, tx_count: 2 });
+        bus.publish(BlockEvent::BlockCommitted {
+            channel_id: "ch".to_string(),
+            height: 2,
+            tx_count: 2,
+        });
 
         // Early subscriber sees both events
         let e1 = rx_early.recv().await.unwrap();
         let e2 = rx_early.recv().await.unwrap();
-        assert_eq!(e1, BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 1, tx_count: 1 });
-        assert_eq!(e2, BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 2, tx_count: 2 });
+        assert_eq!(
+            e1,
+            BlockEvent::BlockCommitted {
+                channel_id: "ch".to_string(),
+                height: 1,
+                tx_count: 1
+            }
+        );
+        assert_eq!(
+            e2,
+            BlockEvent::BlockCommitted {
+                channel_id: "ch".to_string(),
+                height: 2,
+                tx_count: 2
+            }
+        );
 
         // Late subscriber sees only the second event
         let e3 = rx_late.recv().await.unwrap();
-        assert_eq!(e3, BlockEvent::BlockCommitted { channel_id: "ch".to_string(), height: 2, tx_count: 2 });
+        assert_eq!(
+            e3,
+            BlockEvent::BlockCommitted {
+                channel_id: "ch".to_string(),
+                height: 2,
+                tx_count: 2
+            }
+        );
     }
 
     #[test]

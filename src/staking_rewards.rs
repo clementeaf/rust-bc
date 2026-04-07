@@ -7,7 +7,6 @@
  * - Claim mechanism
  * - Integration with staking_manager
  */
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -36,28 +35,29 @@ impl StakerRewards {
 
     /// Get pending rewards (not yet claimed)
     pub fn pending_rewards(&self) -> u64 {
-        self.accumulated_rewards.saturating_sub(self.claimed_rewards)
+        self.accumulated_rewards
+            .saturating_sub(self.claimed_rewards)
     }
 }
 
 /// Staking reward contract configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RewardConfig {
-    pub apy_percentage: f64,              // Annual Percentage Yield (e.g., 10.0 for 10% APY)
-    pub blocks_per_year: u64,             // Average blocks per year (for APY calculation)
-    pub min_staking_amount: u64,          // Minimum amount to earn rewards
-    pub reward_interval_blocks: u64,      // Blocks between reward distributions
-    pub max_annual_rewards: u64,          // Max rewards available per year (treasury limit)
+    pub apy_percentage: f64,  // Annual Percentage Yield (e.g., 10.0 for 10% APY)
+    pub blocks_per_year: u64, // Average blocks per year (for APY calculation)
+    pub min_staking_amount: u64, // Minimum amount to earn rewards
+    pub reward_interval_blocks: u64, // Blocks between reward distributions
+    pub max_annual_rewards: u64, // Max rewards available per year (treasury limit)
 }
 
 impl Default for RewardConfig {
     fn default() -> Self {
         RewardConfig {
-            apy_percentage: 10.0,                      // 10% APY
-            blocks_per_year: 2_102_400,                // ~365 days at 15s/block
+            apy_percentage: 10.0,       // 10% APY
+            blocks_per_year: 2_102_400, // ~365 days at 15s/block
             min_staking_amount: 100,
-            reward_interval_blocks: 13_440,             // ~2 days in blocks
-            max_annual_rewards: 10_000_000,             // 10M max annual rewards
+            reward_interval_blocks: 13_440, // ~2 days in blocks
+            max_annual_rewards: 10_000_000, // 10M max annual rewards
         }
     }
 }
@@ -67,11 +67,11 @@ impl Default for RewardConfig {
 pub struct StakingRewardContract {
     pub contract_address: String,
     pub owner: String,
-    pub token_address: String,           // Governance token address
+    pub token_address: String, // Governance token address
     pub config: RewardConfig,
     pub staker_rewards: HashMap<String, StakerRewards>,
     pub total_rewards_distributed: u64,
-    pub treasury_balance: u64,           // Available rewards
+    pub treasury_balance: u64, // Available rewards
     pub last_distribution_block: u64,
 }
 
@@ -96,7 +96,12 @@ impl StakingRewardContract {
     }
 
     /// Calculate reward for a staker based on blocks staked and APY
-    fn calculate_reward_internal(&self, staked_amount: u64, blocks_elapsed: u64, config: &RewardConfig) -> u64 {
+    fn calculate_reward_internal(
+        &self,
+        staked_amount: u64,
+        blocks_elapsed: u64,
+        config: &RewardConfig,
+    ) -> u64 {
         if staked_amount < config.min_staking_amount || blocks_elapsed == 0 {
             return 0;
         }
@@ -155,11 +160,11 @@ impl StakingRewardContract {
 
         // Get staker info without holding mutable borrow
         let (old_staked, blocks_since) = {
-            let staker = self
-                .staker_rewards
-                .get(address)
-                .ok_or("Staker not found")?;
-            (staker.total_staked, current_block.saturating_sub(staker.last_reward_block))
+            let staker = self.staker_rewards.get(address).ok_or("Staker not found")?;
+            (
+                staker.total_staked,
+                current_block.saturating_sub(staker.last_reward_block),
+            )
         };
 
         // Calculate reward outside of borrow scope
@@ -179,10 +184,7 @@ impl StakingRewardContract {
     }
 
     /// Distribute rewards to all stakers
-    pub fn distribute_rewards(
-        &mut self,
-        current_block: u64,
-    ) -> Result<u64, String> {
+    pub fn distribute_rewards(&mut self, current_block: u64) -> Result<u64, String> {
         if current_block < self.last_distribution_block + self.config.reward_interval_blocks {
             return Err("Not enough blocks elapsed for next distribution".to_string());
         }
@@ -197,7 +199,8 @@ impl StakingRewardContract {
             }
 
             let blocks_since_reward = current_block.saturating_sub(staker.last_reward_block);
-            let reward = self.calculate_reward_internal(staker.total_staked, blocks_since_reward, &config);
+            let reward =
+                self.calculate_reward_internal(staker.total_staked, blocks_since_reward, &config);
 
             if reward > 0 && self.treasury_balance >= reward {
                 updates.push((addr.clone(), reward, current_block));
@@ -248,10 +251,7 @@ impl StakingRewardContract {
 
     /// Get total staked across all stakers
     pub fn total_staked(&self) -> u64 {
-        self.staker_rewards
-            .values()
-            .map(|s| s.total_staked)
-            .sum()
+        self.staker_rewards.values().map(|s| s.total_staked).sum()
     }
 
     /// Get number of active stakers
@@ -303,20 +303,16 @@ impl StakingRewardContract {
     }
 
     /// Remove staker from reward system (stakes go to 0)
-    pub fn unstake_staker(
-        &mut self,
-        address: &str,
-        current_block: u64,
-    ) -> Result<u64, String> {
+    pub fn unstake_staker(&mut self, address: &str, current_block: u64) -> Result<u64, String> {
         let config = self.config.clone();
-        
+
         // Get staker info without holding mutable borrow
         let (old_staked, blocks_since) = {
-            let staker = self
-                .staker_rewards
-                .get(address)
-                .ok_or("Staker not found")?;
-            (staker.total_staked, current_block.saturating_sub(staker.last_reward_block))
+            let staker = self.staker_rewards.get(address).ok_or("Staker not found")?;
+            (
+                staker.total_staked,
+                current_block.saturating_sub(staker.last_reward_block),
+            )
         };
 
         // Calculate reward outside of borrow scope
@@ -354,7 +350,8 @@ impl StakingRewardContract {
             treasury_balance: self.treasury_balance,
             total_rewards_distributed: self.total_rewards_distributed,
             average_apy,
-            estimated_annual_rewards: self.calculate_reward(total_staked, self.config.blocks_per_year),
+            estimated_annual_rewards: self
+                .calculate_reward(total_staked, self.config.blocks_per_year),
         }
     }
 }

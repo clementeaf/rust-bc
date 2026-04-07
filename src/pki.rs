@@ -114,10 +114,8 @@ impl NodeCaConfig {
 
     /// Load from `TLS_CA_CERT_PATH` + `TLS_CA_KEY_PATH` environment variables.
     pub fn from_env() -> Result<Self, PkiError> {
-        let cert_path = std::env::var("TLS_CA_CERT_PATH")
-            .map_err(|_| PkiError::MissingCaCert)?;
-        let key_path = std::env::var("TLS_CA_KEY_PATH")
-            .map_err(|_| PkiError::MissingCaKey)?;
+        let cert_path = std::env::var("TLS_CA_CERT_PATH").map_err(|_| PkiError::MissingCaCert)?;
+        let key_path = std::env::var("TLS_CA_KEY_PATH").map_err(|_| PkiError::MissingCaKey)?;
         Self::from_pem_files(Path::new(&cert_path), Path::new(&key_path))
     }
 
@@ -138,7 +136,9 @@ impl NodeCaConfig {
 /// Build `CertificateParams` for the internal CA (fixed CN and validity).
 fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
     let mut params = CertificateParams::new(vec![])?;
-    params.distinguished_name.push(DnType::CommonName, INTERNAL_CA_CN);
+    params
+        .distinguished_name
+        .push(DnType::CommonName, INTERNAL_CA_CN);
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     params.not_before = CA_NOT_BEFORE;
     params.not_after = CA_NOT_AFTER;
@@ -220,13 +220,20 @@ fn der_to_pem_cert(der: &[u8]) -> String {
 }
 
 fn base64_encode(data: &[u8]) -> String {
-    const TABLE: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = Vec::with_capacity((data.len() + 2) / 3 * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as usize;
-        let b1 = if chunk.len() > 1 { chunk[1] as usize } else { 0 };
-        let b2 = if chunk.len() > 2 { chunk[2] as usize } else { 0 };
+        let b1 = if chunk.len() > 1 {
+            chunk[1] as usize
+        } else {
+            0
+        };
+        let b2 = if chunk.len() > 2 {
+            chunk[2] as usize
+        } else {
+            0
+        };
         out.push(TABLE[(b0 >> 2) & 0x3F]);
         out.push(TABLE[((b0 << 4) | (b1 >> 4)) & 0x3F]);
         out.push(if chunk.len() > 1 {
@@ -395,10 +402,7 @@ mod tests {
         let (ca, cert_pem, _) = make_ca();
         let ca_der = {
             let mut reader = std::io::BufReader::new(cert_pem.as_bytes());
-            let der = rustls_pemfile::certs(&mut reader)
-                .next()
-                .unwrap()
-                .unwrap();
+            let der = rustls_pemfile::certs(&mut reader).next().unwrap().unwrap();
             der
         };
 
@@ -412,8 +416,7 @@ mod tests {
         // accepted, leaf certs signed by the same key will pass WebPKI chain
         // validation (signature + issuer DN match).
         use rustls::server::WebPkiClientVerifier;
-        let verifier = WebPkiClientVerifier::builder(std::sync::Arc::new(root_store))
-            .build();
+        let verifier = WebPkiClientVerifier::builder(std::sync::Arc::new(root_store)).build();
         assert!(verifier.is_ok(), "CA cert accepted by WebPKI root store");
         // The leaf cert DER must be non-empty and parseable.
         assert!(!issued.cert_der.as_ref().is_empty());
@@ -431,7 +434,10 @@ mod tests {
         let (ca, _, _) = make_ca();
         let c1 = sign_node_cert("node-a", &ca, 30).unwrap();
         let c2 = sign_node_cert("node-b", &ca, 30).unwrap();
-        assert_ne!(c1.key_pem, c2.key_pem, "each call must generate a fresh key pair");
+        assert_ne!(
+            c1.key_pem, c2.key_pem,
+            "each call must generate a fresh key pair"
+        );
     }
 
     // ── IssuedNodeCert::save ───────────────────────────────────────────────
@@ -465,8 +471,7 @@ mod tests {
         let cert_file = NamedTempFile::new().unwrap();
         let key_file = NamedTempFile::new().unwrap();
         let provisioned =
-            provision_node_cert_if_absent("node", cert_file.path(), key_file.path(), 365)
-                .unwrap();
+            provision_node_cert_if_absent("node", cert_file.path(), key_file.path(), 365).unwrap();
         assert!(!provisioned);
     }
 

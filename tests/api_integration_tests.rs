@@ -1,10 +1,10 @@
+use chrono::Utc;
 use rust_bc::api::errors::{ApiError, ApiResponse, ErrorDto};
 use rust_bc::api::models::{
-    IdentityResponse, BlockResponse, CredentialResponse, ProofResponse,
-    CreateIdentityRequest, ConsensusStateResponse, HealthResponse,
-    BlockchainHealthResponse, VersionResponse, RotateKeyRequest, RotateKeyResponse
+    BlockResponse, BlockchainHealthResponse, ConsensusStateResponse, CreateIdentityRequest,
+    CredentialResponse, HealthResponse, IdentityResponse, ProofResponse, RotateKeyRequest,
+    RotateKeyResponse, VersionResponse,
 };
-use chrono::Utc;
 
 #[test]
 fn test_api_error_creation() {
@@ -35,10 +35,10 @@ fn test_identity_response_serialization() {
         public_key: "test_public_key".to_string(),
         created_at: Utc::now(),
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     assert!(json.contains("did:bc:test123"));
-    
+
     let deserialized: IdentityResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.did, "did:bc:test123");
 }
@@ -53,7 +53,7 @@ fn test_block_response_serialization() {
         transaction_count: 5,
         slot_number: 10,
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     let deserialized: BlockResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.hash, "hash_abc123");
@@ -75,7 +75,7 @@ fn test_credential_response_serialization() {
             created: Utc::now(),
         },
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     let deserialized: CredentialResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.id, "cred_123");
@@ -86,7 +86,7 @@ fn test_api_response_success_wrapper() {
     let data = "test_data".to_string();
     let trace_id = "trace_123".to_string();
     let resp: ApiResponse<String> = ApiResponse::success(data.clone(), trace_id.clone());
-    
+
     assert_eq!(resp.status, "Success");
     assert_eq!(resp.status_code, 200);
     assert_eq!(resp.data, Some(data));
@@ -100,7 +100,7 @@ fn test_api_response_error_wrapper() {
         message: "Test error message".to_string(),
         field: Some("test_field".to_string()),
     };
-    
+
     let resp: ApiResponse<()> = ApiResponse::error(error_dto, 400);
     assert_eq!(resp.status, "Failure");
     assert_eq!(resp.status_code, 400);
@@ -112,7 +112,7 @@ fn test_create_identity_request_validation() {
     let req = CreateIdentityRequest {
         metadata: Some(serde_json::json!({"org": "test_org"})),
     };
-    
+
     let json = serde_json::to_string(&req).unwrap();
     let deserialized: CreateIdentityRequest = serde_json::from_str(&json).unwrap();
     assert!(deserialized.metadata.is_some());
@@ -127,7 +127,7 @@ fn test_consensus_state_response() {
         blockchain_height: 500,
         active_forks: 2,
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     let deserialized: ConsensusStateResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.validators.len(), 2);
@@ -145,7 +145,7 @@ fn test_health_response() {
             validators_count: 3,
         },
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     let deserialized: HealthResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.status, "healthy");
@@ -159,7 +159,7 @@ fn test_version_response() {
         rust_bc_version: "0.1.0".to_string(),
         blockchain_height: 250,
     };
-    
+
     let json = serde_json::to_string(&resp).unwrap();
     let deserialized: VersionResponse = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.api_version, "1.0.0");
@@ -168,22 +168,20 @@ fn test_version_response() {
 
 #[test]
 fn test_rotate_key_request_response() {
-    let req = RotateKeyRequest {
-        old_key_index: 0,
-    };
-    
+    let req = RotateKeyRequest { old_key_index: 0 };
+
     let resp = RotateKeyResponse {
         did: "did:bc:test".to_string(),
         new_key_index: 1,
         rotated_at: Utc::now(),
     };
-    
+
     let req_json = serde_json::to_string(&req).unwrap();
     let resp_json = serde_json::to_string(&resp).unwrap();
-    
+
     let des_req: RotateKeyRequest = serde_json::from_str(&req_json).unwrap();
     let des_resp: RotateKeyResponse = serde_json::from_str(&resp_json).unwrap();
-    
+
     assert_eq!(des_req.old_key_index, 0);
     assert_eq!(des_resp.new_key_index, 1);
 }
@@ -194,6 +192,6 @@ fn test_error_field_extraction() {
         field: "phoneNumber".to_string(),
         reason: "invalid format".to_string(),
     };
-    
+
     assert_eq!(err.field(), Some("phoneNumber".to_string()));
 }

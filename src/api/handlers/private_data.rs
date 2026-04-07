@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse, get, put};
+use actix_web::{get, put, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
@@ -45,13 +45,18 @@ fn check_membership(
         })?
         .to_string();
 
-    let registry = state.collection_registry.as_ref().ok_or(ApiError::NotFound {
-        resource: "collection_registry".to_string(),
-    })?;
+    let registry = state
+        .collection_registry
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "collection_registry".to_string(),
+        })?;
 
-    let collection = registry.get(collection_name).ok_or_else(|| ApiError::NotFound {
-        resource: format!("collection '{collection_name}'"),
-    })?;
+    let collection = registry
+        .get(collection_name)
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("collection '{collection_name}'"),
+        })?;
 
     if !collection.is_member(&org_id) {
         return Err(ApiError::Forbidden {
@@ -79,21 +84,31 @@ pub async fn put_private_data(
     path: web::Path<(String, String)>,
     body: web::Json<PutPrivateDataBody>,
 ) -> ApiResult<HttpResponse> {
-    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/PrivateData.Write", &req)?;
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/PrivateData.Write",
+        &req,
+    )?;
     let (collection, key) = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
 
     check_membership(&req, &state, &collection)?;
 
-    let store = state.private_data_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "private_data_store".to_string(),
-    })?;
+    let store = state
+        .private_data_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "private_data_store".to_string(),
+        })?;
 
     let value_bytes = body.value.as_bytes().to_vec();
 
     let hash = store
         .put_private_data(&collection, &key, &value_bytes)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
 
     // Disseminate to member org peers via P2P.
     let sender_org = req
@@ -137,11 +152,9 @@ pub async fn put_private_data(
             };
             let node = node.clone();
             tokio::spawn(async move {
-                let _ = node.send_and_wait(
-                    &peer_addr,
-                    msg,
-                    std::time::Duration::from_secs(3),
-                ).await;
+                let _ = node
+                    .send_and_wait(&peer_addr, msg, std::time::Duration::from_secs(3))
+                    .await;
             });
         }
     }
@@ -170,17 +183,28 @@ pub async fn get_private_data(
 
     check_membership(&req, &state, &collection)?;
 
-    let store = state.private_data_store.as_ref().ok_or(ApiError::NotFound {
-        resource: "private_data_store".to_string(),
-    })?;
+    let store = state
+        .private_data_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "private_data_store".to_string(),
+        })?;
 
     let bytes = store
         .get_private_data(&collection, &key)
-        .map_err(|e| ApiError::StorageError { reason: e.to_string() })?
-        .ok_or_else(|| ApiError::NotFound { resource: format!("private-data/{collection}/{key}") })?;
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("private-data/{collection}/{key}"),
+        })?;
 
     let value = String::from_utf8_lossy(&bytes).into_owned();
-    let response = GetPrivateDataResponse { collection, key, value };
+    let response = GetPrivateDataResponse {
+        collection,
+        key,
+        value,
+    };
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
@@ -196,8 +220,12 @@ pub struct RegisterCollectionBody {
     pub blocks_to_live: u64,
 }
 
-fn default_peer_count() -> usize { 1 }
-fn default_blocks_to_live() -> u64 { 0 }
+fn default_peer_count() -> usize {
+    1
+}
+fn default_blocks_to_live() -> u64 {
+    0
+}
 
 /// POST /api/v1/private-data/collections — register a new private data collection.
 #[actix_web::post("/private-data/collections")]
@@ -208,9 +236,12 @@ pub async fn register_collection(
     let trace_id = uuid::Uuid::new_v4().to_string();
     let req = body.into_inner();
 
-    let registry = state.collection_registry.as_ref().ok_or(ApiError::NotFound {
-        resource: "collection_registry".to_string(),
-    })?;
+    let registry = state
+        .collection_registry
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "collection_registry".to_string(),
+        })?;
 
     let collection = crate::private_data::PrivateDataCollection::new(
         req.name.clone(),
@@ -223,9 +254,11 @@ pub async fn register_collection(
         reason: e.to_string(),
     })?;
 
-    registry.register(collection).map_err(|e| ApiError::InternalError {
-        reason: e.to_string(),
-    })?;
+    registry
+        .register(collection)
+        .map_err(|e| ApiError::InternalError {
+            reason: e.to_string(),
+        })?;
 
     let response = serde_json::json!({ "name": req.name, "status": "registered" });
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
@@ -294,14 +327,20 @@ mod tests {
             gateway: None,
             discovery_service: None,
             event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            acl_provider: None, ordering_backend: None, world_state: None,
+            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
         })
     }
 
     fn setup() -> web::Data<AppState> {
         let registry = Arc::new(MemoryCollectionRegistry::new());
-        registry.register(make_collection("col1", &["org1", "org2"])).unwrap();
+        registry
+            .register(make_collection("col1", &["org1", "org2"]))
+            .unwrap();
         let store: Arc<dyn PrivateDataStore> = Arc::new(MemoryPrivateDataStore::new());
         make_state(registry, store)
     }
@@ -321,7 +360,9 @@ mod tests {
         let req = test::TestRequest::put()
             .uri("/api/v1/private-data/col1/k1")
             .insert_header(("X-Org-Id", "org1"))
-            .set_json(PutPrivateDataBody { value: "secret".to_string() })
+            .set_json(PutPrivateDataBody {
+                value: "secret".to_string(),
+            })
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
@@ -344,7 +385,9 @@ mod tests {
         let req = test::TestRequest::put()
             .uri("/api/v1/private-data/col1/k1")
             .insert_header(("X-Org-Id", "org_outside"))
-            .set_json(PutPrivateDataBody { value: "secret".to_string() })
+            .set_json(PutPrivateDataBody {
+                value: "secret".to_string(),
+            })
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 403);
@@ -362,7 +405,9 @@ mod tests {
 
         let req = test::TestRequest::put()
             .uri("/api/v1/private-data/col1/k1")
-            .set_json(PutPrivateDataBody { value: "secret".to_string() })
+            .set_json(PutPrivateDataBody {
+                value: "secret".to_string(),
+            })
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 400);
@@ -373,7 +418,9 @@ mod tests {
     #[actix_web::test]
     async fn member_can_get_private_data() {
         let registry = Arc::new(MemoryCollectionRegistry::new());
-        registry.register(make_collection("col1", &["org1"])).unwrap();
+        registry
+            .register(make_collection("col1", &["org1"]))
+            .unwrap();
         let store = Arc::new(MemoryPrivateDataStore::new());
         store.put_private_data("col1", "k1", b"payload").unwrap();
         let state = make_state(registry, store as Arc<dyn PrivateDataStore>);

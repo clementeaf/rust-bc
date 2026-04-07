@@ -1,6 +1,6 @@
 //! Endorsement verification logic
 
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use thiserror::Error;
 
 use super::key_policy::KeyEndorsementStore;
@@ -91,7 +91,9 @@ pub fn validate_endorsements(
     if policy.evaluate(&valid_orgs) {
         Ok(())
     } else {
-        Err(EndorsementError::PolicyNotSatisfied { got: valid_orgs.len() })
+        Err(EndorsementError::PolicyNotSatisfied {
+            got: valid_orgs.len(),
+        })
     }
 }
 
@@ -151,8 +153,7 @@ pub fn validate_endorsements_for_writes(
     let valid_org_refs: Vec<&str> = valid_orgs.clone();
 
     for key in write_keys {
-        let effective_policy = key_policy_store
-            .and_then(|s| s.get_key_policy(key).ok().flatten());
+        let effective_policy = key_policy_store.and_then(|s| s.get_key_policy(key).ok().flatten());
 
         match effective_policy {
             Some(ref kp) => {
@@ -190,7 +191,7 @@ mod tests {
     use super::*;
     use crate::endorsement::org::Organization;
     use crate::endorsement::registry::MemoryOrgRegistry;
-    use ed25519_dalek::{SigningKey, Signer};
+    use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
 
     fn make_keypair() -> (SigningKey, [u8; 32]) {
@@ -310,11 +311,20 @@ mod tests {
         struct MemCrl(Mutex<HashMap<String, Vec<String>>>);
         impl CrlStore for MemCrl {
             fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
-                self.0.lock().unwrap().insert(msp_id.to_string(), serials.to_vec());
+                self.0
+                    .lock()
+                    .unwrap()
+                    .insert(msp_id.to_string(), serials.to_vec());
                 Ok(())
             }
             fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
-                Ok(self.0.lock().unwrap().get(msp_id).cloned().unwrap_or_default())
+                Ok(self
+                    .0
+                    .lock()
+                    .unwrap()
+                    .get(msp_id)
+                    .cloned()
+                    .unwrap_or_default())
             }
         }
 
@@ -330,7 +340,10 @@ mod tests {
         let policy = EndorsementPolicy::AnyOf(vec!["org1".into()]);
 
         let result = validate_endorsements(&endorsements, &policy, &reg, Some(&crl));
-        assert!(matches!(result, Err(EndorsementError::SignerRevoked { .. })));
+        assert!(matches!(
+            result,
+            Err(EndorsementError::SignerRevoked { .. })
+        ));
     }
 
     // ── validate_endorsements_for_writes ─────────────────────────────────────
@@ -419,15 +432,10 @@ mod tests {
         let endorsements = vec![make_endorsement(&sk1, payload, "org1")];
 
         // Empty write_keys → chaincode policy governs.
-        assert!(validate_endorsements_for_writes(
-            &endorsements,
-            &policy,
-            &reg,
-            None,
-            &[],
-            None,
-        )
-        .is_ok());
+        assert!(
+            validate_endorsements_for_writes(&endorsements, &policy, &reg, None, &[], None,)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -438,14 +446,6 @@ mod tests {
         let reg = setup_registry_with_orgs(&[("org1", pk1)]);
         let policy = EndorsementPolicy::AllOf(vec!["org1".into()]);
         // No endorsements — empty valid_orgs.
-        assert!(validate_endorsements_for_writes(
-            &[],
-            &policy,
-            &reg,
-            None,
-            &[],
-            None,
-        )
-        .is_err());
+        assert!(validate_endorsements_for_writes(&[], &policy, &reg, None, &[], None,).is_err());
     }
 }

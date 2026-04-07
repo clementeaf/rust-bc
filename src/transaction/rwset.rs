@@ -33,7 +33,10 @@ mod tests {
 
     #[test]
     fn kv_read_serde_roundtrip() {
-        let r = KVRead { key: "foo".to_string(), version: 7 };
+        let r = KVRead {
+            key: "foo".to_string(),
+            version: 7,
+        };
         let json = serde_json::to_string(&r).unwrap();
         let back: KVRead = serde_json::from_str(&json).unwrap();
         assert_eq!(r, back);
@@ -41,7 +44,10 @@ mod tests {
 
     #[test]
     fn kv_write_serde_roundtrip() {
-        let w = KVWrite { key: "bar".to_string(), value: b"hello".to_vec() };
+        let w = KVWrite {
+            key: "bar".to_string(),
+            value: b"hello".to_vec(),
+        };
         let json = serde_json::to_string(&w).unwrap();
         let back: KVWrite = serde_json::from_str(&json).unwrap();
         assert_eq!(w, back);
@@ -56,7 +62,10 @@ mod tests {
     #[test]
     fn non_empty_rwset_is_not_empty() {
         let rw = ReadWriteSet {
-            reads: vec![KVRead { key: "k".to_string(), version: 1 }],
+            reads: vec![KVRead {
+                key: "k".to_string(),
+                version: 1,
+            }],
             writes: vec![],
         };
         assert!(!rw.is_empty());
@@ -66,7 +75,10 @@ mod tests {
     fn rwset_with_only_write_is_not_empty() {
         let rw = ReadWriteSet {
             reads: vec![],
-            writes: vec![KVWrite { key: "k".to_string(), value: vec![1, 2, 3] }],
+            writes: vec![KVWrite {
+                key: "k".to_string(),
+                value: vec![1, 2, 3],
+            }],
         };
         assert!(!rw.is_empty());
     }
@@ -74,8 +86,14 @@ mod tests {
     #[test]
     fn rwset_serde_roundtrip() {
         let rw = ReadWriteSet {
-            reads: vec![KVRead { key: "a".to_string(), version: 3 }],
-            writes: vec![KVWrite { key: "b".to_string(), value: b"val".to_vec() }],
+            reads: vec![KVRead {
+                key: "a".to_string(),
+                version: 3,
+            }],
+            writes: vec![KVWrite {
+                key: "b".to_string(),
+                value: b"val".to_vec(),
+            }],
         };
         let json = serde_json::to_string(&rw).unwrap();
         let back: ReadWriteSet = serde_json::from_str(&json).unwrap();

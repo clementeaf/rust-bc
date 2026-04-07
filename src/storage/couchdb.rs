@@ -75,9 +75,7 @@ mod base64_bytes {
 /// calling thread is temporarily removed from the worker pool while the
 /// future completes.
 fn block_on_async<F: std::future::Future>(f: F) -> F::Output {
-    tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(f)
-    })
+    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
 }
 
 impl CouchDbWorldState {
@@ -106,12 +104,7 @@ impl CouchDbWorldState {
     }
 
     fn doc_url(&self, key: &str) -> String {
-        format!(
-            "{}/{}/{}",
-            self.base_url,
-            self.db,
-            urlencoding::encode(key)
-        )
+        format!("{}/{}/{}", self.base_url, self.db, urlencoding::encode(key))
     }
 
     fn get_doc(&self, key: &str) -> StorageResult<Option<CouchDoc>> {
@@ -129,17 +122,12 @@ impl CouchDbWorldState {
     }
 
     fn put_doc(&self, doc: &CouchDoc) -> StorageResult<String> {
-        let resp = block_on_async(
-            self.client
-                .put(&self.doc_url(&doc.id))
-                .json(doc)
-                .send(),
-        )
-        .map_err(|e| StorageError::Other(format!("CouchDB put: {e}")))?;
+        let resp = block_on_async(self.client.put(&self.doc_url(&doc.id)).json(doc).send())
+            .map_err(|e| StorageError::Other(format!("CouchDB put: {e}")))?;
 
         if !resp.status().is_success() {
-            let err: CouchErrorResponse = block_on_async(resp.json())
-                .unwrap_or(CouchErrorResponse { error: None });
+            let err: CouchErrorResponse =
+                block_on_async(resp.json()).unwrap_or(CouchErrorResponse { error: None });
             return Err(StorageError::Other(format!(
                 "CouchDB put failed: {}",
                 err.error.unwrap_or_else(|| "unknown".to_string())
@@ -264,8 +252,13 @@ mod tests {
     #[ignore]
     fn put_and_get_roundtrip() {
         let url = couchdb_url().expect("set COUCHDB_URL");
-        let db = format!("test_ws_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
+        let db = format!(
+            "test_ws_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
         let ws = CouchDbWorldState::new(&url, &db).unwrap();
 
         let v = ws.put("key1", b"hello").unwrap();
@@ -283,8 +276,13 @@ mod tests {
     #[ignore]
     fn delete_removes_key() {
         let url = couchdb_url().expect("set COUCHDB_URL");
-        let db = format!("test_ws_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
+        let db = format!(
+            "test_ws_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
         let ws = CouchDbWorldState::new(&url, &db).unwrap();
 
         ws.put("del_key", b"data").unwrap();
@@ -296,8 +294,13 @@ mod tests {
     #[ignore]
     fn get_range_returns_subset() {
         let url = couchdb_url().expect("set COUCHDB_URL");
-        let db = format!("test_ws_{}", std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis());
+        let db = format!(
+            "test_ws_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        );
         let ws = CouchDbWorldState::new(&url, &db).unwrap();
 
         for i in 0..5u8 {

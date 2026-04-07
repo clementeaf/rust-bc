@@ -13,8 +13,7 @@ use crate::storage::traits::Block;
 /// `merkle_root` is the SHA-256 of that JSON payload.
 /// `signature` is zeroed — genesis blocks are not signed by a key.
 pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
-    let config_json = serde_json::to_string(config)
-        .unwrap_or_else(|_| "{}".to_string());
+    let config_json = serde_json::to_string(config).unwrap_or_else(|_| "{}".to_string());
 
     let merkle_root = sha256(config_json.as_bytes());
 
@@ -31,7 +30,8 @@ pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
         transactions: vec![config_json],
         proposer: format!("genesis:{channel_id}"),
         signature: [0u8; 64],
-        endorsements: vec![],orderer_signature: None,
+        endorsements: vec![],
+        orderer_signature: None,
     }
 }
 

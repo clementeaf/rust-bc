@@ -75,23 +75,23 @@ impl RateLimiter {
     /// Check if request from IP should be allowed
     pub fn allow_request(&self, ip: IpAddr) -> bool {
         let mut buckets = self.buckets.lock().unwrap();
-        
+
         // Create bucket if not exists
         buckets
             .entry(ip)
             .or_insert_with(|| TokenBucket::new(self.capacity, self.refill_rate));
-        
+
         // Try to consume 1 token
         let bucket = buckets.get_mut(&ip).unwrap();
         let allowed = bucket.try_consume(1.0);
-        
+
         // Cleanup old buckets periodically
         let mut last_cleanup = self.last_cleanup.lock().unwrap();
         if last_cleanup.elapsed() > self.cleanup_interval {
             Self::cleanup_buckets(&mut buckets);
             *last_cleanup = Instant::now();
         }
-        
+
         allowed
     }
 
@@ -151,7 +151,7 @@ mod tests {
         let mut bucket = TokenBucket::new(100.0, 10.0);
         bucket.try_consume(50.0);
         assert_eq!(bucket.tokens, 50.0);
-        
+
         // Simulate time passing
         std::thread::sleep(Duration::from_millis(100));
         bucket.refill();
@@ -177,12 +177,12 @@ mod tests {
     fn test_allow_request() {
         let limiter = RateLimiter::new(5.0, 1.0);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
-        
+
         // Should allow initial requests up to capacity
         for _ in 0..5 {
             assert!(limiter.allow_request(ip));
         }
-        
+
         // 6th request should be rejected
         assert!(!limiter.allow_request(ip));
     }
@@ -192,12 +192,12 @@ mod tests {
         let limiter = RateLimiter::new(2.0, 1.0);
         let ip1 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
         let ip2 = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 2));
-        
+
         // Each IP has its own bucket
         assert!(limiter.allow_request(ip1));
         assert!(limiter.allow_request(ip1));
         assert!(!limiter.allow_request(ip1));
-        
+
         assert!(limiter.allow_request(ip2));
         assert!(limiter.allow_request(ip2));
         assert!(!limiter.allow_request(ip2));
@@ -207,10 +207,10 @@ mod tests {
     fn test_get_remaining_tokens() {
         let limiter = RateLimiter::new(10.0, 1.0);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
-        
+
         // Initial should be at capacity
         assert_eq!(limiter.get_remaining_tokens(ip), 10.0);
-        
+
         // After consuming
         limiter.allow_request(ip);
         assert_eq!(limiter.get_remaining_tokens(ip), 9.0);
@@ -220,13 +220,13 @@ mod tests {
     fn test_reset() {
         let limiter = RateLimiter::new(5.0, 1.0);
         let ip = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1));
-        
+
         // Exhaust bucket
         for _ in 0..5 {
             limiter.allow_request(ip);
         }
         assert!(!limiter.allow_request(ip));
-        
+
         // Reset
         limiter.reset();
         assert!(limiter.allow_request(ip));
@@ -236,18 +236,18 @@ mod tests {
     fn test_rate_limiter_blocking() {
         let limiter = RateLimiter::new(3.0, 10.0);
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
-        
+
         // Consume all tokens
         assert!(limiter.allow_request(ip));
         assert!(limiter.allow_request(ip));
         assert!(limiter.allow_request(ip));
-        
+
         // Should be blocked
         assert!(!limiter.allow_request(ip));
-        
+
         // Wait for refill
         std::thread::sleep(Duration::from_millis(350));
-        
+
         // Should be allowed again (350ms * 10 tokens/sec = 3.5 tokens refilled)
         assert!(limiter.allow_request(ip));
     }
@@ -256,7 +256,7 @@ mod tests {
     fn test_capacity_constraint() {
         let limiter = RateLimiter::new(50.0, 1000.0);
         let ip = IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1));
-        
+
         // Even with high refill rate, shouldn't exceed capacity
         std::thread::sleep(Duration::from_millis(100));
         let remaining = limiter.get_remaining_tokens(ip);
@@ -267,7 +267,7 @@ mod tests {
     fn test_concurrent_cleanup() {
         let limiter = Arc::new(RateLimiter::new(10.0, 1.0));
         let ip = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        
+
         // Reset to simulate cleanup
         limiter.reset();
         assert_eq!(limiter.get_remaining_tokens(ip), 10.0);

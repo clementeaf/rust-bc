@@ -1,14 +1,14 @@
-pub mod service;
 pub mod raft_node;
 pub mod raft_service;
 pub mod raft_transport;
+pub mod service;
 
 use std::str::FromStr;
 
 use crate::storage::errors::StorageResult;
 use crate::storage::traits::{Block, Transaction};
 use ed25519_dalek::Signer;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 /// Compute a block hash for orderer signing: `sha256(height || parent_hash || merkle_root)`.
 pub fn block_hash_for_signing(block: &Block) -> [u8; 32] {
@@ -150,22 +150,27 @@ mod tests {
 
     #[test]
     fn cut_block_signs_with_orderer_key() {
-        use ed25519_dalek::{SigningKey, VerifyingKey, Verifier, Signature};
+        use ed25519_dalek::{Signature, SigningKey, Verifier, VerifyingKey};
 
         let key = SigningKey::from_bytes(&[42u8; 32]);
         let verifying = VerifyingKey::from(&key);
 
-        let svc = service::OrderingService::with_config(100, 2000)
-            .with_signing_key(key);
+        let svc = service::OrderingService::with_config(100, 2000).with_signing_key(key);
         svc.submit_tx(make_tx("tx1").clone()).unwrap();
 
         let block = svc.cut_block(1, "orderer").unwrap().unwrap();
-        assert!(block.orderer_signature.is_some(), "expected orderer_signature");
+        assert!(
+            block.orderer_signature.is_some(),
+            "expected orderer_signature"
+        );
 
         // Verify the signature.
         let hash = block_hash_for_signing(&block);
         let sig = Signature::from_bytes(&block.orderer_signature.unwrap());
-        assert!(verifying.verify(&hash, &sig).is_ok(), "signature verification failed");
+        assert!(
+            verifying.verify(&hash, &sig).is_ok(),
+            "signature verification failed"
+        );
     }
 
     #[test]
@@ -175,8 +180,7 @@ mod tests {
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let verifying = VerifyingKey::from(&key);
 
-        let svc = service::OrderingService::with_config(100, 2000)
-            .with_signing_key(key);
+        let svc = service::OrderingService::with_config(100, 2000).with_signing_key(key);
         svc.submit_tx(make_tx("tx1").clone()).unwrap();
         let block = svc.cut_block(1, "orderer").unwrap().unwrap();
 
@@ -191,8 +195,7 @@ mod tests {
         let wrong_key = SigningKey::from_bytes(&[99u8; 32]);
         let wrong_verifying = VerifyingKey::from(&wrong_key);
 
-        let svc = service::OrderingService::with_config(100, 2000)
-            .with_signing_key(key);
+        let svc = service::OrderingService::with_config(100, 2000).with_signing_key(key);
         svc.submit_tx(make_tx("tx1").clone()).unwrap();
         let block = svc.cut_block(1, "orderer").unwrap().unwrap();
 

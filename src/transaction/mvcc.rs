@@ -45,18 +45,13 @@ impl std::fmt::Display for MvccConflict {
 /// Returns the first conflict found, or `Ok(())` if all reads are valid.
 ///
 /// [`KVRead`]: crate::transaction::KVRead
-pub fn validate_rwset(
-    rwset: &ReadWriteSet,
-    state: &dyn WorldState,
-) -> Result<(), MvccConflict> {
+pub fn validate_rwset(rwset: &ReadWriteSet, state: &dyn WorldState) -> Result<(), MvccConflict> {
     for read in &rwset.reads {
-        let current_version = match state
-            .get(&read.key)
-            .map_err(|_| MvccConflict {
-                key: read.key.clone(),
-                read_version: read.version,
-                current_version: 0,
-            })? {
+        let current_version = match state.get(&read.key).map_err(|_| MvccConflict {
+            key: read.key.clone(),
+            read_version: read.version,
+            current_version: 0,
+        })? {
             Some(vv) => vv.version,
             None => 0,
         };
@@ -121,7 +116,10 @@ mod tests {
         ReadWriteSet {
             reads: reads
                 .iter()
-                .map(|(k, v)| KVRead { key: k.to_string(), version: *v })
+                .map(|(k, v)| KVRead {
+                    key: k.to_string(),
+                    version: *v,
+                })
                 .collect(),
             writes: vec![],
         }
@@ -217,11 +215,17 @@ mod tests {
                 rwset: ReadWriteSet {
                     reads: reads
                         .iter()
-                        .map(|(k, v)| KVRead { key: k.to_string(), version: *v })
+                        .map(|(k, v)| KVRead {
+                            key: k.to_string(),
+                            version: *v,
+                        })
                         .collect(),
                     writes: writes
                         .iter()
-                        .map(|(k, v)| KVWrite { key: k.to_string(), value: v.to_vec() })
+                        .map(|(k, v)| KVWrite {
+                            key: k.to_string(),
+                            value: v.to_vec(),
+                        })
                         .collect(),
                 },
             },
@@ -235,11 +239,17 @@ mod tests {
             rwset: ReadWriteSet {
                 reads: reads
                     .iter()
-                    .map(|(k, v)| KVRead { key: k.to_string(), version: *v })
+                    .map(|(k, v)| KVRead {
+                        key: k.to_string(),
+                        version: *v,
+                    })
                     .collect(),
                 writes: writes
                     .iter()
-                    .map(|(k, v)| KVWrite { key: k.to_string(), value: v.to_vec() })
+                    .map(|(k, v)| KVWrite {
+                        key: k.to_string(),
+                        value: v.to_vec(),
+                    })
                     .collect(),
             },
         }
@@ -311,10 +321,19 @@ mod tests {
 
         let rw = ReadWriteSet {
             reads: vec![
-                KVRead { key: "ok_key".to_string(), version: 1 },
-                KVRead { key: "bad_key".to_string(), version: 1 },
+                KVRead {
+                    key: "ok_key".to_string(),
+                    version: 1,
+                },
+                KVRead {
+                    key: "bad_key".to_string(),
+                    version: 1,
+                },
             ],
-            writes: vec![KVWrite { key: "x".to_string(), value: b"y".to_vec() }],
+            writes: vec![KVWrite {
+                key: "x".to_string(),
+                value: b"y".to_vec(),
+            }],
         };
         let err = validate_rwset(&rw, &state).unwrap_err();
         assert_eq!(err.key, "bad_key");

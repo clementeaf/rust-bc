@@ -7,7 +7,6 @@
  * - Proposal execution (if quorum + majority met)
  * - Time-locks for security
  */
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -26,8 +25,14 @@ pub enum ProposalStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ProposalAction {
     TextProposal(String),
-    Transfer { to: String, amount: u64 },
-    Custom { action_type: String, params: Vec<String> },
+    Transfer {
+        to: String,
+        amount: u64,
+    },
+    Custom {
+        action_type: String,
+        params: Vec<String>,
+    },
 }
 
 /// Vote cast by a voter
@@ -102,7 +107,8 @@ impl Proposal {
     /// Check if proposal can be executed
     pub fn can_execute(&self, current_block: u64) -> bool {
         self.status == ProposalStatus::Succeeded
-            && current_block >= self.created_block + self.voting_period_blocks + self.timelock_blocks
+            && current_block
+                >= self.created_block + self.voting_period_blocks + self.timelock_blocks
     }
 
     /// Check if proposal passed (majority + quorum)
@@ -123,11 +129,11 @@ impl Proposal {
 /// Governance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GovernanceConfig {
-    pub quorum_percentage: u8,          // 0-100
-    pub voting_period_blocks: u64,      // Blocks for voting
-    pub timelock_blocks: u64,           // Blocks delay before execution
-    pub min_proposal_balance: u64,      // Min tokens to create proposal
-    pub proposal_threshold: u8,         // Min % of token holders to propose
+    pub quorum_percentage: u8,     // 0-100
+    pub voting_period_blocks: u64, // Blocks for voting
+    pub timelock_blocks: u64,      // Blocks delay before execution
+    pub min_proposal_balance: u64, // Min tokens to create proposal
+    pub proposal_threshold: u8,    // Min % of token holders to propose
 }
 
 impl Default for GovernanceConfig {
@@ -147,11 +153,11 @@ impl Default for GovernanceConfig {
 pub struct GovernanceContract {
     pub contract_address: String,
     pub owner: String,
-    pub token_address: String,           // Address of governance token
+    pub token_address: String, // Address of governance token
     pub config: GovernanceConfig,
     pub proposals: HashMap<u64, Proposal>,
     pub next_proposal_id: u64,
-    pub total_holders: u64,              // Total token holders
+    pub total_holders: u64, // Total token holders
     pub executed_proposals: u64,
 }
 
@@ -192,9 +198,8 @@ impl GovernanceContract {
         if proposer == self.owner {
             // Owner can always propose
         } else if self.total_holders > 0 {
-            let threshold_holders = (self.total_holders as f64
-                * self.config.proposal_threshold as f64
-                / 100.0) as u64;
+            let threshold_holders =
+                (self.total_holders as f64 * self.config.proposal_threshold as f64 / 100.0) as u64;
             if proposer_balance < threshold_holders {
                 return Err(format!(
                     "Proposer does not meet threshold: {} < {}",
@@ -221,7 +226,11 @@ impl GovernanceContract {
     }
 
     /// Activate a proposal for voting
-    pub fn activate_proposal(&mut self, proposal_id: u64, _current_block: u64) -> Result<(), String> {
+    pub fn activate_proposal(
+        &mut self,
+        proposal_id: u64,
+        _current_block: u64,
+    ) -> Result<(), String> {
         let proposal = self
             .proposals
             .get_mut(&proposal_id)
@@ -304,7 +313,11 @@ impl GovernanceContract {
     }
 
     /// Execute a proposal
-    pub fn execute_proposal(&mut self, proposal_id: u64, current_block: u64) -> Result<String, String> {
+    pub fn execute_proposal(
+        &mut self,
+        proposal_id: u64,
+        current_block: u64,
+    ) -> Result<String, String> {
         let proposal = self
             .proposals
             .get_mut(&proposal_id)
@@ -343,11 +356,7 @@ impl GovernanceContract {
     }
 
     /// Cancel a proposal (owner only)
-    pub fn cancel_proposal(
-        &mut self,
-        proposal_id: u64,
-        caller: &str,
-    ) -> Result<(), String> {
+    pub fn cancel_proposal(&mut self, proposal_id: u64, caller: &str) -> Result<(), String> {
         if caller != self.owner {
             return Err("Only owner can cancel proposals".to_string());
         }
@@ -371,7 +380,11 @@ impl GovernanceContract {
     }
 
     /// Update governance config (owner only)
-    pub fn update_config(&mut self, caller: &str, new_config: GovernanceConfig) -> Result<(), String> {
+    pub fn update_config(
+        &mut self,
+        caller: &str,
+        new_config: GovernanceConfig,
+    ) -> Result<(), String> {
         if caller != self.owner {
             return Err("Only owner can update config".to_string());
         }

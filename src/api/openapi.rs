@@ -4,8 +4,7 @@ pub struct OpenApi;
 impl OpenApi {
     /// Get OpenAPI specification as JSON (embedded `openapi.json`).
     pub fn spec() -> serde_json::Value {
-        serde_json::from_str(include_str!("openapi.json"))
-            .expect("openapi.json must be valid JSON")
+        serde_json::from_str(include_str!("openapi.json")).expect("openapi.json must be valid JSON")
     }
 }
 

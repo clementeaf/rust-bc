@@ -10,7 +10,10 @@
 //! | `credentials` | cred_id string        | JSON Credential|
 //! | `meta`        | well-known byte keys  | raw bytes      |
 
-use rocksdb::{ColumnFamilyDescriptor, Direction, IteratorMode, MultiThreaded, Options, WriteBatch, DBWithThreadMode};
+use rocksdb::{
+    ColumnFamilyDescriptor, DBWithThreadMode, Direction, IteratorMode, MultiThreaded, Options,
+    WriteBatch,
+};
 
 type RocksDB = DBWithThreadMode<MultiThreaded>;
 use std::path::Path;
@@ -19,10 +22,10 @@ use std::sync::Arc;
 use super::errors::{StorageError, StorageResult};
 use super::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
 use super::world_state::{VersionedValue, WorldState};
+use crate::chaincode::{ChaincodeError, ChaincodePackageStore};
 use crate::endorsement::org::Organization;
 use crate::endorsement::registry::OrgRegistry;
 use crate::msp::CrlStore;
-use crate::chaincode::{ChaincodeError, ChaincodePackageStore};
 use crate::private_data::{sha256, PrivateDataStore};
 
 const CF_BLOCKS: &str = "blocks";
@@ -70,7 +73,6 @@ const ALL_CFS: &[&str] = &[
     CF_KEY_ENDORSEMENT_POLICIES,
     CF_KEY_HISTORY,
 ];
-
 
 /// RocksDB-backed block store using Column Families for data isolation
 pub struct RocksDbBlockStore {
@@ -200,10 +202,14 @@ impl RocksDbBlockStore {
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHANNEL_CONFIGS.to_string()))
     }
 
-    pub(crate) fn cf_key_endorsement_policies(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    pub(crate) fn cf_key_endorsement_policies(
+        &self,
+    ) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
         self.db
             .cf_handle(CF_KEY_ENDORSEMENT_POLICIES)
-            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_KEY_ENDORSEMENT_POLICIES.to_string()))
+            .ok_or_else(|| {
+                StorageError::ColumnFamilyNotFound(CF_KEY_ENDORSEMENT_POLICIES.to_string())
+            })
     }
 
     pub(crate) fn cf_key_history(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
@@ -293,10 +299,9 @@ impl RocksDbBlockStore {
     ) -> StorageResult<Vec<crate::storage::traits::HistoryEntry>> {
         let cf = self.cf_key_history()?;
         let prefix = Self::history_prefix(state_key);
-        let iter = self.db.iterator_cf(
-            &cf,
-            IteratorMode::From(&prefix, Direction::Forward),
-        );
+        let iter = self
+            .db
+            .iterator_cf(&cf, IteratorMode::From(&prefix, Direction::Forward));
 
         let mut entries = Vec::new();
         for item in iter {
@@ -335,8 +340,8 @@ impl RocksDbBlockStore {
             version: new_version,
             data: data.to_vec(),
         };
-        let encoded = serde_json::to_vec(&vv)
-            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        let encoded =
+            serde_json::to_vec(&vv).map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
             .put_cf(&cf, key.as_bytes(), &encoded)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
@@ -394,8 +399,8 @@ impl BlockStore for RocksDbBlockStore {
     }
 
     fn write_transaction(&self, tx: &Transaction) -> StorageResult<()> {
-        let value = serde_json::to_vec(tx)
-            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        let value =
+            serde_json::to_vec(tx).map_err(|e| StorageError::SerializationError(e.to_string()))?;
 
         let mut batch = WriteBatch::default();
         batch.put_cf(&self.cf_transactions()?, tx.id.as_bytes(), &value);
@@ -613,8 +618,8 @@ impl BlockStore for RocksDbBlockStore {
 impl OrgRegistry for RocksDbBlockStore {
     fn register_org(&self, org: &Organization) -> StorageResult<()> {
         let cf = self.cf_organizations()?;
-        let value = serde_json::to_vec(org)
-            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        let value =
+            serde_json::to_vec(org).map_err(|e| StorageError::SerializationError(e.to_string()))?;
         self.db
             .put_cf(&cf, org.org_id.as_bytes(), &value)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
@@ -705,9 +710,10 @@ impl WorldState for RocksDbBlockStore {
     fn get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>> {
         let cf = self.cf_world_state()?;
         let mut result = Vec::new();
-        let iter = self
-            .db
-            .iterator_cf(&cf, IteratorMode::From(start.as_bytes(), Direction::Forward));
+        let iter = self.db.iterator_cf(
+            &cf,
+            IteratorMode::From(start.as_bytes(), Direction::Forward),
+        );
         for item in iter {
             let (raw_key, raw_value) =
                 item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
@@ -750,11 +756,7 @@ impl RocksDbBlockStore {
     }
 
     /// Retrieve raw Wasm bytes for a chaincode package, or `None` if not found.
-    pub fn get_package(
-        &self,
-        chaincode_id: &str,
-        version: &str,
-    ) -> StorageResult<Option<Vec<u8>>> {
+    pub fn get_package(&self, chaincode_id: &str, version: &str) -> StorageResult<Option<Vec<u8>>> {
         let cf = self.cf_chaincode_packages()?;
         self.db
             .get_cf(&cf, Self::package_key(chaincode_id, version))
@@ -765,12 +767,21 @@ impl RocksDbBlockStore {
 // ── ChaincodePackageStore impl ────────────────────────────────────────────────
 
 impl ChaincodePackageStore for RocksDbBlockStore {
-    fn store_package(&self, chaincode_id: &str, version: &str, wasm_bytes: &[u8]) -> Result<(), ChaincodeError> {
+    fn store_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+        wasm_bytes: &[u8],
+    ) -> Result<(), ChaincodeError> {
         self.store_package(chaincode_id, version, wasm_bytes)
             .map_err(|e| ChaincodeError::Storage(e.to_string()))
     }
 
-    fn get_package(&self, chaincode_id: &str, version: &str) -> Result<Option<Vec<u8>>, ChaincodeError> {
+    fn get_package(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Result<Option<Vec<u8>>, ChaincodeError> {
         self.get_package(chaincode_id, version)
             .map_err(|e| ChaincodeError::Storage(e.to_string()))
     }
@@ -816,11 +827,7 @@ impl PrivateDataStore for RocksDbBlockStore {
         Ok(hash)
     }
 
-    fn get_private_data(
-        &self,
-        collection_name: &str,
-        key: &str,
-    ) -> StorageResult<Option<Vec<u8>>> {
+    fn get_private_data(&self, collection_name: &str, key: &str) -> StorageResult<Option<Vec<u8>>> {
         self.ensure_private_cf(collection_name)?;
         let cf_name = Self::private_cf_name(collection_name);
         let cf = self
@@ -933,9 +940,9 @@ impl RocksDbBlockStore {
                 break;
             }
             let version_str = &key_str[prefix.len()..];
-            let version: u64 = version_str
-                .parse()
-                .map_err(|e: std::num::ParseIntError| StorageError::SerializationError(e.to_string()))?;
+            let version: u64 = version_str.parse().map_err(|e: std::num::ParseIntError| {
+                StorageError::SerializationError(e.to_string())
+            })?;
             versions.push(version);
         }
         Ok(versions)
@@ -1004,9 +1011,7 @@ mod tests {
     #[test]
     fn create_channel_store_accepts_alphanumeric_hyphen_underscore() {
         let base = TempDir::new().unwrap();
-        assert!(
-            RocksDbBlockStore::create_channel_store("Channel_01-test", base.path()).is_ok()
-        );
+        assert!(RocksDbBlockStore::create_channel_store("Channel_01-test", base.path()).is_ok());
     }
 
     #[test]
@@ -1026,7 +1031,8 @@ mod tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: [2u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         }
     }
 
@@ -1134,7 +1140,9 @@ mod tests {
     #[test]
     fn transaction_stored_in_own_cf_not_visible_as_block() {
         let (store, _dir) = tmp_store();
-        store.write_transaction(&sample_tx("tx-cf-isolation")).unwrap();
+        store
+            .write_transaction(&sample_tx("tx-cf-isolation"))
+            .unwrap();
         // height 0 should not exist (tx keys are strings, block keys are numbers)
         assert!(!store.block_exists(0).unwrap());
     }
@@ -1206,7 +1214,10 @@ mod tests {
         store.write_batch(&blocks, &txs).unwrap();
         assert!(store.block_exists(10).unwrap());
         assert!(store.block_exists(11).unwrap());
-        assert_eq!(store.read_transaction("batch-tx-1").unwrap().id, "batch-tx-1");
+        assert_eq!(
+            store.read_transaction("batch-tx-1").unwrap().id,
+            "batch-tx-1"
+        );
         assert_eq!(store.get_latest_height().unwrap(), 11);
     }
 
@@ -1313,15 +1324,24 @@ mod tests {
     #[test]
     fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
         let (store, _dir) = tmp_store();
-        assert!(store.credentials_by_subject_did("did:bc:ghost").unwrap().is_empty());
+        assert!(store
+            .credentials_by_subject_did("did:bc:ghost")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
     fn write_credential_is_queryable_by_subject_did() {
         let (store, _dir) = tmp_store();
-        store.write_credential(&cred_for_subject("cred-1", "did:bc:alice")).unwrap();
-        store.write_credential(&cred_for_subject("cred-2", "did:bc:alice")).unwrap();
-        store.write_credential(&cred_for_subject("cred-3", "did:bc:bob")).unwrap();
+        store
+            .write_credential(&cred_for_subject("cred-1", "did:bc:alice"))
+            .unwrap();
+        store
+            .write_credential(&cred_for_subject("cred-2", "did:bc:alice"))
+            .unwrap();
+        store
+            .write_credential(&cred_for_subject("cred-3", "did:bc:bob"))
+            .unwrap();
 
         let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
         let ids: Vec<&str> = alice.iter().map(|c| c.id.as_str()).collect();
@@ -1338,11 +1358,27 @@ mod tests {
     fn cred_subject_index_does_not_cross_subject_boundaries() {
         let (store, _dir) = tmp_store();
         // "did:bc:ali" is a prefix of "did:bc:alice" — confirm no bleed-over
-        store.write_credential(&cred_for_subject("cred-a", "did:bc:ali")).unwrap();
-        store.write_credential(&cred_for_subject("cred-b", "did:bc:alice")).unwrap();
+        store
+            .write_credential(&cred_for_subject("cred-a", "did:bc:ali"))
+            .unwrap();
+        store
+            .write_credential(&cred_for_subject("cred-b", "did:bc:alice"))
+            .unwrap();
 
-        assert_eq!(store.credentials_by_subject_did("did:bc:ali").unwrap().len(), 1);
-        assert_eq!(store.credentials_by_subject_did("did:bc:alice").unwrap().len(), 1);
+        assert_eq!(
+            store
+                .credentials_by_subject_did("did:bc:ali")
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            store
+                .credentials_by_subject_did("did:bc:alice")
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     // ── OrgRegistry (RocksDB) ─────────────────────────────────────────────────
@@ -1541,7 +1577,10 @@ mod tests {
     fn acl_write_read_roundtrip() {
         let (store, _dir) = tmp_store();
         store.set_acl("peer/ChaincodeInvoke", "OrgPolicy").unwrap();
-        let entry = store.get_acl("peer/ChaincodeInvoke").unwrap().expect("entry");
+        let entry = store
+            .get_acl("peer/ChaincodeInvoke")
+            .unwrap()
+            .expect("entry");
         assert_eq!(entry.resource, "peer/ChaincodeInvoke");
         assert_eq!(entry.policy_ref, "OrgPolicy");
     }
@@ -1581,7 +1620,10 @@ mod tests {
         let (store, _dir) = tmp_store();
         let cfg = sample_channel_config(0);
         store.write_channel_config("ch1", &cfg).unwrap();
-        let restored = store.read_channel_config("ch1", 0).unwrap().expect("config");
+        let restored = store
+            .read_channel_config("ch1", 0)
+            .unwrap()
+            .expect("config");
         assert_eq!(cfg, restored);
     }
 
@@ -1594,11 +1636,19 @@ mod tests {
     #[test]
     fn channel_config_list_versions() {
         let (store, _dir) = tmp_store();
-        store.write_channel_config("ch1", &sample_channel_config(0)).unwrap();
-        store.write_channel_config("ch1", &sample_channel_config(1)).unwrap();
-        store.write_channel_config("ch1", &sample_channel_config(2)).unwrap();
+        store
+            .write_channel_config("ch1", &sample_channel_config(0))
+            .unwrap();
+        store
+            .write_channel_config("ch1", &sample_channel_config(1))
+            .unwrap();
+        store
+            .write_channel_config("ch1", &sample_channel_config(2))
+            .unwrap();
         // Different channel — must not appear in ch1 results.
-        store.write_channel_config("ch2", &sample_channel_config(0)).unwrap();
+        store
+            .write_channel_config("ch2", &sample_channel_config(0))
+            .unwrap();
 
         let versions = store.list_channel_versions("ch1").unwrap();
         assert_eq!(versions, vec![0, 1, 2]);
@@ -1625,7 +1675,11 @@ mod tests {
         let key = b"asset:color";
         let value = br#"{"rule":"OR('Org1MSP.member')"}"#;
         store.db.put_cf(&cf, key, value).unwrap();
-        let got = store.db.get_cf(&cf, key).unwrap().expect("value must exist");
+        let got = store
+            .db
+            .get_cf(&cf, key)
+            .unwrap()
+            .expect("value must exist");
         assert_eq!(got, value);
     }
 
@@ -1650,9 +1704,27 @@ mod tests {
         let (store, _dir) = tmp_store();
 
         let entries = vec![
-            HistoryEntry { version: 1, data: b"v1".to_vec(), tx_id: "tx1".into(), timestamp: 100, is_delete: false },
-            HistoryEntry { version: 2, data: b"v2".to_vec(), tx_id: "tx2".into(), timestamp: 200, is_delete: false },
-            HistoryEntry { version: 3, data: vec![], tx_id: "tx3".into(), timestamp: 300, is_delete: true },
+            HistoryEntry {
+                version: 1,
+                data: b"v1".to_vec(),
+                tx_id: "tx1".into(),
+                timestamp: 100,
+                is_delete: false,
+            },
+            HistoryEntry {
+                version: 2,
+                data: b"v2".to_vec(),
+                tx_id: "tx2".into(),
+                timestamp: 200,
+                is_delete: false,
+            },
+            HistoryEntry {
+                version: 3,
+                data: vec![],
+                tx_id: "tx3".into(),
+                timestamp: 300,
+                is_delete: true,
+            },
         ];
 
         for entry in &entries {
@@ -1674,12 +1746,30 @@ mod tests {
 
         let (store, _dir) = tmp_store();
 
-        store.write_history_entry("alpha", &HistoryEntry {
-            version: 1, data: b"a1".to_vec(), tx_id: "t1".into(), timestamp: 10, is_delete: false,
-        }).unwrap();
-        store.write_history_entry("beta", &HistoryEntry {
-            version: 1, data: b"b1".to_vec(), tx_id: "t2".into(), timestamp: 20, is_delete: false,
-        }).unwrap();
+        store
+            .write_history_entry(
+                "alpha",
+                &HistoryEntry {
+                    version: 1,
+                    data: b"a1".to_vec(),
+                    tx_id: "t1".into(),
+                    timestamp: 10,
+                    is_delete: false,
+                },
+            )
+            .unwrap();
+        store
+            .write_history_entry(
+                "beta",
+                &HistoryEntry {
+                    version: 1,
+                    data: b"b1".to_vec(),
+                    tx_id: "t2".into(),
+                    timestamp: 20,
+                    is_delete: false,
+                },
+            )
+            .unwrap();
 
         let alpha_history = store.get_history("alpha").unwrap();
         assert_eq!(alpha_history.len(), 1);

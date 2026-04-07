@@ -145,8 +145,10 @@ mod tests {
     fn hierarchy_traversal() {
         let reg = MemoryOuRegistry::new();
         reg.register_ou(&make_ou("root", "org1", None)).unwrap();
-        reg.register_ou(&make_ou("mfg", "org1", Some("root"))).unwrap();
-        reg.register_ou(&make_ou("line1", "org1", Some("mfg"))).unwrap();
+        reg.register_ou(&make_ou("mfg", "org1", Some("root")))
+            .unwrap();
+        reg.register_ou(&make_ou("line1", "org1", Some("mfg")))
+            .unwrap();
 
         let chain = reg.get_hierarchy("line1").unwrap();
         assert_eq!(chain.len(), 3);

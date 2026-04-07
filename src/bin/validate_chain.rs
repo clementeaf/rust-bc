@@ -1,12 +1,12 @@
 /**
  * Chain Validation Testing Tool
- * 
+ *
  * Tests chain validation, fork resolution, and attack protection
- * 
+ *
  * Uso: cargo run --bin validate_chain --release
  */
 use rust_bc::blockchain::Blockchain;
-use rust_bc::chain_validation::{ChainValidator, ForkResolver, AttackProtection};
+use rust_bc::chain_validation::{AttackProtection, ChainValidator, ForkResolver};
 
 fn main() {
     println!("╔════════════════════════════════════════════════════════╗");
@@ -116,7 +116,10 @@ fn main() {
 
     for test in diff_tests {
         let result = AttackProtection::validate_difficulty_adjustment(
-            test.old, test.new, test.min, test.max_adj,
+            test.old,
+            test.new,
+            test.min,
+            test.max_adj,
         );
         let is_ok = result.is_ok();
         let status = if is_ok == test.expected {
@@ -126,7 +129,10 @@ fn main() {
         };
 
         println!("{}: {}", status, test.description);
-        println!("  {} → {} (min={}, max_adj={})", test.old, test.new, test.min, test.max_adj);
+        println!(
+            "  {} → {} (min={}, max_adj={})",
+            test.old, test.new, test.min, test.max_adj
+        );
         if let Err(e) = result {
             println!("  Reason: {}", e);
         }
@@ -179,7 +185,8 @@ fn main() {
     ];
 
     for test in reorg_tests {
-        let is_safe = ForkResolver::is_reorg_safe(test.fork_point, test.chain_length, test.max_reorg);
+        let is_safe =
+            ForkResolver::is_reorg_safe(test.fork_point, test.chain_length, test.max_reorg);
         let status = if is_safe == test.expected {
             "✅ PASS"
         } else {

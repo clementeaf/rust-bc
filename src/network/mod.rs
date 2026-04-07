@@ -17,9 +17,9 @@ use crate::block_storage::BlockStorage;
 use crate::blockchain::{Block, Blockchain};
 use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
+use crate::ordering::NodeRole;
 use crate::smart_contracts::{ContractManager, SmartContract};
 use crate::transaction_validation::TransactionValidator;
-use crate::ordering::NodeRole;
 
 // ── Configurable buffer sizes (env var override) ─────────────────────────────
 
@@ -88,9 +88,13 @@ pub enum Message {
     /// Gossip alive message for peer liveness detection.
     Alive(gossip::AliveMessage),
     /// Pull-based state sync: request blocks starting from `from_height`.
-    StateRequest { from_height: u64 },
+    StateRequest {
+        from_height: u64,
+    },
     /// Pull-based state sync: response with a batch of blocks.
-    StateResponse { blocks: Vec<crate::storage::traits::Block> },
+    StateResponse {
+        blocks: Vec<crate::storage::traits::Block>,
+    },
     /// Endorsement request: peer simulates chaincode and returns a signed rwset.
     ProposalRequest {
         /// Unique ID to correlate request with response.
@@ -210,7 +214,6 @@ pub struct Node {
     pub announce_address: Option<String>,
 }
 
-
 /// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
 /// Devuelve `None` si no hay ninguna dirección válida (lista deshabilitada o vacía tras parseo).
 pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
@@ -287,7 +290,9 @@ async fn gossip_loop(
         for addr in chosen {
             match open_peer_stream(&addr, tls_connector.as_deref()).await {
                 Ok(mut stream) => {
-                    if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes()).await {
+                    if let Err(e) =
+                        tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes()).await
+                    {
                         eprintln!("gossip: error sending block to {}: {}", addr, e);
                     }
                 }
@@ -425,7 +430,10 @@ impl Node {
     /**
      * Configura el transaction validator para el nodo
      */
-    pub fn set_transaction_validator(&mut self, transaction_validator: Arc<Mutex<TransactionValidator>>) {
+    pub fn set_transaction_validator(
+        &mut self,
+        transaction_validator: Arc<Mutex<TransactionValidator>>,
+    ) {
         self.transaction_validator = Some(transaction_validator);
     }
 
@@ -461,9 +469,13 @@ impl Node {
         // Write request
         let request_json = serde_json::to_string(&message)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        stream.write_all(request_json.as_bytes()).await
+        stream
+            .write_all(request_json.as_bytes())
+            .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        stream.flush().await
+        stream
+            .flush()
+            .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         // Read response with timeout
@@ -581,7 +593,8 @@ impl Node {
                     let collection_registry_clone = collection_registry.clone();
 
                     tokio::spawn(async move {
-                        let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone {
+                        let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone
+                        {
                             match acceptor.accept(stream).await {
                                 Ok(tls) => Box::new(tls),
                                 Err(e) => {
@@ -1003,7 +1016,7 @@ impl Node {
                 if let Some(tv) = &transaction_validator {
                     let mut validator = tv.lock().unwrap();
                     let validation_result = validator.validate(&tx);
-                    
+
                     if !validation_result.is_valid {
                         let error_msg = validation_result.errors.join("; ");
                         println!("🚫 Transacción rechazada por validador: {}", error_msg);
@@ -1460,7 +1473,13 @@ impl Node {
                 Ok(None)
             }
 
-            Message::ProposalRequest { request_id, chaincode_id, function, channel_id: _, proposal: _ } => {
+            Message::ProposalRequest {
+                request_id,
+                chaincode_id,
+                function,
+                channel_id: _,
+                proposal: _,
+            } => {
                 // Peer-side endorsement: simulate chaincode and return signed rwset.
                 let cc_store = match &chaincode_store {
                     Some(s) => s,
@@ -1488,23 +1507,30 @@ impl Node {
                 let wasm_bytes = match cc_store.get_package(&chaincode_id, "latest") {
                     Ok(Some(bytes)) => bytes,
                     Ok(None) => {
-                        eprintln!("ProposalRequest rejected: chaincode '{}' not found", chaincode_id);
+                        eprintln!(
+                            "ProposalRequest rejected: chaincode '{}' not found",
+                            chaincode_id
+                        );
                         return Ok(None);
                     }
                     Err(e) => {
-                        eprintln!("ProposalRequest error loading chaincode '{}': {}", chaincode_id, e);
+                        eprintln!(
+                            "ProposalRequest error loading chaincode '{}': {}",
+                            chaincode_id, e
+                        );
                         return Ok(None);
                     }
                 };
 
                 // 2. Create executor and simulate
-                let executor = match crate::chaincode::executor::WasmExecutor::new(&wasm_bytes, 1_000_000) {
-                    Ok(e) => e,
-                    Err(e) => {
-                        eprintln!("ProposalRequest error creating executor: {}", e);
-                        return Ok(None);
-                    }
-                };
+                let executor =
+                    match crate::chaincode::executor::WasmExecutor::new(&wasm_bytes, 1_000_000) {
+                        Ok(e) => e,
+                        Err(e) => {
+                            eprintln!("ProposalRequest error creating executor: {}", e);
+                            return Ok(None);
+                        }
+                    };
 
                 let (result, rwset) = match executor.simulate(Arc::clone(ws), &function) {
                     Ok(r) => r,
@@ -1562,28 +1588,46 @@ impl Node {
                 Ok(None)
             }
 
-            Message::PrivateDataPush { collection, key, value, sender_org } => {
+            Message::PrivateDataPush {
+                collection,
+                key,
+                value,
+                sender_org,
+            } => {
                 // Validate membership and store private data from peer.
-                let accepted = if let (Some(reg), Some(pd_store)) = (&collection_registry, &private_data_store) {
+                let accepted = if let (Some(reg), Some(pd_store)) =
+                    (&collection_registry, &private_data_store)
+                {
                     if let Some(col) = reg.get(&collection) {
                         if col.is_member(&sender_org) {
                             match pd_store.put_private_data(&collection, &key, &value) {
                                 Ok(_hash) => true,
                                 Err(e) => {
-                                    eprintln!("[private-data] store error for {}/{}: {}", collection, key, e);
+                                    eprintln!(
+                                        "[private-data] store error for {}/{}: {}",
+                                        collection, key, e
+                                    );
                                     false
                                 }
                             }
                         } else {
-                            eprintln!("[private-data] rejected: org '{}' not member of '{}'", sender_org, collection);
+                            eprintln!(
+                                "[private-data] rejected: org '{}' not member of '{}'",
+                                sender_org, collection
+                            );
                             false
                         }
                     } else {
-                        eprintln!("[private-data] rejected: unknown collection '{}'", collection);
+                        eprintln!(
+                            "[private-data] rejected: unknown collection '{}'",
+                            collection
+                        );
                         false
                     }
                 } else {
-                    eprintln!("[private-data] rejected: no collection registry or private data store");
+                    eprintln!(
+                        "[private-data] rejected: no collection registry or private data store"
+                    );
                     false
                 };
 
@@ -1621,7 +1665,9 @@ impl Node {
      * Conecta a un peer
      */
     pub async fn connect_to_peer(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
 
         let version_msg = {
             let blockchain = self.blockchain.lock().unwrap();
@@ -1897,7 +1943,9 @@ impl Node {
         &self,
         address: &str,
     ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
 
         let get_peers_msg = Message::GetPeers;
         let msg_json = serde_json::to_string(&get_peers_msg)?;
@@ -2241,7 +2289,9 @@ impl Node {
             (blockchain.chain.len(), latest.hash.clone())
         };
 
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
 
         // Enviar mensaje de versión para comparar
         let p2p_addr = self.p2p_address();
@@ -2305,7 +2355,9 @@ impl Node {
      * Solicita bloques a un peer
      */
     pub async fn request_blocks(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
 
         let get_blocks_msg = Message::GetBlocks;
         let msg_json = serde_json::to_string(&get_blocks_msg)?;
@@ -2437,7 +2489,9 @@ impl Node {
         address: &str,
         block: &Block,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
         let msg = Message::NewBlock(block.clone());
         let msg_json = serde_json::to_string(&msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
@@ -2472,7 +2526,9 @@ impl Node {
         address: &str,
         tx: &Transaction,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
         let msg = Message::NewTransaction(tx.clone());
         let msg_json = serde_json::to_string(&msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
@@ -2484,7 +2540,9 @@ impl Node {
      */
     pub async fn request_contracts(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
         let start_time = std::time::Instant::now();
-        let mut stream = self.open_stream(address).await.map_err(|e| Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>)?;
+        let mut stream = self.open_stream(address).await.map_err(|e| {
+            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
+        })?;
 
         // Intentar sincronización incremental primero
         let last_sync = {
@@ -2653,7 +2711,8 @@ impl Node {
         address: &str,
         contract: &SmartContract,
     ) -> Result<(), String> {
-        let mut stream = self.open_stream(address)
+        let mut stream = self
+            .open_stream(address)
             .await
             .map_err(|e| format!("Error conectando: {}", e))?;
         let msg = Message::NewContract(contract.clone());
@@ -2754,7 +2813,8 @@ impl Node {
             "📤 Conectando a {} para enviar UpdateContract de {}",
             address, contract.address
         );
-        let mut stream = self.open_stream(address)
+        let mut stream = self
+            .open_stream(address)
             .await
             .map_err(|e| format!("Error conectando a {}: {}", address, e))?;
         let msg = Message::UpdateContract(contract.clone());
@@ -2785,10 +2845,7 @@ impl Node {
     /// 2. Sweeps the membership table and marks silent peers as suspect.
     ///
     /// The returned `JoinHandle` can be used to abort the loop on shutdown.
-    pub fn start_alive_loop(
-        &self,
-        alive_interval_ms: u64,
-    ) -> tokio::task::JoinHandle<()> {
+    pub fn start_alive_loop(&self, alive_interval_ms: u64) -> tokio::task::JoinHandle<()> {
         let node = self.clone();
         tokio::spawn(async move {
             let mut interval =
@@ -2837,14 +2894,18 @@ impl Node {
                 };
                 for peer_addr in &peers {
                     if let Ok(mut stream) = node.open_stream(peer_addr).await {
-                        let _ = tokio::io::AsyncWriteExt::write_all(&mut stream, json.as_bytes()).await;
+                        let _ =
+                            tokio::io::AsyncWriteExt::write_all(&mut stream, json.as_bytes()).await;
                     }
                 }
 
                 // Sweep for suspects.
                 let suspects = node.membership.sweep_suspects(now_ms);
                 for s in &suspects {
-                    eprintln!("[gossip] peer {} marked as suspect (no alive for {}ms)", s, node.membership.timeout_ms);
+                    eprintln!(
+                        "[gossip] peer {} marked as suspect (no alive for {}ms)",
+                        s, node.membership.timeout_ms
+                    );
                 }
             }
         })
@@ -2854,10 +2915,7 @@ impl Node {
     ///
     /// Every `pull_interval_ms` the node asks each peer for blocks it is missing
     /// (via `StateRequest`), receives a `StateResponse`, and writes them to the store.
-    pub fn start_pull_sync_loop(
-        &self,
-        pull_interval_ms: u64,
-    ) -> tokio::task::JoinHandle<()> {
+    pub fn start_pull_sync_loop(&self, pull_interval_ms: u64) -> tokio::task::JoinHandle<()> {
         let node = self.clone();
         tokio::spawn(async move {
             let mut interval =
@@ -2990,7 +3048,10 @@ mod tests {
         let mut node = Node::new(
             "127.0.0.1:9999".parse().unwrap(),
             blockchain,
-            None, None, None, None,
+            None,
+            None,
+            None,
+            None,
         );
         node.set_tls_acceptor(acceptor);
         assert!(node.tls_acceptor.is_some());
@@ -3050,8 +3111,7 @@ mod tests {
         }
     }
 
-    fn empty_process_message_args(
-    ) -> (
+    fn empty_process_message_args() -> (
         Arc<Mutex<HashSet<String>>>,
         Arc<Mutex<crate::blockchain::Blockchain>>,
         Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -3067,28 +3127,38 @@ mod tests {
 
     #[tokio::test]
     async fn orderer_submit_transaction_increases_pending_count() {
-        let svc = Arc::new(crate::ordering::service::OrderingService::with_config(100, 2000));
+        let svc = Arc::new(crate::ordering::service::OrderingService::with_config(
+            100, 2000,
+        ));
         let (peers, bc, receipts, rates) = empty_process_message_args();
         let tx = make_storage_tx();
 
         Node::process_message(
             Message::SubmitTransaction(tx),
-            &peers, &bc,
-            None, None, None, None, None,
-            None, None,
-            receipts, rates, None,
+            &peers,
+            &bc,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            receipts,
+            rates,
+            None,
             NodeRole::Orderer,
             Some(svc.clone()),
             None,
-            None, // gossip_block_tx
-            None, // membership
-            None, // chaincode_store
-            None, // world_state
-            None, // signing_provider
+            None,      // gossip_block_tx
+            None,      // membership
+            None,      // chaincode_store
+            None,      // world_state
+            None,      // signing_provider
             "default", // node_org_id
-            None, // raft_node
-            None, // private_data_store
-            None, // collection_registry
+            None,      // raft_node
+            None,      // private_data_store
+            None,      // collection_registry
         )
         .await
         .unwrap();
@@ -3098,8 +3168,8 @@ mod tests {
 
     #[tokio::test]
     async fn peer_ordered_block_writes_to_store() {
-        use crate::storage::MemoryStore;
         use crate::storage::traits::BlockStore;
+        use crate::storage::MemoryStore;
 
         let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
         let (peers, bc, receipts, rates) = empty_process_message_args();
@@ -3112,27 +3182,36 @@ mod tests {
             transactions: vec![],
             proposer: "ord".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
 
         Node::process_message(
             Message::OrderedBlock(block),
-            &peers, &bc,
-            None, None, None, None, None,
-            None, None,
-            receipts, rates, None,
+            &peers,
+            &bc,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            receipts,
+            rates,
+            None,
             NodeRole::Peer,
             None,
             Some(store.clone()),
-            None, // gossip_block_tx
-            None, // membership
-            None, // chaincode_store
-            None, // world_state
-            None, // signing_provider
+            None,      // gossip_block_tx
+            None,      // membership
+            None,      // chaincode_store
+            None,      // world_state
+            None,      // signing_provider
             "default", // node_org_id
-            None, // raft_node
-            None, // private_data_store
-            None, // collection_registry
+            None,      // raft_node
+            None,      // private_data_store
+            None,      // collection_registry
         )
         .await
         .unwrap();
@@ -3184,20 +3263,21 @@ mod tests {
             None,
             None,
             Some(gossip_tx),
-            None, // membership
-            None, // chaincode_store
-            None, // world_state
-            None, // signing_provider
+            None,      // membership
+            None,      // chaincode_store
+            None,      // world_state
+            None,      // signing_provider
             "default", // node_org_id
-            None, // raft_node
-            None, // private_data_store
-            None, // collection_registry
+            None,      // raft_node
+            None,      // private_data_store
+            None,      // collection_registry
         )
         .await
         .unwrap();
 
-        let (gossiped_block, source) =
-            gossip_rx.try_recv().expect("gossip_tx should receive the accepted block");
+        let (gossiped_block, source) = gossip_rx
+            .try_recv()
+            .expect("gossip_tx should receive the accepted block");
         assert_eq!(gossiped_block.hash, block_hash);
         assert_eq!(source, Some("127.0.0.1:9001".to_string()));
     }
@@ -3212,7 +3292,8 @@ mod tests {
             transactions: vec!["tx-test".to_string()],
             proposer: "orderer1".to_string(),
             signature: [0u8; 64],
-            endorsements: vec![],orderer_signature: None,
+            endorsements: vec![],
+            orderer_signature: None,
         };
         let msg = Message::OrderedBlock(block);
         let json = serde_json::to_string(&msg).unwrap();
@@ -3263,7 +3344,9 @@ mod tests {
             endorsements: vec![],
             orderer_signature: None,
         };
-        let msg = Message::StateResponse { blocks: vec![block] };
+        let msg = Message::StateResponse {
+            blocks: vec![block],
+        };
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: Message = serde_json::from_str(&json).unwrap();
         if let Message::StateResponse { blocks } = decoded {

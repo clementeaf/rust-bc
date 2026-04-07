@@ -9,12 +9,12 @@
 const TEST_CERT_PEM: &str = include_str!("fixtures/test_cert.pem");
 const TEST_KEY_PEM: &str = include_str!("fixtures/test_key.pem");
 
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use rust_bc::tls::{
-    build_client_config, build_client_config_mtls, build_server_config,
-    build_server_config_mtls, PeerVerification,
+    build_client_config, build_client_config_mtls, build_server_config, build_server_config_mtls,
+    PeerVerification,
 };
 use rustls::pki_types::ServerName;
-use rcgen::{generate_simple_self_signed, CertifiedKey};
 use std::io::Write as IoWrite;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -50,8 +50,8 @@ async fn tls_handshake_succeeds_between_client_and_server() {
     let key_file = write_temp(TEST_KEY_PEM);
 
     // Build server TLS config
-    let server_cfg = build_server_config(cert_file.path(), key_file.path())
-        .expect("build_server_config");
+    let server_cfg =
+        build_server_config(cert_file.path(), key_file.path()).expect("build_server_config");
     let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
 
     // Bind on a random localhost port
@@ -85,8 +85,8 @@ async fn tls_server_rejects_plain_tcp_connection() {
     let cert_file = write_temp(TEST_CERT_PEM);
     let key_file = write_temp(TEST_KEY_PEM);
 
-    let server_cfg = build_server_config(cert_file.path(), key_file.path())
-        .expect("build_server_config");
+    let server_cfg =
+        build_server_config(cert_file.path(), key_file.path()).expect("build_server_config");
     let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -112,8 +112,8 @@ async fn bidirectional_tls_exchange() {
     let cert_file = write_temp(TEST_CERT_PEM);
     let key_file = write_temp(TEST_KEY_PEM);
 
-    let server_cfg = build_server_config(cert_file.path(), key_file.path())
-        .expect("build_server_config");
+    let server_cfg =
+        build_server_config(cert_file.path(), key_file.path()).expect("build_server_config");
     let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -134,7 +134,10 @@ async fn bidirectional_tls_exchange() {
 
     let tcp = TcpStream::connect(local_addr).await.unwrap();
     let server_name = ServerName::try_from("localhost").unwrap();
-    let mut tls = connector.connect(server_name, tcp).await.expect("client TLS");
+    let mut tls = connector
+        .connect(server_name, tcp)
+        .await
+        .expect("client TLS");
 
     let msg = b"ping";
     tls.write_all(msg).await.unwrap();
@@ -174,9 +177,8 @@ async fn mtls_handshake_succeeds_with_valid_client_cert() {
     // The self-signed cert IS the CA.
     let ca_file = write_pem(&cert_pem);
 
-    let server_cfg =
-        build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
-            .expect("build_server_config_mtls");
+    let server_cfg = build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+        .expect("build_server_config_mtls");
     let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -184,9 +186,8 @@ async fn mtls_handshake_succeeds_with_valid_client_cert() {
 
     let server_handle = spawn_tls_server(listener, acceptor).await;
 
-    let client_cfg =
-        build_client_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
-            .expect("build_client_config_mtls");
+    let client_cfg = build_client_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+        .expect("build_client_config_mtls");
     let connector = TlsConnector::from(Arc::new(client_cfg));
 
     let tcp = TcpStream::connect(local_addr).await.unwrap();
@@ -212,9 +213,8 @@ async fn mtls_server_rejects_client_without_cert() {
     let key_file = write_pem(&key_pem);
     let ca_file = write_pem(&cert_pem);
 
-    let server_cfg =
-        build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
-            .expect("build_server_config_mtls");
+    let server_cfg = build_server_config_mtls(cert_file.path(), key_file.path(), ca_file.path())
+        .expect("build_server_config_mtls");
     let acceptor = TlsAcceptor::from(Arc::new(server_cfg));
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -227,8 +227,7 @@ async fn mtls_server_rejects_client_without_cert() {
     });
 
     // Client: standard TLS without client cert.
-    let client_cfg =
-        build_client_config(PeerVerification::Dangerous).expect("build_client_config");
+    let client_cfg = build_client_config(PeerVerification::Dangerous).expect("build_client_config");
     let connector = TlsConnector::from(Arc::new(client_cfg));
 
     let tcp = TcpStream::connect(local_addr).await.unwrap();
@@ -237,5 +236,8 @@ async fn mtls_server_rejects_client_without_cert() {
     let _ = connector.connect(server_name, tcp).await;
 
     let handshake_failed = server_handle.await.expect("server task");
-    assert!(handshake_failed, "mTLS server must reject client without cert");
+    assert!(
+        handshake_failed,
+        "mTLS server must reject client without cert"
+    );
 }

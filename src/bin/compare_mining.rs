@@ -1,12 +1,12 @@
 /**
  * Mining Comparison Benchmark
- * 
+ *
  * Compares sequential vs parallel mining performance across difficulty levels
  * Measures speedup and efficiency
- * 
+ *
  * Uso: cargo run --bin compare_mining --release -- [difficulty]
  */
-use rust_bc::blockchain::{Blockchain, Block};
+use rust_bc::blockchain::{Block, Blockchain};
 use rust_bc::models::WalletManager;
 use std::time::Instant;
 
@@ -34,15 +34,15 @@ fn main() {
 
     for diff in 1..=difficulty {
         println!("Testing difficulty {}...", diff);
-        
+
         // Sequential test
         let seq_time = benchmark_sequential(diff);
         println!("  ✓ Sequential: {:.4}s", seq_time);
-        
+
         // Parallel test
         let par_time = benchmark_parallel(diff);
         println!("  ✓ Parallel:   {:.4}s", par_time);
-        
+
         let speedup = seq_time / par_time;
         println!("  ⚡ Speedup:   {:.2}x", speedup);
         println!();
@@ -59,17 +59,17 @@ fn main() {
     println!("SUMMARY TABLE:");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!();
-    println!("{:>4} {:>15} {:>15} {:>12}", "Diff", "Sequential(s)", "Parallel(s)", "Speedup");
+    println!(
+        "{:>4} {:>15} {:>15} {:>12}",
+        "Diff", "Sequential(s)", "Parallel(s)", "Speedup"
+    );
     println!("{}", "─".repeat(50));
 
     let mut total_speedup = 0.0;
     for result in &results {
         println!(
             "{:>4} {:>15.4} {:>15.4} {:>12.2}x",
-            result.difficulty,
-            result.sequential_time,
-            result.parallel_time,
-            result.speedup
+            result.difficulty, result.sequential_time, result.parallel_time, result.speedup
         );
         total_speedup += result.speedup;
     }
@@ -82,10 +82,10 @@ fn main() {
     // Recommendations
     println!("📊 ANALYSIS:");
     println!();
-    
+
     let num_cores = num_cpus::get();
     println!("System Cores: {}", num_cores);
-    
+
     if avg_speedup >= (num_cores as f64 * 0.8) {
         println!("✓ Excellent: Near-linear scaling achieved");
         println!("  → Parallel mining is highly efficient for this system");
@@ -99,7 +99,7 @@ fn main() {
 
     println!();
     println!("💡 RECOMMENDATIONS:");
-    
+
     // Find optimal difficulty with parallel mining
     let target_time = 30.0; // seconds
     let mut best_diff = results[0].difficulty;
@@ -117,7 +117,10 @@ fn main() {
         println!("For 30-second target block time:");
         println!("  • Use difficulty: {}", best_diff);
         println!("  • Expected time: {:.2}s", result.parallel_time);
-        println!("  • Expected speedup from parallelization: {:.2}x", result.speedup);
+        println!(
+            "  • Expected speedup from parallelization: {:.2}x",
+            result.speedup
+        );
     }
 
     println!();

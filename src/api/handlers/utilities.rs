@@ -1,10 +1,10 @@
 use actix_web::{get, web, HttpRequest, HttpResponse};
 // Note: `get` macro still used by `get_metrics` below
 
-use crate::app_state::AppState;
 use crate::api::errors::ApiResult;
 use crate::api::models::{BlockchainHealthResponse, HealthResponse, VersionResponse};
 use crate::api::openapi::OpenApi;
+use crate::app_state::AppState;
 
 lazy_static::lazy_static! {
     static ref SCAFFOLD_HTTP_SINCE: std::time::Instant = std::time::Instant::now();

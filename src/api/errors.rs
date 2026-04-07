@@ -163,10 +163,15 @@ fn required_role_for_resource(resource: &str) -> Option<crate::msp::MspRole> {
     use crate::msp::MspRole;
     match resource {
         // Admin operations
-        "peer/Admin" | "peer/MSP.Admin" | "peer/Discovery.Admin"
-        | "qscc/Snapshot.Admin" | "peer/ChannelConfig" => Some(MspRole::Admin),
+        "peer/Admin"
+        | "peer/MSP.Admin"
+        | "peer/Discovery.Admin"
+        | "qscc/Snapshot.Admin"
+        | "peer/ChannelConfig" => Some(MspRole::Admin),
         // Writer operations — Client or Peer role required
-        "peer/Propose" | "peer/Identity" | "peer/ChaincodeToChaincode"
+        "peer/Propose"
+        | "peer/Identity"
+        | "peer/ChaincodeToChaincode"
         | "peer/PrivateData.Write" => Some(MspRole::Client),
         // Everything else (reads) — no role requirement
         _ => None,
@@ -216,9 +221,7 @@ pub fn enforce_acl(
                 });
             }
             // TLS role satisfied — skip header check.
-        } else
-
-        if !caller_role_str.is_empty() {
+        } else if !caller_role_str.is_empty() {
             match serde_json::from_str::<crate::msp::MspRole>(&format!("\"{caller_role_str}\"")) {
                 Ok(caller_role) => {
                     if !role_satisfies(caller_role, required) {
@@ -252,7 +255,9 @@ pub fn enforce_acl(
             return Ok(()); // Permissive mode — no ACL infrastructure → allow
         }
         return Err(ApiError::Forbidden {
-            reason: format!("ACL infrastructure not configured; cannot authorize resource '{resource}'"),
+            reason: format!(
+                "ACL infrastructure not configured; cannot authorize resource '{resource}'"
+            ),
         });
     };
 
@@ -276,7 +281,9 @@ pub fn enforce_acl(
 
     if caller_org.is_empty() && !acl_permissive() {
         return Err(ApiError::Forbidden {
-            reason: format!("missing caller identity (X-Org-Id header or TLS cert) for resource '{resource}'"),
+            reason: format!(
+                "missing caller identity (X-Org-Id header or TLS cert) for resource '{resource}'"
+            ),
         });
     }
     let orgs: Vec<&str> = if caller_org.is_empty() {
@@ -296,7 +303,9 @@ pub fn enforce_acl(
             reason: format!("ACL policy '{p}' not found for resource '{resource}'"),
         }),
         Err(crate::acl::AclError::Denied(policy)) => Err(ApiError::Forbidden {
-            reason: format!("ACL denied: resource '{resource}', policy '{policy}', org '{caller_org}'"),
+            reason: format!(
+                "ACL denied: resource '{resource}', policy '{policy}', org '{caller_org}'"
+            ),
         }),
     }
 }
@@ -407,7 +416,8 @@ mod tests {
 
     #[test]
     fn test_api_response_success() {
-        let resp: ApiResponse<String> = ApiResponse::success("test".to_string(), "trace-1".to_string());
+        let resp: ApiResponse<String> =
+            ApiResponse::success("test".to_string(), "trace-1".to_string());
         assert_eq!(resp.status, "Success");
         assert_eq!(resp.status_code, 200);
         assert_eq!(resp.data, Some("test".to_string()));

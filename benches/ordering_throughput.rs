@@ -108,7 +108,11 @@ fn build_endorsement_fixture(n_orgs: usize) -> EndorsementFixture {
     // Policy: ALL orgs must endorse (strictest, exercises full validation path).
     let policy = EndorsementPolicy::AllOf(org_ids);
 
-    EndorsementFixture { endorsements, policy, registry }
+    EndorsementFixture {
+        endorsements,
+        policy,
+        registry,
+    }
 }
 
 /// Benchmark: validate N endorsements against an AllOf(N) policy.
@@ -163,35 +167,36 @@ fn bench_event_bus_fanout(c: &mut Criterion) {
         // One publish = one event delivered to N subscribers.
         group.throughput(Throughput::Elements(n as u64));
 
-        group.bench_with_input(
-            BenchmarkId::new("publish_1_event", n),
-            &n,
-            |b, &subs| {
-                b.iter_batched(
-                    // Setup: fresh bus + N receivers kept alive.
-                    || {
-                        let bus = EventBus::with_capacity(128);
-                        let receivers: Vec<_> = (0..subs).map(|_| bus.subscribe()).collect();
-                        (bus, receivers)
-                    },
-                    // Routine: publish one event; drop the bus+receivers.
-                    |(bus, _receivers)| {
-                        let sent = bus.publish(BlockEvent::BlockCommitted {
-                            channel_id: "bench-channel".to_string(),
-                            height: 1,
-                            tx_count: 1,
-                        });
-                        assert_eq!(sent, subs);
-                        sent
-                    },
-                    BatchSize::SmallInput,
-                );
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("publish_1_event", n), &n, |b, &subs| {
+            b.iter_batched(
+                // Setup: fresh bus + N receivers kept alive.
+                || {
+                    let bus = EventBus::with_capacity(128);
+                    let receivers: Vec<_> = (0..subs).map(|_| bus.subscribe()).collect();
+                    (bus, receivers)
+                },
+                // Routine: publish one event; drop the bus+receivers.
+                |(bus, _receivers)| {
+                    let sent = bus.publish(BlockEvent::BlockCommitted {
+                        channel_id: "bench-channel".to_string(),
+                        height: 1,
+                        tx_count: 1,
+                    });
+                    assert_eq!(sent, subs);
+                    sent
+                },
+                BatchSize::SmallInput,
+            );
+        });
     }
 
     group.finish();
 }
 
-criterion_group!(benches, bench_ordering_throughput, bench_endorsement_validation, bench_event_bus_fanout);
+criterion_group!(
+    benches,
+    bench_ordering_throughput,
+    bench_endorsement_validation,
+    bench_event_bus_fanout
+);
 criterion_main!(benches);

@@ -10,8 +10,8 @@ pub mod hsm;
 pub mod keys;
 pub mod signing;
 
-pub use did::{DidDocument, DidStatus, DidMetadata};
-pub use keys::{KeyManager, PublicKeyInfo, KeyPair};
+pub use did::{DidDocument, DidMetadata, DidStatus};
+pub use keys::{KeyManager, KeyPair, PublicKeyInfo};
 
 /// Identity configuration
 #[derive(Clone, Debug)]

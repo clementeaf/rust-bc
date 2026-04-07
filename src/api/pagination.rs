@@ -65,7 +65,11 @@ impl<T: Serialize> PaginatedResponse<T> {
     pub fn new(data: Vec<T>, total: usize, params: &PaginationParams) -> Self {
         let page = params.page();
         let limit = params.limit();
-        let total_pages = if total == 0 { 1 } else { (total + limit - 1) / limit };
+        let total_pages = if total == 0 {
+            1
+        } else {
+            (total + limit - 1) / limit
+        };
         let has_next = page < total_pages;
 
         Self {
@@ -105,26 +109,42 @@ mod tests {
 
     #[test]
     fn limit_capped_at_max() {
-        let p = PaginationParams { page: Some(1), limit: Some(500), cursor: None };
+        let p = PaginationParams {
+            page: Some(1),
+            limit: Some(500),
+            cursor: None,
+        };
         assert_eq!(p.limit(), MAX_LIMIT);
     }
 
     #[test]
     fn limit_zero_becomes_one() {
-        let p = PaginationParams { page: Some(1), limit: Some(0), cursor: None };
+        let p = PaginationParams {
+            page: Some(1),
+            limit: Some(0),
+            cursor: None,
+        };
         assert_eq!(p.limit(), 1);
     }
 
     #[test]
     fn page_zero_becomes_one() {
-        let p = PaginationParams { page: Some(0), limit: None, cursor: None };
+        let p = PaginationParams {
+            page: Some(0),
+            limit: None,
+            cursor: None,
+        };
         assert_eq!(p.page(), 1);
         assert_eq!(p.offset(), 0);
     }
 
     #[test]
     fn paginated_response_metadata() {
-        let params = PaginationParams { page: Some(3), limit: Some(10), cursor: None };
+        let params = PaginationParams {
+            page: Some(3),
+            limit: Some(10),
+            cursor: None,
+        };
         let resp = PaginatedResponse::new(vec![1, 2, 3], 50, &params);
 
         assert_eq!(resp.pagination.total, 50);
@@ -136,7 +156,11 @@ mod tests {
 
     #[test]
     fn paginated_response_last_page() {
-        let params = PaginationParams { page: Some(5), limit: Some(10), cursor: None };
+        let params = PaginationParams {
+            page: Some(5),
+            limit: Some(10),
+            cursor: None,
+        };
         let resp = PaginatedResponse::new(vec![41, 42, 43], 43, &params);
 
         assert_eq!(resp.pagination.total_pages, 5);
@@ -145,7 +169,11 @@ mod tests {
 
     #[test]
     fn paginated_response_serde_roundtrip() {
-        let params = PaginationParams { page: Some(1), limit: Some(5), cursor: None };
+        let params = PaginationParams {
+            page: Some(1),
+            limit: Some(5),
+            cursor: None,
+        };
         let resp = PaginatedResponse::new(vec!["a", "b"], 2, &params);
 
         let json = serde_json::to_string(&resp).unwrap();

@@ -5,10 +5,10 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::endorsement::policy::EndorsementPolicy;
-use crate::endorsement::registry::OrgRegistry;
 use crate::endorsement::policy_store::PolicyStore;
+use crate::endorsement::registry::OrgRegistry;
 use crate::endorsement::types::Endorsement;
-use crate::endorsement::validator::{EndorsementError, validate_endorsements};
+use crate::endorsement::validator::{validate_endorsements, EndorsementError};
 
 /// Errors that can occur when processing channel configuration.
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -68,10 +68,16 @@ pub enum ConfigUpdateType {
     AddOrg(String),
     RemoveOrg(String),
     SetPolicy(EndorsementPolicy),
-    SetAcl { resource: String, policy_ref: String },
+    SetAcl {
+        resource: String,
+        policy_ref: String,
+    },
     SetBatchSize(usize),
     SetBatchTimeout(u64),
-    SetAnchorPeer { org_id: String, peer_address: String },
+    SetAnchorPeer {
+        org_id: String,
+        peer_address: String,
+    },
 }
 
 /// Apply a slice of [`ConfigUpdateType`] changes to `config`, returning a new
@@ -102,7 +108,10 @@ pub fn apply_config_update(
             ConfigUpdateType::SetPolicy(policy) => {
                 next.endorsement_policy = policy.clone();
             }
-            ConfigUpdateType::SetAcl { resource, policy_ref } => {
+            ConfigUpdateType::SetAcl {
+                resource,
+                policy_ref,
+            } => {
                 next.acls.insert(resource.clone(), policy_ref.clone());
             }
             ConfigUpdateType::SetBatchSize(size) => {
@@ -111,7 +120,10 @@ pub fn apply_config_update(
             ConfigUpdateType::SetBatchTimeout(ms) => {
                 next.batch_timeout_ms = *ms;
             }
-            ConfigUpdateType::SetAnchorPeer { org_id, peer_address } => {
+            ConfigUpdateType::SetAnchorPeer {
+                org_id,
+                peer_address,
+            } => {
                 next.anchor_peers
                     .entry(org_id.clone())
                     .or_default()
@@ -172,9 +184,10 @@ mod tests {
             acls: HashMap::from([("peer/ChaincodeInvoke".to_string(), "OrgPolicy".to_string())]),
             batch_size: 50,
             batch_timeout_ms: 1000,
-            anchor_peers: HashMap::from([
-                ("org1".to_string(), vec!["peer0.org1:7051".to_string()]),
-            ]),
+            anchor_peers: HashMap::from([(
+                "org1".to_string(),
+                vec!["peer0.org1:7051".to_string()],
+            )]),
         }
     }
 
@@ -336,9 +349,8 @@ mod tests {
     fn apply_set_policy() {
         let cfg = sample();
         let new_policy = EndorsementPolicy::AnyOf(vec!["org1".to_string(), "org2".to_string()]);
-        let next =
-            apply_config_update(&cfg, &[ConfigUpdateType::SetPolicy(new_policy.clone())])
-                .expect("apply");
+        let next = apply_config_update(&cfg, &[ConfigUpdateType::SetPolicy(new_policy.clone())])
+            .expect("apply");
         assert_eq!(next.endorsement_policy, new_policy);
     }
 
@@ -378,9 +390,8 @@ mod tests {
     #[test]
     fn apply_remove_nonexistent_org_returns_error() {
         let cfg = sample();
-        let err =
-            apply_config_update(&cfg, &[ConfigUpdateType::RemoveOrg("org9".to_string())])
-                .unwrap_err();
+        let err = apply_config_update(&cfg, &[ConfigUpdateType::RemoveOrg("org9".to_string())])
+            .unwrap_err();
         assert_eq!(err, ChannelError::OrgNotFound("org9".to_string()));
     }
 
@@ -409,7 +420,7 @@ mod tests {
     }
 
     fn registry_with(orgs: &[(&str, [u8; 32])]) -> crate::endorsement::MemoryOrgRegistry {
-        use crate::endorsement::{Organization, MemoryOrgRegistry, OrgRegistry as _};
+        use crate::endorsement::{MemoryOrgRegistry, OrgRegistry as _, Organization};
         let reg = MemoryOrgRegistry::new();
         for (org_id, pk) in orgs {
             let org = Organization::new(

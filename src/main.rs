@@ -1,43 +1,43 @@
 #![feature(unsigned_is_multiple_of)]
 
+mod acl;
 mod airdrop;
-mod app_state;
 mod api;
 mod api_legacy;
+mod app_state;
 mod billing;
-mod metrics;
+mod block_creation;
 mod block_storage;
 mod blockchain;
-mod block_creation;
 mod cache;
 mod chain_validation;
+mod chaincode;
+mod channel;
 mod checkpoint;
+mod consensus;
+mod discovery;
+mod endorsement;
+mod events;
+mod gateway;
+mod identity;
+mod metrics;
 mod middleware;
 mod models;
+mod msp;
 mod network;
 mod network_security;
-mod transaction_validation;
+mod ordering;
+mod pki;
+mod private_data;
 mod pruning;
 mod smart_contracts;
 mod staking;
 mod state_reconstructor;
 mod state_snapshot;
 mod storage;
-mod consensus;
-mod identity;
 mod tls;
-mod pki;
-mod endorsement;
-mod ordering;
 mod transaction;
-mod channel;
-mod msp;
-mod private_data;
-mod chaincode;
-mod gateway;
-mod discovery;
-mod events;
-mod acl;
+mod transaction_validation;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -46,11 +46,11 @@ use airdrop::AirdropManager;
 use api::routes::ApiRoutes;
 use api_legacy::config_routes;
 use app_state::AppState;
-use metrics::MetricsCollector;
 use billing::BillingManager;
 use block_storage::BlockStorage;
 use blockchain::Blockchain;
 use cache::BalanceCache;
+use metrics::MetricsCollector;
 use middleware::RateLimitMiddleware;
 use models::{Mempool, WalletManager};
 use network::{parse_peer_allowlist, Node};
@@ -58,12 +58,15 @@ use pruning::PruningManager;
 use staking::{StakingManager, Validator};
 use state_reconstructor::ReconstructedState;
 use state_snapshot::{StateSnapshot, StateSnapshotManager};
-use transaction_validation::TransactionValidator;
-use tls::{load_client_config_from_env, load_tls_config_from_env, reload_tls_config, tls_reload_params_from_env};
-use storage::{MemoryStore, RocksDbBlockStore};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
+use storage::{MemoryStore, RocksDbBlockStore};
+use tls::{
+    load_client_config_from_env, load_tls_config_from_env, reload_tls_config,
+    tls_reload_params_from_env,
+};
+use transaction_validation::TransactionValidator;
 
 /**
  * Función principal - Inicia el servidor API
@@ -76,9 +79,7 @@ fn main() -> std::io::Result<()> {
         .name("main-rt".into())
         .stack_size(32 * 1024 * 1024);
     let handle = builder
-        .spawn(|| {
-            actix_rt::System::new().block_on(async_main())
-        })
+        .spawn(|| actix_rt::System::new().block_on(async_main()))
         .expect("failed to spawn main runtime thread");
     handle.join().unwrap()
 }
@@ -613,19 +614,27 @@ async fn async_main() -> std::io::Result<()> {
                     .ok()
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(1);
-                let peer_map_raw = env::var("RAFT_PEERS")
-                    .unwrap_or_else(|_| format!("{raft_id}:127.0.0.1:8087"));
+                let peer_map_raw =
+                    env::var("RAFT_PEERS").unwrap_or_else(|_| format!("{raft_id}:127.0.0.1:8087"));
                 let parsed_map = crate::ordering::raft_transport::parse_raft_peers(&peer_map_raw);
                 let raft_voter_ids: Vec<u64> = parsed_map.keys().copied().collect();
 
                 match ordering::raft_service::RaftOrderingService::new(
                     raft_id,
-                    if raft_voter_ids.is_empty() { vec![raft_id] } else { raft_voter_ids },
+                    if raft_voter_ids.is_empty() {
+                        vec![raft_id]
+                    } else {
+                        raft_voter_ids
+                    },
                     100,
                     2000,
                 ) {
                     Ok(svc) => {
-                        log::info!("Ordering backend: Raft (node_id={}, peers={})", raft_id, peer_map_raw);
+                        log::info!(
+                            "Ordering backend: Raft (node_id={}, peers={})",
+                            raft_id,
+                            peer_map_raw
+                        );
                         let raft_arc = svc.raft_node.clone();
                         shared_raft_node = Some(raft_arc.clone());
                         raft_peer_map = Some(Arc::new(Mutex::new(parsed_map)));
@@ -635,7 +644,9 @@ async fn async_main() -> std::io::Result<()> {
                         Some(Arc::new(svc))
                     }
                     Err(e) => {
-                        log::error!("Failed to create Raft ordering service: {e}. Falling back to solo.");
+                        log::error!(
+                            "Failed to create Raft ordering service: {e}. Falling back to solo."
+                        );
                         Some(Arc::new(ordering::service::OrderingService::new()))
                     }
                 }
@@ -653,23 +664,27 @@ async fn async_main() -> std::io::Result<()> {
     let policy_store: Arc<dyn crate::endorsement::policy_store::PolicyStore> =
         Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new());
     let discovery_service = Arc::new(
-        crate::discovery::service::DiscoveryService::new(org_registry.clone(), policy_store.clone())
-            .with_metrics(metrics_collector.clone()),
+        crate::discovery::service::DiscoveryService::new(
+            org_registry.clone(),
+            policy_store.clone(),
+        )
+        .with_metrics(metrics_collector.clone()),
     );
     let world_state: Arc<dyn storage::world_state::WorldState> = {
         let state_db = env::var("STATE_DB").unwrap_or_default();
         if state_db == "couchdb" {
-            let couchdb_url = env::var("COUCHDB_URL")
-                .unwrap_or_else(|_| "http://localhost:5984".to_string());
-            let couchdb_db = env::var("COUCHDB_DB")
-                .unwrap_or_else(|_| "world_state".to_string());
+            let couchdb_url =
+                env::var("COUCHDB_URL").unwrap_or_else(|_| "http://localhost:5984".to_string());
+            let couchdb_db = env::var("COUCHDB_DB").unwrap_or_else(|_| "world_state".to_string());
             match storage::couchdb::CouchDbWorldState::new(&couchdb_url, &couchdb_db) {
                 Ok(ws) => {
                     log::info!("World state backend: CouchDB at {couchdb_url}/{couchdb_db}");
                     Arc::new(ws)
                 }
                 Err(e) => {
-                    log::error!("Failed to connect to CouchDB: {e}. Falling back to MemoryWorldState.");
+                    log::error!(
+                        "Failed to connect to CouchDB: {e}. Falling back to MemoryWorldState."
+                    );
                     Arc::new(storage::MemoryWorldState::new())
                 }
             }
@@ -736,15 +751,16 @@ async fn async_main() -> std::io::Result<()> {
         store: {
             let backend = env::var("STORAGE_BACKEND").unwrap_or_default();
             let default_store: Arc<dyn storage::BlockStore> = if backend == "rocksdb" {
-                let path = env::var("ROCKSDB_PATH")
-                    .unwrap_or_else(|_| "./data/blocks".to_string());
+                let path = env::var("ROCKSDB_PATH").unwrap_or_else(|_| "./data/blocks".to_string());
                 match RocksDbBlockStore::new(&path) {
                     Ok(s) => {
                         log::info!("Storage backend: RocksDB at {path}");
                         Arc::new(s)
                     }
                     Err(e) => {
-                        log::error!("Failed to open RocksDB at {path}: {e}. Falling back to MemoryStore.");
+                        log::error!(
+                            "Failed to open RocksDB at {path}: {e}. Falling back to MemoryStore."
+                        );
                         Arc::new(MemoryStore::new())
                     }
                 }
@@ -755,7 +771,8 @@ async fn async_main() -> std::io::Result<()> {
             // Write genesis block for the default channel if store is empty.
             if !default_store.block_exists(0).unwrap_or(true) {
                 let genesis_config = crate::channel::config::ChannelConfig::default();
-                let genesis = crate::channel::genesis::create_genesis_block("default", &genesis_config);
+                let genesis =
+                    crate::channel::genesis::create_genesis_block("default", &genesis_config);
                 if let Err(e) = default_store.write_block(&genesis) {
                     log::error!("Failed to write default channel genesis block: {e}");
                 } else {
@@ -772,11 +789,15 @@ async fn async_main() -> std::io::Result<()> {
         private_data_store: Some(private_data_store.clone()),
         collection_registry: Some(collection_registry.clone()),
         chaincode_package_store: Some(chaincode_package_store.clone()),
-        chaincode_definition_store: Some(Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())),
+        chaincode_definition_store: Some(Arc::new(
+            crate::chaincode::MemoryChaincodeDefinitionStore::new(),
+        )),
         gateway: Some(Arc::new(gateway)),
         discovery_service: Some(discovery_service),
         event_bus: event_bus.clone(),
-        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
+            std::collections::HashMap::new(),
+        )),
         acl_provider: Some(Arc::new(crate::acl::MemoryAclProvider::new())),
         ordering_backend,
         world_state: Some(world_state.clone()),
@@ -814,7 +835,9 @@ async fn async_main() -> std::io::Result<()> {
                                     (current, should)
                                 }
                                 Err(_e) => {
-                                    eprintln!("⚠️  Error al adquirir lock de blockchain en snapshot task");
+                                    eprintln!(
+                                        "⚠️  Error al adquirir lock de blockchain en snapshot task"
+                                    );
                                     continue;
                                 }
                             }
@@ -920,9 +943,8 @@ async fn async_main() -> std::io::Result<()> {
     let bootstrap_nodes_clone = bootstrap_nodes.clone();
 
     // Start pull-based state sync loop (catches up from peers with higher block height).
-    let _pull_sync_handle = node_for_server.start_pull_sync_loop(
-        crate::network::gossip::PULL_INTERVAL_MS,
-    );
+    let _pull_sync_handle =
+        node_for_server.start_pull_sync_loop(crate::network::gossip::PULL_INTERVAL_MS);
 
     // Start Raft tick loop if raft backend is configured.
     if let (Some(raft), Some(peer_map)) = (&shared_raft_node, &raft_peer_map) {
@@ -1012,9 +1034,12 @@ async fn async_main() -> std::io::Result<()> {
         Ok(Some(tls_config)) => {
             println!("🔐 TLS habilitado en {}", api_bind);
             server.bind_rustls_0_23(&api_bind, tls_config)?
-        },
+        }
         Ok(None) => {
-            println!("⚠️  TLS no configurado — API en texto plano en {}", api_bind);
+            println!(
+                "⚠️  TLS no configurado — API en texto plano en {}",
+                api_bind
+            );
             server.bind(&api_bind)?
         }
         Err(e) => {
@@ -1030,15 +1055,14 @@ async fn async_main() -> std::io::Result<()> {
         let sighup_server_handle = api_handle.handle();
         let params = tls_reload_params.clone();
         tokio::spawn(async move {
-            let mut sig = match tokio::signal::unix::signal(
-                tokio::signal::unix::SignalKind::hangup(),
-            ) {
-                Ok(s) => s,
-                Err(e) => {
-                    log::error!("No se pudo registrar SIGHUP: {}", e);
-                    return;
-                }
-            };
+            let mut sig =
+                match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        log::error!("No se pudo registrar SIGHUP: {}", e);
+                        return;
+                    }
+                };
             loop {
                 sig.recv().await;
                 log::info!("SIGHUP recibido — verificando certificados TLS...");
@@ -1073,8 +1097,7 @@ async fn async_main() -> std::io::Result<()> {
         let reload_server_handle = api_handle.handle();
         let params = tls_reload_params.clone();
         tokio::spawn(async move {
-            let mut ticker =
-                tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+            let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
             ticker.tick().await; // saltar el tick inicial inmediato
             loop {
                 ticker.tick().await;

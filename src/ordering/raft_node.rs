@@ -51,8 +51,8 @@ impl RaftNode {
 
         let storage = MemStorage::new_with_conf_state(conf_state);
         let logger = raft::default_logger();
-        let raw_node = RawNode::new(&config, storage, &logger)
-            .map_err(|e| RaftError::Init(e.to_string()))?;
+        let raw_node =
+            RawNode::new(&config, storage, &logger).map_err(|e| RaftError::Init(e.to_string()))?;
 
         Ok(Self {
             id,
@@ -127,8 +127,7 @@ impl RaftNode {
         let cs = self.raw_node.raft.prs().conf().to_conf_state();
         let last_applied = hs.commit;
         // Find the term for the last applied index.
-        let last_term = Storage::term(self.raw_node.store(), last_applied)
-            .unwrap_or(hs.term);
+        let last_term = Storage::term(self.raw_node.store(), last_applied).unwrap_or(hs.term);
 
         let data = serde_json::to_vec(&self.committed_entries.len())
             .map_err(|e| RaftError::Init(e.to_string()))?;
@@ -144,7 +143,8 @@ impl RaftNode {
     /// Apply a snapshot received from a leader, replacing local state.
     pub fn apply_snapshot(&mut self, snap: Snapshot) -> Result<(), RaftError> {
         let mut store = self.raw_node.mut_store().wl();
-        store.apply_snapshot(snap)
+        store
+            .apply_snapshot(snap)
             .map_err(|e| RaftError::Init(e.to_string()))
     }
 
@@ -246,7 +246,11 @@ mod tests {
             .filter(|n| n.is_leader())
             .map(|n| n.id)
             .collect();
-        assert_eq!(leaders.len(), 1, "expected exactly one leader, got {leaders:?}");
+        assert_eq!(
+            leaders.len(),
+            1,
+            "expected exactly one leader, got {leaders:?}"
+        );
     }
 
     #[test]
@@ -259,11 +263,7 @@ mod tests {
 
         route_messages(&mut nodes, 30);
 
-        let leader_id = nodes
-            .iter()
-            .find(|n| n.is_leader())
-            .expect("no leader")
-            .id;
+        let leader_id = nodes.iter().find(|n| n.is_leader()).expect("no leader").id;
 
         // Propose on leader.
         let leader = nodes.iter_mut().find(|n| n.id == leader_id).unwrap();
@@ -276,7 +276,12 @@ mod tests {
         for node in &nodes {
             let last = Storage::last_index(node.raw_node.store()).unwrap();
             // The log must have grown beyond the initial no-op entry.
-            assert!(last >= 2, "node {} last_index={}, expected >= 2", node.id, last);
+            assert!(
+                last >= 2,
+                "node {} last_index={}, expected >= 2",
+                node.id,
+                last
+            );
         }
     }
 

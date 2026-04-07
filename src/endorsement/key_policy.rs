@@ -116,7 +116,9 @@ mod tests {
     #[test]
     fn memory_set_and_get() {
         let store = MemoryKeyEndorsementStore::new();
-        store.set_key_policy("asset:123", &any_of(&["org1"])).unwrap();
+        store
+            .set_key_policy("asset:123", &any_of(&["org1"]))
+            .unwrap();
         let got = store.get_key_policy("asset:123").unwrap();
         assert_eq!(got, Some(any_of(&["org1"])));
     }
@@ -155,7 +157,9 @@ mod tests {
     fn rocksdb_set_and_get() {
         let dir = tempfile::TempDir::new().unwrap();
         let store = crate::storage::adapters::RocksDbBlockStore::new(dir.path()).unwrap();
-        store.set_key_policy("asset:color", &any_of(&["org1"])).unwrap();
+        store
+            .set_key_policy("asset:color", &any_of(&["org1"]))
+            .unwrap();
         let got = store.get_key_policy("asset:color").unwrap();
         assert_eq!(got, Some(any_of(&["org1"])));
     }
@@ -200,6 +204,9 @@ mod tests {
         store.set_key_policy("asset:x", &any_of(&["org1"])).unwrap();
         // The same key in world state must be absent
         let ws_val = store.world_state_get("asset:x").unwrap();
-        assert!(ws_val.is_none(), "key-level policy must not bleed into world state");
+        assert!(
+            ws_val.is_none(),
+            "key-level policy must not bleed into world state"
+        );
     }
 }
