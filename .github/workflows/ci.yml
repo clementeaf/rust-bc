@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check + Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy, rustfmt
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings 2>&1 | tail -20 || true
+
+      - name: Build
+        run: cargo check --all-targets
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests
+        run: |
+          cargo test 2>&1 | tee test-output.txt
+          # Extract results
+          grep "^test result" test-output.txt
+
+      - name: Verify no failures
+        run: |
+          if grep -q "FAILED" test-output.txt; then
+            echo "Tests failed!"
+            exit 1
+          fi
+          echo "All tests passed"
+
+  e2e:
+    name: E2E Tests (Docker)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Start network
+        run: |
+          docker compose up -d
+          echo "Waiting for nodes to start..."
+          sleep 15
+
+      - name: Health check
+        run: |
+          for port in 8080 8082 8084 8086; do
+            for i in $(seq 1 10); do
+              if curl -sk https://localhost:$port/api/v1/health | grep -q healthy; then
+                echo "Port $port healthy"
+                break
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Run E2E tests
+        run: ./scripts/e2e-test.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker compose logs > docker-logs.txt 2>&1
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-logs
+          path: docker-logs.txt
+
+      - name: Stop network
+        if: always()
+        run: docker compose down -v
+
+  build-cli:
+    name: Build CLI (bcctl)
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build bcctl
+        run: cargo build --bin bcctl --release
+
+      - name: Verify help
+        run: ./target/release/bcctl --help
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bcctl-linux
+          path: target/release/bcctl

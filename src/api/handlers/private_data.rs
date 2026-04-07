@@ -1,7 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, get, put};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 
 // ── Request / response types ──────────────────────────────────────────────────
@@ -79,6 +79,7 @@ pub async fn put_private_data(
     path: web::Path<(String, String)>,
     body: web::Json<PutPrivateDataBody>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/PrivateData.Write", &req)?;
     let (collection, key) = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
 
@@ -88,9 +89,62 @@ pub async fn put_private_data(
         resource: "private_data_store".to_string(),
     })?;
 
+    let value_bytes = body.value.as_bytes().to_vec();
+
     let hash = store
-        .put_private_data(&collection, &key, body.value.as_bytes())
+        .put_private_data(&collection, &key, &value_bytes)
         .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+
+    // Disseminate to member org peers via P2P.
+    let sender_org = req
+        .headers()
+        .get("X-Org-Id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+
+    if let Some(ref p2p_node) = state.node {
+        // Find member peers from the discovery service.
+        let member_peers: Vec<String> = if let Some(ref disc) = state.discovery_service {
+            disc.all_peers()
+                .into_iter()
+                .filter(|p| {
+                    // Only send to peers whose org is a member of this collection.
+                    if let Some(ref reg) = state.collection_registry {
+                        if let Some(col) = reg.get(&collection) {
+                            return col.is_member(&p.org_id);
+                        }
+                    }
+                    false
+                })
+                .map(|p| p.peer_address)
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let collection_clone = collection.clone();
+        let key_clone = key.clone();
+        let node = p2p_node.clone();
+
+        // Fire-and-forget: send to each member peer.
+        for peer_addr in member_peers {
+            let msg = crate::network::Message::PrivateDataPush {
+                collection: collection_clone.clone(),
+                key: key_clone.clone(),
+                value: value_bytes.clone(),
+                sender_org: sender_org.clone(),
+            };
+            let node = node.clone();
+            tokio::spawn(async move {
+                let _ = node.send_and_wait(
+                    &peer_addr,
+                    msg,
+                    std::time::Duration::from_secs(3),
+                ).await;
+            });
+        }
+    }
 
     let response = PutPrivateDataResponse {
         collection,

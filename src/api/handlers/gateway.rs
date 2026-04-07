@@ -1,9 +1,10 @@
 //! POST /api/v1/gateway/submit
 
-use actix_web::{post, web, HttpResponse};
+use actix_web::{post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::enforce_channel_membership;
 use crate::app_state::AppState;
 use crate::gateway::TxResult;
 use crate::storage::traits::Transaction;
@@ -35,6 +36,7 @@ pub struct TransactionBody {
 pub struct GatewaySubmitResponse {
     pub tx_id: String,
     pub block_height: u64,
+    pub valid: bool,
 }
 
 impl From<TxResult> for GatewaySubmitResponse {
@@ -42,6 +44,7 @@ impl From<TxResult> for GatewaySubmitResponse {
         Self {
             tx_id: r.tx_id,
             block_height: r.block_height,
+            valid: r.valid,
         }
     }
 }
@@ -54,10 +57,23 @@ impl From<TxResult> for GatewaySubmitResponse {
 /// Returns the committed block height and transaction ID.
 #[post("/gateway/submit")]
 pub async fn gateway_submit(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     body: web::Json<GatewaySubmitRequest>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &http_req,
+    )?;
+
     let req = body.into_inner();
+
+    // Channel membership check: reject if caller's org is not a member.
+    if !req.channel_id.is_empty() {
+        enforce_channel_membership(&state, &req.channel_id, &http_req)?;
+    }
 
     if req.chaincode_id.is_empty() {
         return Err(ApiError::ValidationError {
@@ -91,6 +107,7 @@ pub async fn gateway_submit(
 
     let result = gw
         .submit(&req.chaincode_id, &req.channel_id, tx)
+        .await
         .map_err(|e| ApiError::InternalError { reason: e.to_string() })?;
 
     let trace_id = uuid::Uuid::new_v4().to_string();

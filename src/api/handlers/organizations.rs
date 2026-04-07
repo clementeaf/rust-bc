@@ -1,6 +1,7 @@
 use actix_web::{web, HttpResponse, get, post};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use actix_web::HttpRequest;
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::endorsement::org::Organization;
 use crate::endorsement::policy::EndorsementPolicy;
 use crate::app_state::AppState;
@@ -12,7 +13,9 @@ use crate::app_state::AppState;
 pub async fn store_create_organization(
     state: web::Data<AppState>,
     body: web::Json<Organization>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Admin", &req)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     match &state.org_registry {
         None => Err(ApiError::NotFound { resource: "org_registry".to_string() }),
@@ -70,7 +73,9 @@ pub struct SetPolicyRequest {
 pub async fn store_set_policy(
     state: web::Data<AppState>,
     body: web::Json<SetPolicyRequest>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Admin", &req)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     match &state.policy_store {
         None => Err(ApiError::NotFound { resource: "policy_store".to_string() }),

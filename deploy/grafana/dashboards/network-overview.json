@@ -1,0 +1,82 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "rust-bc-overview",
+    "title": "rust-bc Network Overview",
+    "tags": ["rust-bc"],
+    "timezone": "browser",
+    "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Node Health",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+        "targets": [{ "expr": "up{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } }
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Block Height",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+        "targets": [{ "expr": "block_height{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }],
+        "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+      },
+      {
+        "id": 3,
+        "title": "Connected Peers",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+        "targets": [{ "expr": "connected_peers{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }]
+      },
+      {
+        "id": 4,
+        "title": "Transactions Total",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+        "targets": [{ "expr": "transactions_total{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }]
+      },
+      {
+        "id": 5,
+        "title": "Block Height Over Time",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+        "targets": [{ "expr": "block_height{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }],
+        "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineWidth": 2 } } }
+      },
+      {
+        "id": 6,
+        "title": "Transactions Rate",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+        "targets": [{ "expr": "rate(transactions_total{job=\"rust-bc\"}[1m])", "legendFormat": "{{instance}} tx/s" }],
+        "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars" }, "unit": "ops" } }
+      },
+      {
+        "id": 7,
+        "title": "P2P Peers Over Time",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+        "targets": [{ "expr": "connected_peers{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }]
+      },
+      {
+        "id": 8,
+        "title": "Memory Usage",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+        "targets": [{ "expr": "process_resident_memory_bytes{job=\"rust-bc\"}", "legendFormat": "{{instance}}" }],
+        "fieldConfig": { "defaults": { "unit": "bytes" } }
+      }
+    ],
+    "schemaVersion": 39
+  },
+  "overwrite": true
+}

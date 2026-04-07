@@ -24,7 +24,7 @@ use actix_ws::Message;
 use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
+use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
 use crate::app_state::AppState;
 use crate::events::BlockEvent;
 
@@ -129,6 +129,7 @@ async fn poll_blocks(
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, channel, &req)?;
     let store = get_channel_store(&state, channel)?;
 
     let latest = store

@@ -598,6 +598,13 @@ async fn async_main() -> std::io::Result<()> {
     let metrics_collector = Arc::new(MetricsCollector::new());
 
     // Ordering backend: "raft" or "solo" (default)
+    //
+    // When ORDERING_BACKEND=raft, also reads:
+    //   RAFT_NODE_ID  — this node's raft ID (default: 1)
+    //   RAFT_PEERS    — comma-separated `id:host:port` (e.g. "1:orderer1:8087,2:orderer2:8087")
+    let mut shared_raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>> = None;
+    let mut raft_peer_map: Option<crate::ordering::raft_transport::PeerMap> = None;
+
     let ordering_backend: Option<Arc<dyn ordering::OrderingBackend>> = {
         let backend_name = env::var("ORDERING_BACKEND").unwrap_or_else(|_| "solo".to_string());
         match backend_name.as_str() {
@@ -606,14 +613,25 @@ async fn async_main() -> std::io::Result<()> {
                     .ok()
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(1);
-                let raft_peers: Vec<u64> = env::var("RAFT_PEERS")
-                    .unwrap_or_else(|_| raft_id.to_string())
-                    .split(',')
-                    .filter_map(|s| s.trim().parse().ok())
-                    .collect();
-                match ordering::raft_service::RaftOrderingService::new(raft_id, raft_peers, 100, 2000) {
+                let peer_map_raw = env::var("RAFT_PEERS")
+                    .unwrap_or_else(|_| format!("{raft_id}:127.0.0.1:8087"));
+                let parsed_map = crate::ordering::raft_transport::parse_raft_peers(&peer_map_raw);
+                let raft_voter_ids: Vec<u64> = parsed_map.keys().copied().collect();
+
+                match ordering::raft_service::RaftOrderingService::new(
+                    raft_id,
+                    if raft_voter_ids.is_empty() { vec![raft_id] } else { raft_voter_ids },
+                    100,
+                    2000,
+                ) {
                     Ok(svc) => {
-                        log::info!("Ordering backend: Raft (node_id={})", raft_id);
+                        log::info!("Ordering backend: Raft (node_id={}, peers={})", raft_id, peer_map_raw);
+                        let raft_arc = svc.raft_node.clone();
+                        shared_raft_node = Some(raft_arc.clone());
+                        raft_peer_map = Some(Arc::new(Mutex::new(parsed_map)));
+
+                        // Use the same RaftOrderingService for the gateway —
+                        // shares the RaftNode with the tick loop and P2P handler.
                         Some(Arc::new(svc))
                     }
                     Err(e) => {
@@ -638,14 +656,67 @@ async fn async_main() -> std::io::Result<()> {
         crate::discovery::service::DiscoveryService::new(org_registry.clone(), policy_store.clone())
             .with_metrics(metrics_collector.clone()),
     );
-    let ordering_service_for_gateway = Arc::new(ordering::service::OrderingService::new());
+    let world_state: Arc<dyn storage::world_state::WorldState> = {
+        let state_db = env::var("STATE_DB").unwrap_or_default();
+        if state_db == "couchdb" {
+            let couchdb_url = env::var("COUCHDB_URL")
+                .unwrap_or_else(|_| "http://localhost:5984".to_string());
+            let couchdb_db = env::var("COUCHDB_DB")
+                .unwrap_or_else(|_| "world_state".to_string());
+            match storage::couchdb::CouchDbWorldState::new(&couchdb_url, &couchdb_db) {
+                Ok(ws) => {
+                    log::info!("World state backend: CouchDB at {couchdb_url}/{couchdb_db}");
+                    Arc::new(ws)
+                }
+                Err(e) => {
+                    log::error!("Failed to connect to CouchDB: {e}. Falling back to MemoryWorldState.");
+                    Arc::new(storage::MemoryWorldState::new())
+                }
+            }
+        } else {
+            log::info!("World state backend: MemoryWorldState");
+            Arc::new(storage::MemoryWorldState::new())
+        }
+    };
+    let chaincode_package_store: Arc<dyn crate::chaincode::ChaincodePackageStore> =
+        Arc::new(crate::chaincode::MemoryChaincodePackageStore::new());
+    let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> =
+        Arc::new(crate::identity::signing::SoftwareSigningProvider::generate());
+    let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> = ordering_backend
+        .clone()
+        .unwrap_or_else(|| Arc::new(ordering::service::OrderingService::new()));
     let gateway_store: Arc<dyn storage::BlockStore> = Arc::new(storage::MemoryStore::new());
-    let gateway = crate::gateway::Gateway::new(
+    let mut gateway = crate::gateway::Gateway::new(
         org_registry.clone(),
         policy_store.clone(),
         ordering_service_for_gateway,
-        gateway_store,
+        gateway_store.clone(),
     );
+    gateway.world_state = Some(world_state.clone());
+    gateway.discovery_service = Some(discovery_service.clone());
+    gateway.p2p_node = Some(node_arc.clone());
+    let event_bus = Arc::new(events::EventBus::new());
+    gateway.event_bus = Some(event_bus.clone());
+
+    // Wire endorsement resources into the P2P server node so it can handle
+    // ProposalRequest messages (simulate chaincode + sign rwset).
+    node_for_server.chaincode_store = Some(chaincode_package_store.clone());
+    node_for_server.world_state = Some(world_state.clone());
+    node_for_server.signing_provider = Some(signing_provider.clone());
+    // Wire the gateway store into the server node for pull-based state sync
+    // (StateRequest handler reads blocks from this store).
+    node_for_server.store = Some(gateway_store.clone());
+    // Wire Raft node into the P2P server for RaftMessage handling.
+    if let Some(ref raft) = shared_raft_node {
+        node_for_server.raft_node = Some(raft.clone());
+    }
+    // Wire private data resources for PrivateDataPush handling.
+    let private_data_store: Arc<dyn crate::private_data::PrivateDataStore> =
+        Arc::new(crate::private_data::MemoryPrivateDataStore::new());
+    let collection_registry: Arc<dyn crate::private_data::CollectionRegistry> =
+        Arc::new(crate::private_data::MemoryCollectionRegistry::new());
+    node_for_server.private_data_store = Some(private_data_store.clone());
+    node_for_server.collection_registry = Some(collection_registry.clone());
 
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
@@ -681,24 +752,34 @@ async fn async_main() -> std::io::Result<()> {
                 log::info!("Storage backend: MemoryStore");
                 Arc::new(MemoryStore::new())
             };
+            // Write genesis block for the default channel if store is empty.
+            if !default_store.block_exists(0).unwrap_or(true) {
+                let genesis_config = crate::channel::config::ChannelConfig::default();
+                let genesis = crate::channel::genesis::create_genesis_block("default", &genesis_config);
+                if let Err(e) = default_store.write_block(&genesis) {
+                    log::error!("Failed to write default channel genesis block: {e}");
+                } else {
+                    log::info!("Default channel genesis block written (height=0)");
+                }
+            }
             let mut store_map = std::collections::HashMap::new();
             store_map.insert("default".to_string(), default_store);
             std::sync::Arc::new(std::sync::RwLock::new(store_map))
         },
         org_registry: Some(org_registry),
         policy_store: Some(policy_store),
-        crl_store: None,
-        private_data_store: Some(Arc::new(crate::private_data::MemoryPrivateDataStore::new())),
-        collection_registry: Some(Arc::new(crate::private_data::MemoryCollectionRegistry::new())),
-        chaincode_package_store: Some(Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())),
+        crl_store: Some(Arc::new(crate::msp::MemoryCrlStore::new())),
+        private_data_store: Some(private_data_store.clone()),
+        collection_registry: Some(collection_registry.clone()),
+        chaincode_package_store: Some(chaincode_package_store.clone()),
         chaincode_definition_store: Some(Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())),
         gateway: Some(Arc::new(gateway)),
         discovery_service: Some(discovery_service),
-        event_bus: std::sync::Arc::new(events::EventBus::new()),
+        event_bus: event_bus.clone(),
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-        acl_provider: None,
+        acl_provider: Some(Arc::new(crate::acl::MemoryAclProvider::new())),
         ordering_backend,
-        world_state: None,
+        world_state: Some(world_state.clone()),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
@@ -837,6 +918,38 @@ async fn async_main() -> std::io::Result<()> {
     // Clonar node_arc para conectar a bootstrap nodes después de iniciar
     let node_for_bootstrap = node_arc.clone();
     let bootstrap_nodes_clone = bootstrap_nodes.clone();
+
+    // Start pull-based state sync loop (catches up from peers with higher block height).
+    let _pull_sync_handle = node_for_server.start_pull_sync_loop(
+        crate::network::gossip::PULL_INTERVAL_MS,
+    );
+
+    // Start Raft tick loop if raft backend is configured.
+    if let (Some(raft), Some(peer_map)) = (&shared_raft_node, &raft_peer_map) {
+        let _raft_tick_handle = crate::ordering::raft_transport::start_raft_tick_loop(
+            raft.clone(),
+            peer_map.clone(),
+            node_arc.clone(),
+            100, // tick every 100ms
+        );
+        log::info!("Raft tick loop started (100ms interval)");
+    }
+
+    // Private data TTL purge loop — expires entries whose blocks_to_live window has closed.
+    {
+        let pd_store = private_data_store.clone();
+        let gw_store = gateway_store.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                let current_height = gw_store.get_latest_height().unwrap_or(0);
+                if current_height > 0 {
+                    pd_store.purge_expired(current_height);
+                }
+            }
+        });
+    }
 
     let server_handle = tokio::spawn(async move {
         if let Err(e) = node_for_server.start_server(p2p_port).await {

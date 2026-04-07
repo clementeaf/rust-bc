@@ -21,6 +21,27 @@ pub fn decode_raft_msg(data: &[u8]) -> Result<RaftMsg, prost::DecodeError> {
 /// Peer address map: raft node ID → network address string.
 pub type PeerMap = Arc<Mutex<HashMap<u64, String>>>;
 
+/// Parse a `RAFT_PEERS` string into a `PeerMap`.
+///
+/// Format: `"1:orderer1:8087,2:orderer2:8087,3:orderer3:8087"`
+/// Each entry is `{raft_id}:{host}:{port}`.
+pub fn parse_raft_peers(s: &str) -> HashMap<u64, String> {
+    let mut map = HashMap::new();
+    for entry in s.split(',') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        // Split on first ':' only — the rest is the address.
+        if let Some((id_str, addr)) = entry.split_once(':') {
+            if let Ok(id) = id_str.parse::<u64>() {
+                map.insert(id, addr.to_string());
+            }
+        }
+    }
+    map
+}
+
 /// Tick the raft node, advance it, and return serialized outbound messages
 /// tagged with their destination node ID.
 ///
@@ -41,6 +62,55 @@ pub fn tick_and_collect(node: &mut RaftNode) -> Vec<(u64, Vec<u8>)> {
 pub fn deliver_raw(node: &mut RaftNode, data: &[u8]) -> Result<(), String> {
     let msg = decode_raft_msg(data).map_err(|e| format!("decode error: {e}"))?;
     node.step(msg).map_err(|e| e.to_string())
+}
+
+/// Spawn a background loop that ticks the Raft node every `tick_ms` and sends
+/// outbound consensus messages to peers via P2P.
+///
+/// The loop:
+/// 1. Locks the `RaftNode` and calls `tick_and_collect()`.
+/// 2. For each outbound message, looks up the destination in `peer_map`.
+/// 3. Sends `Message::RaftMessage(bytes)` to the peer via `Node::send_and_wait`
+///    (fire-and-forget — we ignore the response).
+pub fn start_raft_tick_loop(
+    raft_node: Arc<Mutex<RaftNode>>,
+    peer_map: PeerMap,
+    p2p_node: Arc<crate::network::Node>,
+    tick_ms: u64,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(tick_ms));
+        loop {
+            interval.tick().await;
+
+            let outbound = {
+                let mut node = raft_node.lock().unwrap();
+                tick_and_collect(&mut node)
+            };
+
+            if outbound.is_empty() {
+                continue;
+            }
+
+            let map = peer_map.lock().unwrap().clone();
+            for (to_id, data) in outbound {
+                let Some(addr) = map.get(&to_id) else {
+                    continue;
+                };
+                let msg = crate::network::Message::RaftMessage(data);
+                let addr = addr.clone();
+                let node = p2p_node.clone();
+                // Fire-and-forget: send raft message, ignore response.
+                tokio::spawn(async move {
+                    let _ = node.send_and_wait(
+                        &addr,
+                        msg,
+                        std::time::Duration::from_secs(2),
+                    ).await;
+                });
+            }
+        }
+    })
 }
 
 #[cfg(test)]
@@ -118,5 +188,34 @@ mod tests {
                 .any(|e| e.data == b"transport-test");
             assert!(found, "node {} missing 'transport-test'", node.id);
         }
+    }
+
+    #[test]
+    fn parse_raft_peers_three_entries() {
+        let map = parse_raft_peers("1:orderer1:8087,2:orderer2:8087,3:orderer3:8087");
+        assert_eq!(map.len(), 3);
+        assert_eq!(map[&1], "orderer1:8087");
+        assert_eq!(map[&2], "orderer2:8087");
+        assert_eq!(map[&3], "orderer3:8087");
+    }
+
+    #[test]
+    fn parse_raft_peers_empty_string() {
+        let map = parse_raft_peers("");
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn parse_raft_peers_with_spaces() {
+        let map = parse_raft_peers(" 1:host1:9000 , 2:host2:9000 ");
+        assert_eq!(map.len(), 2);
+        assert_eq!(map[&1], "host1:9000");
+    }
+
+    #[test]
+    fn parse_raft_peers_skips_invalid() {
+        let map = parse_raft_peers("abc:host:1234,2:valid:5678");
+        assert_eq!(map.len(), 1);
+        assert_eq!(map[&2], "valid:5678");
     }
 }

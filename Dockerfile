@@ -1,5 +1,4 @@
-# Multi-stage build para optimizar tamaño de imagen
-# Usar versión más reciente de Rust (latest) para soportar dependencias modernas
+# Multi-stage build with cargo cache for fast rebuilds
 FROM debian:bookworm AS builder
 
 # Install Rust nightly (latest) via rustup
@@ -10,13 +9,16 @@ RUN apt-get update && apt-get install -y \
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar todo el código fuente
-COPY . .
+# Layer 1: cache dependencies — only re-run when Cargo.toml/lock change
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo 'fn main() {}' > src/main.rs && echo '' > src/lib.rs \
+    && cargo build --release 2>/dev/null || true \
+    && rm -rf src
 
-# Compilar la aplicación
+# Layer 2: build real code — only re-run when src/ changes
+COPY . .
 RUN cargo build --release
 
 # Imagen final minimalista
@@ -66,4 +68,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Entrypoint
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["rust-bc"]
-

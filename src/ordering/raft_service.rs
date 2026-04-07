@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::ordering::raft_node::{RaftError, RaftNode};
 use crate::storage::errors::StorageResult;
@@ -9,7 +9,7 @@ use crate::storage::traits::{Block, Transaction};
 /// Wraps a [`RaftNode`] and translates `submit_tx` / `cut_block` into
 /// raft propose + committed-entry draining.
 pub struct RaftOrderingService {
-    pub(crate) raft_node: Mutex<RaftNode>,
+    pub(crate) raft_node: Arc<Mutex<RaftNode>>,
     pub max_batch_size: usize,
     pub batch_timeout_ms: u64,
     signing_key: Option<ed25519_dalek::SigningKey>,
@@ -19,11 +19,26 @@ impl RaftOrderingService {
     pub fn new(id: u64, peers: Vec<u64>, max_batch_size: usize, batch_timeout_ms: u64) -> Result<Self, RaftError> {
         let node = RaftNode::new(id, peers)?;
         Ok(Self {
-            raft_node: Mutex::new(node),
+            raft_node: Arc::new(Mutex::new(node)),
             max_batch_size,
             batch_timeout_ms,
             signing_key: None,
         })
+    }
+
+    /// Create from a shared `RaftNode` — used when the tick loop and P2P
+    /// handler share the same node instance.
+    pub fn from_shared(
+        raft_node: Arc<Mutex<RaftNode>>,
+        max_batch_size: usize,
+        batch_timeout_ms: u64,
+    ) -> Self {
+        Self {
+            raft_node,
+            max_batch_size,
+            batch_timeout_ms,
+            signing_key: None,
+        }
     }
 
     /// Attach an Ed25519 signing key so `cut_block` signs each block.

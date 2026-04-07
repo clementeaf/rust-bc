@@ -1,17 +1,19 @@
 //! Snapshot API handlers: create, list, and download state snapshots.
 
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 use crate::storage::snapshot::{self, StateSnapshot};
 
 /// `POST /api/v1/snapshots/{channel_id}` — trigger snapshot creation.
 #[post("/snapshots/{channel_id}")]
 pub async fn create_snapshot(
+    req: HttpRequest,
     path: web::Path<String>,
     state: web::Data<AppState>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "qscc/Snapshot.Admin", &req)?;
     let channel_id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
 

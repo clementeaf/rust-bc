@@ -1,7 +1,7 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
-use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
+use crate::api::handlers::channels::{channel_id_from_req, enforce_channel_membership, get_channel_store};
 use crate::api::models::CreateBlockRequest;
 use crate::app_state::AppState;
 use crate::block_creation;
@@ -89,7 +89,9 @@ pub async fn store_list_blocks(
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let _channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, _channel, &req)?;
+    let store = get_channel_store(&state, _channel)?;
     let (blocks, total) = store
         .list_blocks(query.offset(), query.limit())
         .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
@@ -103,7 +105,9 @@ pub async fn store_latest_height(
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let _channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, _channel, &req)?;
+    let store = get_channel_store(&state, _channel)?;
     let height = store
         .get_latest_height()
         .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
@@ -119,7 +123,9 @@ pub async fn store_get_block(
 ) -> ApiResult<HttpResponse> {
     let height = *path;
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let _channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, _channel, &req)?;
+    let store = get_channel_store(&state, _channel)?;
     match store.read_block(height) {
         Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
         Err(_) => Err(ApiError::NotFound {

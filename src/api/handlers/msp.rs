@@ -1,7 +1,7 @@
-use actix_web::{web, HttpResponse, get, post};
+use actix_web::{web, HttpRequest, HttpResponse, get, post};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 use crate::msp::CrlStore;
 
@@ -19,10 +19,12 @@ pub struct MspInfo {
 /// POST /api/v1/msp/{msp_id}/revoke — add a serial to the MSP's CRL
 #[post("/msp/{msp_id}/revoke")]
 pub async fn revoke_serial(
+    req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
     body: web::Json<RevokeBody>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/MSP.Admin", &req)?;
     let msp_id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
     let store = state.crl_store.as_ref().ok_or(ApiError::NotFound {

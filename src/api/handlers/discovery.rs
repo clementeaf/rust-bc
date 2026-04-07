@@ -3,10 +3,10 @@
 //!   GET  /api/v1/discovery/peers?channel={id}
 //!   POST /api/v1/discovery/register
 
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 use crate::discovery::PeerDescriptor;
 use crate::discovery::service::DiscoveryError;
@@ -126,9 +126,11 @@ pub struct RegisterResponse {
 /// Body: JSON-encoded `PeerDescriptor`
 #[post("/discovery/register")]
 pub async fn post_register_peer(
+    req: HttpRequest,
     state: web::Data<AppState>,
     body: web::Json<PeerDescriptor>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/Discovery.Admin", &req)?;
     if body.peer_address.is_empty() {
         return Err(ApiError::ValidationError {
             field: "peer_address".to_string(),

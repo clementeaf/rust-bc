@@ -8,6 +8,7 @@
 //! - Error handling with exponential backoff
 
 pub mod adapters;
+pub mod couchdb;
 pub mod errors;
 pub mod memory;
 pub mod snapshot;

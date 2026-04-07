@@ -1,7 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, post};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 
 // ── Request types ─────────────────────────────────────────────────────────────
@@ -53,10 +53,12 @@ pub struct CommitResponse {
 /// `chaincode_packages` column family keyed by `{chaincode_id}:{version}`.
 #[post("/chaincode/install")]
 pub async fn install_chaincode(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     query: web::Query<InstallQuery>,
     body: web::Bytes,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
 
     if query.chaincode_id.is_empty() {
@@ -86,6 +88,24 @@ pub async fn install_chaincode(
         .store_package(&query.chaincode_id, &query.version, &body)
         .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
 
+    // Auto-create a ChaincodeDefinition with Installed status so the full
+    // lifecycle (approve → commit) works without a separate seeding step.
+    if let Some(def_store) = state.chaincode_definition_store.as_ref() {
+        let existing = def_store
+            .get_definition(&query.chaincode_id, &query.version)
+            .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        if existing.is_none() {
+            let def = crate::chaincode::definition::ChaincodeDefinition::new(
+                &query.chaincode_id,
+                &query.version,
+                crate::endorsement::EndorsementPolicy::AnyOf(vec![]),
+            );
+            def_store
+                .upsert_definition(def)
+                .map_err(|e| ApiError::StorageError { reason: e.to_string() })?;
+        }
+    }
+
     let response = InstallResponse {
         chaincode_id: query.chaincode_id.clone(),
         version: query.version.clone(),
@@ -107,6 +127,7 @@ pub async fn approve_chaincode(
     path: web::Path<String>,
     query: web::Query<ApproveQuery>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &req)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let chaincode_id = path.into_inner();
 
@@ -182,10 +203,12 @@ pub async fn approve_chaincode(
 /// `Committed`.  Returns 409 Conflict if the policy is not yet satisfied.
 #[post("/chaincode/{id}/commit")]
 pub async fn commit_chaincode(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
     query: web::Query<CommitQuery>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let chaincode_id = path.into_inner();
 
@@ -243,11 +266,13 @@ pub async fn commit_chaincode(
 /// (base64-encoded) and the read-write set produced during execution.
 #[post("/chaincode/{id}/simulate")]
 pub async fn simulate_chaincode(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
     query: web::Query<SimulateQuery>,
     body: web::Json<SimulateRequest>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChaincodeToChaincode", &http_req)?;
     use crate::chaincode::executor::WasmExecutor;
     use crate::storage::MemoryWorldState;
 

@@ -61,6 +61,32 @@ impl Msp {
     }
 }
 
+/// In-memory CRL store backed by a `HashMap`.
+pub struct MemoryCrlStore {
+    inner: std::sync::Mutex<std::collections::HashMap<String, Vec<String>>>,
+}
+
+impl MemoryCrlStore {
+    pub fn new() -> Self {
+        Self { inner: std::sync::Mutex::new(std::collections::HashMap::new()) }
+    }
+}
+
+impl Default for MemoryCrlStore {
+    fn default() -> Self { Self::new() }
+}
+
+impl CrlStore for MemoryCrlStore {
+    fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
+        self.inner.lock().unwrap().insert(msp_id.to_string(), serials.to_vec());
+        Ok(())
+    }
+
+    fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
+        Ok(self.inner.lock().unwrap().get(msp_id).cloned().unwrap_or_default())
+    }
+}
+
 /// Role a principal holds within an MSP.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]

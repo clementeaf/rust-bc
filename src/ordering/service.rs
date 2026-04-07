@@ -59,6 +59,21 @@ impl OrderingService {
         Ok(())
     }
 
+    /// Enqueue an endorsed transaction for the next ordered block.
+    ///
+    /// Extracts the inner `Transaction` from the proposal and enqueues it.
+    /// For MVP the endorsement metadata is validated by the Gateway before
+    /// calling this method; a future version should carry the full
+    /// `EndorsedTransaction` through to the block so committer peers can
+    /// re-validate endorsements.
+    pub fn submit_endorsed_tx(
+        &self,
+        etx: crate::transaction::endorsed::EndorsedTransaction,
+    ) -> StorageResult<()> {
+        self.pending_txs.lock().unwrap().push_back(etx.proposal.tx);
+        Ok(())
+    }
+
     /// Number of transactions currently waiting to be ordered.
     pub fn pending_count(&self) -> usize {
         self.pending_txs.lock().unwrap().len()
