@@ -193,10 +193,59 @@ fn bench_event_bus_fanout(c: &mut Criterion) {
     group.finish();
 }
 
+// ─── RocksDB write throughput ─────────────────────────────────────────────
+
+use rust_bc::storage::{traits::Block, traits::BlockStore, RocksDbBlockStore};
+
+fn make_block(height: u64) -> Block {
+    Block {
+        height,
+        timestamp: 1_700_000_000 + height,
+        parent_hash: [0u8; 32],
+        merkle_root: [0u8; 32],
+        transactions: vec![format!("tx-{height}")],
+        proposer: "bench-orderer".to_string(),
+        signature: [0u8; 64],
+        endorsements: vec![],
+        orderer_signature: None,
+    }
+}
+
+/// Benchmark: write N blocks to RocksDB sequentially.
+fn bench_rocksdb_write(c: &mut Criterion) {
+    let batch_sizes: &[usize] = &[10, 100];
+
+    let mut group = c.benchmark_group("rocksdb_storage");
+
+    for &n in batch_sizes {
+        group.throughput(Throughput::Elements(n as u64));
+
+        group.bench_with_input(BenchmarkId::new("write_blocks", n), &n, |b, &size| {
+            b.iter_batched(
+                || {
+                    let dir = tempfile::TempDir::new().unwrap();
+                    let store = RocksDbBlockStore::new(dir.path()).unwrap();
+                    let blocks: Vec<Block> = (0..size as u64).map(make_block).collect();
+                    (dir, store, blocks)
+                },
+                |(_dir, store, blocks)| {
+                    for block in &blocks {
+                        store.write_block(block).unwrap();
+                    }
+                },
+                BatchSize::SmallInput,
+            );
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_ordering_throughput,
     bench_endorsement_validation,
-    bench_event_bus_fanout
+    bench_event_bus_fanout,
+    bench_rocksdb_write
 );
 criterion_main!(benches);
