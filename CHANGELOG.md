@@ -6,6 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-07 (Fabric Gap Closure)
+
+**Persistent Raft log (crash-tolerant ordering)**
+- `RocksDbRaftStorage` implements `raft::Storage` trait with RocksDB
+- Entries, HardState, ConfState, and Snapshots persist to `{STORAGE_PATH}/raft/`
+- `RaftNode::new_persistent()` loads state from disk on boot, flushes after each advance
+- Each Docker orderer is an independent process with its own persistent Raft DB
+- Process crash + restart recovers full Raft state and re-integrates to cluster
+
+**X.509 MSP enforcement**
+- `TlsIdentityMiddleware` extracts CN/O from mTLS client certificates via `x509-parser`
+- `on_connect` captures DER peer certs from rustls `ServerConnection`
+- `enforce_acl` uses TLS identity as authoritative source, headers as fallback
+- Role inference from CN: "admin" → Admin, "peer"/"orderer" → Peer, else → Client
+
+---
+
 ### 2026-04-07 (Post-MVP — Block 3)
 
 **External chaincode (chaincode-as-a-service)**
