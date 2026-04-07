@@ -3,6 +3,9 @@
 use raft::prelude::*;
 use raft::storage::MemStorage;
 use raft::StateRole;
+use std::path::Path;
+
+use super::raft_storage::RocksDbRaftStorage;
 
 /// Errors produced by [`RaftNode`].
 #[derive(Debug, thiserror::Error)]
@@ -24,6 +27,9 @@ pub struct RaftNode {
     pub raw_node: RawNode<MemStorage>,
     pub pending_proposals: Vec<Vec<u8>>,
     pub committed_entries: Vec<Entry>,
+    /// Optional persistent storage — entries and hard state are flushed here
+    /// after each `advance()` call so the Raft log survives restarts.
+    persistent_storage: Option<std::sync::Arc<RocksDbRaftStorage>>,
 }
 
 impl RaftNode {
@@ -59,6 +65,81 @@ impl RaftNode {
             raw_node,
             pending_proposals: Vec::new(),
             committed_entries: Vec::new(),
+            persistent_storage: None,
+        })
+    }
+
+    /// Create a persistent Raft node that recovers state from disk on startup
+    /// and flushes entries + hard state after each `advance()`.
+    ///
+    /// On first boot, the DB is initialized with the given `peers` as voters.
+    /// On subsequent boots, state is loaded from the existing DB.
+    pub fn new_persistent(
+        id: u64,
+        peers: Vec<u64>,
+        raft_db_path: &Path,
+    ) -> Result<Self, RaftError> {
+        let persistent = RocksDbRaftStorage::new(raft_db_path)
+            .map_err(|e| RaftError::Init(format!("RocksDB raft storage: {e}")))?;
+
+        let cs = ConfState {
+            voters: peers.clone(),
+            ..Default::default()
+        };
+        persistent.initialize(&cs).map_err(|e| RaftError::Init(e))?;
+
+        // Load persisted state into MemStorage so RawNode can use it.
+        let initial = raft::Storage::initial_state(&persistent)
+            .map_err(|e| RaftError::Init(e.to_string()))?;
+
+        let mem = MemStorage::new_with_conf_state(initial.conf_state.clone());
+        {
+            let mut store = mem.wl();
+            store.set_hardstate(initial.hard_state.clone());
+            // Replay persisted entries into MemStorage.
+            let first = raft::Storage::first_index(&persistent)
+                .map_err(|e| RaftError::Init(e.to_string()))?;
+            let last = raft::Storage::last_index(&persistent)
+                .map_err(|e| RaftError::Init(e.to_string()))?;
+            if last >= first {
+                let entries = raft::Storage::entries(
+                    &persistent,
+                    first,
+                    last + 1,
+                    None,
+                    raft::GetEntriesContext::empty(false),
+                )
+                .map_err(|e| RaftError::Init(e.to_string()))?;
+                if !entries.is_empty() {
+                    store
+                        .append(&entries)
+                        .map_err(|e| RaftError::Init(e.to_string()))?;
+                }
+            }
+        }
+
+        let config = Config {
+            id,
+            election_tick: 10,
+            heartbeat_tick: 3,
+            ..Default::default()
+        };
+
+        let logger = raft::default_logger();
+        let raw_node =
+            RawNode::new(&config, mem, &logger).map_err(|e| RaftError::Init(e.to_string()))?;
+
+        log::info!(
+            "Raft node {id} initialized from persistent storage at {}",
+            raft_db_path.display()
+        );
+
+        Ok(Self {
+            id,
+            raw_node,
+            pending_proposals: Vec::new(),
+            committed_entries: Vec::new(),
+            persistent_storage: Some(std::sync::Arc::new(persistent)),
         })
     }
 
@@ -95,6 +176,8 @@ impl RaftNode {
         let mut ready = self.raw_node.ready();
         let mut msgs: Vec<Message> = ready.take_messages();
         let mut committed: Vec<Entry> = ready.take_committed_entries();
+        // Collect entries for persistent storage before appending to MemStorage.
+        let all_entries_to_persist: Vec<Entry> = ready.entries().to_vec();
         {
             let mut store = self.raw_node.mut_store().wl();
             if !ready.entries().is_empty() {
@@ -115,6 +198,18 @@ impl RaftNode {
         }
         self.raw_node.advance_apply();
         self.committed_entries.extend(committed.clone());
+
+        // Flush to persistent storage if configured.
+        if let Some(ref ps) = self.persistent_storage {
+            if let Err(e) = ps.append_entries(&all_entries_to_persist) {
+                log::error!("Failed to persist raft entries: {e}");
+            }
+            let hs = self.raw_node.raft.hard_state();
+            if let Err(e) = ps.set_hardstate(&hs) {
+                log::error!("Failed to persist raft hard state: {e}");
+            }
+        }
+
         (msgs, committed)
     }
 

@@ -1,5 +1,6 @@
 pub mod raft_node;
 pub mod raft_service;
+pub mod raft_storage;
 pub mod raft_transport;
 pub mod service;
 

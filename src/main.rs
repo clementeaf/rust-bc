@@ -619,16 +619,24 @@ async fn async_main() -> std::io::Result<()> {
                 let parsed_map = crate::ordering::raft_transport::parse_raft_peers(&peer_map_raw);
                 let raft_voter_ids: Vec<u64> = parsed_map.keys().copied().collect();
 
-                match ordering::raft_service::RaftOrderingService::new(
-                    raft_id,
-                    if raft_voter_ids.is_empty() {
-                        vec![raft_id]
-                    } else {
-                        raft_voter_ids
-                    },
-                    100,
-                    2000,
-                ) {
+                let voters = if raft_voter_ids.is_empty() {
+                    vec![raft_id]
+                } else {
+                    raft_voter_ids
+                };
+                // Use persistent Raft storage when STORAGE_BACKEND=rocksdb.
+                let raft_result = if env::var("STORAGE_BACKEND").unwrap_or_default() == "rocksdb" {
+                    let raft_path = std::path::PathBuf::from(
+                        env::var("STORAGE_PATH").unwrap_or_else(|_| "./data/blocks".to_string()),
+                    )
+                    .join("raft");
+                    ordering::raft_service::RaftOrderingService::new_persistent(
+                        raft_id, voters, 100, 2000, &raft_path,
+                    )
+                } else {
+                    ordering::raft_service::RaftOrderingService::new(raft_id, voters, 100, 2000)
+                };
+                match raft_result {
                     Ok(svc) => {
                         log::info!(
                             "Ordering backend: Raft (node_id={}, peers={})",

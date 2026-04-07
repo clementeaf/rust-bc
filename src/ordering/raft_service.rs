@@ -31,6 +31,23 @@ impl RaftOrderingService {
         })
     }
 
+    /// Create a persistent Raft ordering service that recovers state from disk.
+    pub fn new_persistent(
+        id: u64,
+        peers: Vec<u64>,
+        max_batch_size: usize,
+        batch_timeout_ms: u64,
+        raft_db_path: &std::path::Path,
+    ) -> Result<Self, RaftError> {
+        let node = RaftNode::new_persistent(id, peers, raft_db_path)?;
+        Ok(Self {
+            raft_node: Arc::new(Mutex::new(node)),
+            max_batch_size,
+            batch_timeout_ms,
+            signing_key: None,
+        })
+    }
+
     /// Create from a shared `RaftNode` — used when the tick loop and P2P
     /// handler share the same node instance.
     pub fn from_shared(
