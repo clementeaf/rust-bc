@@ -268,7 +268,7 @@ impl MembershipTable {
         now_ms: u64,
         latest_height: u64,
     ) {
-        let mut table = self.inner.lock().unwrap();
+        let mut table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let entry = table
             .entry(peer_address.to_string())
             .or_insert(PeerLiveness {
@@ -294,7 +294,7 @@ impl MembershipTable {
     /// The leader is the alive peer with the lexicographically smallest
     /// `peer_address` within the org. Returns `None` if no alive peer exists.
     pub fn elect_leader(&self, org_id: &str) -> Option<String> {
-        let table = self.inner.lock().unwrap();
+        let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table
             .iter()
             .filter(|(_, e)| e.status == PeerStatus::Alive && e.org_id == org_id)
@@ -305,7 +305,7 @@ impl MembershipTable {
     /// Return peers whose reported `latest_height` exceeds `local_height`.
     /// These are candidates for pull-sync.
     pub fn peers_ahead_of(&self, local_height: u64) -> Vec<String> {
-        let table = self.inner.lock().unwrap();
+        let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table
             .iter()
             .filter(|(_, e)| e.status == PeerStatus::Alive && e.latest_height > local_height)
@@ -316,7 +316,7 @@ impl MembershipTable {
     /// Sweep all peers: any peer whose `last_seen_ms + timeout_ms < now_ms`
     /// is marked `Suspect`. Returns the list of newly suspected peer addresses.
     pub fn sweep_suspects(&self, now_ms: u64) -> Vec<String> {
-        let mut table = self.inner.lock().unwrap();
+        let mut table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let mut newly_suspect = Vec::new();
         for (addr, entry) in table.iter_mut() {
             if entry.status == PeerStatus::Alive
@@ -331,19 +331,19 @@ impl MembershipTable {
 
     /// Get the current status of a peer, if known.
     pub fn status(&self, peer_address: &str) -> Option<PeerStatus> {
-        let table = self.inner.lock().unwrap();
+        let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table.get(peer_address).map(|e| e.status)
     }
 
     /// Remove a peer from the membership table entirely.
     pub fn remove(&self, peer_address: &str) {
-        let mut table = self.inner.lock().unwrap();
+        let mut table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table.remove(peer_address);
     }
 
     /// Return all known peers and their status.
     pub fn all_peers(&self) -> Vec<(String, PeerStatus)> {
-        let table = self.inner.lock().unwrap();
+        let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table.iter().map(|(k, v)| (k.clone(), v.status)).collect()
     }
 }

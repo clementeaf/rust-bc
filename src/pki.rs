@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn from_env_fails_without_ca_cert_var() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_CA_CERT_PATH");
         std::env::remove_var("TLS_CA_KEY_PATH");
         let result = NodeCaConfig::from_env();
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn from_env_fails_without_ca_key_var() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (_, cert_pem, _) = make_ca();
         let cert_file = write_temp(&cert_pem);
         std::env::set_var("TLS_CA_CERT_PATH", cert_file.path());
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn from_env_succeeds_with_valid_vars() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (_, cert_pem, key_pem) = make_ca();
         let cert_file = write_temp(&cert_pem);
         let key_file = write_temp(&key_pem);
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn provision_creates_cert_and_key_when_both_absent() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (_, cert_pem, key_pem) = make_ca();
         let ca_cert_file = write_temp(&cert_pem);
         let ca_key_file = write_temp(&key_pem);
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn provision_creates_when_cert_exists_but_key_missing() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let (_, cert_pem, key_pem) = make_ca();
         let ca_cert_file = write_temp(&cert_pem);
         let ca_key_file = write_temp(&key_pem);
@@ -532,7 +532,7 @@ mod tests {
 
     #[test]
     fn provision_fails_without_env_vars() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_CA_CERT_PATH");
         std::env::remove_var("TLS_CA_KEY_PATH");
 

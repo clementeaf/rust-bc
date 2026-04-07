@@ -53,11 +53,17 @@ impl OrgRegistry for MemoryOrgRegistry {
     }
 
     fn list_orgs(&self) -> StorageResult<Vec<Organization>> {
-        Ok(self.inner.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
 
     fn remove_org(&self, org_id: &str) -> StorageResult<()> {
-        let mut map = self.inner.lock().unwrap();
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if map.remove(org_id).is_none() {
             return Err(StorageError::KeyNotFound(org_id.to_string()));
         }

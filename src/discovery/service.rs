@@ -46,7 +46,7 @@ impl DiscoveryService {
     /// Add or update a peer entry.
     pub fn register_peer(&self, desc: PeerDescriptor) {
         let count = {
-            let mut map = self.peers.lock().unwrap();
+            let mut map = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             map.insert(desc.peer_address.clone(), desc);
             map.len()
         };
@@ -58,7 +58,7 @@ impl DiscoveryService {
     /// Remove a peer entry; returns an error if the peer was not registered.
     pub fn unregister_peer(&self, address: &str) -> Result<(), DiscoveryError> {
         let count = {
-            let mut map = self.peers.lock().unwrap();
+            let mut map = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             if map.remove(address).is_none() {
                 return Err(DiscoveryError::PeerNotFound(address.to_string()));
             }
@@ -72,7 +72,7 @@ impl DiscoveryService {
 
     /// Update the `last_heartbeat` timestamp for a registered peer.
     pub fn heartbeat(&self, address: &str, timestamp: u64) -> Result<(), DiscoveryError> {
-        let mut map = self.peers.lock().unwrap();
+        let mut map = self.peers.lock().unwrap_or_else(|e| e.into_inner());
         let peer = map
             .get_mut(address)
             .ok_or_else(|| DiscoveryError::PeerNotFound(address.to_string()))?;
@@ -93,7 +93,12 @@ impl DiscoveryService {
 
     /// Return a snapshot of all registered peers.
     pub fn all_peers(&self) -> Vec<PeerDescriptor> {
-        self.peers.lock().unwrap().values().cloned().collect()
+        self.peers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Return the minimum set of peers needed to satisfy the endorsement policy

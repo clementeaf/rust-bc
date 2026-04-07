@@ -36,7 +36,7 @@ impl Default for MemoryChannelRegistry {
 
 impl ChannelRegistry for MemoryChannelRegistry {
     fn create_channel(&self, channel: &Channel) -> StorageResult<()> {
-        let mut map = self.inner.lock().unwrap();
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if map.contains_key(&channel.channel_id) {
             return Err(StorageError::KeyNotFound(format!(
                 "channel '{}' already exists",
@@ -57,11 +57,17 @@ impl ChannelRegistry for MemoryChannelRegistry {
     }
 
     fn list_channels(&self) -> StorageResult<Vec<Channel>> {
-        Ok(self.inner.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
 
     fn update_channel(&self, channel: &Channel) -> StorageResult<()> {
-        let mut map = self.inner.lock().unwrap();
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if !map.contains_key(&channel.channel_id) {
             return Err(StorageError::KeyNotFound(channel.channel_id.clone()));
         }

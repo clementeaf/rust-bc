@@ -57,11 +57,16 @@ impl OuRegistry for MemoryOuRegistry {
     }
 
     fn get_ou(&self, ou_id: &str) -> StorageResult<Option<OrganizationalUnit>> {
-        Ok(self.inner.read().unwrap().get(ou_id).cloned())
+        Ok(self
+            .inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(ou_id)
+            .cloned())
     }
 
     fn list_ous(&self, org_id: &str) -> StorageResult<Vec<OrganizationalUnit>> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         Ok(map
             .values()
             .filter(|ou| ou.org_id == org_id)
@@ -70,7 +75,7 @@ impl OuRegistry for MemoryOuRegistry {
     }
 
     fn get_hierarchy(&self, ou_id: &str) -> StorageResult<Vec<OrganizationalUnit>> {
-        let map = self.inner.read().unwrap();
+        let map = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let mut chain = Vec::new();
         let mut current = ou_id.to_string();
         // Walk up the parent chain (limit to 100 to prevent cycles).

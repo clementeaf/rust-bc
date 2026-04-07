@@ -846,7 +846,7 @@ mod tests {
 
     #[test]
     fn load_from_env_returns_none_when_no_vars() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_CERT_PATH");
         std::env::remove_var("TLS_KEY_PATH");
         let result = load_tls_config_from_env().unwrap();
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_returns_none_without_tls_vars() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_CERT_PATH");
         std::env::remove_var("TLS_KEY_PATH");
         std::env::remove_var("TLS_VERIFY_PEER");
@@ -898,7 +898,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_full_when_tls_enabled() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -915,7 +915,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_dangerous_when_verify_peer_false() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -971,7 +971,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_mtls_fails_without_ca() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -988,7 +988,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_mtls_succeeds_with_ca() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
@@ -1007,7 +1007,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_mtls_fails_without_ca() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -1024,7 +1024,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_mtls_succeeds_with_ca() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
@@ -1098,7 +1098,7 @@ mod tests {
 
     #[test]
     fn cert_pin_config_from_env_disabled_when_var_absent() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_PINNED_CERTS");
         let config = CertPinConfig::from_env().unwrap();
         assert!(config.is_disabled());
@@ -1106,7 +1106,7 @@ mod tests {
 
     #[test]
     fn cert_pin_config_from_env_disabled_when_var_empty() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("TLS_PINNED_CERTS", "");
         let config = CertPinConfig::from_env().unwrap();
         std::env::remove_var("TLS_PINNED_CERTS");
@@ -1115,7 +1115,7 @@ mod tests {
 
     #[test]
     fn cert_pin_config_from_env_loads_valid_fingerprint() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let fp = test_cert_fingerprint();
         let hex = hex::encode(fp);
         std::env::set_var("TLS_PINNED_CERTS", &hex);
@@ -1130,7 +1130,7 @@ mod tests {
 
     #[test]
     fn cert_pin_config_from_env_errors_on_invalid_hex() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("TLS_PINNED_CERTS", "zz".repeat(32));
         let result = CertPinConfig::from_env();
         std::env::remove_var("TLS_PINNED_CERTS");
@@ -1139,7 +1139,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_mtls_with_pin_accepts_pinned_cert() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
@@ -1160,7 +1160,7 @@ mod tests {
 
     #[test]
     fn load_client_config_from_env_with_pin_builds_config() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
@@ -1251,7 +1251,7 @@ mod tests {
 
     #[test]
     fn tls_reload_params_from_env_returns_none_without_vars() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_CERT_PATH");
         std::env::remove_var("TLS_KEY_PATH");
         std::env::remove_var("TLS_MUTUAL");
@@ -1260,7 +1260,7 @@ mod tests {
 
     #[test]
     fn tls_reload_params_from_env_builds_params() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -1277,7 +1277,7 @@ mod tests {
 
     #[test]
     fn tls_reload_params_from_env_includes_ca_when_mtls() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let ca = write_temp(TEST_CERT_PEM);
@@ -1325,7 +1325,7 @@ mod tests {
 
     #[test]
     fn ocsp_staple_from_env_returns_none_when_unset() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("TLS_OCSP_STAPLE_PATH");
         let result = OcspStaple::from_env().unwrap();
         assert!(result.is_none());
@@ -1335,7 +1335,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_without_ocsp_still_works() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -1351,7 +1351,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_with_ocsp_staple_path_succeeds() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         let staple = write_temp_bytes(b"\x30\x03\x0a\x01\x00");
@@ -1369,7 +1369,7 @@ mod tests {
 
     #[test]
     fn load_tls_config_from_env_with_invalid_ocsp_path_fails() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let cert = write_temp(TEST_CERT_PEM);
         let key = write_temp(TEST_KEY_PEM);
         std::env::set_var("TLS_CERT_PATH", cert.path());
@@ -1465,7 +1465,7 @@ mod tests {
 
     #[test]
     fn ocsp_staple_from_env_loads_file_when_set() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let data = b"\x30\x03\x0a\x01\x00";
         let f = write_temp_bytes(data);
         std::env::set_var("TLS_OCSP_STAPLE_PATH", f.path());

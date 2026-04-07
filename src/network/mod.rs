@@ -270,7 +270,12 @@ async fn gossip_loop(
 ) {
     use rand::seq::SliceRandom as _;
     while let Some((block, source)) = rx.recv().await {
-        let all_peers: Vec<String> = peers.lock().unwrap().iter().cloned().collect();
+        let all_peers: Vec<String> = peers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .cloned()
+            .collect();
         let candidates: Vec<String> = all_peers
             .into_iter()
             .filter(|p| source.as_deref() != Some(p.as_str()))
@@ -688,13 +693,13 @@ impl Node {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            let mut limits = rate_limits.lock().unwrap();
+            let mut limits = rate_limits.lock().unwrap_or_else(|e| e.into_inner());
             limits.retain(|_, (ts, _)| now - *ts < 60);
         }
 
         // Procesar contratos pendientes para este peer
         {
-            let mut pending = pending_broadcasts.lock().unwrap();
+            let mut pending = pending_broadcasts.lock().unwrap_or_else(|e| e.into_inner());
             let mut to_remove = Vec::new();
             for (i, (peer, _contract)) in pending.iter().enumerate() {
                 if peer == &peer_addr_str {
@@ -740,7 +745,7 @@ impl Node {
 
                         // Agregar el peer que se conectó a nuestra lista SOLO si pasó la validación
                         if let Some(their_p2p_addr) = p2p_address {
-                            let mut peers_guard = peers.lock().unwrap();
+                            let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
                             peers_guard.insert(their_p2p_addr.clone());
                             println!(
                                 "📡 Peer agregado desde conexión entrante: {}",
@@ -825,20 +830,20 @@ impl Node {
             Message::Ping => Ok(Some(Message::Pong)),
 
             Message::GetBlocks => {
-                let blockchain = blockchain.lock().unwrap();
+                let blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
                 let blocks = blockchain.chain.clone();
                 Ok(Some(Message::Blocks(blocks)))
             }
 
             Message::Blocks(blocks) => {
-                let mut blockchain = blockchain.lock().unwrap();
+                let mut blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
 
                 // Resolver conflicto usando la regla de la cadena más larga
                 if blocks.len() > blockchain.chain.len() {
                     if Self::is_valid_chain(&blocks) {
                         // Validar transacciones si tenemos wallet_manager
                         let should_replace = if let Some(wm) = &wallet_manager {
-                            let wm_guard = wm.lock().unwrap();
+                            let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                             blockchain.resolve_conflict(&blocks, &wm_guard)
                         } else {
                             // Sin wallet_manager, solo validar estructura
@@ -851,7 +856,7 @@ impl Node {
 
                             // Sincronizar wallets desde la nueva blockchain
                             if let Some(wm) = &wallet_manager {
-                                let mut wm_guard = wm.lock().unwrap();
+                                let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                                 wm_guard.sync_from_blockchain(&blockchain.chain);
                             }
 
@@ -885,7 +890,7 @@ impl Node {
             }
 
             Message::NewBlock(block) => {
-                let mut blockchain = blockchain.lock().unwrap();
+                let mut blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
                 let latest = blockchain.get_latest_block();
 
                 // Verificar si el bloque ya existe
@@ -938,7 +943,8 @@ impl Node {
 
                 // Validar checkpoints (protección anti-51%)
                 if let Some(ref checkpoint_mgr) = checkpoint_manager {
-                    let checkpoint_manager_guard = checkpoint_mgr.lock().unwrap();
+                    let checkpoint_manager_guard =
+                        checkpoint_mgr.lock().unwrap_or_else(|e| e.into_inner());
                     if let Err(e) = checkpoint_manager_guard.validate_block_against_checkpoints(
                         block.index,
                         &block.hash,
@@ -951,7 +957,7 @@ impl Node {
 
                 // Validar transacciones si tenemos wallet_manager
                 if let Some(wm) = &wallet_manager {
-                    let wallet_manager_guard = wm.lock().unwrap();
+                    let wallet_manager_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                     for tx in &block.transactions {
                         if tx.from != "0" {
                             if let Err(e) =
@@ -974,7 +980,7 @@ impl Node {
 
                 // Procesar transacciones si tenemos wallet_manager
                 if let Some(wm) = &wallet_manager {
-                    let mut wallet_manager_guard = wm.lock().unwrap();
+                    let mut wallet_manager_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                     for tx in &block_clone.transactions {
                         if tx.from == "0" {
                             // Coinbase transaction
@@ -1014,7 +1020,7 @@ impl Node {
 
                 // Validate transaction using the validation gate
                 if let Some(tv) = &transaction_validator {
-                    let mut validator = tv.lock().unwrap();
+                    let mut validator = tv.lock().unwrap_or_else(|e| e.into_inner());
                     let validation_result = validator.validate(&tx);
 
                     if !validation_result.is_valid {
@@ -1028,13 +1034,13 @@ impl Node {
             }
 
             Message::GetPeers => {
-                let peers = peers.lock().unwrap();
+                let peers = peers.lock().unwrap_or_else(|e| e.into_inner());
                 let peer_list: Vec<String> = peers.iter().cloned().collect();
                 Ok(Some(Message::Peers(peer_list)))
             }
 
             Message::Peers(peer_list) => {
-                let mut peers = peers.lock().unwrap();
+                let mut peers = peers.lock().unwrap_or_else(|e| e.into_inner());
                 for peer in peer_list {
                     peers.insert(peer);
                 }
@@ -1061,10 +1067,10 @@ impl Node {
 
                 // Si el peer envió su dirección P2P, agregarlo a nuestra lista
                 if let Some(their_p2p_addr) = p2p_address {
-                    let mut peers_guard = peers.lock().unwrap();
+                    let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
                     peers_guard.insert(their_p2p_addr);
                 }
-                let blockchain = blockchain.lock().unwrap();
+                let blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
                 let latest = blockchain.get_latest_block();
                 let my_count = blockchain.chain.len();
                 let my_hash = latest.hash.clone();
@@ -1089,7 +1095,7 @@ impl Node {
             // Mensajes de contratos
             Message::GetContracts => {
                 if let Some(cm) = &contract_manager {
-                    let cm_guard = cm.read().unwrap();
+                    let cm_guard = cm.read().unwrap_or_else(|e| e.into_inner());
                     let contracts: Vec<SmartContract> = cm_guard
                         .get_all_contracts()
                         .iter()
@@ -1103,7 +1109,7 @@ impl Node {
 
             Message::GetContractsSince { timestamp } => {
                 if let Some(cm) = &contract_manager {
-                    let cm_guard = cm.read().unwrap();
+                    let cm_guard = cm.read().unwrap_or_else(|e| e.into_inner());
                     let contracts: Vec<SmartContract> = cm_guard
                         .get_all_contracts()
                         .iter()
@@ -1121,7 +1127,7 @@ impl Node {
 
             Message::Contracts(contracts) => {
                 if let Some(cm) = &contract_manager {
-                    let mut cm_guard = cm.write().unwrap();
+                    let mut cm_guard = cm.write().unwrap_or_else(|e| e.into_inner());
                     let mut synced = 0;
                     let mut errors = 0;
 
@@ -1197,7 +1203,7 @@ impl Node {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    let mut limits = rate_limits.lock().unwrap();
+                    let mut limits = rate_limits.lock().unwrap_or_else(|e| e.into_inner());
                     let (last_ts, count) = limits.entry(peer.clone()).or_insert((now, 0));
 
                     if now - *last_ts < 60 {
@@ -1218,7 +1224,7 @@ impl Node {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    let mut receipts = recent_receipts.lock().unwrap();
+                    let mut receipts = recent_receipts.lock().unwrap_or_else(|e| e.into_inner());
 
                     // Limpiar entradas antiguas (más de 5 minutos)
                     receipts.retain(|_, (ts, _)| now - *ts < 300);
@@ -1243,7 +1249,7 @@ impl Node {
                         return Ok(None);
                     }
 
-                    let mut cm_guard = cm.write().unwrap();
+                    let mut cm_guard = cm.write().unwrap_or_else(|e| e.into_inner());
 
                     // Verificar si el contrato ya existe
                     if cm_guard.get_contract(&contract.address).is_none() {
@@ -1285,7 +1291,7 @@ impl Node {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    let mut limits = rate_limits.lock().unwrap();
+                    let mut limits = rate_limits.lock().unwrap_or_else(|e| e.into_inner());
                     let (last_ts, count) = limits.entry(peer.clone()).or_insert((now, 0));
 
                     if now - *last_ts < 60 {
@@ -1306,7 +1312,7 @@ impl Node {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap()
                         .as_secs();
-                    let mut receipts = recent_receipts.lock().unwrap();
+                    let mut receipts = recent_receipts.lock().unwrap_or_else(|e| e.into_inner());
 
                     // Limpiar entradas antiguas (más de 5 minutos)
                     receipts.retain(|_, (ts, _)| now - *ts < 300);
@@ -1335,7 +1341,7 @@ impl Node {
                         return Ok(None);
                     }
 
-                    let mut cm_guard = cm.write().unwrap();
+                    let mut cm_guard = cm.write().unwrap_or_else(|e| e.into_inner());
 
                     if let Some(existing_mut) = cm_guard.get_contract_mut(&contract.address) {
                         // Validar que el owner no haya cambiado ilegalmente
@@ -1414,7 +1420,7 @@ impl Node {
                 if let Some(ref raft) = raft_node {
                     match crate::ordering::raft_transport::decode_raft_msg(&data) {
                         Ok(raft_msg) => {
-                            let mut node = raft.lock().unwrap();
+                            let mut node = raft.lock().unwrap_or_else(|e| e.into_inner());
                             if let Err(e) = node.step(raft_msg) {
                                 eprintln!("RaftMessage step error: {}", e);
                             }
@@ -1670,7 +1676,7 @@ impl Node {
         })?;
 
         let version_msg = {
-            let blockchain = self.blockchain.lock().unwrap();
+            let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
             let latest = blockchain.get_latest_block();
             let p2p_addr = self.p2p_address();
             Message::Version {
@@ -1736,13 +1742,13 @@ impl Node {
 
             // Agregar el peer a nuestra lista DESPUÉS de validar Network ID
             {
-                let mut peers = self.peers.lock().unwrap();
+                let mut peers = self.peers.lock().unwrap_or_else(|e| e.into_inner());
                 peers.insert(peer_p2p_addr.clone());
                 println!("📡 Peer agregado en connect_to_peer: {}", peer_p2p_addr);
             }
 
             let (my_count, my_latest) = {
-                let blockchain = self.blockchain.lock().unwrap();
+                let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
                 let count = blockchain.chain.len();
                 let latest = blockchain.get_latest_block().hash.clone();
                 (count, latest)
@@ -1789,7 +1795,7 @@ impl Node {
             }
         } else {
             // Si no recibimos Version válido, aún así agregar el peer
-            let mut peers = self.peers.lock().unwrap();
+            let mut peers = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers.insert(address.to_string());
         }
 
@@ -1802,7 +1808,7 @@ impl Node {
      */
     pub async fn sync_with_all_peers(&self) -> Result<(), Box<dyn std::error::Error>> {
         let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -1975,7 +1981,7 @@ impl Node {
     pub async fn try_bootstrap_reconnect(&self, force: bool) -> bool {
         // Obtener información sobre peers actuales (soltar lock antes de await)
         let (has_peers, current_peers) = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             let has = !peers_guard.is_empty();
             let current: HashSet<String> = peers_guard.iter().cloned().collect();
             (has, current)
@@ -2049,7 +2055,7 @@ impl Node {
      */
     pub async fn discover_peers(&self) -> usize {
         let current_peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2062,7 +2068,7 @@ impl Node {
                 if self.try_bootstrap_reconnect(false).await {
                     // Si reconectamos, esperar un momento y obtener la nueva lista
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    let peers_guard = self.peers.lock().unwrap();
+                    let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
                     if peers_guard.is_empty() {
                         return 0;
                     }
@@ -2078,7 +2084,7 @@ impl Node {
 
         // Re-obtener lista actualizada después de posible reconexión
         let current_peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2111,7 +2117,7 @@ impl Node {
         const MAX_PEERS: usize = 200;
         let mut new_peers_count = 0;
         {
-            let mut peers_guard = self.peers.lock().unwrap();
+            let mut peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             let current_count = peers_guard.len();
 
             for discovered_peer in discovered_peers {
@@ -2141,7 +2147,7 @@ impl Node {
         // Si tenemos pocos peers (menos de 3), intentar conectar a bootstrap/seed nodes también
         // Esto ayuda a descubrir más peers incluso si ya tenemos algunos
         let (peer_count, has_any_nodes) = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             let count = peers_guard.len();
             let has_nodes = !self.bootstrap_nodes.is_empty() || !self.seed_nodes.is_empty();
             (count, has_nodes)
@@ -2162,7 +2168,7 @@ impl Node {
             .unwrap()
             .as_secs();
         {
-            let mut failed = self.failed_peers.lock().unwrap();
+            let mut failed = self.failed_peers.lock().unwrap_or_else(|e| e.into_inner());
             failed.retain(|_, (ts, attempts)| {
                 let age = now.saturating_sub(*ts);
                 // Mantener si tiene menos de 10 minutos y menos de 5 intentos
@@ -2172,7 +2178,7 @@ impl Node {
 
         // Obtener lista de peers actuales
         let all_peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2182,7 +2188,7 @@ impl Node {
 
         // Separar peers nuevos descubiertos de peers fallidos para retry
         {
-            let failed = self.failed_peers.lock().unwrap();
+            let failed = self.failed_peers.lock().unwrap_or_else(|e| e.into_inner());
             for peer_addr in &all_peers {
                 if peer_addr == &my_addr {
                     continue;
@@ -2226,12 +2232,14 @@ impl Node {
                         connected_count += 1;
 
                         // Remover de peers fallidos si estaba ahí
-                        let mut failed = self.failed_peers.lock().unwrap();
+                        let mut failed =
+                            self.failed_peers.lock().unwrap_or_else(|e| e.into_inner());
                         failed.remove(&peer_addr);
                     }
                     Err(e) => {
                         // Registrar como peer fallido
-                        let mut failed = self.failed_peers.lock().unwrap();
+                        let mut failed =
+                            self.failed_peers.lock().unwrap_or_else(|e| e.into_inner());
                         let entry = failed.entry(peer_addr.clone()).or_insert((now, 0));
                         entry.1 += 1;
                         eprintln!(
@@ -2256,7 +2264,7 @@ impl Node {
      */
     pub async fn cleanup_disconnected_peers(&self) {
         let peers_to_check: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2270,7 +2278,7 @@ impl Node {
         }
 
         if !disconnected.is_empty() {
-            let mut peers_guard = self.peers.lock().unwrap();
+            let mut peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             for peer in disconnected {
                 peers_guard.remove(&peer);
                 println!("🗑️  Peer removido de la lista: {}", peer);
@@ -2284,7 +2292,7 @@ impl Node {
     pub async fn sync_with_peer(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Obtener información de nuestra blockchain antes de conectar
         let (my_count, my_latest) = {
-            let blockchain = self.blockchain.lock().unwrap();
+            let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
             let latest = blockchain.get_latest_block();
             (blockchain.chain.len(), latest.hash.clone())
         };
@@ -2368,13 +2376,13 @@ impl Node {
         let response_str = String::from_utf8_lossy(&buffer[..n]);
 
         if let Ok(Message::Blocks(blocks)) = serde_json::from_str(&response_str) {
-            let mut blockchain = self.blockchain.lock().unwrap();
+            let mut blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
 
             // Si nuestra cadena está vacía o solo tiene génesis, aceptar la cadena recibida si es válida
             if blockchain.chain.is_empty() || (blockchain.chain.len() == 1 && !blocks.is_empty()) {
                 if Self::is_valid_chain(&blocks) {
                     let should_replace = if let Some(wm) = &self.wallet_manager {
-                        let wm_guard = wm.lock().unwrap();
+                        let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                         // Si tenemos solo génesis, reemplazar completamente
                         if blockchain.chain.len() == 1 {
                             blockchain.chain = blocks.clone();
@@ -2392,7 +2400,7 @@ impl Node {
 
                         // Sincronizar wallets desde la nueva blockchain
                         if let Some(wm) = &self.wallet_manager {
-                            let mut wm_guard = wm.lock().unwrap();
+                            let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                             wm_guard.sync_from_blockchain(&blockchain.chain);
                         }
 
@@ -2412,7 +2420,7 @@ impl Node {
             // Resolver conflicto usando la regla de la cadena más larga
             if blocks.len() > blockchain.chain.len() && Self::is_valid_chain(&blocks) {
                 let should_replace = if let Some(wm) = &self.wallet_manager {
-                    let wm_guard = wm.lock().unwrap();
+                    let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                     blockchain.resolve_conflict(&blocks, &wm_guard)
                 } else {
                     blockchain.chain = blocks.clone();
@@ -2427,7 +2435,7 @@ impl Node {
 
                     // Sincronizar wallets desde la nueva blockchain
                     if let Some(wm) = &self.wallet_manager {
-                        let mut wm_guard = wm.lock().unwrap();
+                        let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                         wm_guard.sync_from_blockchain(&blockchain.chain);
                     }
 
@@ -2467,7 +2475,7 @@ impl Node {
      */
     pub async fn broadcast_block(&self, block: &Block) {
         let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2507,7 +2515,7 @@ impl Node {
      */
     pub async fn broadcast_transaction(&self, tx: &Transaction) {
         let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2546,7 +2554,10 @@ impl Node {
 
         // Intentar sincronización incremental primero
         let last_sync = {
-            let metrics = self.contract_sync_metrics.lock().unwrap();
+            let metrics = self
+                .contract_sync_metrics
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             metrics
                 .get(address)
                 .map(|m| m.last_sync_timestamp)
@@ -2570,7 +2581,7 @@ impl Node {
 
         if let Ok(Message::Contracts(contracts)) = serde_json::from_str(&response_str) {
             if let Some(cm) = &self.contract_manager {
-                let mut cm_guard = cm.write().unwrap();
+                let mut cm_guard = cm.write().unwrap_or_else(|e| e.into_inner());
                 let mut synced = 0;
                 let mut errors = 0;
 
@@ -2627,7 +2638,10 @@ impl Node {
                     .as_secs();
 
                 {
-                    let mut metrics = self.contract_sync_metrics.lock().unwrap();
+                    let mut metrics = self
+                        .contract_sync_metrics
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     metrics.insert(
                         address.to_string(),
                         ContractSyncMetrics {
@@ -2668,7 +2682,7 @@ impl Node {
      */
     pub async fn broadcast_contract(&self, contract: &SmartContract) {
         let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2694,7 +2708,10 @@ impl Node {
                                 peer_addr, error_msg
                             );
                             // Agregar a cola de pendientes (memoria)
-                            let mut pending = self.pending_contract_broadcasts.lock().unwrap();
+                            let mut pending = self
+                                .pending_contract_broadcasts
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             pending.push((peer_addr.clone(), contract.clone()));
                         }
                     }
@@ -2734,7 +2751,7 @@ impl Node {
      */
     pub async fn broadcast_contract_update(&self, contract: &SmartContract) {
         let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap();
+            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             peers_guard.iter().cloned().collect()
         };
 
@@ -2787,7 +2804,10 @@ impl Node {
                         } else {
                             eprintln!("❌ Error enviando actualización de contrato a {} después de 3 intentos: {}", peer_addr, error_msg);
                             // Agregar a cola de pendientes (memoria)
-                            let mut pending = self.pending_contract_broadcasts.lock().unwrap();
+                            let mut pending = self
+                                .pending_contract_broadcasts
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             pending.push((peer_addr.clone(), contract.clone()));
                         }
                     }
@@ -2855,7 +2875,10 @@ impl Node {
 
                 // Bump sequence number.
                 let seq = {
-                    let mut seq_guard = node.alive_sequence.lock().unwrap();
+                    let mut seq_guard = node
+                        .alive_sequence
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     *seq_guard += 1;
                     *seq_guard
                 };
@@ -2889,7 +2912,7 @@ impl Node {
 
                 // Broadcast to all peers.
                 let peers: Vec<String> = {
-                    let g = node.peers.lock().unwrap();
+                    let g = node.peers.lock().unwrap_or_else(|e| e.into_inner());
                     g.iter().cloned().collect()
                 };
                 for peer_addr in &peers {
@@ -2932,7 +2955,7 @@ impl Node {
                 let local_height = store.get_latest_height().unwrap_or(0);
 
                 let peers: Vec<String> = {
-                    let g = node.peers.lock().unwrap();
+                    let g = node.peers.lock().unwrap_or_else(|e| e.into_inner());
                     g.iter().cloned().collect()
                 };
 
@@ -3226,7 +3249,12 @@ mod tests {
 
         // Build a fresh chain and mine block 1 on top of the genesis.
         let bc_arc = Arc::new(Mutex::new(Blockchain::new(1)));
-        let genesis_hash = bc_arc.lock().unwrap().get_latest_block().hash.clone();
+        let genesis_hash = bc_arc
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_latest_block()
+            .hash
+            .clone();
 
         let coinbase = Blockchain::create_coinbase_transaction(
             "miner_address_for_gossip_test_12345",

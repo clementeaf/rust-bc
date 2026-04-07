@@ -154,7 +154,10 @@ impl Default for MemoryChaincodeDefinitionStore {
 impl ChaincodeDefinitionStore for MemoryChaincodeDefinitionStore {
     fn upsert_definition(&self, def: ChaincodeDefinition) -> Result<(), ChaincodeError> {
         let key = Self::key(&def.chaincode_id, &def.version);
-        self.defs.lock().unwrap().insert(key, def);
+        self.defs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, def);
         Ok(())
     }
 

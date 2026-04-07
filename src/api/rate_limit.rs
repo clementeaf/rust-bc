@@ -74,7 +74,7 @@ impl RateLimiter {
 
     /// Check if request from IP should be allowed
     pub fn allow_request(&self, ip: IpAddr) -> bool {
-        let mut buckets = self.buckets.lock().unwrap();
+        let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
 
         // Create bucket if not exists
         buckets
@@ -86,7 +86,7 @@ impl RateLimiter {
         let allowed = bucket.try_consume(1.0);
 
         // Cleanup old buckets periodically
-        let mut last_cleanup = self.last_cleanup.lock().unwrap();
+        let mut last_cleanup = self.last_cleanup.lock().unwrap_or_else(|e| e.into_inner());
         if last_cleanup.elapsed() > self.cleanup_interval {
             Self::cleanup_buckets(&mut buckets);
             *last_cleanup = Instant::now();
@@ -97,7 +97,7 @@ impl RateLimiter {
 
     /// Get remaining tokens for an IP
     pub fn get_remaining_tokens(&self, ip: IpAddr) -> f64 {
-        let buckets = self.buckets.lock().unwrap();
+        let buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
         buckets
             .get(&ip)
             .map(|b| b.current_tokens())
@@ -111,7 +111,7 @@ impl RateLimiter {
 
     /// Reset rate limiter (clear all buckets)
     pub fn reset(&self) {
-        let mut buckets = self.buckets.lock().unwrap();
+        let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
         buckets.clear();
     }
 }

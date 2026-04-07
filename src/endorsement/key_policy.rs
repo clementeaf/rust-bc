@@ -55,11 +55,19 @@ impl KeyEndorsementStore for MemoryKeyEndorsementStore {
     }
 
     fn get_key_policy(&self, key: &str) -> StorageResult<Option<EndorsementPolicy>> {
-        Ok(self.inner.lock().unwrap().get(key).cloned())
+        Ok(self
+            .inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned())
     }
 
     fn delete_key_policy(&self, key: &str) -> StorageResult<()> {
-        self.inner.lock().unwrap().remove(key);
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(key);
         Ok(())
     }
 }

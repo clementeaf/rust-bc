@@ -23,7 +23,7 @@ pub async fn create_snapshot(
     let trace_id = uuid::Uuid::new_v4().to_string();
 
     let store = {
-        let map = state.store.read().unwrap();
+        let map = state.store.read().unwrap_or_else(|e| e.into_inner());
         map.get(&channel_id).cloned()
     };
 

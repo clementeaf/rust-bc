@@ -144,6 +144,7 @@ fn test_health_response() {
             last_block_hash: "hash_last".to_string(),
             validators_count: 3,
         },
+        checks: None,
     };
 
     let json = serde_json::to_string(&resp).unwrap();

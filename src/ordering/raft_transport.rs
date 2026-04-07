@@ -84,7 +84,7 @@ pub fn start_raft_tick_loop(
             interval.tick().await;
 
             let outbound = {
-                let mut node = raft_node.lock().unwrap();
+                let mut node = raft_node.lock().unwrap_or_else(|e| e.into_inner());
                 tick_and_collect(&mut node)
             };
 
@@ -92,7 +92,7 @@ pub fn start_raft_tick_loop(
                 continue;
             }
 
-            let map = peer_map.lock().unwrap().clone();
+            let map = peer_map.lock().unwrap_or_else(|e| e.into_inner()).clone();
             for (to_id, data) in outbound {
                 let Some(addr) = map.get(&to_id) else {
                     continue;

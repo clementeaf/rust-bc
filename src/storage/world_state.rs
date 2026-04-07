@@ -70,11 +70,16 @@ impl Default for MemoryWorldState {
 
 impl WorldState for MemoryWorldState {
     fn get(&self, key: &str) -> StorageResult<Option<VersionedValue>> {
-        Ok(self.inner.lock().unwrap().get(key).cloned())
+        Ok(self
+            .inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned())
     }
 
     fn put(&self, key: &str, data: &[u8]) -> StorageResult<u64> {
-        let mut map = self.inner.lock().unwrap();
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let new_version = map.get(key).map(|v| v.version + 1).unwrap_or(1);
         map.insert(
             key.to_string(),
@@ -85,7 +90,7 @@ impl WorldState for MemoryWorldState {
         );
 
         // Append history entry.
-        let mut hist = self.history.lock().unwrap();
+        let mut hist = self.history.lock().unwrap_or_else(|e| e.into_inner());
         hist.entry(key.to_string()).or_default().push(HistoryEntry {
             version: new_version,
             data: data.to_vec(),
@@ -101,12 +106,12 @@ impl WorldState for MemoryWorldState {
     }
 
     fn delete(&self, key: &str) -> StorageResult<()> {
-        let mut map = self.inner.lock().unwrap();
+        let mut map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         // Record the delete version before removing.
         let del_version = map.get(key).map(|v| v.version + 1).unwrap_or(1);
         map.remove(key);
 
-        let mut hist = self.history.lock().unwrap();
+        let mut hist = self.history.lock().unwrap_or_else(|e| e.into_inner());
         hist.entry(key.to_string()).or_default().push(HistoryEntry {
             version: del_version,
             data: vec![],
@@ -122,7 +127,7 @@ impl WorldState for MemoryWorldState {
     }
 
     fn get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>> {
-        let map = self.inner.lock().unwrap();
+        let map = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let result = map
             .range(start.to_string()..end.to_string())
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -131,7 +136,7 @@ impl WorldState for MemoryWorldState {
     }
 
     fn get_history(&self, key: &str) -> StorageResult<Vec<HistoryEntry>> {
-        let hist = self.history.lock().unwrap();
+        let hist = self.history.lock().unwrap_or_else(|e| e.into_inner());
         Ok(hist.get(key).cloned().unwrap_or_default())
     }
 }

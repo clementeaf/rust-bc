@@ -256,11 +256,20 @@ impl CollectionRegistry for MemoryCollectionRegistry {
     }
 
     fn get(&self, name: &str) -> Option<PrivateDataCollection> {
-        self.inner.read().unwrap().get(name).cloned()
+        self.inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(name)
+            .cloned()
     }
 
     fn list(&self) -> Vec<PrivateDataCollection> {
-        self.inner.read().unwrap().values().cloned().collect()
+        self.inner
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect()
     }
 }
 

@@ -56,20 +56,24 @@ impl RaftOrderingService {
     pub fn submit_tx(&self, tx: &Transaction) -> StorageResult<()> {
         let data = serde_json::to_vec(tx)
             .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))?;
-        let mut node = self.raft_node.lock().unwrap();
+        let mut node = self.raft_node.lock().unwrap_or_else(|e| e.into_inner());
         node.propose(data)
             .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))
     }
 
     /// Number of committed entries not yet consumed by `cut_block`.
     pub fn pending_count(&self) -> usize {
-        self.raft_node.lock().unwrap().committed_entries.len()
+        self.raft_node
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .committed_entries
+            .len()
     }
 
     /// Drain committed entries, deserialize transactions, and cut a block.
     /// Returns `None` if no committed entries with transaction data are available.
     pub fn cut_block(&self, height: u64, proposer: &str) -> StorageResult<Option<Block>> {
-        let mut node = self.raft_node.lock().unwrap();
+        let mut node = self.raft_node.lock().unwrap_or_else(|e| e.into_inner());
         if node.committed_entries.is_empty() {
             return Ok(None);
         }
@@ -148,7 +152,7 @@ mod tests {
 
     /// Elect the single-node raft so it can accept proposals.
     fn elect(svc: &RaftOrderingService) {
-        let mut node = svc.raft_node.lock().unwrap();
+        let mut node = svc.raft_node.lock().unwrap_or_else(|e| e.into_inner());
         for _ in 0..20 {
             node.tick();
             node.advance();
@@ -170,7 +174,7 @@ mod tests {
 
         // Advance raft to commit the proposals.
         {
-            let mut node = svc.raft_node.lock().unwrap();
+            let mut node = svc.raft_node.lock().unwrap_or_else(|e| e.into_inner());
             node.advance();
         }
 
@@ -199,7 +203,7 @@ mod tests {
         }
 
         {
-            let mut node = svc.raft_node.lock().unwrap();
+            let mut node = svc.raft_node.lock().unwrap_or_else(|e| e.into_inner());
             node.advance();
         }
 

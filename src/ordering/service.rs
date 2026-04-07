@@ -58,7 +58,10 @@ impl OrderingService {
 
     /// Enqueue a transaction for the next ordered block.
     pub fn submit_tx(&self, tx: Transaction) -> StorageResult<()> {
-        self.pending_txs.lock().unwrap().push_back(tx);
+        self.pending_txs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push_back(tx);
         Ok(())
     }
 
@@ -73,19 +76,25 @@ impl OrderingService {
         &self,
         etx: crate::transaction::endorsed::EndorsedTransaction,
     ) -> StorageResult<()> {
-        self.pending_txs.lock().unwrap().push_back(etx.proposal.tx);
+        self.pending_txs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push_back(etx.proposal.tx);
         Ok(())
     }
 
     /// Number of transactions currently waiting to be ordered.
     pub fn pending_count(&self) -> usize {
-        self.pending_txs.lock().unwrap().len()
+        self.pending_txs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
     }
 
     /// Drain up to `max_batch_size` transactions and create an ordered `Block`.
     /// Returns `None` if the pending queue is empty.
     pub fn cut_block(&self, height: u64, proposer: &str) -> StorageResult<Option<Block>> {
-        let mut queue = self.pending_txs.lock().unwrap();
+        let mut queue = self.pending_txs.lock().unwrap_or_else(|e| e.into_inner());
         if queue.is_empty() {
             return Ok(None);
         }
@@ -165,7 +174,13 @@ mod tests {
         let svc = OrderingService::with_config(100, 2000);
         assert_eq!(svc.max_batch_size, 100);
         assert_eq!(svc.batch_timeout_ms, 2000);
-        assert_eq!(svc.pending_txs.lock().unwrap().len(), 0);
+        assert_eq!(
+            svc.pending_txs
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .len(),
+            0
+        );
     }
 
     #[test]

@@ -35,8 +35,8 @@ impl Default for MemoryStore {
 
 impl BlockStore for MemoryStore {
     fn write_block(&self, block: &Block) -> StorageResult<()> {
-        let mut blocks = self.blocks.lock().unwrap();
-        let mut latest = self.latest_height.lock().unwrap();
+        let mut blocks = self.blocks.lock().unwrap_or_else(|e| e.into_inner());
+        let mut latest = self.latest_height.lock().unwrap_or_else(|e| e.into_inner());
         if block.height > *latest {
             *latest = block.height;
         }
@@ -120,11 +120,15 @@ impl BlockStore for MemoryStore {
     }
 
     fn get_latest_height(&self) -> StorageResult<u64> {
-        Ok(*self.latest_height.lock().unwrap())
+        Ok(*self.latest_height.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
     fn block_exists(&self, height: u64) -> StorageResult<bool> {
-        Ok(self.blocks.lock().unwrap().contains_key(&height))
+        Ok(self
+            .blocks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(&height))
     }
 
     fn transactions_by_block_height(&self, height: u64) -> StorageResult<Vec<Transaction>> {

@@ -68,7 +68,11 @@ fn record_ack(client_id: &str, height: u64) {
 
 /// Get the last acked height for a client.
 fn get_last_ack(client_id: &str) -> Option<u64> {
-    checkpoints().lock().unwrap().get(client_id).copied()
+    checkpoints()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(client_id)
+        .copied()
 }
 
 /// Returns `true` when `event` passes the given `filter`.
@@ -213,7 +217,7 @@ async fn ws_stream(
                                     if let Some(start) = effective_start {
                                         let channel = f.channel_id.as_deref().unwrap_or("default");
                                         let store = {
-                                            let map = store_map.read().unwrap();
+                                            let map = store_map.read().unwrap_or_else(|e| e.into_inner());
                                             map.get(channel).cloned()
                                         };
                                         if let Some(s) = store {
@@ -287,7 +291,7 @@ pub async fn events_blocks_filtered(
                             // Only convert BlockCommitted events.
                             if let BlockEvent::BlockCommitted { ref channel_id, height, .. } = event {
                                 let store = {
-                                    let map = store_map.read().unwrap();
+                                    let map = store_map.read().unwrap_or_else(|e| e.into_inner());
                                     map.get(channel_id).cloned()
                                 };
                                 let block = match store {
@@ -376,7 +380,7 @@ pub async fn events_blocks_private(
                             }
                             if let BlockEvent::BlockCommitted { ref channel_id, height, .. } = event {
                                 let store = {
-                                    let map = store_map.read().unwrap();
+                                    let map = store_map.read().unwrap_or_else(|e| e.into_inner());
                                     map.get(channel_id).cloned()
                                 };
                                 let block = match store {

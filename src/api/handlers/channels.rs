@@ -407,7 +407,7 @@ mod tests {
         let state = make_state(vec![("default", Arc::new(MemoryStore::new()))]);
         // Directly test the store mutation logic (the handler uses web::Data, hard to unit test)
         {
-            let mut map = state.store.write().unwrap();
+            let mut map = state.store.write().unwrap_or_else(|e| e.into_inner());
             assert!(!map.contains_key("ch-new"));
             map.insert(
                 "ch-new".to_string(),
@@ -429,7 +429,7 @@ mod tests {
                 Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
             ),
         ]);
-        let map = state.store.read().unwrap();
+        let map = state.store.read().unwrap_or_else(|e| e.into_inner());
         assert!(map.contains_key("ch-dup"));
     }
 
@@ -450,7 +450,7 @@ mod tests {
             ("ch1", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
             ("ch2", Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>),
         ]);
-        let map = state.store.read().unwrap();
+        let map = state.store.read().unwrap_or_else(|e| e.into_inner());
         let mut ids: Vec<&str> = map.keys().map(|s| s.as_str()).collect();
         ids.sort();
         assert_eq!(ids, vec!["ch1", "ch2", "default"]);
@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn list_channels_empty_store_returns_empty_vec() {
         let state = make_state(vec![]);
-        let map = state.store.read().unwrap();
+        let map = state.store.read().unwrap_or_else(|e| e.into_inner());
         assert!(map.is_empty());
     }
 
@@ -586,7 +586,12 @@ mod tests {
     fn get_channel_config_history_unknown_channel_returns_none() {
         let state = make_state(vec![]);
 
-        let result = state.channel_configs.read().unwrap().get("ghost").cloned();
+        let result = state
+            .channel_configs
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .get("ghost")
+            .cloned();
 
         assert!(result.is_none());
     }
@@ -628,7 +633,10 @@ mod tests {
 
         apply_config_update_logic(&state, "ch1", tx);
 
-        let configs = state.channel_configs.read().unwrap();
+        let configs = state
+            .channel_configs
+            .read()
+            .unwrap_or_else(|e| e.into_inner());
         let history = configs.get("ch1").unwrap();
         assert_eq!(history.len(), 2);
         assert_eq!(history[1].batch_size, 200);
@@ -692,7 +700,10 @@ mod tests {
         get_channel_store(state, channel_id)?;
 
         let current = {
-            let configs = state.channel_configs.read().unwrap();
+            let configs = state
+                .channel_configs
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
             configs
                 .get(channel_id)
                 .and_then(|v| v.last().cloned())

@@ -153,7 +153,7 @@ impl StakingManager {
         // Nota: El balance se verifica en la blockchain, no en el wallet manager
         // Aquí solo verificamos que el wallet existe
 
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
 
         // Si ya es validador, agregar al stake existente
         if let Some(validator) = validators.get_mut(address) {
@@ -177,7 +177,7 @@ impl StakingManager {
      * @returns Resultado de la operación
      */
     pub fn request_unstake(&self, address: &str, amount: Option<u64>) -> Result<u64, String> {
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         let validator = validators
             .get_mut(address)
             .ok_or_else(|| "No eres un validador".to_string())?;
@@ -212,7 +212,7 @@ impl StakingManager {
      * @returns Cantidad retirada
      */
     pub fn complete_unstake(&self, address: &str) -> Result<u64, String> {
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         let validator = validators
             .get_mut(address)
             .ok_or_else(|| "No eres un validador".to_string())?;
@@ -258,7 +258,7 @@ impl StakingManager {
      * @returns Dirección del validador seleccionado o None
      */
     pub fn select_validator(&self, block_hash: &str) -> Option<String> {
-        let validators = self.validators.lock().unwrap();
+        let validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
 
         // Filtrar solo validadores activos
         let active_validators: Vec<(&String, &Validator)> = validators
@@ -310,7 +310,7 @@ impl StakingManager {
      * @returns Validator o None
      */
     pub fn get_validator(&self, address: &str) -> Option<Validator> {
-        let validators = self.validators.lock().unwrap();
+        let validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         validators.get(address).cloned()
     }
 
@@ -319,7 +319,7 @@ impl StakingManager {
      * @returns Lista de validadores activos
      */
     pub fn get_active_validators(&self) -> Vec<Validator> {
-        let validators = self.validators.lock().unwrap();
+        let validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         validators
             .values()
             .filter(|v| {
@@ -334,7 +334,7 @@ impl StakingManager {
      * @param validators_from_db - Lista de validadores desde la base de datos
      */
     pub fn load_validators(&self, validators_from_db: Vec<Validator>) {
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         for validator in validators_from_db {
             validators.insert(validator.address.clone(), validator);
         }
@@ -347,7 +347,7 @@ impl StakingManager {
      * @param reward - Recompensa por validar
      */
     pub fn record_validation(&self, address: &str, block_index: u64, reward: u64) {
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(validator) = validators.get_mut(address) {
             validator.increment_validation(block_index);
             validator.add_reward(reward);
@@ -368,7 +368,7 @@ impl StakingManager {
         block_index: u64,
         _block_hash: &str,
     ) -> bool {
-        let mut validators = self.validators.lock().unwrap();
+        let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
 
         if let Some(validator) = validators.get_mut(validator_address) {
             // Verificar si ya validó este índice de bloque (doble firma)

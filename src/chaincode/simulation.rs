@@ -44,7 +44,11 @@ impl SimulationWorldState {
     pub fn to_rwset(&self) -> crate::transaction::rwset::ReadWriteSet {
         use crate::transaction::rwset::ReadWriteSet;
 
-        let reads = self.read_set.lock().unwrap().clone();
+        let reads = self
+            .read_set
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let writes: Vec<KVWrite> = self
             .write_buffer
             .lock()
@@ -69,31 +73,52 @@ impl WorldState for SimulationWorldState {
     /// 3. Delegate to `base_state`; record the observed version.
     fn get(&self, key: &str) -> StorageResult<Option<VersionedValue>> {
         // Check delete set first.
-        if self.delete_set.lock().unwrap().iter().any(|k| k == key) {
-            self.read_set.lock().unwrap().push(KVRead {
-                key: key.to_string(),
-                version: 0,
-            });
+        if self
+            .delete_set
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|k| k == key)
+        {
+            self.read_set
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(KVRead {
+                    key: key.to_string(),
+                    version: 0,
+                });
             return Ok(None);
         }
 
         // Check local write buffer.
-        if let Some(data) = self.write_buffer.lock().unwrap().get(key).cloned() {
+        if let Some(data) = self
+            .write_buffer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned()
+        {
             // Local writes have no committed version — record version 0.
-            self.read_set.lock().unwrap().push(KVRead {
-                key: key.to_string(),
-                version: 0,
-            });
+            self.read_set
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(KVRead {
+                    key: key.to_string(),
+                    version: 0,
+                });
             return Ok(Some(VersionedValue { version: 0, data }));
         }
 
         // Fall through to base state.
         let result = self.base_state.get(key)?;
         let version = result.as_ref().map(|vv| vv.version).unwrap_or(0);
-        self.read_set.lock().unwrap().push(KVRead {
-            key: key.to_string(),
-            version,
-        });
+        self.read_set
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(KVRead {
+                key: key.to_string(),
+                version,
+            });
         Ok(result)
     }
 
@@ -102,7 +127,10 @@ impl WorldState for SimulationWorldState {
     /// Returns version `0` because no real version has been assigned yet.
     fn put(&self, key: &str, data: &[u8]) -> StorageResult<u64> {
         // If the key was previously deleted in this simulation, un-delete it.
-        self.delete_set.lock().unwrap().retain(|k| k != key);
+        self.delete_set
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|k| k != key);
         self.write_buffer
             .lock()
             .unwrap()
@@ -112,8 +140,11 @@ impl WorldState for SimulationWorldState {
 
     /// Mark the key as deleted in the simulation without touching `base_state`.
     fn delete(&self, key: &str) -> StorageResult<()> {
-        self.write_buffer.lock().unwrap().remove(key);
-        let mut ds = self.delete_set.lock().unwrap();
+        self.write_buffer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(key);
+        let mut ds = self.delete_set.lock().unwrap_or_else(|e| e.into_inner());
         if !ds.iter().any(|k| k == key) {
             ds.push(key.to_string());
         }
@@ -124,8 +155,8 @@ impl WorldState for SimulationWorldState {
     fn get_range(&self, start: &str, end: &str) -> StorageResult<Vec<(String, VersionedValue)>> {
         let mut base = self.base_state.get_range(start, end)?;
 
-        let write_buf = self.write_buffer.lock().unwrap();
-        let delete_set = self.delete_set.lock().unwrap();
+        let write_buf = self.write_buffer.lock().unwrap_or_else(|e| e.into_inner());
+        let delete_set = self.delete_set.lock().unwrap_or_else(|e| e.into_inner());
 
         // Remove base entries that were locally deleted or overwritten.
         base.retain(|(k, _)| !delete_set.contains(k) && !write_buf.contains_key(k));
@@ -214,7 +245,7 @@ mod tests {
 
         sim.get("z").unwrap();
 
-        let rs = sim.read_set.lock().unwrap();
+        let rs = sim.read_set.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(rs.len(), 1);
         assert_eq!(rs[0].key, "z");
         assert_eq!(rs[0].version, 1); // first write in base → version 1
@@ -227,7 +258,7 @@ mod tests {
 
         sim.get("ghost").unwrap();
 
-        let rs = sim.read_set.lock().unwrap();
+        let rs = sim.read_set.lock().unwrap_or_else(|e| e.into_inner());
         assert_eq!(rs.len(), 1);
         assert_eq!(rs[0].version, 0);
     }
