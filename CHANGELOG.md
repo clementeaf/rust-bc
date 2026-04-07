@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-07 (Post-MVP — Block 3)
+
+**External chaincode (chaincode-as-a-service)**
+- `ChaincodeDefinition.runtime` field: `Wasm` (default) or `External { endpoint, tls }`
+- Simulate handler dispatches to `ExternalChaincodeClient` for external runtime
+- HTTP POST to `{endpoint}/invoke` with JSON body
+
+**TLS Identity Middleware**
+- `TlsIdentityMiddleware` extracts CN/O from `X-TLS-Client-CN`/`X-TLS-Client-O` headers
+- Inserts `TlsIdentity` into request extensions for downstream handlers
+- Compatible with TLS-terminating proxies
+
+**HSM signing (feature-gated)**
+- `#[cfg(feature = "hsm")]` sign/verify paths on `HsmSigningProvider`
+- Verify uses `ed25519_dalek` with cached public key
+- Sign path documented for PKCS#11 `C_Sign` (requires hardware testing)
+
+**Already complete (preexisting)**
+- Hot certificate rotation — SIGHUP + periodic reload already implemented
+- Block explorer UI — Next.js app in `block-explorer/`
+- CouchDB world state — `WorldState` trait fully implemented in `storage/couchdb.rs`
+
+---
+
 ### 2026-04-07 (MVP Readiness)
 
 **Graceful shutdown**
