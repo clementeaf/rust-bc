@@ -248,9 +248,9 @@ mod tests {
         std::env::var("COUCHDB_URL").ok()
     }
 
-    #[test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
-    fn put_and_get_roundtrip() {
+    async fn put_and_get_roundtrip() {
         let url = couchdb_url().expect("set COUCHDB_URL");
         let db = format!(
             "test_ws_{}",
@@ -272,9 +272,9 @@ mod tests {
         assert_eq!(v2, 2);
     }
 
-    #[test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
-    fn delete_removes_key() {
+    async fn delete_removes_key() {
         let url = couchdb_url().expect("set COUCHDB_URL");
         let db = format!(
             "test_ws_{}",
@@ -290,9 +290,9 @@ mod tests {
         assert!(ws.get("del_key").unwrap().is_none());
     }
 
-    #[test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[ignore]
-    fn get_range_returns_subset() {
+    async fn get_range_returns_subset() {
         let url = couchdb_url().expect("set COUCHDB_URL");
         let db = format!(
             "test_ws_{}",
