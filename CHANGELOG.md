@@ -6,6 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-07 (MVP Readiness)
+
+**Graceful shutdown**
+- SIGTERM/SIGINT handler via `tokio::signal` — drains HTTP connections, aborts background tasks, flushes RocksDB
+
+**Persistent service stores**
+- 8 of 9 services now persist to RocksDB when `STORAGE_BACKEND=rocksdb`
+- New CF impls: `PolicyStore`, `CollectionRegistry`, `ChaincodeDefinitionStore`
+- Added serde derives to `PrivateDataCollection`, `ChaincodeDefinition`, `ChaincodeStatus`
+- Single shared `Arc<RocksDbBlockStore>` instance for all services
+- Explicit failure: node exits if `STORAGE_BACKEND=rocksdb` and DB fails to open (no silent fallback)
+
+**Health check with dependency verification**
+- `/api/v1/health` now reports `checks: { storage, peers, ordering }`
+- Returns `"degraded"` when storage or ordering is unavailable
+
+**JS/TS SDK — Fabric-style operations**
+- New methods: `submitTransaction`, `evaluate`, `registerOrg`, `setPolicy`, `createChannel`, `listChannels`, `putPrivateData`, `getPrivateData`
+
+**Mutex poison recovery**
+- Replaced 178 `.lock()/.read()/.write().unwrap()` with `unwrap_or_else(|e| e.into_inner())`
+- Prevents cascading panics across threads from poisoned locks
+
+**Documentation**
+- `docs/QUICK-START.md` — git clone to first transaction in < 5 minutes
+- `docs/API-REFERENCE.md` — all 68 endpoints with curl examples
+- `docs/DEPLOYMENT.md` — production config, env vars, security checklist
+- `docs/MVP-ROADMAP.md` — task-level breakdown for MVP delivery
+
+---
+
 ### 2026-04-07 (CI Stabilization)
 
 **Docker TLS permissions**
