@@ -43,5 +43,9 @@ EOF
   rm -f "$DIR/$NODE.csr" "$DIR/$NODE-ext.cnf"
 done
 
+# Make certs readable inside containers (the /tls volume is mounted :ro,
+# so the entrypoint cannot chown; the files must be world-readable on the host).
+chmod 644 "$DIR"/*.pem
+
 echo "==> TLS certificates generated in $DIR"
 ls -la "$DIR"/*.pem
