@@ -208,7 +208,7 @@ pub async fn store_write_transaction(
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
-    Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
+    Ok(HttpResponse::Created().json(ApiResponse::success_with_code(body.into_inner(), 201, trace_id)))
 }
 
 /// GET /api/v1/store/transactions/{tx_id} — lee una transacción del store.
