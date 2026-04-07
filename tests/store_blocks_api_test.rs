@@ -82,6 +82,7 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         acl_provider: None,
         ordering_backend: None,
         world_state: None,
+        audit_store: None,
     }
 }
 
@@ -119,6 +120,7 @@ fn make_state_no_store() -> AppState {
         acl_provider: None,
         ordering_backend: None,
         world_state: None,
+        audit_store: None,
     }
 }
 

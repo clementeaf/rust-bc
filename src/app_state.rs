@@ -76,4 +76,6 @@ pub struct AppState {
     pub ordering_backend: Option<Arc<dyn OrderingBackend>>,
     /// World state for snapshots and state queries.
     pub world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
+    /// Audit trail — immutable log of all API requests.
+    pub audit_store: Option<Arc<dyn crate::audit::AuditStore>>,
 }

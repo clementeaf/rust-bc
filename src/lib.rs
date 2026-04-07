@@ -38,6 +38,7 @@ pub mod state_snapshot;
 pub mod acl;
 pub mod api;
 pub mod app_state;
+pub mod audit;
 pub mod block_creation;
 pub mod chaincode;
 pub mod channel;

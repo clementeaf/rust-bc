@@ -200,9 +200,115 @@ fn parse_x509_identity(der: &[u8]) -> Option<TlsIdentity> {
     Some(TlsIdentity { org_id, role })
 }
 
+// ── Audit Middleware ─────────────────────────────────────────────────────────
+
+/// Middleware that records every HTTP request to the audit store.
+///
+/// Captures: timestamp, method, path, org_id (from TlsIdentity or X-Org-Id),
+/// source IP, response status code, trace_id, and duration in milliseconds.
+pub struct AuditMiddleware {
+    pub store: std::sync::Arc<dyn crate::audit::AuditStore>,
+}
+
+impl<S, B> Transform<S, ServiceRequest> for AuditMiddleware
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = AuditMiddlewareService<S>;
+    type Future = futures::future::Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        futures::future::ok(AuditMiddlewareService {
+            service: Rc::new(service),
+            store: self.store.clone(),
+        })
+    }
+}
+
+pub struct AuditMiddlewareService<S> {
+    service: Rc<S>,
+    store: std::sync::Arc<dyn crate::audit::AuditStore>,
+}
+
+impl<S, B> Service<ServiceRequest> for AuditMiddlewareService<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let method = req.method().to_string();
+        let path = req.path().to_string();
+        let source_ip = req
+            .peer_addr()
+            .map(|a| a.ip().to_string())
+            .unwrap_or_default();
+        let trace_id = req
+            .headers()
+            .get("X-Trace-ID")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+        // Try TlsIdentity first, then X-Org-Id header.
+        let org_id = {
+            let ext = req.extensions();
+            ext.get::<TlsIdentity>().map(|id| id.org_id.clone())
+        }
+        .or_else(|| {
+            req.headers()
+                .get("X-Org-Id")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default();
+
+        let start = std::time::Instant::now();
+        let store = self.store.clone();
+        let srv = self.service.clone();
+
+        Box::pin(async move {
+            let res = srv.call(req).await?;
+            let duration_ms = start.elapsed().as_millis() as u64;
+            let status_code = res.status().as_u16();
+
+            let entry = crate::audit::AuditEntry {
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                method,
+                path,
+                org_id,
+                source_ip,
+                status_code,
+                trace_id,
+                duration_ms,
+            };
+
+            // Fire-and-forget — never block the response for audit logging.
+            if let Err(e) = store.append(&entry) {
+                log::error!("audit log failed: {e}");
+            }
+
+            Ok(res)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Audit middleware tests ─────────────────────────────────────────────
 
     #[test]
     fn test_uuid_generation() {

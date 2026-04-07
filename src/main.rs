@@ -5,6 +5,7 @@ mod airdrop;
 mod api;
 mod api_legacy;
 mod app_state;
+mod audit;
 mod billing;
 mod block_creation;
 mod block_storage;
@@ -856,6 +857,7 @@ async fn async_main() -> std::io::Result<()> {
         }),
         ordering_backend,
         world_state: Some(world_state.clone()),
+        audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
@@ -1062,6 +1064,11 @@ async fn async_main() -> std::io::Result<()> {
             actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {}", err))
         });
 
+    let audit_store_for_mw: Arc<dyn crate::audit::AuditStore> = app_state
+        .audit_store
+        .clone()
+        .unwrap_or_else(|| Arc::new(crate::audit::MemoryAuditStore::new()));
+
     let server = HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -1073,6 +1080,9 @@ async fn async_main() -> std::io::Result<()> {
         App::new()
             .wrap(cors)
             .wrap(Compress::default())
+            .wrap(crate::api::middleware::AuditMiddleware {
+                store: audit_store_for_mw.clone(),
+            })
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .wrap(crate::api::middleware::TlsIdentityMiddleware)
             .app_data(web::Data::new(app_state.clone()))

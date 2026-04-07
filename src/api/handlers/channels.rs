@@ -367,6 +367,7 @@ mod tests {
             acl_provider: None,
             ordering_backend: None,
             world_state: None,
+            audit_store: None,
         }
     }
 

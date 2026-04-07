@@ -1,6 +1,7 @@
 //! API Handler functions for endpoints
 
 pub mod acl;
+pub mod audit;
 pub mod blocks;
 pub mod chain;
 pub mod chaincode;
