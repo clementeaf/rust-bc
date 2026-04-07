@@ -1066,6 +1066,7 @@ async fn async_main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(Compress::default())
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
+            .wrap(crate::api::middleware::TlsIdentityMiddleware)
             .app_data(web::Data::new(app_state.clone()))
             .app_data(json_config.clone())
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
@@ -1075,6 +1076,23 @@ async fn async_main() -> std::io::Result<()> {
             }))
             .configure(config_routes)
             .configure(ApiRoutes::configure_metrics)
+    })
+    .on_connect(|conn, ext| {
+        // Extract peer certificates from mTLS handshake into connection extensions.
+        // Actix passes the underlying TLS stream; we extract the rustls ServerConnection
+        // and read the peer cert chain.
+        use std::any::Any;
+        if let Some(tls_stream) = (conn as &dyn Any)
+            .downcast_ref::<actix_tls::accept::rustls_0_23::TlsStream<actix_web::rt::net::TcpStream>>()
+        {
+            let server_conn = tls_stream.get_ref().1;
+            if let Some(certs) = server_conn.peer_certificates() {
+                let der_certs: Vec<Vec<u8>> = certs.iter().map(|c| c.as_ref().to_vec()).collect();
+                if !der_certs.is_empty() {
+                    ext.insert(crate::api::middleware::PeerCertificates(der_certs));
+                }
+            }
+        }
     });
 
     let api_handle = match load_tls_config_from_env() {

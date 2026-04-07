@@ -65,14 +65,15 @@ where
 
 // ── TLS Identity Middleware ───────────────────────────────────────────────────
 
-/// Identity extracted from a verified client TLS certificate.
+// Re-export the canonical TlsIdentity from errors.rs — enforce_acl reads this type.
+use crate::api::errors::TlsIdentity;
+
+/// DER-encoded peer certificates extracted during the TLS handshake.
+///
+/// Stored in connection-level extensions via `HttpServer::on_connect`.
+/// The middleware reads these to parse X.509 identity.
 #[derive(Debug, Clone)]
-pub struct TlsIdentity {
-    /// Common Name from the client certificate subject.
-    pub common_name: String,
-    /// Organization from the client certificate subject (if present).
-    pub organization: Option<String>,
-}
+pub struct PeerCertificates(pub Vec<Vec<u8>>);
 
 /// Middleware that extracts the client certificate CN/O from a mTLS connection
 /// and inserts a [`TlsIdentity`] into the request extensions.
@@ -129,7 +130,16 @@ where
 }
 
 fn extract_tls_identity(req: &ServiceRequest) -> Option<TlsIdentity> {
-    // Try the X-TLS-Client-CN header (set by TLS-terminating proxies or test harnesses).
+    // 1. Try real X.509 peer certificates from the mTLS handshake.
+    if let Some(peer_certs) = req.conn_data::<PeerCertificates>() {
+        if let Some(der) = peer_certs.0.first() {
+            if let Some(identity) = parse_x509_identity(der) {
+                return Some(identity);
+            }
+        }
+    }
+
+    // 2. Fallback: X-TLS-Client-CN/O headers (set by TLS-terminating proxies or tests).
     let cn = req
         .headers()
         .get("X-TLS-Client-CN")
@@ -142,10 +152,52 @@ fn extract_tls_identity(req: &ServiceRequest) -> Option<TlsIdentity> {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
-    cn.map(|common_name| TlsIdentity {
-        common_name,
-        organization: org,
-    })
+    let org_id = org.or_else(|| cn.clone())?;
+    Some(TlsIdentity { org_id, role: None })
+}
+
+/// Parse CN and O from a DER-encoded X.509 certificate.
+///
+/// Maps X.509 subject fields to the ACL identity model:
+///   - Organization (O) → `org_id` (used for endorsement policy checks)
+///   - Common Name (CN) → used to infer MSP role:
+///     - CN containing "admin" → `MspRole::Admin`
+///     - CN containing "peer" or "orderer" → `MspRole::Peer`
+///     - Otherwise → `MspRole::Client`
+fn parse_x509_identity(der: &[u8]) -> Option<TlsIdentity> {
+    use x509_parser::prelude::*;
+
+    let (_, cert) = X509Certificate::from_der(der).ok()?;
+    let subject = cert.subject();
+
+    let org = subject
+        .iter_organization()
+        .next()
+        .and_then(|attr| attr.as_str().ok())
+        .map(|s| s.to_string());
+
+    // org_id is the Organization field; fall back to CN if O is absent.
+    let cn = subject
+        .iter_common_name()
+        .next()
+        .and_then(|attr| attr.as_str().ok())
+        .map(|s| s.to_string());
+
+    let org_id = org.or_else(|| cn.clone())?;
+
+    // Infer MSP role from the CN.
+    let role = cn.as_deref().map(|cn_str| {
+        let lower = cn_str.to_lowercase();
+        if lower.contains("admin") {
+            crate::msp::MspRole::Admin
+        } else if lower.contains("peer") || lower.contains("orderer") {
+            crate::msp::MspRole::Peer
+        } else {
+            crate::msp::MspRole::Client
+        }
+    });
+
+    Some(TlsIdentity { org_id, role })
 }
 
 #[cfg(test)]
@@ -162,11 +214,48 @@ mod tests {
     #[test]
     fn tls_identity_clone() {
         let id = TlsIdentity {
-            common_name: "node1".to_string(),
-            organization: Some("org1".to_string()),
+            org_id: "org1".to_string(),
+            role: Some(crate::msp::MspRole::Admin),
         };
         let cloned = id.clone();
-        assert_eq!(cloned.common_name, "node1");
-        assert_eq!(cloned.organization, Some("org1".to_string()));
+        assert_eq!(cloned.org_id, "org1");
+        assert!(matches!(cloned.role, Some(crate::msp::MspRole::Admin)));
+    }
+
+    #[test]
+    fn parse_x509_identity_extracts_cn_and_org() {
+        // Build a minimal self-signed cert with CN=node1, O=rust-bc
+        let cert_der = generate_test_cert("node1", "rust-bc");
+        let id = parse_x509_identity(&cert_der).unwrap();
+        assert_eq!(id.org_id, "rust-bc");
+        assert!(matches!(id.role, Some(crate::msp::MspRole::Client)));
+    }
+
+    #[test]
+    fn parse_x509_admin_role_inferred() {
+        let cert_der = generate_test_cert("admin-user", "org1");
+        let id = parse_x509_identity(&cert_der).unwrap();
+        assert_eq!(id.org_id, "org1");
+        assert!(matches!(id.role, Some(crate::msp::MspRole::Admin)));
+    }
+
+    #[test]
+    fn parse_x509_peer_role_inferred() {
+        let cert_der = generate_test_cert("peer0.org1", "org1");
+        let id = parse_x509_identity(&cert_der).unwrap();
+        assert!(matches!(id.role, Some(crate::msp::MspRole::Peer)));
+    }
+
+    /// Generate a self-signed X.509 cert DER for testing.
+    fn generate_test_cert(cn: &str, org: &str) -> Vec<u8> {
+        use rcgen::{CertificateParams, DistinguishedName, KeyPair};
+        let mut dn = DistinguishedName::new();
+        dn.push(rcgen::DnType::CommonName, cn);
+        dn.push(rcgen::DnType::OrganizationName, org);
+        let mut params = CertificateParams::default();
+        params.distinguished_name = dn;
+        let key = KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+        cert.der().to_vec()
     }
 }
