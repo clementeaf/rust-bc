@@ -122,6 +122,7 @@ mod tests {
     }
 
     fn make_state(crl: Arc<dyn CrlStore>) -> web::Data<AppState> {
+        std::env::set_var("ACL_MODE", "permissive");
         web::Data::new(AppState {
             blockchain: Arc::new(Mutex::new(Blockchain::new(1))),
             wallet_manager: Arc::new(Mutex::new(WalletManager::new())),

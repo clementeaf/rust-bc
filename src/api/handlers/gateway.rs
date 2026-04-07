@@ -144,6 +144,7 @@ mod tests {
     use crate::transaction_validation::{TransactionValidator, ValidationConfig};
 
     fn base_state(gateway: Option<Arc<Gateway>>) -> web::Data<AppState> {
+        std::env::set_var("ACL_MODE", "permissive");
         let mut store_map = std::collections::HashMap::new();
         store_map.insert(
             "default".to_string(),
