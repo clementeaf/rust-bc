@@ -89,7 +89,7 @@ jobs:
 
       - name: Start network
         run: |
-          docker compose up -d
+          docker compose up -d node1 node2 node3 orderer1
           echo "Waiting for nodes to start..."
           sleep 15
 
