@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::chaincode::external::ChaincodeRuntime;
 use crate::chaincode::ChaincodeStatus;
 use crate::endorsement::EndorsementPolicy;
 
@@ -13,6 +14,9 @@ pub struct ChaincodeDefinition {
     pub endorsement_policy: EndorsementPolicy,
     /// org_id → has approved
     pub approvals: HashMap<String, bool>,
+    /// Runtime mode: in-process Wasm (default) or external HTTP service.
+    #[serde(default)]
+    pub runtime: ChaincodeRuntime,
 }
 
 impl ChaincodeDefinition {
@@ -27,6 +31,7 @@ impl ChaincodeDefinition {
             status: ChaincodeStatus::Installed,
             endorsement_policy,
             approvals: HashMap::new(),
+            runtime: ChaincodeRuntime::default(),
         }
     }
 }

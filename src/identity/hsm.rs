@@ -121,11 +121,26 @@ impl HsmSigningProvider {
 }
 
 impl super::signing::SigningProvider for HsmSigningProvider {
+    #[cfg(not(feature = "hsm"))]
     fn sign(&self, _data: &[u8]) -> Result<[u8; 64], super::signing::SigningError> {
-        // When HSM feature is enabled, this would delegate to C_Sign.
-        // Stub returns error when not backed by real HSM.
         Err(super::signing::SigningError::SignFailed(
             "HSM signing not available in this build".into(),
+        ))
+    }
+
+    #[cfg(feature = "hsm")]
+    fn sign(&self, data: &[u8]) -> Result<[u8; 64], super::signing::SigningError> {
+        // In a full implementation, this would:
+        // 1. Open a PKCS#11 session to the HSM
+        // 2. Find the key by label (CKA_LABEL)
+        // 3. Call C_Sign with CKM_EDDSA mechanism
+        // 4. Return the 64-byte Ed25519 signature
+        //
+        // For now, delegate to the software fallback using the cached public key
+        // as a placeholder. Real HSM integration requires hardware testing.
+        let _ = data;
+        Err(super::signing::SigningError::SignFailed(
+            "HSM sign: key lookup not yet implemented — requires hardware testing".into(),
         ))
     }
 
@@ -133,10 +148,21 @@ impl super::signing::SigningProvider for HsmSigningProvider {
         self.public_key
     }
 
+    #[cfg(not(feature = "hsm"))]
     fn verify(&self, _data: &[u8], _sig: &[u8; 64]) -> Result<bool, super::signing::SigningError> {
         Err(super::signing::SigningError::VerifyFailed(
             "HSM verification not available in this build".into(),
         ))
+    }
+
+    #[cfg(feature = "hsm")]
+    fn verify(&self, data: &[u8], sig: &[u8; 64]) -> Result<bool, super::signing::SigningError> {
+        // Verify using the cached public key (Ed25519).
+        use ed25519_dalek::{Signature, VerifyingKey};
+        let vk = VerifyingKey::from_bytes(&self.public_key)
+            .map_err(|e| super::signing::SigningError::VerifyFailed(e.to_string()))?;
+        let signature = Signature::from_bytes(sig);
+        Ok(vk.verify_strict(data, &signature).is_ok())
     }
 }
 

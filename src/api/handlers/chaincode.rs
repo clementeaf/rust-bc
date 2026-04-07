@@ -350,28 +350,58 @@ pub async fn simulate_chaincode(
             resource: "chaincode_package_store".to_string(),
         })?;
 
-    let wasm = pkg_store
-        .get_package(&chaincode_id, &query.version)
-        .map_err(|e| ApiError::StorageError {
-            reason: e.to_string(),
-        })?
-        .ok_or_else(|| ApiError::NotFound {
-            resource: format!("chaincode package '{chaincode_id}:{}'", query.version),
-        })?;
+    // Check if the chaincode has an external runtime defined.
+    let runtime = state
+        .chaincode_definition_store
+        .as_ref()
+        .and_then(|ds| {
+            ds.get_definition(&chaincode_id, &query.version)
+                .ok()
+                .flatten()
+        })
+        .map(|def| def.runtime)
+        .unwrap_or_default();
 
-    let executor = WasmExecutor::new(&wasm, 10_000_000).map_err(|e| ApiError::StorageError {
-        reason: e.to_string(),
-    })?;
-
-    let base: std::sync::Arc<dyn crate::storage::WorldState> =
-        std::sync::Arc::new(MemoryWorldState::new());
-
-    let (result_bytes, rwset) =
-        executor
-            .simulate(base, &body.function)
+    let (result_bytes, rwset) = match runtime {
+        crate::chaincode::external::ChaincodeRuntime::External { endpoint, tls } => {
+            let client = crate::chaincode::external::ExternalChaincodeClient::new(&endpoint, tls)
+                .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
+            let result = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(client.invoke(&body.function, &[], ""))
+            })
             .map_err(|e| ApiError::StorageError {
                 reason: e.to_string(),
             })?;
+            // External chaincode returns raw bytes; no rwset available.
+            (result, crate::transaction::rwset::ReadWriteSet::default())
+        }
+        crate::chaincode::external::ChaincodeRuntime::Wasm { .. } => {
+            let wasm = pkg_store
+                .get_package(&chaincode_id, &query.version)
+                .map_err(|e| ApiError::StorageError {
+                    reason: e.to_string(),
+                })?
+                .ok_or_else(|| ApiError::NotFound {
+                    resource: format!("chaincode package '{chaincode_id}:{}'", query.version),
+                })?;
+
+            let executor =
+                WasmExecutor::new(&wasm, 10_000_000).map_err(|e| ApiError::StorageError {
+                    reason: e.to_string(),
+                })?;
+
+            let base: std::sync::Arc<dyn crate::storage::WorldState> =
+                std::sync::Arc::new(MemoryWorldState::new());
+
+            executor
+                .simulate(base, &body.function)
+                .map_err(|e| ApiError::StorageError {
+                    reason: e.to_string(),
+                })?
+        }
+    };
 
     let response = SimulateResponse {
         result: base64_encode(&result_bytes),
