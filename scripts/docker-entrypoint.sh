@@ -41,8 +41,8 @@ fi
 DB_PATH="/app/data/${DB_NAME:-blockchain}.db"
 mkdir -p /app/data
 
-# Si se pasan argumentos, usarlos
-if [ $# -ge 1 ]; then
+# Si se pasan argumentos numéricos, usarlos como puertos
+if [ $# -ge 1 ] && [[ "$1" =~ ^[0-9]+$ ]]; then
     API_PORT=${1:-${API_PORT:-8080}}
     P2P_PORT=${2:-${P2P_PORT:-8081}}
     DB_NAME=${3:-${DB_NAME:-blockchain}}

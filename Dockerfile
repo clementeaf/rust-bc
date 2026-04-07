@@ -65,6 +65,6 @@ VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
 
-# Entrypoint
+# Entrypoint — env vars (API_PORT, P2P_PORT, etc.) configure the node.
+# Do NOT pass positional args via CMD; the entrypoint treats $1 as API_PORT.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["rust-bc"]

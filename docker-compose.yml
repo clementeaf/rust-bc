@@ -45,6 +45,7 @@ services:
       # Bootstrap
       BOOTSTRAP_NODES: "node2:8081,node3:8081"
       ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
     volumes:
       - node1-data:/app/data
       - ./deploy/tls:/tls:ro
@@ -74,6 +75,7 @@ services:
       RATE_LIMIT_BURST: "200"
       BOOTSTRAP_NODES: "node1:8081,node3:8081"
       ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
     volumes:
       - node2-data:/app/data
       - ./deploy/tls:/tls:ro
@@ -105,6 +107,7 @@ services:
       RATE_LIMIT_BURST: "200"
       BOOTSTRAP_NODES: "node1:8081,node2:8081"
       ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
     volumes:
       - node3-data:/app/data
       - ./deploy/tls:/tls:ro
@@ -138,6 +141,7 @@ services:
       RATE_LIMIT_RPS: "200"
       RATE_LIMIT_BURST: "400"
       BOOTSTRAP_NODES: "node1:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
     volumes:
       - orderer1-data:/app/data
       - ./deploy/tls:/tls:ro

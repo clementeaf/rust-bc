@@ -110,7 +110,6 @@ jobs:
 
       - name: Run E2E tests
         run: ./scripts/e2e-test.sh
-        continue-on-error: true
 
       - name: Collect logs on failure
         if: failure()
