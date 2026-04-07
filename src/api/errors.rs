@@ -1,6 +1,16 @@
-use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
+use actix_web::{error::ResponseError, http::StatusCode, HttpMessage, HttpResponse};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+/// Identity extracted from TLS client certificate.
+///
+/// Injected into request extensions by `TlsIdentityMiddleware` when mTLS is
+/// enabled. `enforce_acl` reads this before falling back to `X-Org-Id` header.
+#[derive(Debug, Clone)]
+pub struct TlsIdentity {
+    pub org_id: String,
+    pub role: Option<crate::msp::MspRole>,
+}
 
 /// API error types matching NeuroAccessMaui pattern
 #[derive(Debug, Error, Clone)]
@@ -124,6 +134,172 @@ impl ResponseError for ApiError {
 
 /// Result type for API operations
 pub type ApiResult<T> = Result<T, ApiError>;
+
+/// Whether ACL enforcement runs in permissive mode (log-only, never deny).
+///
+/// Set `ACL_MODE=permissive` to allow all requests regardless of identity.
+/// Any other value (or absent) defaults to **strict** mode where missing
+/// identity, missing ACL entries, and missing policies all result in denial.
+pub fn acl_permissive() -> bool {
+    std::env::var("ACL_MODE")
+        .map(|v| v.eq_ignore_ascii_case("permissive"))
+        .unwrap_or(false)
+}
+
+/// Enforce ACL for a resource.
+///
+/// In **strict** mode (default): missing identity headers, missing ACL
+/// infrastructure, and undefined ACL entries all result in `Forbidden`.
+/// In **permissive** mode (`ACL_MODE=permissive`): access is always granted
+/// (useful for local development and bootstrapping).
+///
+/// Returns `ApiError::Forbidden` when the caller's org does not satisfy the
+/// policy bound to the resource.
+/// Return the minimum MSP role required for a given resource.
+///
+/// Admin resources require `Admin`, write resources require `Client` or `Peer`,
+/// and read resources return `None` (any role allowed).
+fn required_role_for_resource(resource: &str) -> Option<crate::msp::MspRole> {
+    use crate::msp::MspRole;
+    match resource {
+        // Admin operations
+        "peer/Admin" | "peer/MSP.Admin" | "peer/Discovery.Admin"
+        | "qscc/Snapshot.Admin" | "peer/ChannelConfig" => Some(MspRole::Admin),
+        // Writer operations — Client or Peer role required
+        "peer/Propose" | "peer/Identity" | "peer/ChaincodeToChaincode"
+        | "peer/PrivateData.Write" => Some(MspRole::Client),
+        // Everything else (reads) — no role requirement
+        _ => None,
+    }
+}
+
+/// Check whether `caller_role` satisfies `required_role`.
+///
+/// Admin satisfies any requirement. Client/Peer satisfy Client-level requirements.
+fn role_satisfies(caller_role: crate::msp::MspRole, required: crate::msp::MspRole) -> bool {
+    use crate::msp::MspRole;
+    match required {
+        MspRole::Admin => caller_role == MspRole::Admin,
+        MspRole::Client | MspRole::Peer => matches!(
+            caller_role,
+            MspRole::Admin | MspRole::Client | MspRole::Peer
+        ),
+        _ => true,
+    }
+}
+
+pub fn enforce_acl(
+    acl_provider: Option<&dyn crate::acl::AclProvider>,
+    policy_store: Option<&dyn crate::endorsement::policy_store::PolicyStore>,
+    resource: &str,
+    request: &actix_web::HttpRequest,
+) -> Result<(), ApiError> {
+    // ── MSP role check ───────────────────────────────────────────────────
+    if let Some(required) = required_role_for_resource(resource) {
+        // Try TLS-derived role first, then X-Msp-Role header.
+        let tls_role = {
+            let ext = request.extensions();
+            ext.get::<TlsIdentity>().and_then(|id| id.role)
+        };
+        let caller_role_str = request
+            .headers()
+            .get("X-Msp-Role")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        if let Some(tls_r) = tls_role {
+            if !role_satisfies(tls_r, required) {
+                return Err(ApiError::Forbidden {
+                    reason: format!(
+                        "TLS identity role '{tls_r:?}' insufficient for resource '{resource}' (requires '{required:?}')"
+                    ),
+                });
+            }
+            // TLS role satisfied — skip header check.
+        } else
+
+        if !caller_role_str.is_empty() {
+            match serde_json::from_str::<crate::msp::MspRole>(&format!("\"{caller_role_str}\"")) {
+                Ok(caller_role) => {
+                    if !role_satisfies(caller_role, required) {
+                        return Err(ApiError::Forbidden {
+                            reason: format!(
+                                "MSP role '{caller_role_str}' insufficient for resource '{resource}' (requires '{required:?}')"
+                            ),
+                        });
+                    }
+                }
+                Err(_) => {
+                    return Err(ApiError::Forbidden {
+                        reason: format!("invalid X-Msp-Role header: '{caller_role_str}'"),
+                    });
+                }
+            }
+        }
+        // No TLS identity and no X-Msp-Role header.
+        if !acl_permissive() {
+            return Err(ApiError::Forbidden {
+                reason: format!(
+                    "missing X-Msp-Role header for resource '{resource}' (requires '{required:?}')"
+                ),
+            });
+        }
+    }
+
+    // ── Org-based ACL check ──────────────────────────────────────────────
+    let (Some(acl), Some(ps)) = (acl_provider, policy_store) else {
+        if acl_permissive() {
+            return Ok(()); // Permissive mode — no ACL infrastructure → allow
+        }
+        return Err(ApiError::Forbidden {
+            reason: format!("ACL infrastructure not configured; cannot authorize resource '{resource}'"),
+        });
+    };
+
+    // Try TLS-derived identity first (set by TLS identity middleware),
+    // then fall back to X-Org-Id header.
+    let tls_org = {
+        let ext = request.extensions();
+        ext.get::<TlsIdentity>().map(|id| id.org_id.clone())
+    };
+    let header_org;
+    let caller_org = if let Some(ref org) = tls_org {
+        org.as_str()
+    } else {
+        header_org = request
+            .headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        header_org
+    };
+
+    if caller_org.is_empty() && !acl_permissive() {
+        return Err(ApiError::Forbidden {
+            reason: format!("missing caller identity (X-Org-Id header or TLS cert) for resource '{resource}'"),
+        });
+    }
+    let orgs: Vec<&str> = if caller_org.is_empty() {
+        vec![]
+    } else {
+        vec![caller_org]
+    };
+
+    match crate::acl::check_access(acl, ps, resource, &orgs) {
+        Ok(()) => Ok(()),
+        Err(crate::acl::AclError::NotDefined(_)) if acl_permissive() => Ok(()),
+        Err(crate::acl::AclError::PolicyNotFound(_)) if acl_permissive() => Ok(()),
+        Err(crate::acl::AclError::NotDefined(r)) => Err(ApiError::Forbidden {
+            reason: format!("no ACL entry defined for resource '{r}'"),
+        }),
+        Err(crate::acl::AclError::PolicyNotFound(p)) => Err(ApiError::Forbidden {
+            reason: format!("ACL policy '{p}' not found for resource '{resource}'"),
+        }),
+        Err(crate::acl::AclError::Denied(policy)) => Err(ApiError::Forbidden {
+            reason: format!("ACL denied: resource '{resource}', policy '{policy}', org '{caller_org}'"),
+        }),
+    }
+}
 
 /// Generic API response wrapper (NeuroAccessMaui pattern)
 #[derive(Debug, Clone, Serialize, Deserialize)]

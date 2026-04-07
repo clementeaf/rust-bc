@@ -41,7 +41,8 @@ impl ChaincodeInvoker for WasmInvoker {
 /// Wraps an `ExternalChaincodeClient` as a `ChaincodeInvoker`.
 ///
 /// Since external invocations are async but the trait is sync, this
-/// invoker uses `tokio::runtime::Handle::current().block_on()` to bridge.
+/// invoker uses `block_in_place` + `Handle::block_on` to bridge without
+/// blocking other async worker threads.
 pub struct ExternalInvoker {
     client: crate::chaincode::external::ExternalChaincodeClient,
 }
@@ -60,10 +61,10 @@ impl ChaincodeInvoker for ExternalInvoker {
     ) -> Result<Vec<u8>, ChaincodeError> {
         // External chaincode receives state context as a string identifier;
         // the actual state operations happen on the external service side.
-        let rt = tokio::runtime::Handle::try_current()
-            .map_err(|e| ChaincodeError::Execution(format!("no tokio runtime: {e}")))?;
-
-        rt.block_on(self.client.invoke(func_name, &[], ""))
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.client.invoke(func_name, &[], ""))
+        })
     }
 }
 

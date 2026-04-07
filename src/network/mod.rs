@@ -21,6 +21,32 @@ use crate::smart_contracts::{ContractManager, SmartContract};
 use crate::transaction_validation::TransactionValidator;
 use crate::ordering::NodeRole;
 
+// ── Configurable buffer sizes (env var override) ─────────────────────────────
+
+/// Buffer for `send_and_wait` P2P responses.  Default 256 KB.
+fn p2p_response_buffer_size() -> usize {
+    std::env::var("P2P_RESPONSE_BUFFER_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(256 * 1024)
+}
+
+/// Buffer for the per-connection message handler.  Default 64 KB.
+fn p2p_handler_buffer_size() -> usize {
+    std::env::var("P2P_HANDLER_BUFFER_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(64 * 1024)
+}
+
+/// Buffer for pull-based state sync responses.  Default 4 MB.
+fn p2p_sync_buffer_size() -> usize {
+    std::env::var("P2P_SYNC_BUFFER_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4 * 1024 * 1024)
+}
+
 /// Abstracts over plain TCP and TLS peer streams.
 trait AsyncStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static {}
 impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> AsyncStream for T {}
@@ -65,6 +91,50 @@ pub enum Message {
     StateRequest { from_height: u64 },
     /// Pull-based state sync: response with a batch of blocks.
     StateResponse { blocks: Vec<crate::storage::traits::Block> },
+    /// Endorsement request: peer simulates chaincode and returns a signed rwset.
+    ProposalRequest {
+        /// Unique ID to correlate request with response.
+        request_id: String,
+        /// Chaincode to simulate.
+        chaincode_id: String,
+        /// Function to invoke (e.g. "invoke", "query").
+        function: String,
+        /// Channel context.
+        channel_id: String,
+        /// The transaction proposal from the client.
+        proposal: crate::transaction::proposal::TransactionProposal,
+    },
+    /// Endorsement response: simulation result + signed endorsement.
+    ProposalResponse {
+        /// Correlates with the originating `ProposalRequest`.
+        request_id: String,
+        /// The read-write set produced by simulation.
+        rwset: crate::transaction::rwset::ReadWriteSet,
+        /// This peer's endorsement (org_id + signature over rwset hash).
+        endorsement: crate::endorsement::types::Endorsement,
+        /// Chaincode return value (empty if void).
+        result: Vec<u8>,
+    },
+    /// Push private data to a member peer for replication.
+    PrivateDataPush {
+        /// Collection name.
+        collection: String,
+        /// Data key within the collection.
+        key: String,
+        /// The private data bytes.
+        value: Vec<u8>,
+        /// Org ID of the sender (receiver validates membership).
+        sender_org: String,
+    },
+    /// Acknowledgement that private data was stored by the receiving peer.
+    PrivateDataAck {
+        /// Collection name (for correlation).
+        collection: String,
+        /// Data key (for correlation).
+        key: String,
+        /// Whether the peer accepted and stored the data.
+        accepted: bool,
+    },
 }
 
 /**
@@ -117,8 +187,20 @@ pub struct Node {
     pub gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
     /// Gossip membership table for alive-based liveness tracking.
     pub membership: gossip::MembershipTable,
-    /// Organization ID of this node (used in alive messages).
+    /// Organization ID of this node (used in alive messages and endorsements).
     pub org_id: String,
+    /// Chaincode package store for loading Wasm during endorsement simulation.
+    pub chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
+    /// World state for chaincode simulation.
+    pub world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
+    /// Signing provider for producing endorsements.
+    pub signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
+    /// Raft node for delivering inbound consensus messages.
+    pub raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+    /// Private data store for receiving replicated private data from peers.
+    pub private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
+    /// Collection registry for validating membership on private data push.
+    pub collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
     /// Monotonically increasing alive sequence counter.
     pub alive_sequence: Arc<Mutex<u64>>,
     /// Anchor peers for cross-org gossip discovery (parsed from `ANCHOR_PEERS` env).
@@ -295,6 +377,12 @@ impl Node {
                 .map(|v| gossip::parse_anchor_peers(&v))
                 .unwrap_or_default(),
             announce_address: std::env::var("P2P_EXTERNAL_ADDRESS").ok(),
+            chaincode_store: None,
+            world_state: None,
+            signing_provider: None,
+            raft_node: None,
+            private_data_store: None,
+            collection_registry: None,
         }
     }
 
@@ -357,6 +445,52 @@ impl Node {
         open_peer_stream(address, self.tls_connector.as_deref()).await
     }
 
+    /// Send a message to a peer and wait for a response on the same TCP stream.
+    ///
+    /// Opens a new connection, writes the serialized message, then reads the
+    /// peer's response with the given timeout.  Returns `Err` on network
+    /// failure, serialization error, or timeout.
+    pub async fn send_and_wait(
+        &self,
+        peer_address: &str,
+        message: Message,
+        timeout: std::time::Duration,
+    ) -> Result<Message, Box<dyn std::error::Error + Send + Sync>> {
+        let mut stream = self.open_stream(peer_address).await?;
+
+        // Write request
+        let request_json = serde_json::to_string(&message)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        stream.write_all(request_json.as_bytes()).await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        stream.flush().await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+        // Read response with timeout
+        let mut buf = vec![0u8; p2p_response_buffer_size()];
+        let n = tokio::time::timeout(timeout, stream.read(&mut buf))
+            .await
+            .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("no response from {} within {:?}", peer_address, timeout),
+                ))
+            })?
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+        if n == 0 {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                format!("peer {} closed connection without responding", peer_address),
+            )));
+        }
+
+        let response: Message = serde_json::from_slice(&buf[..n])
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+        Ok(response)
+    }
+
     /**
      * Inicia el servidor P2P
      */
@@ -386,6 +520,13 @@ impl Node {
         let ordering_service = self.ordering_service.clone();
         let store = self.store.clone();
         let membership = self.membership.clone();
+        let chaincode_store = self.chaincode_store.clone();
+        let world_state = self.world_state.clone();
+        let signing_provider = self.signing_provider.clone();
+        let node_org_id = self.org_id.clone();
+        let raft_node = self.raft_node.clone();
+        let private_data_store = self.private_data_store.clone();
+        let collection_registry = self.collection_registry.clone();
 
         // Push-gossip channel: newly accepted blocks are sent here and forwarded
         // to GOSSIP_FANOUT random peers by the background gossip task.
@@ -431,6 +572,13 @@ impl Node {
                     let store_clone = store.clone();
                     let gossip_tx_clone = gossip_tx.clone();
                     let membership_clone = membership.clone();
+                    let chaincode_store_clone = chaincode_store.clone();
+                    let world_state_clone = world_state.clone();
+                    let signing_provider_clone = signing_provider.clone();
+                    let node_org_id_clone = node_org_id.clone();
+                    let raft_node_clone = raft_node.clone();
+                    let private_data_store_clone = private_data_store.clone();
+                    let collection_registry_clone = collection_registry.clone();
 
                     tokio::spawn(async move {
                         let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone {
@@ -464,6 +612,13 @@ impl Node {
                             store_clone,
                             Some(gossip_tx_clone),
                             membership_clone,
+                            chaincode_store_clone,
+                            world_state_clone,
+                            signing_provider_clone,
+                            node_org_id_clone,
+                            raft_node_clone,
+                            private_data_store_clone,
+                            collection_registry_clone,
                         )
                         .await
                         {
@@ -502,9 +657,16 @@ impl Node {
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
         gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
         membership: gossip::MembershipTable,
+        chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
+        world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
+        signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
+        node_org_id: String,
+        raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+        private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
+        collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
-        let mut buffer = [0; 8192]; // Aumentado a 8KB para contratos más grandes
+        let mut buffer = vec![0u8; p2p_handler_buffer_size()];
         let mut first_message = true;
 
         // Limpiar rate limit antiguo (más de 1 minuto)
@@ -595,6 +757,13 @@ impl Node {
                     store.clone(),
                     gossip_block_tx.clone(),
                     Some(&membership),
+                    chaincode_store.clone(),
+                    world_state.clone(),
+                    signing_provider.clone(),
+                    &node_org_id,
+                    raft_node.clone(),
+                    private_data_store.clone(),
+                    collection_registry.clone(),
                 )
                 .await?;
 
@@ -631,6 +800,13 @@ impl Node {
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
         gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
         membership: Option<&gossip::MembershipTable>,
+        chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
+        world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
+        signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
+        node_org_id: &str,
+        raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+        private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
+        collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
@@ -1220,8 +1396,21 @@ impl Node {
                 Ok(None)
             }
 
-            Message::RaftMessage(_data) => {
-                // Handled by the raft transport loop (15.3.2), not here.
+            Message::RaftMessage(data) => {
+                // Decode protobuf and deliver to the local Raft node.
+                if let Some(ref raft) = raft_node {
+                    match crate::ordering::raft_transport::decode_raft_msg(&data) {
+                        Ok(raft_msg) => {
+                            let mut node = raft.lock().unwrap();
+                            if let Err(e) = node.step(raft_msg) {
+                                eprintln!("RaftMessage step error: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("RaftMessage decode error: {}", e);
+                        }
+                    }
+                }
                 Ok(None)
             }
 
@@ -1242,8 +1431,172 @@ impl Node {
                 Ok(None)
             }
 
-            Message::StateRequest { .. } | Message::StateResponse { .. } => {
-                // Handled by the pull-sync loop (16.2.3), not inline.
+            Message::StateRequest { from_height } => {
+                // Respond with blocks starting at from_height, up to STATE_BATCH_SIZE.
+                if let Some(ref blk_store) = store {
+                    let latest = blk_store.get_latest_height().unwrap_or(0);
+                    let mut blocks = Vec::new();
+                    for h in from_height..=latest {
+                        if blocks.len() >= gossip::STATE_BATCH_SIZE {
+                            break;
+                        }
+                        if let Ok(block) = blk_store.read_block(h) {
+                            blocks.push(block);
+                        }
+                    }
+                    if blocks.is_empty() {
+                        Ok(None)
+                    } else {
+                        Ok(Some(Message::StateResponse { blocks }))
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
+
+            Message::StateResponse { .. } => {
+                // Responses are read directly by start_pull_sync_loop() on the
+                // same TCP stream. Ignore unsolicited responses.
+                Ok(None)
+            }
+
+            Message::ProposalRequest { request_id, chaincode_id, function, channel_id: _, proposal: _ } => {
+                // Peer-side endorsement: simulate chaincode and return signed rwset.
+                let cc_store = match &chaincode_store {
+                    Some(s) => s,
+                    None => {
+                        eprintln!("ProposalRequest rejected: no chaincode store configured");
+                        return Ok(None);
+                    }
+                };
+                let ws = match &world_state {
+                    Some(s) => s,
+                    None => {
+                        eprintln!("ProposalRequest rejected: no world state configured");
+                        return Ok(None);
+                    }
+                };
+                let signer = match &signing_provider {
+                    Some(s) => s,
+                    None => {
+                        eprintln!("ProposalRequest rejected: no signing provider configured");
+                        return Ok(None);
+                    }
+                };
+
+                // 1. Load chaincode Wasm package (latest version)
+                let wasm_bytes = match cc_store.get_package(&chaincode_id, "latest") {
+                    Ok(Some(bytes)) => bytes,
+                    Ok(None) => {
+                        eprintln!("ProposalRequest rejected: chaincode '{}' not found", chaincode_id);
+                        return Ok(None);
+                    }
+                    Err(e) => {
+                        eprintln!("ProposalRequest error loading chaincode '{}': {}", chaincode_id, e);
+                        return Ok(None);
+                    }
+                };
+
+                // 2. Create executor and simulate
+                let executor = match crate::chaincode::executor::WasmExecutor::new(&wasm_bytes, 1_000_000) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        eprintln!("ProposalRequest error creating executor: {}", e);
+                        return Ok(None);
+                    }
+                };
+
+                let (result, rwset) = match executor.simulate(Arc::clone(ws), &function) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("ProposalRequest simulation failed: {}", e);
+                        return Ok(None);
+                    }
+                };
+
+                // 3. Sign the rwset hash
+                let rwset_bytes = serde_json::to_vec(&rwset).unwrap_or_default();
+                let payload_hash: [u8; 32] = {
+                    use sha2::Digest;
+                    let mut hasher = sha2::Sha256::new();
+                    hasher.update(&rwset_bytes);
+                    hasher.finalize().into()
+                };
+
+                let signature = match signer.sign(&payload_hash) {
+                    Ok(sig) => sig,
+                    Err(e) => {
+                        eprintln!("ProposalRequest signing failed: {}", e);
+                        return Ok(None);
+                    }
+                };
+
+                // 4. Build endorsement
+                let pub_key = signer.public_key();
+                let signer_did = format!("did:key:{}", hex::encode(pub_key));
+                let timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+
+                let endorsement = crate::endorsement::types::Endorsement {
+                    signer_did,
+                    org_id: node_org_id.to_string(),
+                    signature,
+                    payload_hash,
+                    timestamp,
+                };
+
+                Ok(Some(Message::ProposalResponse {
+                    request_id,
+                    rwset,
+                    endorsement,
+                    result,
+                }))
+            }
+
+            Message::ProposalResponse { .. } => {
+                // Responses are read directly by send_and_wait() on the same
+                // TCP stream, so they never arrive here in normal operation.
+                // Ignore unsolicited responses.
+                Ok(None)
+            }
+
+            Message::PrivateDataPush { collection, key, value, sender_org } => {
+                // Validate membership and store private data from peer.
+                let accepted = if let (Some(reg), Some(pd_store)) = (&collection_registry, &private_data_store) {
+                    if let Some(col) = reg.get(&collection) {
+                        if col.is_member(&sender_org) {
+                            match pd_store.put_private_data(&collection, &key, &value) {
+                                Ok(_hash) => true,
+                                Err(e) => {
+                                    eprintln!("[private-data] store error for {}/{}: {}", collection, key, e);
+                                    false
+                                }
+                            }
+                        } else {
+                            eprintln!("[private-data] rejected: org '{}' not member of '{}'", sender_org, collection);
+                            false
+                        }
+                    } else {
+                        eprintln!("[private-data] rejected: unknown collection '{}'", collection);
+                        false
+                    }
+                } else {
+                    eprintln!("[private-data] rejected: no collection registry or private data store");
+                    false
+                };
+
+                Ok(Some(Message::PrivateDataAck {
+                    collection,
+                    key,
+                    accepted,
+                }))
+            }
+
+            Message::PrivateDataAck { .. } => {
+                // Acks are read directly by the dissemination logic via
+                // send_and_wait(). Ignore unsolicited acks.
                 Ok(None)
             }
         }
@@ -2547,7 +2900,7 @@ impl Node {
                     }
 
                     // Read response.
-                    let mut buf = vec![0u8; 1024 * 1024]; // 1 MB max
+                    let mut buf = vec![0u8; p2p_sync_buffer_size()];
                     let n = match tokio::io::AsyncReadExt::read(&mut stream, &mut buf).await {
                         Ok(n) if n > 0 => n,
                         _ => continue,
@@ -2729,6 +3082,13 @@ mod tests {
             None,
             None, // gossip_block_tx
             None, // membership
+            None, // chaincode_store
+            None, // world_state
+            None, // signing_provider
+            "default", // node_org_id
+            None, // raft_node
+            None, // private_data_store
+            None, // collection_registry
         )
         .await
         .unwrap();
@@ -2766,6 +3126,13 @@ mod tests {
             Some(store.clone()),
             None, // gossip_block_tx
             None, // membership
+            None, // chaincode_store
+            None, // world_state
+            None, // signing_provider
+            "default", // node_org_id
+            None, // raft_node
+            None, // private_data_store
+            None, // collection_registry
         )
         .await
         .unwrap();
@@ -2818,6 +3185,13 @@ mod tests {
             None,
             Some(gossip_tx),
             None, // membership
+            None, // chaincode_store
+            None, // world_state
+            None, // signing_provider
+            "default", // node_org_id
+            None, // raft_node
+            None, // private_data_store
+            None, // collection_registry
         )
         .await
         .unwrap();

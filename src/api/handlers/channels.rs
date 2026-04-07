@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
-use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
 use crate::channel::config::{apply_config_update, ChannelConfig, ConfigTransaction};
 use crate::channel::genesis::create_genesis_block;
@@ -37,6 +37,54 @@ pub fn channel_id_from_req(req: &actix_web::HttpRequest) -> &str {
         .unwrap_or("default")
 }
 
+/// Verify that the caller's org (from `X-Org-Id` header) is a member of the
+/// channel.  Returns `Ok(())` if the channel has no config yet (permissive
+/// bootstrap), if the channel has no member orgs configured, or if `X-Org-Id`
+/// is absent (backwards compatible).  Returns `Forbidden` only when a channel
+/// has explicit member orgs AND the caller's org is not among them.
+pub fn enforce_channel_membership(
+    state: &AppState,
+    channel_id: &str,
+    req: &actix_web::HttpRequest,
+) -> Result<(), ApiError> {
+    let caller_org = req
+        .headers()
+        .get("X-Org-Id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if channel_id == "default" {
+        return Ok(()); // Default channel is open to all
+    }
+    if caller_org.is_empty() {
+        if crate::api::errors::acl_permissive() {
+            return Ok(());
+        }
+        return Err(ApiError::Forbidden {
+            reason: format!("missing X-Org-Id header for channel '{channel_id}' membership check"),
+        });
+    }
+
+    let configs = state
+        .channel_configs
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
+
+    if let Some(history) = configs.get(channel_id) {
+        if let Some(latest) = history.last() {
+            if !latest.member_orgs.is_empty() && !latest.member_orgs.contains(&caller_org.to_string()) {
+                return Err(ApiError::Forbidden {
+                    reason: format!(
+                        "org '{caller_org}' is not a member of channel '{channel_id}'"
+                    ),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Return the `BlockStore` for `channel_id`, or `ApiError::NotFound` if absent.
 ///
 /// Handlers pass the value from the `X-Channel-Id` header (or `"default"` when
@@ -64,9 +112,11 @@ pub fn get_channel_store(
 /// alfanuméricos, guiones o guiones bajos.  Devuelve 409 si ya existe.
 #[post("/channels")]
 pub async fn create_channel(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     body: web::Json<CreateChannelRequest>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChannelConfig", &http_req)?;
     let channel_id = body.into_inner().channel_id;
     let trace_id = uuid::Uuid::new_v4().to_string();
 
@@ -119,10 +169,12 @@ pub async fn create_channel(
 /// Returns 200 with the resulting `ChannelConfig`.
 #[post("/channels/{channel_id}/config")]
 pub async fn update_channel_config(
+    http_req: HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<String>,
     body: web::Json<ConfigTransaction>,
 ) -> ApiResult<HttpResponse> {
+    enforce_acl(state.acl_provider.as_deref(), state.policy_store.as_deref(), "peer/ChannelConfig", &http_req)?;
     let channel_id = path.into_inner();
     let tx = body.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();

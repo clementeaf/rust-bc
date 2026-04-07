@@ -38,7 +38,8 @@ impl Default for ApiConfig {
             port: 8080,
             rate_limit_per_minute: 1000,
             max_request_size_bytes: 10 * 1024 * 1024, // 10MB
-            jwt_secret: "change-me-in-production".to_string(),
+            jwt_secret: std::env::var("JWT_SECRET")
+                .unwrap_or_else(|_| "change-me-in-production".to_string()),
         }
     }
 }

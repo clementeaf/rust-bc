@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-07 (Production Hardening)
+
+**ACL deny-by-default**
+- `enforce_acl()` now denies requests with missing identity, missing ACL infrastructure, or undefined ACL entries
+- New env var `ACL_MODE=permissive` restores the old allow-all behavior for local development
+- `enforce_channel_membership()` denies requests without `X-Org-Id` on non-default channels (strict mode)
+
+**JWT secret from environment**
+- `ApiConfig` reads `JWT_SECRET` env var at startup; falls back to hardcoded default only if unset
+
+**CouchDB async client**
+- Replaced `reqwest::blocking::Client` with async `reqwest::Client` in `CouchDbWorldState`
+- Sync `WorldState` trait bridged via `block_in_place` + `Handle::block_on` (no runtime deadlock)
+- Same fix applied to `ExternalInvoker` in `src/chaincode/invoker.rs`
+
+**Configurable P2P buffer sizes**
+- `P2P_RESPONSE_BUFFER_BYTES` — `send_and_wait` responses (default 256 KB, was 64 KB)
+- `P2P_HANDLER_BUFFER_BYTES` — per-connection message handler (default 64 KB, was 8 KB)
+- `P2P_SYNC_BUFFER_BYTES` — pull-based state sync responses (default 4 MB, was 1 MB)
+
+---
+
 ### 2026-04-06 (E2E Tests, Operator Tooling, Full Service Wiring & Gap Analysis)
 
 **All scaffold services wired to startup**

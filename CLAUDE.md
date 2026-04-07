@@ -95,6 +95,11 @@ Services initialized at startup (all use in-memory backends by default):
 | `TLS_CA_CERT_PATH` | — | CA certificate for peer verification |
 | `BOOTSTRAP_NODES` | — | Comma-separated `host:port` list |
 | `SEED_NODES` | — | Always-tried peer list |
+| `ACL_MODE` | *(strict)* | Set to `permissive` to allow all requests without identity |
+| `JWT_SECRET` | `change-me-in-production` | Secret for JWT token signing |
+| `P2P_RESPONSE_BUFFER_BYTES` | 262144 | Buffer size for `send_and_wait` responses (256 KB) |
+| `P2P_HANDLER_BUFFER_BYTES` | 65536 | Buffer size for per-connection message handler (64 KB) |
+| `P2P_SYNC_BUFFER_BYTES` | 4194304 | Buffer size for pull-based state sync (4 MB) |
 
 ## Global Claude configuration (`~/.claude/`)
 
