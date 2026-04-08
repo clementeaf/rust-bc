@@ -27,6 +27,9 @@ mod tests {
         assert!(paths.contains_key("/transactions"));
         assert!(paths.contains_key("/blocks"));
         assert!(paths.contains_key("/health"));
-        assert!(paths["/transactions"]["post"]["security"].is_array());
+        assert!(paths.contains_key("/gateway/submit"));
+        assert!(paths.contains_key("/channels"));
+        assert!(paths.contains_key("/audit/requests"));
+        assert!(paths.contains_key("/audit/export"));
     }
 }

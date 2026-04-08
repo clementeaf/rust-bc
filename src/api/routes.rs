@@ -19,7 +19,8 @@ impl ApiRoutes {
     /// Only register the `/metrics` endpoint (used in production where legacy
     /// router owns the `/api/v1` scope and calls `ApiRoutes::register`).
     pub fn configure_metrics(cfg: &mut web::ServiceConfig) {
-        cfg.service(utilities::get_metrics);
+        cfg.service(utilities::get_metrics)
+            .route("/swagger", web::get().to(utilities::swagger_ui));
     }
 
     /// Register all scaffold routes into an existing `/api/v1` scope.

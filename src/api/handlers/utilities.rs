@@ -95,6 +95,35 @@ pub async fn get_openapi(_req: HttpRequest) -> ApiResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(spec))
 }
 
+/// GET /swagger — Swagger UI for interactive API exploration.
+pub async fn swagger_ui(_req: HttpRequest) -> HttpResponse {
+    let html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>rust-bc API — Swagger UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"/>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/api/v1/openapi.json',
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout: 'StandaloneLayout',
+      deepLinking: true,
+    });
+  </script>
+</body>
+</html>"#;
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(html)
+}
+
 /// GET /metrics — Prometheus text exposition format (0.0.4).
 ///
 /// Intentionally outside `/api/v1` so Prometheus scrapers can use the

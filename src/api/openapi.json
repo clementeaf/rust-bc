@@ -1,519 +1,351 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "rust-bc REST API",
+    "title": "rust-bc Blockchain API",
     "version": "1.0.0",
-    "description": "REST API for rust-bc. **Gateway** routes wrap payloads in a common envelope (`status`, `status_code`, `message`, `data`, `error`, `timestamp`, `trace_id`). **Legacy** routes (wallets, contracts, billing, mining, etc.) still use `{ success, data?, message? }` until migrated."
+    "description": "REST API for the rust-bc blockchain network. All scaffold endpoints return a gateway envelope: `{ status, status_code, message, data, error, timestamp, trace_id }`. Legacy endpoints use `{ success, data, message }`."
   },
   "servers": [{ "url": "/api/v1", "description": "API v1" }],
   "tags": [
-    { "name": "Gateway", "description": "NeuroAccess-style envelope responses" },
-    { "name": "Legacy", "description": "Legacy JSON shape until migration" },
-    { "name": "Utilities", "description": "Health, version, OpenAPI document" }
+    { "name": "Health", "description": "Health and utilities" },
+    { "name": "Gateway", "description": "Endorse → Order → Commit pipeline" },
+    { "name": "Blocks", "description": "Block queries (legacy chain)" },
+    { "name": "Store Blocks", "description": "Block queries (storage layer)" },
+    { "name": "Transactions", "description": "Transaction lifecycle" },
+    { "name": "Channels", "description": "Channel management" },
+    { "name": "Organizations", "description": "Organization registry" },
+    { "name": "Policies", "description": "Endorsement policies" },
+    { "name": "Chaincode", "description": "Chaincode lifecycle" },
+    { "name": "Private Data", "description": "Private data collections" },
+    { "name": "Discovery", "description": "Peer discovery service" },
+    { "name": "ACL", "description": "Access control lists" },
+    { "name": "MSP", "description": "Membership service provider" },
+    { "name": "Identity", "description": "DID and key management" },
+    { "name": "Credentials", "description": "Verifiable credentials" },
+    { "name": "Events", "description": "Block event streaming" },
+    { "name": "Snapshots", "description": "State snapshots" },
+    { "name": "Audit", "description": "Audit trail for compliance" },
+    { "name": "Wallets", "description": "Wallet management (legacy)" },
+    { "name": "Mining", "description": "Block mining (legacy)" },
+    { "name": "Chain", "description": "Chain info and verification" }
   ],
   "components": {
     "securitySchemes": {
-      "ApiKeyAuth": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-API-Key",
-        "description": "Optional billing / rate-limit API key"
-      }
+      "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-API-Key" },
+      "OrgId": { "type": "apiKey", "in": "header", "name": "X-Org-Id", "description": "Organization identity" },
+      "ChannelId": { "type": "apiKey", "in": "header", "name": "X-Channel-Id", "description": "Channel scope (default: 'default')" },
+      "MspRole": { "type": "apiKey", "in": "header", "name": "X-Msp-Role", "description": "MSP role: admin, client, peer" }
     },
     "schemas": {
-      "ErrorDto": {
-        "type": "object",
-        "properties": {
-          "code": { "type": "string" },
-          "message": { "type": "string" },
-          "field": { "type": "string", "nullable": true }
-        },
-        "required": ["code", "message"]
-      },
       "GatewayEnvelope": {
         "type": "object",
-        "description": "Successful gateway response",
         "properties": {
-          "status": { "type": "string", "enum": ["Success"] },
+          "status": { "type": "string", "example": "Success" },
           "status_code": { "type": "integer", "example": 200 },
           "message": { "type": "string", "example": "OK" },
           "data": {},
-          "error": { "type": "null" },
+          "error": { "nullable": true },
           "timestamp": { "type": "string", "format": "date-time" },
           "trace_id": { "type": "string", "format": "uuid" }
-        },
-        "required": ["status", "status_code", "message", "timestamp", "trace_id"]
-      },
-      "GatewayErrorEnvelope": {
-        "type": "object",
-        "properties": {
-          "status": { "type": "string", "enum": ["Failure"] },
-          "status_code": { "type": "integer" },
-          "message": { "type": "string" },
-          "data": { "type": "null" },
-          "error": { "$ref": "#/components/schemas/ErrorDto" },
-          "timestamp": { "type": "string", "format": "date-time" },
-          "trace_id": { "type": "string" }
         }
       },
-      "LegacyEnvelope": {
+      "HealthCheck": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean" },
-          "data": {},
-          "message": { "type": "string", "nullable": true }
-        },
-        "required": ["success"]
+          "status": { "type": "string", "enum": ["healthy", "degraded"] },
+          "uptime_seconds": { "type": "integer" },
+          "blockchain": {
+            "type": "object",
+            "properties": {
+              "height": { "type": "integer" },
+              "last_block_hash": { "type": "string" },
+              "validators_count": { "type": "integer" }
+            }
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "storage": { "type": "string" },
+              "peers": { "type": "string" },
+              "ordering": { "type": "string" }
+            }
+          }
+        }
+      },
+      "GatewaySubmitRequest": {
+        "type": "object",
+        "required": ["chaincode_id", "transaction"],
+        "properties": {
+          "chaincode_id": { "type": "string" },
+          "channel_id": { "type": "string", "default": "" },
+          "transaction": {
+            "type": "object",
+            "required": ["id", "input_did", "output_recipient", "amount"],
+            "properties": {
+              "id": { "type": "string" },
+              "input_did": { "type": "string" },
+              "output_recipient": { "type": "string" },
+              "amount": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "GatewaySubmitResponse": {
+        "type": "object",
+        "properties": {
+          "tx_id": { "type": "string" },
+          "block_height": { "type": "integer" },
+          "valid": { "type": "boolean" }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "required": ["org_id"],
+        "properties": {
+          "org_id": { "type": "string" },
+          "name": { "type": "string" },
+          "msp_id": { "type": "string" }
+        }
+      },
+      "EndorsementPolicy": {
+        "type": "object",
+        "description": "One of: { AnyOf: [orgs] }, { AllOf: [orgs] }, { NOutOf: { n, orgs } }"
+      },
+      "ChannelInfo": {
+        "type": "object",
+        "properties": { "channel_id": { "type": "string" } }
       },
       "Transaction": {
         "type": "object",
         "properties": {
           "id": { "type": "string" },
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "amount": { "type": "integer", "format": "uint64" },
-          "fee": { "type": "integer", "format": "uint64" },
-          "data": { "type": "string", "nullable": true },
-          "timestamp": { "type": "integer", "format": "uint64" },
-          "signature": { "type": "string" }
+          "block_height": { "type": "integer" },
+          "timestamp": { "type": "integer" },
+          "input_did": { "type": "string" },
+          "output_recipient": { "type": "string" },
+          "amount": { "type": "integer" },
+          "state": { "type": "string" }
         }
       },
-      "Block": {
+      "AclEntry": {
         "type": "object",
-        "additionalProperties": true,
-        "description": "Block record (index, hash, transactions, merkle_root, ...)"
-      },
-      "CreateTransactionRequest": {
-        "type": "object",
-        "required": ["from", "to", "amount"],
         "properties": {
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "amount": { "type": "integer", "format": "uint64" },
-          "fee": { "type": "integer", "format": "uint64" },
-          "data": { "type": "string" },
-          "signature": { "type": "string" }
+          "resource": { "type": "string" },
+          "policy_ref": { "type": "string" }
         }
       },
-      "CreateBlockRequest": {
+      "PeerDescriptor": {
         "type": "object",
-        "required": ["transactions"],
         "properties": {
-          "transactions": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/CreateTransactionRequest" }
-          }
+          "peer_address": { "type": "string" },
+          "org_id": { "type": "string" },
+          "role": { "type": "string" },
+          "chaincodes": { "type": "array", "items": { "type": "string" } },
+          "channels": { "type": "array", "items": { "type": "string" } }
         }
       },
-      "HealthPayload": {
+      "AuditEntry": {
         "type": "object",
         "properties": {
-          "status": { "type": "string", "example": "healthy" },
-          "uptime_seconds": { "type": "integer", "format": "uint64" },
-          "blockchain": {
-            "type": "object",
-            "properties": {
-              "height": { "type": "integer", "format": "uint64" },
-              "last_block_hash": { "type": "string" },
-              "validators_count": { "type": "integer" }
-            }
-          }
-        }
-      },
-      "VersionPayload": {
-        "type": "object",
-        "properties": {
-          "api_version": { "type": "string" },
-          "rust_bc_version": { "type": "string" },
-          "blockchain_height": { "type": "integer", "format": "uint64" }
-        }
-      },
-      "ChainVerifyPayload": {
-        "type": "object",
-        "properties": {
-          "valid": { "type": "boolean" },
-          "block_count": { "type": "integer" }
-        }
-      },
-      "ChainInfoPayload": {
-        "type": "object",
-        "properties": {
-          "block_count": { "type": "integer" },
-          "difficulty": { "type": "integer" },
-          "latest_block_hash": { "type": "string" },
-          "is_valid": { "type": "boolean" }
-        }
-      },
-      "MempoolPayload": {
-        "type": "object",
-        "properties": {
-          "count": { "type": "integer" },
-          "transactions": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Transaction" }
-          }
+          "timestamp": { "type": "string", "format": "date-time" },
+          "method": { "type": "string" },
+          "path": { "type": "string" },
+          "org_id": { "type": "string" },
+          "source_ip": { "type": "string" },
+          "status_code": { "type": "integer" },
+          "trace_id": { "type": "string" },
+          "duration_ms": { "type": "integer" }
         }
       }
     }
   },
   "paths": {
     "/health": {
-      "get": {
-        "tags": ["Gateway", "Utilities"],
-        "summary": "Health check",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope with HealthPayload in `data`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/HealthPayload" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
+      "get": { "tags": ["Health"], "summary": "Health check with dependency verification", "responses": { "200": { "description": "Health status" } } }
     },
     "/version": {
-      "get": {
-        "tags": ["Gateway", "Utilities"],
-        "summary": "API and crate version",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope with VersionPayload in `data`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/VersionPayload" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
+      "get": { "tags": ["Health"], "summary": "API and crate version", "responses": { "200": { "description": "Version info" } } }
     },
     "/openapi.json": {
-      "get": {
-        "tags": ["Utilities"],
-        "summary": "OpenAPI 3 document (raw JSON, not gateway-wrapped)",
-        "responses": {
-          "200": {
-            "description": "OpenAPI specification object",
-            "content": {
-              "application/json": {
-                "schema": { "type": "object", "additionalProperties": true }
-              }
-            }
-          }
-        }
+      "get": { "tags": ["Health"], "summary": "OpenAPI specification", "responses": { "200": { "description": "OpenAPI JSON" } } }
+    },
+    "/gateway/submit": {
+      "post": {
+        "tags": ["Gateway"],
+        "summary": "Submit transaction (endorse → order → commit)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GatewaySubmitRequest" } } } },
+        "responses": { "200": { "description": "Transaction committed" } }
       }
     },
     "/blocks": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "List full chain",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is Block[]",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": {
-                          "type": "array",
-                          "items": { "$ref": "#/components/schemas/Block" }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["Gateway"],
-        "summary": "Create / mine block from transaction list",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateBlockRequest" }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Gateway envelope; `data` is new block hash (string)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "type": "string", "description": "Block hash" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          }
-        }
-      }
+      "get": { "tags": ["Blocks"], "summary": "List all blocks", "responses": { "200": { "description": "Block array" } } },
+      "post": { "tags": ["Blocks"], "summary": "Mine a block", "responses": { "200": { "description": "Mined block" } } }
     },
     "/blocks/index/{index}": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "Block by height",
-        "parameters": [
-          {
-            "name": "index",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "integer", "format": "uint64" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is Block",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/Block" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          }
-        }
-      }
+      "get": { "tags": ["Blocks"], "summary": "Get block by height", "parameters": [{ "name": "index", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Block" } } }
     },
     "/blocks/{hash}": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "Block by hash",
-        "parameters": [
-          {
-            "name": "hash",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is Block",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/Block" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          }
-        }
-      }
+      "get": { "tags": ["Blocks"], "summary": "Get block by hash", "parameters": [{ "name": "hash", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Block" } } }
     },
-    "/chain/verify": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "Verify local chain integrity",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is ChainVerifyPayload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/ChainVerifyPayload" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
+    "/store/blocks": {
+      "get": { "tags": ["Store Blocks"], "summary": "Paginated block list", "parameters": [{ "name": "page", "in": "query", "schema": { "type": "integer" } }, { "name": "limit", "in": "query", "schema": { "type": "integer" } }], "responses": { "200": { "description": "Paginated blocks" } } }
     },
-    "/chain/info": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "Chain metadata",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is ChainInfoPayload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/ChainInfoPayload" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
+    "/store/blocks/latest": {
+      "get": { "tags": ["Store Blocks"], "summary": "Latest block height", "responses": { "200": { "description": "Height" } } }
+    },
+    "/store/blocks/{height}": {
+      "get": { "tags": ["Store Blocks"], "summary": "Get block by height from store", "parameters": [{ "name": "height", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Block" } } }
+    },
+    "/store/blocks/{height}/transactions": {
+      "get": { "tags": ["Store Blocks"], "summary": "List transactions in block", "parameters": [{ "name": "height", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Transaction array" } } }
     },
     "/transactions": {
-      "post": {
-        "tags": ["Gateway"],
-        "summary": "Submit transaction to mempool",
-        "security": [{ "ApiKeyAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTransactionRequest" }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Gateway envelope; `data` is Transaction",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/Transaction" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized (billing)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          },
-          "402": {
-            "description": "Payment required (billing limit)",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/GatewayErrorEnvelope" }
-              }
-            }
-          }
-        }
-      }
+      "post": { "tags": ["Transactions"], "summary": "Create and enqueue transaction", "responses": { "200": { "description": "Transaction created" } } }
     },
     "/mempool": {
-      "get": {
-        "tags": ["Gateway"],
-        "summary": "Pending mempool transactions",
-        "responses": {
-          "200": {
-            "description": "Gateway envelope; `data` is MempoolPayload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    { "$ref": "#/components/schemas/GatewayEnvelope" },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": { "$ref": "#/components/schemas/MempoolPayload" }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
+      "get": { "tags": ["Transactions"], "summary": "Get pending transactions", "responses": { "200": { "description": "Mempool contents" } } }
+    },
+    "/store/transactions": {
+      "post": { "tags": ["Transactions"], "summary": "Persist transaction to store", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Transaction" } } } }, "responses": { "201": { "description": "Transaction persisted" } } }
+    },
+    "/store/transactions/{tx_id}": {
+      "get": { "tags": ["Transactions"], "summary": "Read transaction from store", "parameters": [{ "name": "tx_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Transaction" } } }
+    },
+    "/channels": {
+      "post": { "tags": ["Channels"], "summary": "Create channel", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "channel_id": { "type": "string" } } } } } }, "responses": { "201": { "description": "Channel created" } } },
+      "get": { "tags": ["Channels"], "summary": "List channels", "responses": { "200": { "description": "Channel list" } } }
+    },
+    "/channels/{channel_id}/config": {
+      "post": { "tags": ["Channels"], "summary": "Update channel config", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Config updated" } } },
+      "get": { "tags": ["Channels"], "summary": "Get channel config", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Channel config" } } }
+    },
+    "/channels/{channel_id}/config/history": {
+      "get": { "tags": ["Channels"], "summary": "Config version history", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Config history" } } }
+    },
+    "/store/organizations": {
+      "post": { "tags": ["Organizations"], "summary": "Register organization", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Organization" } } } }, "responses": { "201": { "description": "Organization registered" } } },
+      "get": { "tags": ["Organizations"], "summary": "List organizations", "responses": { "200": { "description": "Organization list" } } }
+    },
+    "/store/organizations/{org_id}": {
+      "get": { "tags": ["Organizations"], "summary": "Get organization", "parameters": [{ "name": "org_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Organization" } } }
+    },
+    "/store/policies": {
+      "post": { "tags": ["Policies"], "summary": "Set endorsement policy", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "resource_id": { "type": "string" }, "policy": { "$ref": "#/components/schemas/EndorsementPolicy" } } } } } }, "responses": { "201": { "description": "Policy set" } } }
+    },
+    "/store/policies/{resource_id}": {
+      "get": { "tags": ["Policies"], "summary": "Get endorsement policy", "parameters": [{ "name": "resource_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Policy" } } }
+    },
+    "/chaincode/install": {
+      "post": { "tags": ["Chaincode"], "summary": "Install chaincode (Wasm binary)", "parameters": [{ "name": "chaincode_id", "in": "query", "required": true, "schema": { "type": "string" } }, { "name": "version", "in": "query", "required": true, "schema": { "type": "string" } }], "requestBody": { "required": true, "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } }, "responses": { "200": { "description": "Installed" } } }
+    },
+    "/chaincode/{id}/approve": {
+      "post": { "tags": ["Chaincode"], "summary": "Approve chaincode for org", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "version", "in": "query", "required": true, "schema": { "type": "string" } }], "security": [{ "OrgId": [] }], "responses": { "200": { "description": "Approved" } } }
+    },
+    "/chaincode/{id}/commit": {
+      "post": { "tags": ["Chaincode"], "summary": "Commit chaincode", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "version", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Committed" } } }
+    },
+    "/chaincode/{id}/simulate": {
+      "post": { "tags": ["Chaincode"], "summary": "Simulate chaincode (read-only)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "version", "in": "query", "schema": { "type": "string" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "function": { "type": "string" } } } } } }, "responses": { "200": { "description": "Simulation result + rwset" } } }
+    },
+    "/private-data/collections": {
+      "post": { "tags": ["Private Data"], "summary": "Register collection", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "member_org_ids": { "type": "array", "items": { "type": "string" } } } } } } }, "responses": { "201": { "description": "Collection registered" } } }
+    },
+    "/private-data/{collection}/{key}": {
+      "put": { "tags": ["Private Data"], "summary": "Write private data", "parameters": [{ "name": "collection", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "key", "in": "path", "required": true, "schema": { "type": "string" } }], "security": [{ "OrgId": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "value": { "type": "string" } } } } } }, "responses": { "200": { "description": "Written with hash" } } },
+      "get": { "tags": ["Private Data"], "summary": "Read private data", "parameters": [{ "name": "collection", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "key", "in": "path", "required": true, "schema": { "type": "string" } }], "security": [{ "OrgId": [] }], "responses": { "200": { "description": "Private data value" } } }
+    },
+    "/discovery/register": {
+      "post": { "tags": ["Discovery"], "summary": "Register peer", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PeerDescriptor" } } } }, "responses": { "201": { "description": "Peer registered" } } }
+    },
+    "/discovery/endorsers": {
+      "get": { "tags": ["Discovery"], "summary": "Get endorsement plan", "parameters": [{ "name": "chaincode", "in": "query", "required": true, "schema": { "type": "string" } }, { "name": "channel", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Endorser list" } } }
+    },
+    "/discovery/peers": {
+      "get": { "tags": ["Discovery"], "summary": "List channel peers", "parameters": [{ "name": "channel", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Peer list" } } }
+    },
+    "/acls": {
+      "post": { "tags": ["ACL"], "summary": "Set ACL entry", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AclEntry" } } } }, "responses": { "200": { "description": "ACL set" } } },
+      "get": { "tags": ["ACL"], "summary": "List all ACL entries", "responses": { "200": { "description": "ACL list" } } }
+    },
+    "/acls/{resource}": {
+      "get": { "tags": ["ACL"], "summary": "Get ACL for resource", "parameters": [{ "name": "resource", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "ACL entry" } } }
+    },
+    "/msp/{msp_id}/revoke": {
+      "post": { "tags": ["MSP"], "summary": "Add serial to CRL", "parameters": [{ "name": "msp_id", "in": "path", "required": true, "schema": { "type": "string" } }], "security": [{ "MspRole": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "serial": { "type": "string" } } } } } }, "responses": { "200": { "description": "Revoked" } } }
+    },
+    "/msp/{msp_id}": {
+      "get": { "tags": ["MSP"], "summary": "Get MSP info", "parameters": [{ "name": "msp_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "MSP info" } } }
+    },
+    "/identity/create": {
+      "post": { "tags": ["Identity"], "summary": "Create DID + keypair", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" } } } } } }, "responses": { "200": { "description": "DID created" } } }
+    },
+    "/identity/{did}": {
+      "get": { "tags": ["Identity"], "summary": "Get DID document", "parameters": [{ "name": "did", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "DID document" } } }
+    },
+    "/store/identities": {
+      "post": { "tags": ["Identity"], "summary": "Persist identity record", "responses": { "201": { "description": "Identity stored" } } }
+    },
+    "/store/identities/{did}": {
+      "get": { "tags": ["Identity"], "summary": "Read identity record", "parameters": [{ "name": "did", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Identity record" } } }
+    },
+    "/credentials/issue": {
+      "post": { "tags": ["Credentials"], "summary": "Issue verifiable credential", "responses": { "200": { "description": "Credential issued" } } }
+    },
+    "/credentials/{id}/verify": {
+      "post": { "tags": ["Credentials"], "summary": "Verify credential", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Verification result" } } }
+    },
+    "/store/credentials": {
+      "post": { "tags": ["Credentials"], "summary": "Persist credential", "responses": { "201": { "description": "Credential stored" } } }
+    },
+    "/store/credentials/{cred_id}": {
+      "get": { "tags": ["Credentials"], "summary": "Read credential", "parameters": [{ "name": "cred_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Credential" } } }
+    },
+    "/store/credentials/by-subject/{subject_did}": {
+      "get": { "tags": ["Credentials"], "summary": "List credentials by subject", "parameters": [{ "name": "subject_did", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Credential list" } } }
+    },
+    "/events/blocks": {
+      "get": { "tags": ["Events"], "summary": "Block event stream (WebSocket or long-poll)", "parameters": [{ "name": "from_height", "in": "query", "schema": { "type": "integer" } }], "responses": { "200": { "description": "Block events" } } }
+    },
+    "/events/blocks/filtered": {
+      "get": { "tags": ["Events"], "summary": "Filtered block events (WebSocket)", "responses": { "200": { "description": "Filtered events" } } }
+    },
+    "/events/blocks/private": {
+      "get": { "tags": ["Events"], "summary": "Private data events (WebSocket)", "security": [{ "OrgId": [] }], "responses": { "200": { "description": "Private events" } } }
+    },
+    "/snapshots/{channel_id}": {
+      "post": { "tags": ["Snapshots"], "summary": "Create state snapshot", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "201": { "description": "Snapshot created" } } },
+      "get": { "tags": ["Snapshots"], "summary": "List snapshots", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Snapshot list" } } }
+    },
+    "/snapshots/{channel_id}/{snapshot_id}": {
+      "get": { "tags": ["Snapshots"], "summary": "Download snapshot", "parameters": [{ "name": "channel_id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "snapshot_id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Snapshot binary" } } }
+    },
+    "/audit/requests": {
+      "get": { "tags": ["Audit"], "summary": "Query audit log entries", "parameters": [{ "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } }, { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } }, { "name": "org_id", "in": "query", "schema": { "type": "string" } }, { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 1000 } }], "responses": { "200": { "description": "Audit entries" } } }
+    },
+    "/audit/export": {
+      "get": { "tags": ["Audit"], "summary": "Export audit log as CSV", "parameters": [{ "name": "from", "in": "query", "schema": { "type": "string", "format": "date-time" } }, { "name": "to", "in": "query", "schema": { "type": "string", "format": "date-time" } }], "responses": { "200": { "description": "CSV file", "content": { "text/csv": {} } } }
       }
+    },
+    "/proposals": {
+      "post": { "tags": ["Gateway"], "summary": "Simulate proposal (local endorsement)", "responses": { "200": { "description": "Proposal result" } } }
+    },
+    "/transactions/submit": {
+      "post": { "tags": ["Gateway"], "summary": "Submit endorsed transaction to ordering", "responses": { "202": { "description": "Submitted to ordering" } } }
+    },
+    "/wallets/create": {
+      "post": { "tags": ["Wallets"], "summary": "Create new wallet", "responses": { "200": { "description": "Wallet created" } } }
+    },
+    "/wallets/{address}": {
+      "get": { "tags": ["Wallets"], "summary": "Get wallet balance", "parameters": [{ "name": "address", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Wallet info" } } }
+    },
+    "/mine": {
+      "post": { "tags": ["Mining"], "summary": "Mine a block", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "miner_address": { "type": "string" } } } } } }, "responses": { "200": { "description": "Block mined" } } }
+    },
+    "/chain/info": {
+      "get": { "tags": ["Chain"], "summary": "Blockchain metadata", "responses": { "200": { "description": "Chain info" } } }
+    },
+    "/chain/verify": {
+      "get": { "tags": ["Chain"], "summary": "Verify chain integrity", "responses": { "200": { "description": "Verification result" } } }
     }
   }
 }
