@@ -178,7 +178,9 @@ cd deploy && ./generate-tls.sh
 | node1 | 8080 (API), 8081 (P2P) | peer + orderer (org1) |
 | node2 | 8082 (API), 8083 (P2P) | peer (org2) |
 | node3 | 8084 (API), 8085 (P2P) | peer (org1) |
-| orderer1 | 8086 (API), 8087 (P2P) | orderer |
+| orderer1 | 8086 (API), 8087 (P2P) | orderer (Raft ID 1) |
+| orderer2 | 8088 (API), 8089 (P2P) | orderer (Raft ID 2) |
+| orderer3 | 8090 (API), 8091 (P2P) | orderer (Raft ID 3) |
 | prometheus | 9090 | Metrics |
 | grafana | 3000 | Dashboards (admin/admin) |
 

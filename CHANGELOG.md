@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-10 (Production Readiness — Final Gaps)
+
+**3-node Raft ordering cluster**
+- Docker Compose default changed from solo to 3-node Raft (`ORDERING_BACKEND=raft`)
+- Orderer1/2/3 with `RAFT_NODE_ID` and `RAFT_PEERS` configured for automatic cluster formation
+- Persistent Raft log per orderer (RocksDB at `STORAGE_PATH/raft/`)
+- TLS certificates generated for all 3 orderers via `deploy/generate-tls.sh`
+
+**Performance benchmarks published**
+- `docs/BENCHMARKS-FULL.md` with Criterion measurements on Apple M-series
+- Ordering: 23M tx/s (in-memory), endorsement: 45K/s (Ed25519), RocksDB: 104K blocks/s
+- End-to-end pipeline estimate: 5K-15K tx/s on 3-node Raft LAN
+- Comparison table with Hyperledger Fabric published TPS
+
+**Chaincode SDK for Rust developers**
+- `chaincode-sdk/` — Rust crate that compiles to Wasm for deployment on the blockchain
+- API: `state_put`, `state_get`, `state_put_json`, `state_get_json`, `emit_event`, `set_key_policy`, `history_for_key`, `invoke` (cross-chaincode), `set_response`
+- Example: `examples/asset_transfer.rs` — complete asset management contract (create, read, transfer, history)
+- Compiles to `wasm32-unknown-unknown` target
+
+---
+
 ### 2026-04-10 (Certification Readiness — Levels 1-3)
 
 **Level 1 — Enterprise presentation readiness**

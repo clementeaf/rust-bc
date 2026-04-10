@@ -114,7 +114,7 @@ services:
     depends_on:
       - node1
 
-  # ── Orderer ────────────────────────────────────────────────────────────────
+  # ── Orderers (3-node Raft cluster) ────────────────────────────────────────
 
   orderer1:
     <<: *node-defaults
@@ -132,7 +132,9 @@ services:
       NETWORK_ID: "local-test"
       ORG_ID: "ordererOrg"
       NODE_ROLE: "orderer"
-      ORDERING_BACKEND: "solo"
+      ORDERING_BACKEND: "raft"
+      RAFT_NODE_ID: "1"
+      RAFT_PEERS: "1:orderer1:8081,2:orderer2:8081,3:orderer3:8081"
       STORAGE_BACKEND: "rocksdb"
       STORAGE_PATH: "/app/data/rocksdb"
       TLS_CERT_PATH: "/tls/orderer1-cert.pem"
@@ -140,11 +142,79 @@ services:
       TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
       RATE_LIMIT_RPS: "200"
       RATE_LIMIT_BURST: "400"
-      BOOTSTRAP_NODES: "node1:8081"
+      BOOTSTRAP_NODES: "node1:8081,orderer2:8081,orderer3:8081"
       ACL_MODE: "${ACL_MODE:-permissive}"
     volumes:
       - orderer1-data:/app/data
       - ./deploy/tls:/tls:ro
+
+  orderer2:
+    <<: *node-defaults
+    container_name: rust-bc-orderer2
+    ports:
+      - "8088:8080"
+      - "8089:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "orderer2:8081"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "ordererOrg"
+      NODE_ROLE: "orderer"
+      ORDERING_BACKEND: "raft"
+      RAFT_NODE_ID: "2"
+      RAFT_PEERS: "1:orderer1:8081,2:orderer2:8081,3:orderer3:8081"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      TLS_CERT_PATH: "/tls/orderer2-cert.pem"
+      TLS_KEY_PATH: "/tls/orderer2-key.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
+      RATE_LIMIT_RPS: "200"
+      RATE_LIMIT_BURST: "400"
+      BOOTSTRAP_NODES: "orderer1:8081,orderer3:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
+    volumes:
+      - orderer2-data:/app/data
+      - ./deploy/tls:/tls:ro
+    depends_on:
+      - orderer1
+
+  orderer3:
+    <<: *node-defaults
+    container_name: rust-bc-orderer3
+    ports:
+      - "8090:8080"
+      - "8091:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      P2P_EXTERNAL_ADDRESS: "orderer3:8081"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      DIFFICULTY: "1"
+      RUST_LOG: "info"
+      NETWORK_ID: "local-test"
+      ORG_ID: "ordererOrg"
+      NODE_ROLE: "orderer"
+      ORDERING_BACKEND: "raft"
+      RAFT_NODE_ID: "3"
+      RAFT_PEERS: "1:orderer1:8081,2:orderer2:8081,3:orderer3:8081"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      TLS_CERT_PATH: "/tls/orderer3-cert.pem"
+      TLS_KEY_PATH: "/tls/orderer3-key.pem"
+      TLS_CA_CERT_PATH: "/tls/ca-cert.pem"
+      RATE_LIMIT_RPS: "200"
+      RATE_LIMIT_BURST: "400"
+      BOOTSTRAP_NODES: "orderer1:8081,orderer2:8081"
+      ACL_MODE: "${ACL_MODE:-permissive}"
+    volumes:
+      - orderer3-data:/app/data
+      - ./deploy/tls:/tls:ro
+    depends_on:
+      - orderer1
 
   # ── Monitoring ─────────────────────────────────────────────────────────────
 
@@ -185,6 +255,8 @@ volumes:
   node2-data:
   node3-data:
   orderer1-data:
+  orderer2-data:
+  orderer3-data:
   prometheus-data:
   grafana-data:
 

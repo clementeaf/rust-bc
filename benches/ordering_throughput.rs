@@ -98,7 +98,7 @@ fn build_endorsement_fixture(n_orgs: usize) -> EndorsementFixture {
         endorsements.push(Endorsement {
             signer_did: format!("did:bc:{org_id}:signer"),
             org_id: org_id.clone(),
-            signature: sig,
+            signature: sig.to_vec(),
             payload_hash: payload,
             timestamp: 0,
         });
@@ -205,7 +205,7 @@ fn make_block(height: u64) -> Block {
         merkle_root: [0u8; 32],
         transactions: vec![format!("tx-{height}")],
         proposer: "bench-orderer".to_string(),
-        signature: [0u8; 64],
+        signature: vec![0u8; 64],
         endorsements: vec![],
         orderer_signature: None,
     }

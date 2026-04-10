@@ -13,7 +13,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
   -out "$DIR/ca-cert.pem" \
   -subj "/CN=rust-bc-ca/O=rust-bc"
 
-for NODE in node1 node2 node3 orderer1; do
+for NODE in node1 node2 node3 orderer1 orderer2 orderer3; do
   echo "==> Generating cert for $NODE..."
 
   # CSR
