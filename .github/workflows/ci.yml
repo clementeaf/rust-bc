@@ -11,6 +11,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   ACL_MODE: permissive
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   check:
