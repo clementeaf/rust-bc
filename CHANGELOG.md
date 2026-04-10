@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-10 (Fabric Parity Audit + Enterprise Documentation)
+
+**Structural audit against Hyperledger Fabric**
+- Verified full Fabric feature parity across 6 critical areas
+- Channel ledger isolation confirmed: `StoreMap` (per-channel `HashMap<String, Arc<dyn BlockStore>>`) used by all store handlers via `channel_id_from_req()` + `get_channel_store()`
+- Private data dissemination confirmed: selective push to member peers via discovery service, membership validation on receive, `PrivateDataAck` responses
+- Chaincode lifecycle confirmed: `Installed → Approved → Committed` state machine with per-org approval tracking and endorsement policy evaluation on commit
+- Pull state sync confirmed: `StateRequest`/`StateResponse` messages, anti-entropy gap detection via alive message heights
+- WebSocket events confirmed: `actix-ws` upgrade, `EventBus` subscription, channel/chaincode filtering, historical replay, client ack tracking
+
+**Fix: proposals handler channel scoping**
+- `POST /api/v1/proposals` now persists transactions to the channel-scoped store (was hardcoded to `"default"`)
+
+**Enterprise documentation**
+- `docs/ENTERPRISE.md` — Platform overview for enterprise evaluation (architecture, privacy, consensus, chaincode, endorsement policies, PQC, operations, use cases, Fabric comparison)
+- `docs/PQC-ENTERPRISE.md` — Post-quantum cryptography positioning document for the Chamber (NIST FIPS 204 compliance, Fabric comparison, regulatory alignment, deployment model)
+
+---
+
 ### 2026-04-10 (Post-Quantum Cryptography — FIPS 204)
 
 **ML-DSA-65 signing provider**

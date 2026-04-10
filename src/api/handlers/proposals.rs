@@ -1,8 +1,9 @@
 //! POST /api/v1/proposals and POST /api/v1/transactions/submit
 
-use actix_web::{post, web, HttpResponse};
+use actix_web::{post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::channels::channel_id_from_req;
 use crate::app_state::AppState;
 use crate::endorsement::validator::validate_endorsements;
 use crate::transaction::endorsed::EndorsedTransaction;
@@ -18,8 +19,10 @@ use crate::transaction::rwset::{KVRead, ReadWriteSet};
 pub async fn submit_proposal(
     state: web::Data<AppState>,
     body: web::Json<TransactionProposal>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
     let proposal = body.into_inner();
 
     // Simulate: build a response rwset from the proposal rwset.
@@ -64,12 +67,12 @@ pub async fn submit_proposal(
         endorsement,
     };
 
-    // Persist the original tx to the store if available.
+    // Persist the original tx to the channel's store if available.
     if let Some(store) = state
         .store
         .read()
         .unwrap_or_else(|e| e.into_inner())
-        .get("default")
+        .get(channel)
         .cloned()
     {
         let _ = store.write_transaction(&proposal.tx);
