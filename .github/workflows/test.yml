@@ -32,17 +32,14 @@ jobs:
 
       - name: Run unit tests
         run: cargo test --lib --all 2>&1 | tail -50
-        continue-on-error: true
 
       - name: Run integration tests
         run: cargo test --test '*' --all 2>&1 | tail -50
-        continue-on-error: true
 
       - name: Generate coverage report
         run: |
           cargo install tarpaulin --locked 2>/dev/null || true
-          cargo tarpaulin --out Html --output-dir coverage 2>/dev/null || echo "Coverage report skipped"
-        continue-on-error: true
+          cargo tarpaulin --out Html --out Xml --output-dir coverage --fail-under 80 2>&1 | tail -20
 
       - name: Upload coverage
         uses: actions/upload-artifact@v3

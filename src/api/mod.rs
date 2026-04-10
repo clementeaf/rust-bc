@@ -30,16 +30,39 @@ pub struct ApiConfig {
     pub jwt_secret: String,
 }
 
-impl Default for ApiConfig {
-    fn default() -> Self {
+/// Default JWT secret used only in development/test when `JWT_SECRET` is unset.
+const DEV_JWT_SECRET: &str = "change-me-in-production";
+
+impl ApiConfig {
+    /// Build config from environment. Panics if `JWT_SECRET` is missing or
+    /// matches the default value when `RUST_BC_ENV=production`.
+    pub fn from_env() -> Self {
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            log::warn!("JWT_SECRET not set — using insecure default (dev only)");
+            DEV_JWT_SECRET.to_string()
+        });
+
+        let env_mode = std::env::var("RUST_BC_ENV").unwrap_or_default();
+        if env_mode == "production" && jwt_secret == DEV_JWT_SECRET {
+            panic!(
+                "FATAL: JWT_SECRET must be set to a unique value in production. \
+                 Set RUST_BC_ENV=development to use the insecure default."
+            );
+        }
+
         Self {
             host: "127.0.0.1".to_string(),
             port: 8080,
             rate_limit_per_minute: 1000,
-            max_request_size_bytes: 10 * 1024 * 1024, // 10MB
-            jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "change-me-in-production".to_string()),
+            max_request_size_bytes: 10 * 1024 * 1024,
+            jwt_secret,
         }
+    }
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self::from_env()
     }
 }
 

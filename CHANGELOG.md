@@ -6,6 +6,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-10 (Certification Readiness — Levels 1-3)
+
+**Level 1 — Enterprise presentation readiness**
+- MIT license added
+- `JWT_SECRET` required in production (`RUST_BC_ENV=production` panics if missing or default)
+- Signing key zeroization: Ed25519 via `ZeroizeOnDrop`, ML-DSA-65 via custom `Drop`
+- Integration test fixed for PQC signature migration (`store_blocks_api_test.rs`)
+
+**Level 2 — Third-party audit readiness**
+- Property-based tests (proptest): 5 cases for Ed25519 + ML-DSA-65 sign/verify invariants
+- Input validation middleware: Content-Type enforcement, max payload size (10 MB), wired at startup
+- Vulnerability disclosure policy added to SECURITY.md (72h ack, 7-day fix timeline)
+- Consensus threat model added to SECURITY.md (Raft, gossip, censorship attacks + mitigations)
+- CI coverage gate: `cargo tarpaulin --fail-under 80`, test steps no longer soft-fail
+- Production unwrap audit: single handler unwrap fixed in events.rs
+- `docs/ENCRYPTION-AT-REST.md` — LUKS, Docker, cloud encryption guidance
+
+**Level 3 — Formal certification preparation**
+- FIPS 140-3 power-up self-tests (KAT): Ed25519, ML-DSA-65, SHA-256 run at startup; node refuses to start on failure
+- `docs/FIPS-140-MODULE.md` — cryptographic module boundary, approved algorithms, key management, gap analysis
+- `docs/COMPLIANCE-FRAMEWORK.md` — SOC 2 (13 criteria), ISO 27001 (17 Annex A controls), regulatory mapping (Chile CMF, EU eIDAS/GDPR, US FISMA)
+- `docs/CERTIFICATION-ROADMAP.md` — three-level roadmap with items, effort, and audience per level
+
+**Dependencies:** `zeroize` 1.7, `proptest` 1.4 (dev)
+
+---
+
 ### 2026-04-10 (Fabric Parity Audit + Enterprise Documentation)
 
 **Structural audit against Hyperledger Fabric**

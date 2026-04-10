@@ -40,7 +40,7 @@ fn dag_block(hash: u8, parent: u8, height: u64) -> DagBlock {
         0,
         0,
         "v1".to_string(),
-        [2u8; 64],
+        vec![2u8; 64],
     )
 }
 

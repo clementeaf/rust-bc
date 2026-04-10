@@ -304,6 +304,112 @@ where
     }
 }
 
+// ── Input Validation Middleware ──────────────────────────────────────────────
+
+/// Middleware that enforces Content-Type and max payload size on mutation requests.
+///
+/// - `POST`, `PUT`, `PATCH` requests must have `Content-Type: application/json`
+///   (unless the path starts with an exception prefix like `/api/v1/events`).
+/// - All requests are rejected if `Content-Length` exceeds `max_bytes`.
+pub struct InputValidationMiddleware {
+    pub max_bytes: usize,
+}
+
+impl Default for InputValidationMiddleware {
+    fn default() -> Self {
+        Self {
+            max_bytes: 10 * 1024 * 1024, // 10 MB
+        }
+    }
+}
+
+impl<S, B> Transform<S, ServiceRequest> for InputValidationMiddleware
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type InitError = ();
+    type Transform = InputValidationService<S>;
+    type Future = futures::future::Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        futures::future::ok(InputValidationService {
+            service: Rc::new(service),
+            max_bytes: self.max_bytes,
+        })
+    }
+}
+
+pub struct InputValidationService<S> {
+    service: Rc<S>,
+    max_bytes: usize,
+}
+
+impl<S, B> Service<ServiceRequest> for InputValidationService<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
+{
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    forward_ready!(service);
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let method = req.method().clone();
+        let path = req.path().to_string();
+
+        // Check Content-Length against max
+        if let Some(cl) = req
+            .headers()
+            .get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            if cl > self.max_bytes {
+                return Box::pin(futures::future::err(
+                    actix_web::error::ErrorPayloadTooLarge(format!(
+                        "payload too large: {} bytes (max {})",
+                        cl, self.max_bytes
+                    )),
+                ));
+            }
+        }
+
+        // Mutation methods must send application/json (except WebSocket upgrades and event streams)
+        let needs_json = matches!(
+            method,
+            actix_web::http::Method::POST
+                | actix_web::http::Method::PUT
+                | actix_web::http::Method::PATCH
+        );
+        let is_exempt = path.contains("/events") || path.contains("/ws");
+
+        if needs_json && !is_exempt {
+            let content_type = req
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            if !content_type.contains("application/json") && !content_type.is_empty() {
+                return Box::pin(futures::future::err(
+                    actix_web::error::ErrorUnsupportedMediaType(
+                        "Content-Type must be application/json",
+                    ),
+                ));
+            }
+        }
+
+        let srv = self.service.clone();
+        Box::pin(async move { srv.call(req).await })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -62,7 +62,7 @@ fn checkpoints() -> &'static Mutex<HashMap<String, u64>> {
 fn record_ack(client_id: &str, height: u64) {
     checkpoints()
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .insert(client_id.to_string(), height);
 }
 

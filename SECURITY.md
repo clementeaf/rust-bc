@@ -123,6 +123,46 @@ Reject if: timestamp < (current_time - 3600000) OR timestamp > (current_time + 3
 - [ ] Monitor timestamp validation failure rate
 - [ ] Test disaster recovery procedures
 
+## Vulnerability Disclosure
+
+If you discover a security vulnerability in this project, please report it responsibly.
+
+**Contact:** security@rust-bc.dev
+
+**Process:**
+1. Send a description of the vulnerability to the contact above
+2. Include steps to reproduce if possible
+3. Do not disclose publicly until a fix is available
+4. We will acknowledge receipt within 72 hours
+5. We will provide a fix timeline within 7 days
+
+We follow coordinated disclosure. Credit is given to reporters in the changelog unless they prefer anonymity.
+
+## Consensus and Network Threat Model
+
+### Raft Ordering
+
+- **Leader manipulation:** Mitigated by Raft protocol — leader is elected by majority vote, log entries require majority replication before commit
+- **Split brain:** Raft guarantees at most one leader per term; network partitions result in the minority partition halting (no conflicting blocks)
+- **Log truncation:** Persistent Raft log (RocksDB) survives crashes; entries are never deleted, only compacted after snapshotting
+
+### Gossip Protocol
+
+- **Eclipse attacks:** Mitigated by signed alive messages — peers verify Ed25519/ML-DSA-65 signatures on all gossip messages
+- **Block withholding:** Anti-entropy protocol detects height gaps between peers and triggers pull-sync to fill missing blocks
+- **Sybil on gossip:** Permissioned network — only peers with valid TLS certificates (mTLS) can connect
+
+### Censorship
+
+- **Transaction censorship by orderer:** Mitigated by endorsement pipeline — transactions are endorsed by multiple orgs before reaching the orderer; the orderer cannot modify endorsed transactions without invalidating signatures
+- **Block censorship:** All peers verify block contents against endorsement policies; an orderer that omits valid transactions would be detected by peers comparing their pending queues
+
+### Residual Risks
+
+- A compromised Raft majority (>50% of orderers) could halt ordering or reorder transactions
+- A compromised CA could issue certificates to unauthorized peers
+- Private data dissemination relies on honest member peers — a malicious member could withhold data from other authorized members
+
 ## References
 
 - HMAC Specification: RFC 2104

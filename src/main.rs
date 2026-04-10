@@ -742,6 +742,11 @@ async fn async_main() -> std::io::Result<()> {
         } else {
             Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
         };
+    // FIPS 140-3 power-up self-tests — verify crypto correctness before accepting requests.
+    crate::identity::signing::run_crypto_self_tests()
+        .expect("FATAL: cryptographic self-tests failed — node cannot start");
+    log::info!("Cryptographic self-tests passed (Ed25519, ML-DSA-65, SHA-256)");
+
     let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
         let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
         match algo.to_lowercase().as_str() {
@@ -1102,6 +1107,7 @@ async fn async_main() -> std::io::Result<()> {
             })
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .wrap(crate::api::middleware::TlsIdentityMiddleware)
+            .wrap(crate::api::middleware::InputValidationMiddleware::default())
             .app_data(web::Data::new(app_state.clone()))
             .app_data(json_config.clone())
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
