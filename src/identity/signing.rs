@@ -146,10 +146,12 @@ impl MlDsaSigningProvider {
     pub fn from_keys(pk_bytes: &[u8], sk_bytes: &[u8]) -> Result<Self, SigningError> {
         use pqcrypto_traits::sign::PublicKey as PqPk;
         use pqcrypto_traits::sign::SecretKey as PqSk;
-        let pk = pqcrypto_mldsa::mldsa65::PublicKey::from_bytes(pk_bytes)
-            .map_err(|e| SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 public key: {e}")))?;
-        let sk = pqcrypto_mldsa::mldsa65::SecretKey::from_bytes(sk_bytes)
-            .map_err(|e| SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 secret key: {e}")))?;
+        let pk = pqcrypto_mldsa::mldsa65::PublicKey::from_bytes(pk_bytes).map_err(|e| {
+            SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 public key: {e}"))
+        })?;
+        let sk = pqcrypto_mldsa::mldsa65::SecretKey::from_bytes(sk_bytes).map_err(|e| {
+            SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 secret key: {e}"))
+        })?;
         Ok(Self {
             public_key: pk,
             secret_key: sk,
@@ -175,10 +177,10 @@ impl SigningProvider for MlDsaSigningProvider {
 
     fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, SigningError> {
         use pqcrypto_traits::sign::DetachedSignature;
-        let signature =
-            pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(sig)
-                .map_err(|e| SigningError::VerifyFailed(format!("invalid ML-DSA-65 signature: {e}")))?;
-        match pqcrypto_mldsa::mldsa65::verify_detached_signature(&signature, data, &self.public_key) {
+        let signature = pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(sig)
+            .map_err(|e| SigningError::VerifyFailed(format!("invalid ML-DSA-65 signature: {e}")))?;
+        match pqcrypto_mldsa::mldsa65::verify_detached_signature(&signature, data, &self.public_key)
+        {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -244,8 +246,9 @@ pub fn run_crypto_self_tests() -> Result<(), SigningError> {
         use sha2::Digest;
         let input = b"FIPS-140-3-KAT-SHA256";
         let hash = sha2::Sha256::digest(input);
-        let expected = hex::decode("11ffe3edcec6203b91f4f575c8d51dad935ea2a40e0bed0e5f9f69575afb80d0")
-            .expect("valid hex");
+        let expected =
+            hex::decode("11ffe3edcec6203b91f4f575c8d51dad935ea2a40e0bed0e5f9f69575afb80d0")
+                .expect("valid hex");
         if hash.as_slice() != expected.as_slice() {
             return Err(SigningError::SignFailed(
                 "SHA-256 KAT: digest mismatch".into(),

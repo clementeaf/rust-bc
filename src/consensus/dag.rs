@@ -475,7 +475,15 @@ mod tests {
     #[test]
     fn test_dag_is_linear() {
         let mut dag = Dag::new();
-        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), vec![2u8; 64]);
+        let block = DagBlock::new(
+            [1u8; 32],
+            [0u8; 32],
+            0,
+            0,
+            1000,
+            "p".to_string(),
+            vec![2u8; 64],
+        );
         dag.add_block(block).unwrap();
         assert!(dag.is_linear());
     }
@@ -483,7 +491,15 @@ mod tests {
     #[test]
     fn test_dag_chain_height() {
         let mut dag = Dag::new();
-        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), vec![2u8; 64]);
+        let block = DagBlock::new(
+            [1u8; 32],
+            [0u8; 32],
+            0,
+            0,
+            1000,
+            "p".to_string(),
+            vec![2u8; 64],
+        );
         dag.add_block(block).unwrap();
         assert_eq!(dag.chain_height(), 1);
     }

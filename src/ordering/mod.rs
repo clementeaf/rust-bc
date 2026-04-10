@@ -42,7 +42,10 @@ pub fn verify_orderer_signature(
         Some(s) => s,
     };
     let hash = block_hash_for_signing(block);
-    let sig_array: &[u8; 64] = sig_bytes.as_slice().try_into().map_err(|_| "invalid signature length: expected 64 bytes".to_string())?;
+    let sig_array: &[u8; 64] = sig_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| "invalid signature length: expected 64 bytes".to_string())?;
     let sig = ed25519_dalek::Signature::from_bytes(sig_array);
     use ed25519_dalek::Verifier;
     orderer_key

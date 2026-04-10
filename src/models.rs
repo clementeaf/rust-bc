@@ -120,9 +120,8 @@ impl Transaction {
             use pqcrypto_traits::sign::{DetachedSignature, PublicKey};
             let pk = pqcrypto_mldsa::mldsa65::PublicKey::from_bytes(public_key_bytes)
                 .map_err(|_| SignatureError::new())?;
-            let sig =
-                pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(&signature_bytes)
-                    .map_err(|_| SignatureError::new())?;
+            let sig = pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(&signature_bytes)
+                .map_err(|_| SignatureError::new())?;
             let message = self.calculate_hash();
             return pqcrypto_mldsa::mldsa65::verify_detached_signature(
                 &sig,
