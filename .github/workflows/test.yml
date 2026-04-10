@@ -25,7 +25,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
@@ -42,7 +42,7 @@ jobs:
           cargo tarpaulin --out Html --out Xml --output-dir coverage --fail-under 80 2>&1 | tail -20
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: coverage/
