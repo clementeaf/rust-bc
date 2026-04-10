@@ -6,6 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-10 (Post-Quantum Cryptography — FIPS 204)
+
+**ML-DSA-65 signing provider**
+- `MlDsaSigningProvider` implements `SigningProvider` using ML-DSA-65 (FIPS 204, NIST security level 3)
+- Keypair generation, signing (3309-byte signatures), and verification via `pqcrypto-mldsa`
+- `from_keys(pk, sk)` constructor for restoring providers from persisted key material
+
+**Generalized `SigningProvider` trait**
+- Signatures and public keys changed from fixed-size arrays to `Vec<u8>` / `&[u8]`
+- New `algorithm()` method returns `SigningAlgorithm` enum (`Ed25519` or `MlDsa65`)
+- `SoftwareSigningProvider` (Ed25519) and `HsmSigningProvider` adapted to the new trait
+
+**Variable-length signatures across the stack**
+- `Endorsement.signature`: `[u8; 64]` → `Vec<u8>`
+- `Block.signature` and `Block.orderer_signature`: `[u8; 64]` → `Vec<u8>`
+- `DagBlock.signature`: `[u8; 64]` → `Vec<u8>`
+- `TransactionProposal.creator_signature`: `[u8; 64]` → `Vec<u8>`
+- `AliveMessage.signature` (gossip): `[u8; 64]` → `Vec<u8>`
+- All hex serde helpers updated for variable-length byte vectors
+
+**Runtime algorithm selection**
+- `SIGNING_ALGORITHM` env var: `ed25519` (default), `ml-dsa-65` / `mldsa65`
+- Logged at startup; unknown values fall back to Ed25519 with a warning
+
+**Legacy transaction verification**
+- `Transaction.verify_signature()` auto-detects Ed25519 or ML-DSA-65 by key/signature size
+
+**Dependencies:** `pqcrypto-mldsa` 0.1.2, `pqcrypto-traits` 0.3
+
+---
+
 ### 2026-04-07 (Fabric Gap Closure)
 
 **Persistent Raft log (crash-tolerant ordering)**

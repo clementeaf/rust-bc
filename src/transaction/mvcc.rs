@@ -211,7 +211,7 @@ mod tests {
             proposal: TransactionProposal {
                 tx: base_tx(id),
                 creator_did: "did:test:creator".to_string(),
-                creator_signature: [0u8; 64],
+                creator_signature: vec![0u8; 64],
                 rwset: ReadWriteSet {
                     reads: reads
                         .iter()
@@ -232,7 +232,7 @@ mod tests {
             endorsements: vec![Endorsement {
                 signer_did: "did:test:org1".to_string(),
                 org_id: "Org1".to_string(),
-                signature: [0u8; 64],
+                signature: vec![0u8; 64],
                 payload_hash: [0u8; 32],
                 timestamp: 0,
             }],

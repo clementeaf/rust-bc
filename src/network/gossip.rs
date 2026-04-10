@@ -3,21 +3,17 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-/// Serde helper for `[u8; 64]` — serializes as a hex string.
+/// Serde helper for variable-length signature bytes — serializes as a hex string.
 mod signature_hex {
     use serde::{self, Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S: Serializer>(bytes: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(bytes: &Vec<u8>, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_str(&hex::encode(bytes))
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
         let s = String::deserialize(d)?;
-        let vec = hex::decode(&s).map_err(serde::de::Error::custom)?;
-        let arr: [u8; 64] = vec
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("expected 64 bytes"))?;
-        Ok(arr)
+        hex::decode(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -36,9 +32,9 @@ pub struct AliveMessage {
     pub timestamp: u64,
     /// Monotonically increasing sequence number (per peer).
     pub sequence: u64,
-    /// Ed25519-style 64-byte signature over the serialized payload.
+    /// Signature bytes (variable-length: Ed25519 = 64, ML-DSA-65 = 3309).
     #[serde(with = "signature_hex")]
-    pub signature: [u8; 64],
+    pub signature: Vec<u8>,
     /// Latest block height known by this peer (used for anti-entropy gap detection).
     #[serde(default)]
     pub latest_height: u64,
@@ -55,7 +51,7 @@ impl AliveMessage {
         org_id: impl Into<String>,
         timestamp: u64,
         sequence: u64,
-        signature: [u8; 64],
+        signature: Vec<u8>,
     ) -> Self {
         Self {
             peer_address: peer_address.into(),
@@ -73,7 +69,7 @@ impl AliveMessage {
         org_id: impl Into<String>,
         timestamp: u64,
         sequence: u64,
-        signature: [u8; 64],
+        signature: Vec<u8>,
         latest_height: u64,
     ) -> Self {
         Self {
@@ -86,7 +82,7 @@ impl AliveMessage {
         }
     }
 
-    /// Verify the signature against the provided public key bytes.
+    /// Verify the signature against the provided public key bytes (Ed25519).
     ///
     /// Returns `true` when the signature matches. The canonical message that
     /// was signed is `"{peer_address}:{org_id}:{timestamp}:{sequence}"`.
@@ -354,19 +350,19 @@ mod tests {
 
     #[test]
     fn creates_alive_message() {
-        let sig = [0u8; 64];
+        let sig = vec![0u8; 64];
         let msg = AliveMessage::new("127.0.0.1:8081", "org1", 1_700_000_000, 1, sig);
 
         assert_eq!(msg.peer_address, "127.0.0.1:8081");
         assert_eq!(msg.org_id, "org1");
         assert_eq!(msg.timestamp, 1_700_000_000);
         assert_eq!(msg.sequence, 1);
-        assert_eq!(msg.signature, [0u8; 64]);
+        assert_eq!(msg.signature, vec![0u8; 64]);
     }
 
     #[test]
     fn serde_roundtrip() {
-        let sig = [42u8; 64];
+        let sig = vec![42u8; 64];
         let original = AliveMessage::new("10.0.0.1:7051", "org2", 1_700_000_001, 5, sig);
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -382,10 +378,10 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[1u8; 32]);
         let public_key = signing_key.verifying_key().to_bytes();
 
-        let mut msg = AliveMessage::new("127.0.0.1:8081", "org1", 1_700_000_000, 1, [0u8; 64]);
+        let mut msg = AliveMessage::new("127.0.0.1:8081", "org1", 1_700_000_000, 1, vec![0u8; 64]);
         let payload = msg.signable_payload();
         let sig = signing_key.sign(payload.as_bytes());
-        msg.signature = sig.to_bytes();
+        msg.signature = sig.to_bytes().to_vec();
 
         assert!(msg.verify_signature(&public_key));
     }
@@ -397,10 +393,10 @@ mod tests {
         let signing_key = SigningKey::from_bytes(&[1u8; 32]);
         let wrong_key = SigningKey::from_bytes(&[2u8; 32]);
 
-        let mut msg = AliveMessage::new("127.0.0.1:8081", "org1", 1_700_000_000, 1, [0u8; 64]);
+        let mut msg = AliveMessage::new("127.0.0.1:8081", "org1", 1_700_000_000, 1, vec![0u8; 64]);
         let payload = msg.signable_payload();
         let sig = signing_key.sign(payload.as_bytes());
-        msg.signature = sig.to_bytes();
+        msg.signature = sig.to_bytes().to_vec();
 
         assert!(!msg.verify_signature(&wrong_key.verifying_key().to_bytes()));
     }
@@ -409,7 +405,7 @@ mod tests {
     fn message_alive_serde_roundtrip() {
         use crate::network::Message;
 
-        let sig = [7u8; 64];
+        let sig = vec![7u8; 64];
         let alive = AliveMessage::new("10.0.0.5:7051", "org3", 1_700_000_100, 42, sig);
         let msg = Message::Alive(alive.clone());
 

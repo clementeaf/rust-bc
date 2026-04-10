@@ -20,8 +20,8 @@ pub struct DagBlock {
     pub timestamp: u64,
     /// Block proposer's identity
     pub proposer: String,
-    /// Block signature
-    pub signature: [u8; 64],
+    /// Block signature (variable-length: Ed25519 = 64, ML-DSA-65 = 3309)
+    pub signature: Vec<u8>,
     /// Transaction hashes included in block
     pub transactions: Vec<[u8; 32]>,
 }
@@ -35,7 +35,7 @@ impl DagBlock {
         slot: u64,
         timestamp: u64,
         proposer: String,
-        signature: [u8; 64],
+        signature: Vec<u8>,
     ) -> Self {
         DagBlock {
             hash,
@@ -330,7 +330,7 @@ mod tests {
             1,
             1000,
             "proposer1".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         assert_eq!(block.height, 1);
         assert!(block.is_genesis());
@@ -345,7 +345,7 @@ mod tests {
             1,
             1000,
             "proposer1".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         let vertex = DagVertex::new(block);
         assert!(vertex.children.is_empty());
@@ -361,7 +361,7 @@ mod tests {
             0,
             1000,
             "proposer".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         assert!(dag.add_block(block).is_ok());
         assert_eq!(dag.block_count(), 1);
@@ -377,7 +377,7 @@ mod tests {
             0,
             1000,
             "proposer".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         let child = DagBlock::new(
             [2u8; 32],
@@ -386,7 +386,7 @@ mod tests {
             1,
             2000,
             "proposer".to_string(),
-            [3u8; 64],
+            vec![3u8; 64],
         );
 
         dag.add_block(genesis).unwrap();
@@ -404,7 +404,7 @@ mod tests {
             0,
             1000,
             "proposer".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         dag.add_block(block.clone()).unwrap();
         assert!(dag.add_block(block).is_err());
@@ -420,7 +420,7 @@ mod tests {
             1,
             1000,
             "proposer".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         assert!(dag.add_block(block).is_err());
     }
@@ -435,7 +435,7 @@ mod tests {
             0,
             1000,
             "proposer".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         dag.add_block(block.clone()).unwrap();
         assert_eq!(dag.get_block(&[1u8; 32]).unwrap(), block);
@@ -451,7 +451,7 @@ mod tests {
             0,
             1000,
             "p1".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         );
         let child = DagBlock::new(
             [2u8; 32],
@@ -460,7 +460,7 @@ mod tests {
             1,
             2000,
             "p2".to_string(),
-            [3u8; 64],
+            vec![3u8; 64],
         );
 
         dag.add_block(genesis).unwrap();
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn test_dag_is_linear() {
         let mut dag = Dag::new();
-        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), [2u8; 64]);
+        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), vec![2u8; 64]);
         dag.add_block(block).unwrap();
         assert!(dag.is_linear());
     }
@@ -483,7 +483,7 @@ mod tests {
     #[test]
     fn test_dag_chain_height() {
         let mut dag = Dag::new();
-        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), [2u8; 64]);
+        let block = DagBlock::new([1u8; 32], [0u8; 32], 0, 0, 1000, "p".to_string(), vec![2u8; 64]);
         dag.add_block(block).unwrap();
         assert_eq!(dag.chain_height(), 1);
     }
@@ -504,7 +504,7 @@ mod tests {
             0,
             1000,
             "p".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         )
     }
 

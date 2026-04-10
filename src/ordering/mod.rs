@@ -24,7 +24,7 @@ pub fn block_hash_for_signing(block: &Block) -> [u8; 32] {
 pub fn sign_block(block: &mut Block, key: &ed25519_dalek::SigningKey) {
     let hash = block_hash_for_signing(block);
     let sig = key.sign(&hash);
-    block.orderer_signature = Some(sig.to_bytes());
+    block.orderer_signature = Some(sig.to_bytes().to_vec());
 }
 
 /// Verify a block's orderer signature against the orderer's public key.
@@ -42,7 +42,8 @@ pub fn verify_orderer_signature(
         Some(s) => s,
     };
     let hash = block_hash_for_signing(block);
-    let sig = ed25519_dalek::Signature::from_bytes(sig_bytes);
+    let sig_array: &[u8; 64] = sig_bytes.as_slice().try_into().map_err(|_| "invalid signature length: expected 64 bytes".to_string())?;
+    let sig = ed25519_dalek::Signature::from_bytes(sig_array);
     use ed25519_dalek::Verifier;
     orderer_key
         .verify(&hash, &sig)
@@ -167,7 +168,9 @@ mod tests {
 
         // Verify the signature.
         let hash = block_hash_for_signing(&block);
-        let sig = Signature::from_bytes(&block.orderer_signature.unwrap());
+        let sig_vec = block.orderer_signature.unwrap();
+        let sig_arr: &[u8; 64] = sig_vec.as_slice().try_into().unwrap();
+        let sig = Signature::from_bytes(sig_arr);
         assert!(
             verifying.verify(&hash, &sig).is_ok(),
             "signature verification failed"

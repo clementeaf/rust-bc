@@ -343,7 +343,7 @@ impl Gateway {
                         state: String::new(),
                     },
                     creator_did: String::new(),
-                    creator_signature: [0u8; 64],
+                    creator_signature: vec![0u8; 64],
                     rwset: ReadWriteSet::default(),
                 },
             };

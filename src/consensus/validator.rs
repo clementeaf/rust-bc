@@ -37,7 +37,7 @@ impl BlockValidator {
 
     /// Validate block signature format (basic check, real verification deferred)
     pub fn validate_signature(block: &DagBlock) -> ValidityResult {
-        if block.signature == [0u8; 64] {
+        if block.signature.iter().all(|&b| b == 0) && block.signature.len() == 64 {
             return ValidityResult::Invalid("Signature cannot be zero".to_string());
         }
 
@@ -131,7 +131,7 @@ mod tests {
             0,
             1000,
             "validator1".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         )
     }
 
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn test_validate_signature_zero() {
         let mut block = create_valid_block();
-        block.signature = [0u8; 64];
+        block.signature = vec![0u8; 64];
         assert!(matches!(
             BlockValidator::validate_signature(&block),
             ValidityResult::Invalid(_)

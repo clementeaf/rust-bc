@@ -5,12 +5,13 @@ use crate::storage::traits::Transaction;
 use crate::transaction::rwset::ReadWriteSet;
 
 /// A transaction proposal submitted by a client for endorsement.
+///
+/// `creator_signature` is variable-length to support post-quantum algorithms.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionProposal {
     pub tx: Transaction,
     pub creator_did: String,
-    #[serde(with = "sig_bytes")]
-    pub creator_signature: [u8; 64],
+    pub creator_signature: Vec<u8>,
     pub rwset: ReadWriteSet,
 }
 
@@ -19,20 +20,6 @@ pub struct TransactionProposal {
 pub struct ProposalResponse {
     pub rwset: ReadWriteSet,
     pub endorsement: Endorsement,
-}
-
-mod sig_bytes {
-    use serde::{Deserializer, Serializer};
-
-    pub fn serialize<S: Serializer>(bytes: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_bytes(bytes)
-    }
-
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
-        let v: Vec<u8> = serde::Deserialize::deserialize(d)?;
-        v.try_into()
-            .map_err(|_| serde::de::Error::custom("expected 64 bytes"))
-    }
 }
 
 #[cfg(test)]
@@ -69,7 +56,7 @@ mod tests {
         Endorsement {
             signer_did: "did:example:org1".to_string(),
             org_id: "Org1".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             payload_hash: [0u8; 32],
             timestamp: 0,
         }
@@ -80,7 +67,7 @@ mod tests {
         let proposal = TransactionProposal {
             tx: sample_tx(),
             creator_did: "did:example:alice".to_string(),
-            creator_signature: [0u8; 64],
+            creator_signature: vec![0u8; 64],
             rwset: sample_rwset(),
         };
         assert_eq!(proposal.creator_did, "did:example:alice");

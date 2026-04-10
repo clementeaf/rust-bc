@@ -215,7 +215,7 @@ mod tests {
             merkle_root: [0u8; 32],
             transactions: vec![],
             proposer: "p".into(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -252,7 +252,7 @@ mod tests {
             merkle_root: [0u8; 32],
             transactions: vec![],
             proposer: "p".into(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -300,7 +300,7 @@ mod tests {
                 merkle_root: [0u8; 32],
                 transactions: vec![format!("tx{h}_0"), format!("tx{h}_1"), format!("tx{h}_2")],
                 proposer: "p".into(),
-                signature: [0u8; 64],
+                signature: vec![0u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             };
@@ -336,7 +336,7 @@ mod tests {
                 merkle_root: [0u8; 32],
                 transactions: vec![],
                 proposer: "p".into(),
-                signature: [0u8; 64],
+                signature: vec![0u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             };

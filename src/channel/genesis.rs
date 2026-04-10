@@ -29,7 +29,7 @@ pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
         merkle_root,
         transactions: vec![config_json],
         proposer: format!("genesis:{channel_id}"),
-        signature: [0u8; 64],
+        signature: vec![0u8; 64],
         endorsements: vec![],
         orderer_signature: None,
     }

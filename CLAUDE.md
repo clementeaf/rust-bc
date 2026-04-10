@@ -74,7 +74,7 @@ Services initialized at startup (all use in-memory backends by default):
 
 ### Other subsystems
 - `src/consensus/` — DAG, fork choice, validator scheduling
-- `src/identity/` — DID + key management
+- `src/identity/` — DID + key management + pluggable signing (`SigningProvider` trait with Ed25519 and ML-DSA-65 implementations)
 - `src/tls.rs`, `src/pki.rs` — mutual TLS, certificate provisioning
 - `src/network.rs` — P2P node, peer discovery
 
@@ -100,6 +100,7 @@ Services initialized at startup (all use in-memory backends by default):
 | `P2P_RESPONSE_BUFFER_BYTES` | 262144 | Buffer size for `send_and_wait` responses (256 KB) |
 | `P2P_HANDLER_BUFFER_BYTES` | 65536 | Buffer size for per-connection message handler (64 KB) |
 | `P2P_SYNC_BUFFER_BYTES` | 4194304 | Buffer size for pull-based state sync (4 MB) |
+| `SIGNING_ALGORITHM` | *(ed25519)* | `ed25519` or `ml-dsa-65` — selects the node's signing provider |
 
 ## Global Claude configuration (`~/.claude/`)
 
@@ -202,3 +203,4 @@ cd deploy && ./generate-tls.sh
 - Block keys in RocksDB are zero-padded to 12 digits so lexicographic order matches numeric order.
 - Secondary index keys use the same zero-padded prefix: `{:012}:{id}`, enabling cheap prefix range scans without a full table scan.
 - `tempfile::TempDir` is the standard test helper for RocksDB tests — the directory is cleaned up on drop.
+- Signature fields across all structs are `Vec<u8>` (not `[u8; 64]`) to support both Ed25519 (64 bytes) and ML-DSA-65 (3309 bytes). Serialized as hex strings via `vec_hex` serde helpers.

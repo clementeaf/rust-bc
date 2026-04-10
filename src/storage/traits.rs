@@ -8,6 +8,9 @@ use super::errors::StorageResult;
 use crate::endorsement::types::Endorsement;
 
 /// Block structure for storage
+///
+/// Signature fields are variable-length (`Vec<u8>`) to support both Ed25519
+/// (64 bytes) and post-quantum algorithms like ML-DSA-65 (3309 bytes).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     pub height: u64,
@@ -16,52 +19,46 @@ pub struct Block {
     pub merkle_root: [u8; 32],
     pub transactions: Vec<String>,
     pub proposer: String,
-    #[serde(with = "sig_hex")]
-    pub signature: [u8; 64],
+    #[serde(with = "vec_hex")]
+    pub signature: Vec<u8>,
     /// Endorsements collected for this block (empty for legacy blocks)
     #[serde(default)]
     pub endorsements: Vec<Endorsement>,
     /// Orderer signature over the block hash (absent for legacy blocks).
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_sig_hex")]
-    pub orderer_signature: Option<[u8; 64]>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_vec_hex")]
+    pub orderer_signature: Option<Vec<u8>>,
 }
 
-mod sig_hex {
+mod vec_hex {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S: Serializer>(sig: &[u8; 64], s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(&hex::encode(sig))
+    pub fn serialize<S: Serializer>(bytes: &Vec<u8>, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&hex::encode(bytes))
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<[u8; 64], D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
         let hex_str = String::deserialize(d)?;
-        let bytes = hex::decode(&hex_str).map_err(serde::de::Error::custom)?;
-        bytes
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("signature must be 64 bytes"))
+        hex::decode(&hex_str).map_err(serde::de::Error::custom)
     }
 }
 
-mod opt_sig_hex {
+mod opt_vec_hex {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S: Serializer>(sig: &Option<[u8; 64]>, s: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(sig: &Option<Vec<u8>>, s: S) -> Result<S::Ok, S::Error> {
         match sig {
             Some(bytes) => s.serialize_str(&hex::encode(bytes)),
             None => s.serialize_none(),
         }
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<[u8; 64]>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<u8>>, D::Error> {
         let opt: Option<String> = Option::deserialize(d)?;
         match opt {
             None => Ok(None),
             Some(hex_str) => {
                 let bytes = hex::decode(&hex_str).map_err(serde::de::Error::custom)?;
-                let arr: [u8; 64] = bytes
-                    .try_into()
-                    .map_err(|_| serde::de::Error::custom("orderer_signature must be 64 bytes"))?;
-                Ok(Some(arr))
+                Ok(Some(bytes))
             }
         }
     }
@@ -245,7 +242,7 @@ mod tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "node-1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         }
@@ -266,7 +263,7 @@ mod tests {
         let e = Endorsement {
             signer_did: "did:bc:alice".to_string(),
             org_id: "org1".to_string(),
-            signature: [1u8; 64],
+            signature: vec![1u8; 64],
             payload_hash: [2u8; 32],
             timestamp: 9999,
         };
@@ -277,7 +274,7 @@ mod tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "node-1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![e.clone()],
             orderer_signature: None,
         };
@@ -290,11 +287,11 @@ mod tests {
     #[test]
     fn block_serde_with_orderer_signature() {
         let mut block = sample_block(10);
-        block.orderer_signature = Some([42u8; 64]);
+        block.orderer_signature = Some(vec![42u8; 64]);
         let json = serde_json::to_string(&block).unwrap();
         assert!(json.contains("orderer_signature"));
         let decoded: Block = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.orderer_signature, Some([42u8; 64]));
+        assert_eq!(decoded.orderer_signature, Some(vec![42u8; 64]));
     }
 
     #[test]

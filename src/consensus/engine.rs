@@ -222,7 +222,7 @@ mod tests {
             0,
             0,
             "v1".to_string(),
-            [2u8; 64],
+            vec![2u8; 64],
         )
     }
 
@@ -272,7 +272,7 @@ mod tests {
     fn reject_zero_signature() {
         let mut e = engine();
         let mut b = valid_block(1, 0, 0);
-        b.signature = [0u8; 64];
+        b.signature = vec![0u8; 64];
         assert!(matches!(
             e.accept_block(b),
             Err(ConsensusError::InvalidBlock(_))

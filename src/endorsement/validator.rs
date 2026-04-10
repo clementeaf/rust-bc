@@ -28,7 +28,8 @@ pub enum EndorsementError {
 
 /// Verify a single endorsement against a known public key.
 ///
-/// `public_key` must be a valid 32-byte Ed25519 public key.
+/// Currently supports Ed25519 (32-byte public key, 64-byte signature).
+/// Post-quantum signature verification is handled by `SigningProvider::verify()`.
 pub fn verify_endorsement(e: &Endorsement, public_key: &[u8; 32]) -> Result<(), EndorsementError> {
     let verifying_key = VerifyingKey::from_bytes(public_key)
         .map_err(|err| EndorsementError::InvalidPublicKey(err.to_string()))?;
@@ -201,7 +202,7 @@ mod tests {
     }
 
     fn make_endorsement(sk: &SigningKey, payload_hash: [u8; 32], org_id: &str) -> Endorsement {
-        let sig = sk.sign(&payload_hash).to_bytes();
+        let sig = sk.sign(&payload_hash).to_bytes().to_vec();
         Endorsement {
             signer_did: format!("did:bc:{org_id}:signer"),
             org_id: org_id.to_string(),
@@ -227,7 +228,7 @@ mod tests {
         let e = Endorsement {
             signer_did: "did:bc:x".to_string(),
             org_id: "org1".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             payload_hash: payload,
             timestamp: 0,
         };

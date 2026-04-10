@@ -26,7 +26,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -117,7 +117,7 @@ mod comprehensive_storage_tests {
                 merkle_root: [1u8; 32],
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
-                signature: [2u8; 64],
+                signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             };
@@ -154,7 +154,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -186,7 +186,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -219,7 +219,7 @@ mod comprehensive_storage_tests {
                 merkle_root: [1u8; 32],
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{}", i),
-                signature: [2u8; 64],
+                signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             })
@@ -255,7 +255,7 @@ mod comprehensive_storage_tests {
                 merkle_root: [1u8; 32],
                 transactions: (1..=10).map(|j| format!("tx{}_{}", i, j)).collect(),
                 proposer: format!("proposer{}", i),
-                signature: [2u8; 64],
+                signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             })
@@ -273,7 +273,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         }];
@@ -300,7 +300,7 @@ mod comprehensive_storage_tests {
                 merkle_root: [1u8; 32],
                 transactions: vec![],
                 proposer: "proposer".to_string(),
-                signature: [2u8; 64],
+                signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             };
@@ -343,7 +343,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "p1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -354,7 +354,7 @@ mod comprehensive_storage_tests {
             merkle_root: [2u8; 32],
             transactions: vec![],
             proposer: "p2".to_string(),
-            signature: [3u8; 64],
+            signature: vec![3u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -373,7 +373,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: (1..=1000).map(|i| format!("tx{:04}", i)).collect(),
             proposer: "proposer".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -390,7 +390,7 @@ mod comprehensive_storage_tests {
             merkle_root: [0u8; 32],
             transactions: vec![],
             proposer: "genesis".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -407,7 +407,7 @@ mod comprehensive_storage_tests {
             merkle_root: [255u8; 32],
             transactions: vec![],
             proposer: "max".to_string(),
-            signature: [255u8; 64],
+            signature: vec![255u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -424,7 +424,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "proposer".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -454,7 +454,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "proposer-!@#$%^&*()".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -471,7 +471,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "proposer-🚀-✅".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -604,7 +604,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "p1".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -621,7 +621,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "proposer".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -674,7 +674,7 @@ mod comprehensive_storage_tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "p".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -697,7 +697,7 @@ mod comprehensive_storage_tests {
                 merkle_root: [1u8; 32],
                 transactions: vec![],
                 proposer: "p".to_string(),
-                signature: [0u8; 64],
+                signature: vec![0u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
             };

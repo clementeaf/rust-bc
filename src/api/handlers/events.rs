@@ -476,7 +476,7 @@ mod tests {
             merkle_root: [1u8; 32],
             transactions: vec![],
             proposer: "node-1".to_string(),
-            signature: [2u8; 64],
+            signature: vec![2u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         }

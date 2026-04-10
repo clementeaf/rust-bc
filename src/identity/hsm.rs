@@ -121,15 +121,19 @@ impl HsmSigningProvider {
 }
 
 impl super::signing::SigningProvider for HsmSigningProvider {
+    fn algorithm(&self) -> super::signing::SigningAlgorithm {
+        super::signing::SigningAlgorithm::Ed25519
+    }
+
     #[cfg(not(feature = "hsm"))]
-    fn sign(&self, _data: &[u8]) -> Result<[u8; 64], super::signing::SigningError> {
+    fn sign(&self, _data: &[u8]) -> Result<Vec<u8>, super::signing::SigningError> {
         Err(super::signing::SigningError::SignFailed(
             "HSM signing not available in this build".into(),
         ))
     }
 
     #[cfg(feature = "hsm")]
-    fn sign(&self, data: &[u8]) -> Result<[u8; 64], super::signing::SigningError> {
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, super::signing::SigningError> {
         // In a full implementation, this would:
         // 1. Open a PKCS#11 session to the HSM
         // 2. Find the key by label (CKA_LABEL)
@@ -144,24 +148,26 @@ impl super::signing::SigningProvider for HsmSigningProvider {
         ))
     }
 
-    fn public_key(&self) -> [u8; 32] {
-        self.public_key
+    fn public_key(&self) -> Vec<u8> {
+        self.public_key.to_vec()
     }
 
     #[cfg(not(feature = "hsm"))]
-    fn verify(&self, _data: &[u8], _sig: &[u8; 64]) -> Result<bool, super::signing::SigningError> {
+    fn verify(&self, _data: &[u8], _sig: &[u8]) -> Result<bool, super::signing::SigningError> {
         Err(super::signing::SigningError::VerifyFailed(
             "HSM verification not available in this build".into(),
         ))
     }
 
     #[cfg(feature = "hsm")]
-    fn verify(&self, data: &[u8], sig: &[u8; 64]) -> Result<bool, super::signing::SigningError> {
-        // Verify using the cached public key (Ed25519).
+    fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, super::signing::SigningError> {
         use ed25519_dalek::{Signature, VerifyingKey};
+        let sig_bytes: [u8; 64] = sig
+            .try_into()
+            .map_err(|_| super::signing::SigningError::VerifyFailed("Ed25519 signature must be 64 bytes".into()))?;
         let vk = VerifyingKey::from_bytes(&self.public_key)
             .map_err(|e| super::signing::SigningError::VerifyFailed(e.to_string()))?;
-        let signature = Signature::from_bytes(sig);
+        let signature = Signature::from_bytes(&sig_bytes);
         Ok(vk.verify_strict(data, &signature).is_ok())
     }
 }

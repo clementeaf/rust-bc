@@ -742,8 +742,25 @@ async fn async_main() -> std::io::Result<()> {
         } else {
             Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
         };
-    let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> =
-        Arc::new(crate::identity::signing::SoftwareSigningProvider::generate());
+    let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
+        let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
+        match algo.to_lowercase().as_str() {
+            "ml-dsa-65" | "mldsa65" => {
+                log::info!("Signing algorithm: ML-DSA-65 (FIPS 204, post-quantum)");
+                Arc::new(crate::identity::signing::MlDsaSigningProvider::generate())
+            }
+            _ => {
+                if !algo.is_empty() && algo.to_lowercase() != "ed25519" {
+                    log::warn!(
+                        "Unknown SIGNING_ALGORITHM='{}', falling back to Ed25519",
+                        algo
+                    );
+                }
+                log::info!("Signing algorithm: Ed25519");
+                Arc::new(crate::identity::signing::SoftwareSigningProvider::generate())
+            }
+        }
+    };
     let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> = ordering_backend
         .clone()
         .unwrap_or_else(|| Arc::new(ordering::service::OrderingService::new()));

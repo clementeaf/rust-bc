@@ -88,36 +88,51 @@ impl Transaction {
         !self.from.is_empty() && !self.to.is_empty() && self.amount > 0
     }
 
-    /**
-     * Verifica la firma digital de la transacción
-     */
+    /// Verify the digital signature of this transaction.
+    ///
+    /// Supports Ed25519 (32-byte public key, 64-byte signature) for the
+    /// legacy wallet system. Post-quantum verification for new-layer
+    /// transactions uses `SigningProvider::verify()` instead.
     pub fn verify_signature(&self, public_key_bytes: &[u8]) -> Result<(), SignatureError> {
         if self.signature.is_empty() {
             return Err(SignatureError::new());
         }
 
-        if public_key_bytes.len() != 32 {
-            return Err(SignatureError::new());
-        }
-
-        let mut pk_array = [0u8; 32];
-        pk_array.copy_from_slice(public_key_bytes);
-        let public_key = VerifyingKey::from_bytes(&pk_array).map_err(|_| SignatureError::new())?;
-
         let signature_bytes = hex::decode(&self.signature).map_err(|_| SignatureError::new())?;
 
-        if signature_bytes.len() != 64 {
-            return Err(SignatureError::new());
+        // Ed25519 path: 32-byte public key, 64-byte signature
+        if public_key_bytes.len() == 32 && signature_bytes.len() == 64 {
+            let mut pk_array = [0u8; 32];
+            pk_array.copy_from_slice(public_key_bytes);
+            let public_key =
+                VerifyingKey::from_bytes(&pk_array).map_err(|_| SignatureError::new())?;
+            let mut sig_array = [0u8; 64];
+            sig_array.copy_from_slice(&signature_bytes);
+            let signature = Signature::from_bytes(&sig_array);
+            let message = self.calculate_hash();
+            return public_key
+                .verify(message.as_bytes(), &signature)
+                .map_err(|_| SignatureError::new());
         }
 
-        let mut sig_array = [0u8; 64];
-        sig_array.copy_from_slice(&signature_bytes);
-        let signature = Signature::from_bytes(&sig_array);
+        // ML-DSA-65 path: 1952-byte public key, 3309-byte signature
+        if public_key_bytes.len() == 1952 && signature_bytes.len() == 3309 {
+            use pqcrypto_traits::sign::{DetachedSignature, PublicKey};
+            let pk = pqcrypto_mldsa::mldsa65::PublicKey::from_bytes(public_key_bytes)
+                .map_err(|_| SignatureError::new())?;
+            let sig =
+                pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(&signature_bytes)
+                    .map_err(|_| SignatureError::new())?;
+            let message = self.calculate_hash();
+            return pqcrypto_mldsa::mldsa65::verify_detached_signature(
+                &sig,
+                message.as_bytes(),
+                &pk,
+            )
+            .map_err(|_| SignatureError::new());
+        }
 
-        let message = self.calculate_hash();
-        public_key
-            .verify(message.as_bytes(), &signature)
-            .map_err(|_| SignatureError::new())
+        Err(SignatureError::new())
     }
 
     /**

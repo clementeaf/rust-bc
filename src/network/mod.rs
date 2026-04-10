@@ -1565,7 +1565,7 @@ impl Node {
 
                 // 4. Build endorsement
                 let pub_key = signer.public_key();
-                let signer_did = format!("did:key:{}", hex::encode(pub_key));
+                let signer_did = format!("did:key:{}", hex::encode(&pub_key));
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -2901,7 +2901,7 @@ impl Node {
                     &node.org_id,
                     now_ms / 1000,
                     seq,
-                    [0u8; 64],
+                    vec![0u8; 64],
                     local_height,
                 );
 
@@ -3204,7 +3204,7 @@ mod tests {
             merkle_root: [0u8; 32],
             transactions: vec![],
             proposer: "ord".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -3319,7 +3319,7 @@ mod tests {
             merkle_root: [0u8; 32],
             transactions: vec!["tx-test".to_string()],
             proposer: "orderer1".to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };
@@ -3368,7 +3368,7 @@ mod tests {
             merkle_root: [2u8; 32],
             transactions: vec!["tx1".to_string()],
             proposer: "peer0".to_string(),
-            signature: [3u8; 64],
+            signature: vec![3u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };

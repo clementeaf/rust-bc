@@ -112,7 +112,7 @@ impl OrderingService {
             merkle_root: [0u8; 32],
             transactions: tx_ids,
             proposer: proposer.to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         };

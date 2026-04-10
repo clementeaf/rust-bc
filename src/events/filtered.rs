@@ -68,7 +68,7 @@ mod tests {
             merkle_root: [0u8; 32],
             transactions: vec!["tx1".into(), "tx2".into(), "tx3".into()],
             proposer: "peer0".into(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             endorsements: vec![],
             orderer_signature: None,
         }

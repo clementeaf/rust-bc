@@ -47,7 +47,7 @@ mod tests {
         Endorsement {
             signer_did: format!("did:example:{org}"),
             org_id: org.to_string(),
-            signature: [0u8; 64],
+            signature: vec![0u8; 64],
             payload_hash: [0u8; 32],
             timestamp: 0,
         }
@@ -58,7 +58,7 @@ mod tests {
         let proposal = TransactionProposal {
             tx: sample_tx(),
             creator_did: "did:example:alice".to_string(),
-            creator_signature: [0u8; 64],
+            creator_signature: vec![0u8; 64],
             rwset: sample_rwset(),
         };
         let endorsed = EndorsedTransaction {
