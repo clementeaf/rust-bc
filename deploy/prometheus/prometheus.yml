@@ -10,6 +10,8 @@ scrape_configs:
           - 'node2:8080'
           - 'node3:8080'
           - 'orderer1:8080'
+          - 'orderer2:8080'
+          - 'orderer3:8080'
         labels:
           network: 'local-test'
     metrics_path: '/metrics'

@@ -12,6 +12,8 @@ NODE1="https://127.0.0.1:8080"
 NODE2="https://127.0.0.1:8082"
 NODE3="https://127.0.0.1:8084"
 ORDERER="https://127.0.0.1:8086"
+ORDERER2="https://127.0.0.1:8088"
+ORDERER3="https://127.0.0.1:8090"
 CURL="curl -sk --max-time 10"
 VERBOSE="${1:-}"
 
@@ -740,6 +742,18 @@ assert_eq "$pre_amount" "42" "Transaction readable before restart"
 # Note: full crash recovery (docker stop/start) is manual.
 # This test verifies the store-backed write/read cycle works.
 skip "Docker stop/start test (run manually: docker compose stop node1 && docker compose start node1)"
+
+# ── 13. Raft Orderer Cluster Health ──────────────────────────────────────────
+section "Raft Orderer Cluster"
+
+resp=$(api GET "$ORDERER/api/v1/health")
+assert_not_empty "$resp" "Orderer1 health responds"
+
+resp2=$(api GET "$ORDERER2/api/v1/health")
+assert_not_empty "$resp2" "Orderer2 health responds"
+
+resp3=$(api GET "$ORDERER3/api/v1/health")
+assert_not_empty "$resp3" "Orderer3 health responds"
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
