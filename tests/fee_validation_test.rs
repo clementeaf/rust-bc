@@ -39,8 +39,7 @@ fn test_fee_validation_requires_native_token() {
     let error = validation_result.unwrap_err();
     assert!(
         error.contains("token nativo") || error.contains("insuficiente") || error.contains("Saldo"),
-        "Error debe mencionar token nativo o saldo insuficiente. Error recibido: {}",
-        error
+        "Error debe mencionar token nativo o saldo insuficiente. Error recibido: {error}"
     );
 }
 

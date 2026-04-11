@@ -30,6 +30,7 @@ pub trait WorldState: Send + Sync {
     /// Returns the new version number (1 on first write, n+1 on update).
     fn put(&self, key: &str, data: &[u8]) -> StorageResult<u64>;
 
+    #[allow(dead_code)]
     /// Remove `key` from the world state.  No-op if the key does not exist.
     fn delete(&self, key: &str) -> StorageResult<()>;
 
@@ -143,9 +144,11 @@ impl WorldState for MemoryWorldState {
 
 // ── Composite key helpers ─────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 /// Separator byte used in composite keys (matches Hyperledger Fabric convention).
 const COMPOSITE_SEP: char = '\x00';
 
+#[allow(dead_code)]
 /// Build a composite key from an object type and zero or more attribute values.
 ///
 /// Format: `\x00{object_type}\x00{attr1}\x00{attr2}\x00…`
@@ -165,6 +168,7 @@ pub fn composite_key(object_type: &str, attrs: &[&str]) -> String {
     key
 }
 
+#[allow(dead_code)]
 /// Parse a composite key back into its `(object_type, attributes)` components.
 ///
 /// Returns `None` if the key does not start with `\x00` or has fewer than two
@@ -187,6 +191,7 @@ pub fn parse_composite_key(key: &str) -> Option<(String, Vec<String>)> {
     Some((object_type, attrs))
 }
 
+#[allow(dead_code)]
 /// Return all world-state entries whose composite key starts with the given
 /// `object_type` and `partial` attribute prefix.
 ///
@@ -261,7 +266,7 @@ mod tests {
         let s = ws();
         // Insert 10 keys: "key00".."key09"
         for i in 0..10u8 {
-            s.put(&format!("key{:02}", i), &[i]).unwrap();
+            s.put(&format!("key{i:02}"), &[i]).unwrap();
         }
         // Range ["key02", "key07") → key02,03,04,05,06
         let result = s.get_range("key02", "key07").unwrap();

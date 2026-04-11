@@ -22,6 +22,7 @@ pub struct ReadWriteSet {
 }
 
 impl ReadWriteSet {
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.reads.is_empty() && self.writes.is_empty()
     }

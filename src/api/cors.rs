@@ -1,6 +1,7 @@
 use actix_web::http::Method;
 
 /// CORS policy configuration
+#[allow(dead_code)] // Fields used via builder methods
 #[derive(Clone, Debug)]
 pub struct CorsPolicy {
     /// Allowed origins (e.g., "https://example.com", or "*" for all)
@@ -48,41 +49,48 @@ impl Default for CorsPolicy {
 }
 
 impl CorsPolicy {
+    #[allow(dead_code)]
     /// Create a new CORS policy
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[allow(dead_code)]
     /// Set allowed origins
     pub fn with_origins(mut self, origins: Vec<String>) -> Self {
         self.allowed_origins = origins;
         self
     }
 
+    #[allow(dead_code)]
     /// Set allowed methods
     pub fn with_methods(mut self, methods: Vec<Method>) -> Self {
         self.allowed_methods = methods;
         self
     }
 
+    #[allow(dead_code)]
     /// Set allowed headers
     pub fn with_headers(mut self, headers: Vec<String>) -> Self {
         self.allowed_headers = headers;
         self
     }
 
+    #[allow(dead_code)]
     /// Set exposed headers
     pub fn with_exposed_headers(mut self, headers: Vec<String>) -> Self {
         self.exposed_headers = headers;
         self
     }
 
+    #[allow(dead_code)]
     /// Enable credentials
     pub fn allow_credentials(mut self, allow: bool) -> Self {
         self.allow_credentials = allow;
         self
     }
 
+    #[allow(dead_code)]
     /// Set max age for preflight cache
     pub fn with_max_age(mut self, seconds: u32) -> Self {
         self.max_age = seconds;
@@ -144,6 +152,7 @@ impl CorsPolicy {
     }
 }
 
+#[allow(dead_code)]
 /// CORS handler for preflight OPTIONS requests
 pub fn handle_preflight_request(
     origin: Option<&str>,

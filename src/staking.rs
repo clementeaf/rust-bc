@@ -378,8 +378,7 @@ impl StakingManager {
                 let slashed = validator.slash(slash_amount);
 
                 eprintln!(
-                    "⚡ SLASHING aplicado a {}: {} tokens slasheados por doble firma en bloque {}",
-                    validator_address, slashed, block_index
+                    "⚡ SLASHING aplicado a {validator_address}: {slashed} tokens slasheados por doble firma en bloque {block_index}"
                 );
 
                 return true;

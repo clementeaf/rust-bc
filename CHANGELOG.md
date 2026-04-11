@@ -6,6 +6,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-11 (Audit Hardening)
+
+**Wasmtime upgrade (v21 → v36)**
+- Resolves 15 CVEs including sandbox escape, memory leaks, and host panics
+- Rust toolchain updated to `nightly-2025-05-01` (1.88.0) for compatibility
+- Removed `#![feature(unsigned_is_multiple_of)]` (stable since 1.87)
+
+**Clippy clean pass**
+- Zero warnings from `cargo clippy -- -D warnings`
+- 199 `uninlined_format_args` auto-fixed for Rust 1.88 lint rules
+- Removed crate-level `#![allow(dead_code, unused_imports)]` from `lib.rs` and `main.rs`
+- 144 previously hidden warnings resolved: unused imports removed, dead code annotated per-item
+- Removed file-level `#![allow(dead_code)]` from `chain_validation.rs`, `transaction_validation.rs`, `network_security.rs`
+
+**Dependency CVE fix**
+- `bytes` 1.11.0 → 1.11.1 (RUSTSEC-2026-0007, integer overflow in `BytesMut::reserve`)
+
+---
+
 ### 2026-04-10 (Production Readiness — Final Gaps)
 
 **3-node Raft ordering cluster**

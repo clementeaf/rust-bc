@@ -15,6 +15,7 @@ pub enum ForkChoiceRule {
     #[default]
     HeaviestSubtree,
 
+    #[allow(dead_code)]
     /// Choose the branch that reaches the greatest block height.
     /// Ties are broken by the lexicographically smallest block hash.
     LongestChain,
@@ -28,6 +29,7 @@ pub enum ForkChoiceRule {
 /// ```
 #[derive(Debug, Clone)]
 pub struct ForkChoice {
+    #[allow(dead_code)]
     rule: ForkChoiceRule,
 }
 
@@ -37,6 +39,7 @@ impl ForkChoice {
         Self { rule }
     }
 
+    #[allow(dead_code)]
     /// Return the canonical chain (genesis → tip) according to the configured
     /// rule.  Returns an empty `Vec` when the DAG has no genesis block.
     pub fn canonical_chain(&self, dag: &Dag) -> Vec<[u8; 32]> {
@@ -46,6 +49,7 @@ impl ForkChoice {
         }
     }
 
+    #[allow(dead_code)]
     /// Resolve a set of competing tips to the canonical one.
     ///
     /// Returns `None` if `candidates` is empty or none appear in the canonical

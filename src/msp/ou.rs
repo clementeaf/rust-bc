@@ -21,9 +21,13 @@ pub struct OrganizationalUnit {
 
 /// Registry for organizational unit definitions.
 pub trait OuRegistry: Send + Sync {
+    #[allow(dead_code)]
     fn register_ou(&self, ou: &OrganizationalUnit) -> StorageResult<()>;
+    #[allow(dead_code)]
     fn get_ou(&self, ou_id: &str) -> StorageResult<Option<OrganizationalUnit>>;
+    #[allow(dead_code)]
     fn list_ous(&self, org_id: &str) -> StorageResult<Vec<OrganizationalUnit>>;
+    #[allow(dead_code)]
     /// Return the hierarchy chain from `ou_id` up to the root OU.
     fn get_hierarchy(&self, ou_id: &str) -> StorageResult<Vec<OrganizationalUnit>>;
 }

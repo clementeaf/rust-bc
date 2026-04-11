@@ -16,11 +16,11 @@ fn main() {
         .unwrap_or(1);
 
     println!("==========================================");
-    println!("Test de Minería Manual - Dificultad: {}", difficulty);
+    println!("Test de Minería Manual - Dificultad: {difficulty}");
     println!("==========================================");
     println!();
 
-    println!("Iniciando blockchain con dificultad: {}", difficulty);
+    println!("Iniciando blockchain con dificultad: {difficulty}");
     let blockchain = Blockchain::new(difficulty);
     let mut wallet_manager = WalletManager::new();
 
@@ -28,7 +28,7 @@ fn main() {
     let wallet = wallet_manager.create_wallet();
     let miner_address = wallet.address.clone();
 
-    println!("Dirección del minero: {}", miner_address);
+    println!("Dirección del minero: {miner_address}");
     println!("Bloque génesis creado. Hash: {}", blockchain.chain[0].hash);
     println!();
     println!("Iniciando minería del bloque #1...");
@@ -49,8 +49,8 @@ fn main() {
 
     let mut test_block = Block::new(index, vec![coinbase], previous_hash, difficulty_target);
 
-    println!("Dificultad: {}", difficulty_target);
-    println!("Target: {} ceros al inicio del hash", difficulty_target);
+    println!("Dificultad: {difficulty_target}");
+    println!("Target: {difficulty_target} ceros al inicio del hash");
     println!("Buscando hash válido...");
     println!();
 
@@ -84,7 +84,7 @@ fn main() {
             println!("✓ Hash válido encontrado!");
             println!("  Hash: {}", test_block.hash);
             println!("  Nonce: {}", test_block.nonce);
-            println!("  Hashes totales: {}", hash_count);
+            println!("  Hashes totales: {hash_count}");
             println!(
                 "  Tiempo total: {:.2} segundos",
                 start.elapsed().as_secs_f64()
@@ -106,7 +106,7 @@ fn main() {
             println!();
             println!("⚠️  Timeout alcanzado (10 minutos). La dificultad puede ser demasiado alta.");
             println!("   Intenta con una dificultad menor (1-3)");
-            println!("   Hashes probados: {}", hash_count);
+            println!("   Hashes probados: {hash_count}");
             std::process::exit(1);
         }
     }

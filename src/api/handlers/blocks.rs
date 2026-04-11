@@ -55,7 +55,7 @@ pub async fn get_block_by_index(
             Ok(HttpResponse::Ok().json(body))
         }
         None => Err(ApiError::NotFound {
-            resource: format!("block index {}", idx),
+            resource: format!("block index {idx}"),
         }),
     }
 }
@@ -77,7 +77,7 @@ pub async fn get_block_by_hash(
             Ok(HttpResponse::Ok().json(body))
         }
         None => Err(ApiError::NotFound {
-            resource: format!("block {}", hash),
+            resource: format!("block {hash}"),
         }),
     }
 }
@@ -135,7 +135,7 @@ pub async fn store_get_block(
     match store.read_block(height) {
         Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
         Err(_) => Err(ApiError::NotFound {
-            resource: format!("block height {}", height),
+            resource: format!("block height {height}"),
         }),
     }
 }

@@ -438,7 +438,7 @@ impl Blockchain {
 
         let block_size = Self::calculate_block_size(&transactions);
         if block_size > self.max_block_size_bytes {
-            return Err(format!("Bloque excede tamaño máximo: {} bytes", block_size));
+            return Err(format!("Bloque excede tamaño máximo: {block_size} bytes"));
         }
 
         if transactions.len() > self.max_transactions_per_block {
@@ -453,13 +453,13 @@ impl Blockchain {
             if tx.from == "0" {
                 coinbase_count += 1;
                 if let Err(e) = self.validate_coinbase_transaction(tx) {
-                    return Err(format!("Transacción coinbase inválida: {}", e));
+                    return Err(format!("Transacción coinbase inválida: {e}"));
                 }
             } else if tx.from == "STAKING" {
                 // Transacciones de unstaking: permitidas sin validación adicional
                 // (se validan en el contexto de staking)
             } else if let Err(e) = self.validate_transaction(tx, wallet_manager) {
-                return Err(format!("Transacción inválida: {}", e));
+                return Err(format!("Transacción inválida: {e}"));
             }
         }
 
@@ -731,8 +731,7 @@ impl Blockchain {
 
         if tx.amount > MAX_COINBASE_AMOUNT {
             return Err(format!(
-                "Cantidad de coinbase excede el límite máximo: {}",
-                MAX_COINBASE_AMOUNT
+                "Cantidad de coinbase excede el límite máximo: {MAX_COINBASE_AMOUNT}"
             ));
         }
 
@@ -742,8 +741,7 @@ impl Blockchain {
 
         if tx.to.len() < MIN_ADDRESS_LENGTH {
             return Err(format!(
-                "Dirección destinataria de coinbase debe tener al menos {} caracteres",
-                MIN_ADDRESS_LENGTH
+                "Dirección destinataria de coinbase debe tener al menos {MIN_ADDRESS_LENGTH} caracteres"
             ));
         }
 

@@ -21,6 +21,7 @@ pub mod traits;
 pub mod versioning;
 
 /// API configuration
+#[allow(dead_code)] // Config struct fields read via from_env()
 #[derive(Clone, Debug)]
 pub struct ApiConfig {
     pub host: String,

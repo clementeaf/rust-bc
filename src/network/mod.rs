@@ -158,6 +158,7 @@ pub struct ContractSyncMetrics {
 
 #[derive(Clone)]
 pub struct Node {
+    #[allow(dead_code)]
     pub address: SocketAddr,
     pub peers: Arc<Mutex<HashSet<String>>>,
     pub blockchain: Arc<Mutex<Blockchain>>,
@@ -209,6 +210,7 @@ pub struct Node {
     pub private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
     /// Collection registry for validating membership on private data push.
     pub collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
+    #[allow(dead_code)]
     /// Monotonically increasing alive sequence counter.
     pub alive_sequence: Arc<Mutex<u64>>,
     /// Anchor peers for cross-org gossip discovery (parsed from `ANCHOR_PEERS` env).
@@ -233,8 +235,7 @@ pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
             }
             Err(_) => {
                 eprintln!(
-                    "⚠️  PEER_ALLOWLIST: entrada ignorada (no es dirección válida): {:?}",
-                    t
+                    "⚠️  PEER_ALLOWLIST: entrada ignorada (no es dirección válida): {t:?}"
                 );
             }
         }
@@ -302,10 +303,10 @@ async fn gossip_loop(
                     if let Err(e) =
                         tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes()).await
                     {
-                        eprintln!("gossip: error sending block to {}: {}", addr, e);
+                        eprintln!("gossip: error sending block to {addr}: {e}");
                     }
                 }
-                Err(e) => eprintln!("gossip: could not connect to {}: {}", addr, e),
+                Err(e) => eprintln!("gossip: could not connect to {addr}: {e}"),
             }
         }
     }
@@ -494,7 +495,7 @@ impl Node {
             .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
                 Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
-                    format!("no response from {} within {:?}", peer_address, timeout),
+                    format!("no response from {peer_address} within {timeout:?}"),
                 ))
             })?
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
@@ -502,7 +503,7 @@ impl Node {
         if n == 0 {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::UnexpectedEof,
-                format!("peer {} closed connection without responding", peer_address),
+                format!("peer {peer_address} closed connection without responding"),
             )));
         }
 
@@ -516,11 +517,11 @@ impl Node {
      * Inicia el servidor P2P
      */
     pub async fn start_server(&mut self, port: u16) -> Result<(), Box<dyn std::error::Error>> {
-        let addr = format!("0.0.0.0:{}", port);
+        let addr = format!("0.0.0.0:{port}");
         let listener = TcpListener::bind(&addr).await?;
         self.listening = true;
 
-        println!("🌐 Servidor P2P iniciado en {}", addr);
+        println!("🌐 Servidor P2P iniciado en {addr}");
 
         // Clonar recursos compartidos antes del loop
         let peers = self.peers.clone();
@@ -568,14 +569,13 @@ impl Node {
                     if let Some(ref allowed) = peer_allowlist {
                         if !allowed.contains(&peer_key) {
                             eprintln!(
-                                "🚫 Conexión P2P rechazada (no está en PEER_ALLOWLIST): {}",
-                                peer_key
+                                "🚫 Conexión P2P rechazada (no está en PEER_ALLOWLIST): {peer_key}"
                             );
                             drop(stream);
                             continue;
                         }
                     }
-                    println!("📡 Nueva conexión desde: {}", peer_addr);
+                    println!("📡 Nueva conexión desde: {peer_addr}");
                     let peers_clone = peers.clone();
                     let blockchain_clone = blockchain.clone();
                     let wallet_manager_clone = wallet_manager.clone();
@@ -607,7 +607,7 @@ impl Node {
                             match acceptor.accept(stream).await {
                                 Ok(tls) => Box::new(tls),
                                 Err(e) => {
-                                    eprintln!("TLS handshake error from {}: {}", peer_addr, e);
+                                    eprintln!("TLS handshake error from {peer_addr}: {e}");
                                     return;
                                 }
                             }
@@ -644,12 +644,12 @@ impl Node {
                         )
                         .await
                         {
-                            eprintln!("Error manejando conexión: {}", e);
+                            eprintln!("Error manejando conexión: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    eprintln!("Error aceptando conexión: {}", e);
+                    eprintln!("Error aceptando conexión: {e}");
                 }
             }
         }
@@ -736,12 +736,11 @@ impl Node {
                         // Validar Network ID - rechazar si no coincide
                         if let (Some(their_id), Some(my_id)) = (their_network_id, &network_id) {
                             if *their_id != **my_id {
-                                eprintln!("❌ Network ID mismatch: expected '{}', got '{}'. Rejecting connection.", my_id, their_id);
+                                eprintln!("❌ Network ID mismatch: expected '{my_id}', got '{their_id}'. Rejecting connection.");
                                 // Enviar mensaje de error antes de cerrar (aunque el cliente puede no procesarlo)
                                 // Cerrar el stream inmediatamente para que el cliente detecte el rechazo
                                 return Err(format!(
-                                    "Network ID mismatch: expected '{}', got '{}'",
-                                    my_id, their_id
+                                    "Network ID mismatch: expected '{my_id}', got '{their_id}'"
                                 )
                                 .into());
                             }
@@ -752,8 +751,7 @@ impl Node {
                             let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
                             peers_guard.insert(their_p2p_addr.clone());
                             println!(
-                                "📡 Peer agregado desde conexión entrante: {}",
-                                their_p2p_addr
+                                "📡 Peer agregado desde conexión entrante: {their_p2p_addr}"
                             );
                         }
                         first_message = false;
@@ -867,7 +865,7 @@ impl Node {
                         if let Some(ref storage) = block_storage {
                             for block in &blockchain.chain {
                                 if let Err(e) = storage.save_block(block) {
-                                    eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
+                                    eprintln!("⚠️  Error guardando bloque en archivos: {e}");
                                 }
                             }
                         }
@@ -950,7 +948,7 @@ impl Node {
                         &block.hash,
                         &block.previous_hash,
                     ) {
-                        println!("🚫 Bloque rechazado por validación de checkpoint: {}", e);
+                        println!("🚫 Bloque rechazado por validación de checkpoint: {e}");
                         return Ok(None);
                     }
                 }
@@ -963,7 +961,7 @@ impl Node {
                             if let Err(e) =
                                 blockchain.validate_transaction(tx, &wallet_manager_guard)
                             {
-                                println!("⚠️  Transacción inválida en bloque recibido: {}", e);
+                                println!("⚠️  Transacción inválida en bloque recibido: {e}");
                                 return Ok(None);
                             }
                         }
@@ -985,12 +983,12 @@ impl Node {
                         if tx.from == "0" {
                             // Coinbase transaction
                             if let Err(e) = wallet_manager_guard.process_coinbase_transaction(tx) {
-                                eprintln!("⚠️  Error procesando transacción coinbase: {}", e);
+                                eprintln!("⚠️  Error procesando transacción coinbase: {e}");
                             }
                         } else {
                             // Transfer transaction
                             if let Err(e) = wallet_manager_guard.process_transaction(tx) {
-                                eprintln!("⚠️  Error procesando transacción: {}", e);
+                                eprintln!("⚠️  Error procesando transacción: {e}");
                             }
                         }
                     }
@@ -999,7 +997,7 @@ impl Node {
                 // Guardar bloque en BlockStorage
                 if let Some(ref storage) = block_storage {
                     if let Err(e) = storage.save_block(&block_clone) {
-                        eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
+                        eprintln!("⚠️  Error guardando bloque en archivos: {e}");
                     }
                 }
 
@@ -1025,7 +1023,7 @@ impl Node {
 
                     if !validation_result.is_valid {
                         let error_msg = validation_result.errors.join("; ");
-                        println!("🚫 Transacción rechazada por validador: {}", error_msg);
+                        println!("🚫 Transacción rechazada por validador: {error_msg}");
                         return Ok(None);
                     }
                 }
@@ -1058,8 +1056,7 @@ impl Node {
                 if let (Some(their_id), Some(my_id)) = (their_network_id, &network_id) {
                     if *their_id != **my_id {
                         return Err(format!(
-                            "Network ID mismatch: expected '{}', got '{}'",
-                            my_id, their_id
+                            "Network ID mismatch: expected '{my_id}', got '{their_id}'"
                         )
                         .into());
                     }
@@ -1177,10 +1174,10 @@ impl Node {
                     }
 
                     if synced > 0 {
-                        println!("✅ {} contratos sincronizados desde peer", synced);
+                        println!("✅ {synced} contratos sincronizados desde peer");
                     }
                     if errors > 0 {
-                        println!("⚠️  {} contratos rechazados por validación", errors);
+                        println!("⚠️  {errors} contratos rechazados por validación");
                     }
                 }
                 Ok(None)
@@ -1208,7 +1205,7 @@ impl Node {
 
                     if now - *last_ts < 60 {
                         if *count >= 10 {
-                            eprintln!("⚠️  Rate limit excedido para peer {}: {} contratos en último minuto", peer, count);
+                            eprintln!("⚠️  Rate limit excedido para peer {peer}: {count} contratos en último minuto");
                             return Ok(None);
                         }
                         *count += 1;
@@ -1296,7 +1293,7 @@ impl Node {
 
                     if now - *last_ts < 60 {
                         if *count >= 20 {
-                            eprintln!("⚠️  Rate limit excedido para peer {}: {} actualizaciones en último minuto", peer, count);
+                            eprintln!("⚠️  Rate limit excedido para peer {peer}: {count} actualizaciones en último minuto");
                             return Ok(None);
                         }
                         *count += 1;
@@ -1422,11 +1419,11 @@ impl Node {
                         Ok(raft_msg) => {
                             let mut node = raft.lock().unwrap_or_else(|e| e.into_inner());
                             if let Err(e) = node.step(raft_msg) {
-                                eprintln!("RaftMessage step error: {}", e);
+                                eprintln!("RaftMessage step error: {e}");
                             }
                         }
                         Err(e) => {
-                            eprintln!("RaftMessage decode error: {}", e);
+                            eprintln!("RaftMessage decode error: {e}");
                         }
                     }
                 }
@@ -1514,15 +1511,13 @@ impl Node {
                     Ok(Some(bytes)) => bytes,
                     Ok(None) => {
                         eprintln!(
-                            "ProposalRequest rejected: chaincode '{}' not found",
-                            chaincode_id
+                            "ProposalRequest rejected: chaincode '{chaincode_id}' not found"
                         );
                         return Ok(None);
                     }
                     Err(e) => {
                         eprintln!(
-                            "ProposalRequest error loading chaincode '{}': {}",
-                            chaincode_id, e
+                            "ProposalRequest error loading chaincode '{chaincode_id}': {e}"
                         );
                         return Ok(None);
                     }
@@ -1533,7 +1528,7 @@ impl Node {
                     match crate::chaincode::executor::WasmExecutor::new(&wasm_bytes, 1_000_000) {
                         Ok(e) => e,
                         Err(e) => {
-                            eprintln!("ProposalRequest error creating executor: {}", e);
+                            eprintln!("ProposalRequest error creating executor: {e}");
                             return Ok(None);
                         }
                     };
@@ -1541,7 +1536,7 @@ impl Node {
                 let (result, rwset) = match executor.simulate(Arc::clone(ws), &function) {
                     Ok(r) => r,
                     Err(e) => {
-                        eprintln!("ProposalRequest simulation failed: {}", e);
+                        eprintln!("ProposalRequest simulation failed: {e}");
                         return Ok(None);
                     }
                 };
@@ -1558,7 +1553,7 @@ impl Node {
                 let signature = match signer.sign(&payload_hash) {
                     Ok(sig) => sig,
                     Err(e) => {
-                        eprintln!("ProposalRequest signing failed: {}", e);
+                        eprintln!("ProposalRequest signing failed: {e}");
                         return Ok(None);
                     }
                 };
@@ -1610,23 +1605,20 @@ impl Node {
                                 Ok(_hash) => true,
                                 Err(e) => {
                                     eprintln!(
-                                        "[private-data] store error for {}/{}: {}",
-                                        collection, key, e
+                                        "[private-data] store error for {collection}/{key}: {e}"
                                     );
                                     false
                                 }
                             }
                         } else {
                             eprintln!(
-                                "[private-data] rejected: org '{}' not member of '{}'",
-                                sender_org, collection
+                                "[private-data] rejected: org '{sender_org}' not member of '{collection}'"
                             );
                             false
                         }
                     } else {
                         eprintln!(
-                            "[private-data] rejected: unknown collection '{}'",
-                            collection
+                            "[private-data] rejected: unknown collection '{collection}'"
                         );
                         false
                     }
@@ -1703,8 +1695,7 @@ impl Node {
             Err(e) => {
                 // Error al leer - conexión probablemente cerrada
                 return Err(format!(
-                    "Error reading response from peer: {} (connection may have been rejected)",
-                    e
+                    "Error reading response from peer: {e} (connection may have been rejected)"
                 )
                 .into());
             }
@@ -1732,8 +1723,7 @@ impl Node {
             } else {
                 // Si el peer no envía network_id, asumimos compatibilidad (backward compatibility)
                 println!(
-                    "⚠️  Peer {} no envió network_id, asumiendo compatibilidad",
-                    address
+                    "⚠️  Peer {address} no envió network_id, asumiendo compatibilidad"
                 );
             }
 
@@ -1744,7 +1734,7 @@ impl Node {
             {
                 let mut peers = self.peers.lock().unwrap_or_else(|e| e.into_inner());
                 peers.insert(peer_p2p_addr.clone());
-                println!("📡 Peer agregado en connect_to_peer: {}", peer_p2p_addr);
+                println!("📡 Peer agregado en connect_to_peer: {peer_p2p_addr}");
             }
 
             let (my_count, my_latest) = {
@@ -1757,8 +1747,7 @@ impl Node {
             // Sincronizar si el peer tiene más bloques
             if their_count > my_count {
                 println!(
-                    "📥 Sincronizando blockchain desde {} (ellos: {}, nosotros: {})",
-                    address, their_count, my_count
+                    "📥 Sincronizando blockchain desde {address} (ellos: {their_count}, nosotros: {my_count})"
                 );
                 self.request_blocks(address).await?;
             }
@@ -1770,8 +1759,7 @@ impl Node {
                     self.request_blocks(address).await?;
                 } else {
                     println!(
-                        "⚠️  Fork detectado con {}: mismo número de bloques pero diferentes hashes",
-                        address
+                        "⚠️  Fork detectado con {address}: mismo número de bloques pero diferentes hashes"
                     );
                     println!("   Nuestro hash: {}...", &my_latest[..16]);
                     println!("   Su hash: {}...", &their_hash[..16]);
@@ -1781,16 +1769,15 @@ impl Node {
             // Si tenemos más bloques, el peer debería sincronizar desde nosotros
             else if my_count > their_count {
                 println!(
-                    "ℹ️  Tenemos más bloques que {} (nosotros: {}, ellos: {})",
-                    address, my_count, their_count
+                    "ℹ️  Tenemos más bloques que {address} (nosotros: {my_count}, ellos: {their_count})"
                 );
             }
 
             // Sincronizar contratos
             if self.contract_manager.is_some() {
-                println!("📋 Sincronizando contratos desde {}...", address);
+                println!("📋 Sincronizando contratos desde {address}...");
                 if let Err(e) = self.request_contracts(address).await {
-                    eprintln!("⚠️  Error sincronizando contratos desde {}: {}", address, e);
+                    eprintln!("⚠️  Error sincronizando contratos desde {address}: {e}");
                 }
             }
         } else {
@@ -1799,7 +1786,7 @@ impl Node {
             peers.insert(address.to_string());
         }
 
-        println!("✅ Conectado a peer: {}", address);
+        println!("✅ Conectado a peer: {address}");
         Ok(())
     }
 
@@ -1814,7 +1801,7 @@ impl Node {
 
         for peer_addr in peers.iter() {
             if let Err(e) = self.sync_with_peer(peer_addr).await {
-                eprintln!("Error sincronizando con {}: {}", peer_addr, e);
+                eprintln!("Error sincronizando con {peer_addr}: {e}");
             }
         }
 
@@ -1849,6 +1836,7 @@ impl Node {
         false
     }
 
+    #[allow(dead_code)]
     /// Connect to anchor peers before general discovery.
     ///
     /// Anchor peers serve as cross-org entry points: each org publishes one
@@ -1913,13 +1901,12 @@ impl Node {
 
             match self.connect_to_peer(bootstrap_addr).await {
                 Ok(_) => {
-                    println!("✅ Conectado a bootstrap node: {}", bootstrap_addr);
+                    println!("✅ Conectado a bootstrap node: {bootstrap_addr}");
                     connected += 1;
                 }
                 Err(e) => {
                     println!(
-                        "⚠️  No se pudo conectar a bootstrap node {}: {}",
-                        bootstrap_addr, e
+                        "⚠️  No se pudo conectar a bootstrap node {bootstrap_addr}: {e}"
                     );
                     failed += 1;
                 }
@@ -1961,7 +1948,7 @@ impl Node {
         let n = match stream.read(&mut buffer).await {
             Ok(0) => return Err("Connection closed by peer".into()),
             Ok(n) => n,
-            Err(e) => return Err(format!("Error reading response: {}", e).into()),
+            Err(e) => return Err(format!("Error reading response: {e}").into()),
         };
 
         let response_str = String::from_utf8_lossy(&buffer[..n]);
@@ -2006,7 +1993,7 @@ impl Node {
         } else {
             "🔄 Sin peers conectados, intentando conectar a bootstrap/seed nodes..."
         };
-        println!("{}", log_msg);
+        println!("{log_msg}");
 
         let mut connected = 0;
 
@@ -2030,7 +2017,7 @@ impl Node {
                     } else {
                         "seed"
                     };
-                    println!("✅ Conectado a {} node: {}", node_type, node_addr);
+                    println!("✅ Conectado a {node_type} node: {node_addr}");
                     connected += 1;
                     // Si no es forzado, con uno es suficiente
                     if !force {
@@ -2104,7 +2091,7 @@ impl Node {
                 }
                 Err(e) => {
                     // Silenciosamente ignorar errores (peer puede estar desconectado)
-                    eprintln!("⚠️  Error obteniendo peers de {}: {}", peer_addr, e);
+                    eprintln!("⚠️  Error obteniendo peers de {peer_addr}: {e}");
                 }
             }
 
@@ -2133,7 +2120,7 @@ impl Node {
         }
 
         if new_peers_count > 0 {
-            println!("🔍 Descubiertos {} nuevos peers", new_peers_count);
+            println!("🔍 Descubiertos {new_peers_count} nuevos peers");
         }
 
         new_peers_count
@@ -2228,7 +2215,7 @@ impl Node {
                 // No está conectado, intentar conectar
                 match self.connect_to_peer(&peer_addr).await {
                     Ok(_) => {
-                        println!("✅ Auto-conectado a peer: {}", peer_addr);
+                        println!("✅ Auto-conectado a peer: {peer_addr}");
                         connected_count += 1;
 
                         // Remover de peers fallidos si estaba ahí
@@ -2255,7 +2242,7 @@ impl Node {
         }
 
         if connected_count > 0 {
-            println!("✅ Auto-conectado a {} peers", connected_count);
+            println!("✅ Auto-conectado a {connected_count} peers");
         }
     }
 
@@ -2272,7 +2259,7 @@ impl Node {
 
         for peer_addr in peers_to_check.iter() {
             if !self.ping_peer(peer_addr).await {
-                println!("🔌 Peer desconectado detectado: {}", peer_addr);
+                println!("🔌 Peer desconectado detectado: {peer_addr}");
                 disconnected.push(peer_addr.clone());
             }
         }
@@ -2281,7 +2268,7 @@ impl Node {
             let mut peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             for peer in disconnected {
                 peers_guard.remove(&peer);
-                println!("🗑️  Peer removido de la lista: {}", peer);
+                println!("🗑️  Peer removido de la lista: {peer}");
             }
         }
     }
@@ -2327,8 +2314,7 @@ impl Node {
             // Sincronizar si tienen más bloques
             if their_count > my_count {
                 println!(
-                    "📥 Sincronizando desde {} (ellos: {}, nosotros: {})",
-                    address, their_count, my_count
+                    "📥 Sincronizando desde {address} (ellos: {their_count}, nosotros: {my_count})"
                 );
                 return self.request_blocks(address).await;
             }
@@ -2341,8 +2327,7 @@ impl Node {
                     return self.request_blocks(address).await;
                 } else {
                     println!(
-                        "⚠️  Fork detectado con {}: mismo número pero diferentes hashes",
-                        address
+                        "⚠️  Fork detectado con {address}: mismo número pero diferentes hashes"
                     );
                 }
             }
@@ -2350,8 +2335,7 @@ impl Node {
             // Si tenemos más bloques, el peer debería sincronizar desde nosotros
             if my_count > their_count {
                 println!(
-                    "ℹ️  Tenemos más bloques que {} (nosotros: {}, ellos: {})",
-                    address, my_count, their_count
+                    "ℹ️  Tenemos más bloques que {address} (nosotros: {my_count}, ellos: {their_count})"
                 );
             }
         }
@@ -2408,7 +2392,7 @@ impl Node {
                         if let Some(ref storage) = self.block_storage {
                             for block in &blockchain.chain {
                                 if let Err(e) = storage.save_block(block) {
-                                    eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
+                                    eprintln!("⚠️  Error guardando bloque en archivos: {e}");
                                 }
                             }
                         }
@@ -2443,7 +2427,7 @@ impl Node {
                     if let Some(ref storage) = self.block_storage {
                         for block in &blockchain.chain {
                             if let Err(e) = storage.save_block(block) {
-                                eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
+                                eprintln!("⚠️  Error guardando bloque en archivos: {e}");
                             }
                         }
                     }
@@ -2482,8 +2466,7 @@ impl Node {
         for peer_addr in peers.iter() {
             if let Err(e) = self.send_block_to_peer(peer_addr, block).await {
                 eprintln!(
-                    "Error enviando bloque a {}: {} (el peer puede necesitar sincronización)",
-                    peer_addr, e
+                    "Error enviando bloque a {peer_addr}: {e} (el peer puede necesitar sincronización)"
                 );
             }
         }
@@ -2521,7 +2504,7 @@ impl Node {
 
         for peer_addr in peers.iter() {
             if let Err(e) = self.send_transaction_to_peer(peer_addr, tx).await {
-                eprintln!("Error enviando transacción a {}: {}", peer_addr, e);
+                eprintln!("Error enviando transacción a {peer_addr}: {e}");
             }
         }
     }
@@ -2652,25 +2635,21 @@ impl Node {
 
                 if synced > 0 {
                     println!(
-                        "✅ {} contratos sincronizados desde {} ({}ms, {} errores)",
-                        synced, address, duration_ms, errors
+                        "✅ {synced} contratos sincronizados desde {address} ({duration_ms}ms, {errors} errores)"
                     );
                 } else if errors > 0 {
                     println!(
-                        "⚠️  {} contratos rechazados desde {} por validación",
-                        errors, address
+                        "⚠️  {errors} contratos rechazados desde {address} por validación"
                     );
                 } else {
                     println!(
-                        "ℹ️  No hay contratos nuevos para sincronizar desde {}",
-                        address
+                        "ℹ️  No hay contratos nuevos para sincronizar desde {address}"
                     );
                 }
             }
         } else {
             println!(
-                "⚠️  Respuesta inválida al solicitar contratos desde {}",
-                address
+                "⚠️  Respuesta inválida al solicitar contratos desde {address}"
             );
         }
 
@@ -2704,8 +2683,7 @@ impl Node {
                             tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                         } else {
                             eprintln!(
-                                "Error enviando contrato a {} después de 3 intentos: {}",
-                                peer_addr, error_msg
+                                "Error enviando contrato a {peer_addr} después de 3 intentos: {error_msg}"
                             );
                             // Agregar a cola de pendientes (memoria)
                             let mut pending = self
@@ -2731,14 +2709,14 @@ impl Node {
         let mut stream = self
             .open_stream(address)
             .await
-            .map_err(|e| format!("Error conectando: {}", e))?;
+            .map_err(|e| format!("Error conectando: {e}"))?;
         let msg = Message::NewContract(contract.clone());
         let msg_json =
-            serde_json::to_string(&msg).map_err(|e| format!("Error serializando: {}", e))?;
+            serde_json::to_string(&msg).map_err(|e| format!("Error serializando: {e}"))?;
         stream
             .write_all(msg_json.as_bytes())
             .await
-            .map_err(|e| format!("Error escribiendo: {}", e))?;
+            .map_err(|e| format!("Error escribiendo: {e}"))?;
 
         // Esperar un poco para que el peer procese el mensaje (similar a bloques)
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -2802,7 +2780,7 @@ impl Node {
                             );
                             tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                         } else {
-                            eprintln!("❌ Error enviando actualización de contrato a {} después de 3 intentos: {}", peer_addr, error_msg);
+                            eprintln!("❌ Error enviando actualización de contrato a {peer_addr} después de 3 intentos: {error_msg}");
                             // Agregar a cola de pendientes (memoria)
                             let mut pending = self
                                 .pending_contract_broadcasts
@@ -2836,10 +2814,10 @@ impl Node {
         let mut stream = self
             .open_stream(address)
             .await
-            .map_err(|e| format!("Error conectando a {}: {}", address, e))?;
+            .map_err(|e| format!("Error conectando a {address}: {e}"))?;
         let msg = Message::UpdateContract(contract.clone());
         let msg_json = serde_json::to_string(&msg)
-            .map_err(|e| format!("Error serializando UpdateContract: {}", e))?;
+            .map_err(|e| format!("Error serializando UpdateContract: {e}"))?;
 
         println!(
             "📤 Enviando UpdateContract de {} a {} (tamaño: {} bytes)",
@@ -2850,7 +2828,7 @@ impl Node {
         stream
             .write_all(msg_json.as_bytes())
             .await
-            .map_err(|e| format!("Error escribiendo UpdateContract a {}: {}", address, e))?;
+            .map_err(|e| format!("Error escribiendo UpdateContract a {address}: {e}"))?;
 
         // Esperar un poco para que el peer procese el mensaje (similar a bloques)
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -2858,6 +2836,7 @@ impl Node {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Spawn the alive broadcast + suspect sweep loop.
     ///
     /// Every `alive_interval_ms` the node:

@@ -84,8 +84,8 @@ pub async fn get_msp_info(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{test, App};
     use crate::msp::CrlStore;
+    use actix_web::{test, App};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, RwLock};
 

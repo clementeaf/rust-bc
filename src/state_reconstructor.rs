@@ -65,7 +65,7 @@ impl ReconstructedState {
         }
 
         if total > 100 {
-            println!("🔄 Reconstruyendo estado desde {} bloques...", total);
+            println!("🔄 Reconstruyendo estado desde {total} bloques...");
         }
 
         // Para cadenas pequeñas (< 1000 bloques), procesar secuencialmente
@@ -103,7 +103,7 @@ impl ReconstructedState {
             // Mostrar progreso cada 1000 bloques
             if total > 1000 && i > 0 && i % 1000 == 0 {
                 let progress = (i as f64 / total as f64) * 100.0;
-                println!("   Progreso: {:.1}% ({}/{})", progress, i, total);
+                println!("   Progreso: {progress:.1}% ({i}/{total})");
             }
         }
 

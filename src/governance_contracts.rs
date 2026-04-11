@@ -202,8 +202,7 @@ impl GovernanceContract {
                 (self.total_holders as f64 * self.config.proposal_threshold as f64 / 100.0) as u64;
             if proposer_balance < threshold_holders {
                 return Err(format!(
-                    "Proposer does not meet threshold: {} < {}",
-                    proposer_balance, threshold_holders
+                    "Proposer does not meet threshold: {proposer_balance} < {threshold_holders}"
                 ));
             }
         }
@@ -336,9 +335,9 @@ impl GovernanceContract {
         self.executed_proposals += 1;
 
         let result = match &proposal.action {
-            ProposalAction::TextProposal(text) => format!("Text proposal executed: {}", text),
+            ProposalAction::TextProposal(text) => format!("Text proposal executed: {text}"),
             ProposalAction::Transfer { to, amount } => {
-                format!("Transfer executed: {} tokens to {}", amount, to)
+                format!("Transfer executed: {amount} tokens to {to}")
             }
             ProposalAction::Custom {
                 action_type,

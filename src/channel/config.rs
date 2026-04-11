@@ -17,8 +17,10 @@ pub enum ChannelError {
     OrgAlreadyExists(String),
     #[error("org not found: {0}")]
     OrgNotFound(String),
+    #[allow(dead_code)]
     #[error("unknown update type applied to channel")]
     UnknownUpdate,
+    #[allow(dead_code)]
     #[error("modification policy not found for channel '{0}'")]
     PolicyNotFound(String),
     #[error("endorsement validation failed: {0}")]
@@ -419,8 +421,9 @@ mod tests {
         }
     }
 
-    fn registry_with(orgs: &[(&str, [u8; 32])]) -> crate::endorsement::MemoryOrgRegistry {
-        use crate::endorsement::{MemoryOrgRegistry, OrgRegistry as _, Organization};
+    fn registry_with(orgs: &[(&str, [u8; 32])]) -> crate::endorsement::registry::MemoryOrgRegistry {
+        use crate::endorsement::org::Organization;
+        use crate::endorsement::registry::{MemoryOrgRegistry, OrgRegistry as _};
         let reg = MemoryOrgRegistry::new();
         for (org_id, pk) in orgs {
             let org = Organization::new(

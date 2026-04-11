@@ -37,8 +37,10 @@ use std::path::Path;
 /// Common Name used for all internally-generated CA certificates.
 pub const INTERNAL_CA_CN: &str = "Rust-BC Internal CA";
 
+#[allow(dead_code)]
 /// CA certificate validity (10 years from a fixed epoch).
 const CA_NOT_BEFORE: time::OffsetDateTime = time::macros::datetime!(2024-01-01 0:00 UTC);
+#[allow(dead_code)]
 const CA_NOT_AFTER: time::OffsetDateTime = time::macros::datetime!(2034-01-01 0:00 UTC);
 
 // ── Errors ─────────────────────────────────────────────────────────────────
@@ -49,6 +51,7 @@ pub enum PkiError {
     Rcgen(#[from] rcgen::Error),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
+    #[allow(dead_code)]
     #[error("TLS_CA_CERT_PATH must be set for PKI provisioning")]
     MissingCaCert,
     #[error("TLS_CA_KEY_PATH must be set for PKI provisioning")]
@@ -59,6 +62,7 @@ pub enum PkiError {
 
 // ── IssuedNodeCert ─────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 /// A node certificate issued by the internal CA.
 pub struct IssuedNodeCert {
     /// DER-encoded signed certificate (ready for use with rustls).
@@ -70,6 +74,7 @@ pub struct IssuedNodeCert {
 }
 
 impl IssuedNodeCert {
+    #[allow(dead_code)]
     /// Write cert and key to the given paths as PEM files.
     pub fn save(&self, cert_path: &Path, key_path: &Path) -> Result<(), PkiError> {
         std::fs::write(cert_path, self.cert_pem.as_bytes())?;
@@ -82,6 +87,7 @@ impl IssuedNodeCert {
 
 /// An internal CA that can sign P2P node certificates.
 pub struct NodeCaConfig {
+    #[allow(dead_code)]
     ca_cert: rcgen::Certificate,
     ca_key: KeyPair,
 }
@@ -95,6 +101,7 @@ impl std::fmt::Debug for NodeCaConfig {
 }
 
 impl NodeCaConfig {
+    #[allow(dead_code)]
     /// Load a CA from PEM key file, reconstructing the rcgen signing cert.
     ///
     /// The `cert_path` file is validated (must be readable) but its content is
@@ -119,6 +126,7 @@ impl NodeCaConfig {
         Self::from_pem_files(Path::new(&cert_path), Path::new(&key_path))
     }
 
+    #[allow(dead_code)]
     /// Generate a new self-signed CA in memory.
     ///
     /// Returns `(NodeCaConfig, cert_pem, key_pem)` so the caller can persist
@@ -133,6 +141,7 @@ impl NodeCaConfig {
     }
 }
 
+#[allow(dead_code)]
 /// Build `CertificateParams` for the internal CA (fixed CN and validity).
 fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
     let mut params = CertificateParams::new(vec![])?;
@@ -147,6 +156,7 @@ fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
 
 // ── sign_node_cert ─────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 /// Generate a new ECDSA P-256 key pair and issue a TLS certificate for
 /// `node_id`, signed by `ca`.
 ///
@@ -180,6 +190,7 @@ pub fn sign_node_cert(
 
 // ── provision_node_cert_if_absent ──────────────────────────────────────────
 
+#[allow(dead_code)]
 /// If `cert_path` and `key_path` do not both exist, generate a new node
 /// certificate signed by the CA from environment variables and write them to
 /// disk.
@@ -206,6 +217,7 @@ pub fn provision_node_cert_if_absent(
 
 // ── PEM helpers ────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 /// Encodes DER bytes as a PEM CERTIFICATE block (no external crate needed).
 fn der_to_pem_cert(der: &[u8]) -> String {
     let b64 = base64_encode(der);
@@ -219,9 +231,10 @@ fn der_to_pem_cert(der: &[u8]) -> String {
     out
 }
 
+#[allow(dead_code)]
 fn base64_encode(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = Vec::with_capacity((data.len() + 2) / 3 * 4);
+    let mut out = Vec::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as usize;
         let b1 = if chunk.len() > 1 {

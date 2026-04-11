@@ -4,8 +4,8 @@
 //! (from TlsIdentity or X-Org-Id), source IP, response status, trace_id, and
 //! duration. Records are append-only in RocksDB (CF `audit_log`).
 
-use serde::{Deserialize, Serialize};
 use crate::storage::errors::StorageResult;
+use serde::{Deserialize, Serialize};
 
 /// A single audit log entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]

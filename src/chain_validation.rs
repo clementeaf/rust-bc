@@ -50,23 +50,21 @@ impl ChainValidator {
 
             // Validar que cada bloque tenga hash válido
             if !block.is_valid() {
-                errors.push(format!("Bloque {} tiene hash inválido", i));
+                errors.push(format!("Bloque {i} tiene hash inválido"));
             }
 
             // Validar referencias entre bloques (solo para bloques no-génesis)
             if i > 0 {
                 if block.previous_hash != chain[i - 1].hash {
                     errors.push(format!(
-                        "Bloque {} referencia bloque anterior incorrecto",
-                        i
+                        "Bloque {i} referencia bloque anterior incorrecto"
                     ));
                 }
 
                 // Validar que timestamp sea monótonamente creciente (con margen)
                 if block.timestamp < chain[i - 1].timestamp {
                     errors.push(format!(
-                        "Bloque {} tiene timestamp más antiguo que su antecesor",
-                        i
+                        "Bloque {i} tiene timestamp más antiguo que su antecesor"
                     ));
                 }
             }
@@ -75,8 +73,7 @@ impl ChainValidator {
             for (tx_idx, tx) in block.transactions.iter().enumerate() {
                 if tx.amount == 0 && tx.fee == 0 && tx.from != "genesis" && tx.from != "0" {
                     errors.push(format!(
-                        "Bloque {}, transacción {} tiene monto y fee = 0",
-                        i, tx_idx
+                        "Bloque {i}, transacción {tx_idx} tiene monto y fee = 0"
                     ));
                 }
             }
@@ -229,8 +226,7 @@ impl AttackProtection {
         // Validar piso de dificultad
         if new_difficulty < min_difficulty {
             return Err(format!(
-                "Dificultad por debajo del mínimo: {} < {}",
-                new_difficulty, min_difficulty
+                "Dificultad por debajo del mínimo: {new_difficulty} < {min_difficulty}"
             ));
         }
 
@@ -238,8 +234,7 @@ impl AttackProtection {
         let adjustment = (old_difficulty as i16 - new_difficulty as i16).abs();
         if adjustment > max_single_adjustment as i16 {
             return Err(format!(
-                "Ajuste de dificultad demasiado grande: {}",
-                adjustment
+                "Ajuste de dificultad demasiado grande: {adjustment}"
             ));
         }
 

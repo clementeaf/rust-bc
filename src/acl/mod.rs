@@ -8,7 +8,6 @@ pub mod provider;
 pub mod resources;
 pub use checker::{check_access, AclError};
 pub use provider::{AclProvider, MemoryAclProvider};
-pub use resources::AclResource;
 
 use serde::{Deserialize, Serialize};
 

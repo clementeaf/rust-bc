@@ -263,8 +263,7 @@ impl PluginRegistry {
                     if plugin.enabled {
                         plugin.execution_count += 1;
                         let result = HookResult::success(format!(
-                            "Plugin {} executed for hook {:?} with context: {}",
-                            plugin_id, hook, context
+                            "Plugin {plugin_id} executed for hook {hook:?} with context: {context}"
                         ));
                         results.push(result);
                     }

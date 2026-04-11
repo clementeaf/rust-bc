@@ -61,7 +61,7 @@ pub fn try_create_block(state: &AppState, req: &CreateBlockRequest) -> Result<St
 
                     if let Some(ref storage) = state.block_storage {
                         if let Err(e) = storage.save_block(&latest_block_clone) {
-                            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
+                            eprintln!("⚠️  Error al guardar bloque en archivos: {e}");
                         }
                     }
 

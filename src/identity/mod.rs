@@ -10,14 +10,15 @@ pub mod hsm;
 pub mod keys;
 pub mod signing;
 
-pub use did::{DidDocument, DidMetadata, DidStatus};
-pub use keys::{KeyManager, KeyPair, PublicKeyInfo};
 
 /// Identity configuration
 #[derive(Clone, Debug)]
 pub struct IdentityConfig {
+    #[allow(dead_code)]
     pub key_derivation_path: String,
+    #[allow(dead_code)]
     pub credential_ttl_days: u32,
+    #[allow(dead_code)]
     pub revocation_check_enabled: bool,
 }
 

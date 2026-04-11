@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 /// Trait for API gateway implementations
 pub trait ApiGateway {
     fn name(&self) -> &str;

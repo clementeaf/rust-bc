@@ -98,6 +98,7 @@ pub fn validate_endorsements(
     }
 }
 
+#[allow(dead_code)]
 /// Validate endorsements for a set of rwset write keys, applying key-level
 /// policy overrides where they exist.
 ///

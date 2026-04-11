@@ -11,6 +11,7 @@ pub trait AclProvider: Send + Sync {
     fn set_acl(&self, resource: &str, policy_ref: &str) -> StorageResult<()>;
     fn get_acl(&self, resource: &str) -> StorageResult<Option<AclEntry>>;
     fn list_acls(&self) -> StorageResult<Vec<AclEntry>>;
+    #[allow(dead_code)] // API variant — may be used by external callers
     fn remove_acl(&self, resource: &str) -> StorageResult<()>;
 }
 

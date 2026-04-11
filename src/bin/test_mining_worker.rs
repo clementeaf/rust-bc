@@ -63,7 +63,7 @@ mod config_tests {
     pub fn test_default_config() {
         let config = TestConfig::from_env_with_defaults();
         config.assert_valid();
-        println!("✅ Default config valid: {:?}", config);
+        println!("✅ Default config valid: {config:?}");
     }
 
     pub fn test_config_parsing() {
@@ -195,9 +195,9 @@ mod backoff_tests {
         assert!(d3.as_millis() <= 5000);
 
         println!("✅ Exponential backoff works correctly");
-        println!("   Attempt 1: {:?}", d1);
-        println!("   Attempt 2: {:?}", d2);
-        println!("   Attempt 3: {:?}", d3);
+        println!("   Attempt 1: {d1:?}");
+        println!("   Attempt 2: {d2:?}");
+        println!("   Attempt 3: {d3:?}");
     }
 
     pub fn test_backoff_reset() {
@@ -218,7 +218,7 @@ mod backoff_tests {
 
         let delay = tracker.calculate_delay();
         assert!(delay.as_millis() <= 5000);
-        println!("✅ Backoff max cap works correctly (capped at {:?})", delay);
+        println!("✅ Backoff max cap works correctly (capped at {delay:?})");
     }
 }
 

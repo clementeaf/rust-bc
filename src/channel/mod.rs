@@ -3,7 +3,6 @@
 pub mod config;
 pub mod genesis;
 pub mod registry;
-pub use config::{ChannelConfig, ConfigUpdateType};
 
 use crate::endorsement::policy::EndorsementPolicy;
 
@@ -22,6 +21,7 @@ pub struct Channel {
 }
 
 impl Channel {
+    #[allow(dead_code)]
     /// Add an org to the member list if not already present.
     pub fn add_member(&mut self, org_id: impl Into<String>) {
         let id = org_id.into();
@@ -30,6 +30,7 @@ impl Channel {
         }
     }
 
+    #[allow(dead_code)]
     /// Returns `true` if `org_id` is a channel member.
     pub fn is_member(&self, org_id: &str) -> bool {
         self.member_org_ids.iter().any(|o| o == org_id)

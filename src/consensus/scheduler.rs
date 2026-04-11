@@ -18,6 +18,7 @@ pub struct Slot {
 }
 
 impl Slot {
+    #[allow(dead_code)]
     /// Create a new slot
     pub fn new(number: u64, proposer: String, start_time: u64, end_time: u64) -> Self {
         Slot {
@@ -28,17 +29,20 @@ impl Slot {
         }
     }
 
+    #[allow(dead_code)]
     /// Check if a given timestamp is within this slot
     pub fn contains_timestamp(&self, timestamp: u64) -> bool {
         timestamp >= self.start_time && timestamp < self.end_time
     }
 
+    #[allow(dead_code)]
     /// Get slot duration in seconds
     pub fn duration(&self) -> u64 {
         self.end_time - self.start_time
     }
 }
 
+#[allow(dead_code)]
 /// Slot scheduler with deterministic proposer assignment
 pub struct SlotScheduler {
     /// Duration of each slot in seconds
@@ -52,6 +56,7 @@ pub struct SlotScheduler {
 }
 
 impl SlotScheduler {
+    #[allow(dead_code)]
     /// Create a new slot scheduler
     pub fn new(slot_duration: u64, validators: Vec<String>, genesis_time: u64) -> Self {
         SlotScheduler {
@@ -62,6 +67,7 @@ impl SlotScheduler {
         }
     }
 
+    #[allow(dead_code)]
     /// Get the proposer for a given slot using deterministic assignment
     pub fn get_proposer(&self, slot_number: u64) -> String {
         if self.validators.is_empty() {
@@ -71,6 +77,7 @@ impl SlotScheduler {
         self.validators[index].clone()
     }
 
+    #[allow(dead_code)]
     /// Get or create a slot
     pub fn get_slot(&mut self, slot_number: u64) -> Slot {
         if let Some(slot) = self.slot_cache.get(&slot_number) {
@@ -86,6 +93,7 @@ impl SlotScheduler {
         slot
     }
 
+    #[allow(dead_code)]
     /// Get current slot number for a given timestamp
     pub fn get_current_slot(&self, timestamp: u64) -> u64 {
         if timestamp < self.genesis_time {
@@ -94,6 +102,7 @@ impl SlotScheduler {
         (timestamp - self.genesis_time) / self.slot_duration
     }
 
+    #[allow(dead_code)]
     /// Get slot number from timestamp
     pub fn timestamp_to_slot(&self, timestamp: u64) -> u64 {
         self.get_current_slot(timestamp)
@@ -112,16 +121,19 @@ impl SlotScheduler {
         timestamp >= start && timestamp < end
     }
 
+    #[allow(dead_code)]
     /// Get all validators
     pub fn validators(&self) -> &[String] {
         &self.validators
     }
 
+    #[allow(dead_code)]
     /// Get genesis time
     pub fn genesis_time(&self) -> u64 {
         self.genesis_time
     }
 
+    #[allow(dead_code)]
     /// Get slot duration
     pub fn slot_duration(&self) -> u64 {
         self.slot_duration

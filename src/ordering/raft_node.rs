@@ -23,8 +23,10 @@ pub enum RaftError {
 /// [`tick`](RaftNode::tick) and then [`advance`](RaftNode::advance) to
 /// drain any ready state.
 pub struct RaftNode {
+    #[allow(dead_code)]
     pub id: u64,
     pub raw_node: RawNode<MemStorage>,
+    #[allow(dead_code)]
     pub pending_proposals: Vec<Vec<u8>>,
     pub committed_entries: Vec<Entry>,
     /// Optional persistent storage — entries and hard state are flushed here
@@ -213,6 +215,7 @@ impl RaftNode {
         (msgs, committed)
     }
 
+    #[allow(dead_code)]
     /// Create a snapshot of the current raft state.
     ///
     /// The snapshot captures committed entries as serialized JSON in the data
@@ -235,6 +238,7 @@ impl RaftNode {
         Ok(snap)
     }
 
+    #[allow(dead_code)]
     /// Apply a snapshot received from a leader, replacing local state.
     pub fn apply_snapshot(&mut self, snap: Snapshot) -> Result<(), RaftError> {
         let mut store = self.raw_node.mut_store().wl();
@@ -243,11 +247,13 @@ impl RaftNode {
             .map_err(|e| RaftError::Init(e.to_string()))
     }
 
+    #[allow(dead_code)]
     /// Return `true` if this node is currently the Raft leader.
     pub fn is_leader(&self) -> bool {
         self.raw_node.raft.state == StateRole::Leader
     }
 
+    #[allow(dead_code)]
     /// Return `true` if this node is currently a Follower.
     pub fn is_follower(&self) -> bool {
         self.raw_node.raft.state == StateRole::Follower

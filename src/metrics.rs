@@ -11,32 +11,43 @@ pub struct MetricsCollector {
     registry: Arc<Registry>,
 
     // ── Blockchain ────────────────────────────────────────────────────────────
+    #[allow(dead_code)]
     pub blocks_total: IntCounter,
     pub blockchain_transactions_total: IntCounter,
     pub chain_height: IntGauge,
     pub difficulty: IntGauge,
 
     // ── Transaction pipeline ──────────────────────────────────────────────────
+    #[allow(dead_code)]
     pub transactions_validated_total: IntCounter,
+    #[allow(dead_code)]
     pub transactions_rejected_total: IntCounter,
+    #[allow(dead_code)]
     pub transactions_total_fees: IntCounter,
     /// Histogram of per-transaction validation latency in milliseconds.
     pub transaction_validation_duration_ms: Histogram,
 
     // ── Mempool ───────────────────────────────────────────────────────────────
+    #[allow(dead_code)]
     pub mempool_pending: IntGauge,
+    #[allow(dead_code)]
     pub mempool_fees_pending: IntGauge,
 
     // ── Network / P2P ─────────────────────────────────────────────────────────
+    #[allow(dead_code)]
     pub network_peers: IntGauge,
+    #[allow(dead_code)]
     pub network_messages_received: IntCounter,
+    #[allow(dead_code)]
     pub network_messages_sent: IntCounter,
 
     // ── Gossip (Phase 12.1.1) ─────────────────────────────────────────────────
+    #[allow(dead_code)]
     /// Number of blocks sent to gossip fanout peers.
     pub gossip_blocks_gossiped: IntCounter,
 
     // ── Endorsement (Phase 12.2.1) ────────────────────────────────────────────
+    #[allow(dead_code)]
     /// Total endorsement policy validations performed.
     pub endorsement_validations_total: IntCounter,
 
@@ -45,10 +56,12 @@ pub struct MetricsCollector {
     pub ordering_blocks_cut_total: IntCounter,
 
     // ── MVCC (Phase 12.2.1) ───────────────────────────────────────────────────
+    #[allow(dead_code)]
     /// Total MVCC read-set conflicts detected during block commit.
     pub mvcc_conflicts_total: IntCounter,
 
     // ── Events (Phase 12.2.1) ─────────────────────────────────────────────────
+    #[allow(dead_code)]
     /// Current number of active event bus subscriptions.
     pub event_subscriptions_active: IntGauge,
 
@@ -271,6 +284,7 @@ impl MetricsCollector {
 
     // ── Blockchain helpers ────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn record_block(&self, tx_count: u64, difficulty: u8, chain_height: u64) {
         self.blocks_total.inc();
         self.blockchain_transactions_total.inc_by(tx_count);
@@ -278,16 +292,19 @@ impl MetricsCollector {
         self.difficulty.set(difficulty as i64);
     }
 
+    #[allow(dead_code)]
     pub fn update_height(&self, height: u64) {
         self.chain_height.set(height as i64);
     }
 
+    #[allow(dead_code)]
     pub fn update_difficulty(&self, difficulty: u8) {
         self.difficulty.set(difficulty as i64);
     }
 
     // ── Transaction helpers ───────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn record_validated(&self, fee: u64, validation_time_ms: f64) {
         self.transactions_validated_total.inc();
         self.transactions_total_fees.inc_by(fee);
@@ -295,12 +312,14 @@ impl MetricsCollector {
             .observe(validation_time_ms);
     }
 
+    #[allow(dead_code)]
     pub fn record_rejected(&self, _reason: &str) {
         self.transactions_rejected_total.inc();
     }
 
     // ── Mempool helpers ───────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn update_mempool(&self, pending_count: u64, total_fees: u64) {
         self.mempool_pending.set(pending_count as i64);
         self.mempool_fees_pending.set(total_fees as i64);
@@ -308,26 +327,31 @@ impl MetricsCollector {
 
     // ── Network helpers ───────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn update_peers(&self, count: u64) {
         self.network_peers.set(count as i64);
     }
 
+    #[allow(dead_code)]
     pub fn record_message_received(&self) {
         self.network_messages_received.inc();
     }
 
+    #[allow(dead_code)]
     pub fn record_message_sent(&self) {
         self.network_messages_sent.inc();
     }
 
     // ── Gossip helpers ────────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn record_gossip_block(&self) {
         self.gossip_blocks_gossiped.inc();
     }
 
     // ── Endorsement helpers ───────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     /// Increment after each call to `validate_endorsements`.
     pub fn record_endorsement_validation(&self) {
         self.endorsement_validations_total.inc();
@@ -342,6 +366,7 @@ impl MetricsCollector {
 
     // ── MVCC helpers ──────────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     /// Increment each time a transaction is rejected due to an MVCC conflict.
     pub fn record_mvcc_conflict(&self) {
         self.mvcc_conflicts_total.inc();
@@ -349,6 +374,7 @@ impl MetricsCollector {
 
     // ── Event bus helpers ─────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     /// Set the current active subscription count (call after subscribe/unsubscribe).
     pub fn set_event_subscriptions(&self, count: usize) {
         self.event_subscriptions_active.set(count as i64);

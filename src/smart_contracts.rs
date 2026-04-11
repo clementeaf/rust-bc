@@ -264,7 +264,7 @@ impl SmartContract {
         let mut hasher = Sha256::new();
         hasher.update(data.as_bytes());
         let hash = hasher.finalize();
-        format!("contract_{:x}", hash)
+        format!("contract_{hash:x}")
     }
 
     /**
@@ -316,7 +316,7 @@ impl SmartContract {
             }
             ContractFunction::SetNFTMetadata { token_id, metadata } => self
                 .set_nft_metadata(token_id, metadata)
-                .map(|_| format!("Metadata set for token {}", token_id)),
+                .map(|_| format!("Metadata set for token {token_id}")),
             ContractFunction::Custom { name, params } => self.execute_custom(&name, &params),
         }
     }
@@ -338,14 +338,12 @@ impl SmartContract {
 
         if address.len() < MIN_ADDRESS_LENGTH {
             return Err(format!(
-                "Address format invalid: minimum length is {} characters",
-                MIN_ADDRESS_LENGTH
+                "Address format invalid: minimum length is {MIN_ADDRESS_LENGTH} characters"
             ));
         }
         if address.len() > MAX_ADDRESS_LENGTH {
             return Err(format!(
-                "Address format invalid: maximum length is {} characters",
-                MAX_ADDRESS_LENGTH
+                "Address format invalid: maximum length is {MAX_ADDRESS_LENGTH} characters"
             ));
         }
         // Validar que sea alfanumérico con caracteres permitidos
@@ -367,16 +365,14 @@ impl SmartContract {
         // Token ID 0 está reservado (usado para eventos de mint)
         if token_id == RESERVED_TOKEN_ID {
             return Err(format!(
-                "Token ID {} is reserved and cannot be used",
-                RESERVED_TOKEN_ID
+                "Token ID {RESERVED_TOKEN_ID} is reserved and cannot be used"
             ));
         }
 
         // Límite máximo para prevenir problemas de serialización y DoS
         if token_id > MAX_TOKEN_ID {
             return Err(format!(
-                "Token ID exceeds maximum allowed: {}",
-                MAX_TOKEN_ID
+                "Token ID exceeds maximum allowed: {MAX_TOKEN_ID}"
             ));
         }
 
@@ -410,7 +406,7 @@ impl SmartContract {
 
         // Límite máximo de amount para prevenir DoS
         if amount > MAX_AMOUNT {
-            return Err(format!("Amount exceeds maximum allowed: {}", MAX_AMOUNT));
+            return Err(format!("Amount exceeds maximum allowed: {MAX_AMOUNT}"));
         }
 
         if from == to {
@@ -447,7 +443,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Transferred {} from {} to {}", amount, from, to))
+        Ok(format!("Transferred {amount} from {from} to {to}"))
     }
 
     /**
@@ -472,7 +468,7 @@ impl SmartContract {
         // Límite máximo de amount
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!("Amount exceeds maximum allowed: {}", MAX_AMOUNT));
+            return Err(format!("Amount exceeds maximum allowed: {MAX_AMOUNT}"));
         }
 
         if from == to {
@@ -519,8 +515,7 @@ impl SmartContract {
         self.update_integrity_hash();
 
         Ok(format!(
-            "Transferred {} from {} to {} via {}",
-            amount, from, to, spender
+            "Transferred {amount} from {from} to {to} via {spender}"
         ))
     }
 
@@ -540,8 +535,7 @@ impl SmartContract {
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
             return Err(format!(
-                "Allowance amount exceeds maximum allowed: {}",
-                MAX_AMOUNT
+                "Allowance amount exceeds maximum allowed: {MAX_AMOUNT}"
             ));
         }
 
@@ -558,8 +552,7 @@ impl SmartContract {
         self.update_integrity_hash();
 
         Ok(format!(
-            "Approved {} to spend {} tokens from {}",
-            spender, amount, owner
+            "Approved {spender} to spend {amount} tokens from {owner}"
         ))
     }
 
@@ -620,7 +613,7 @@ impl SmartContract {
         }
 
         let event_key = format!("event_transfer_{}", self.update_sequence);
-        let event_value = format!("from:{}|to:{}|value:{}", from, to, value);
+        let event_value = format!("from:{from}|to:{to}|value:{value}");
         self.state.metadata.insert(event_key, event_value);
     }
 
@@ -651,7 +644,7 @@ impl SmartContract {
         }
 
         let event_key = format!("event_approval_{}", self.update_sequence);
-        let event_value = format!("owner:{}|spender:{}|value:{}", owner, spender, value);
+        let event_value = format!("owner:{owner}|spender:{spender}|value:{value}");
         self.state.metadata.insert(event_key, event_value);
     }
 
@@ -670,8 +663,7 @@ impl SmartContract {
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
             return Err(format!(
-                "Mint amount exceeds maximum allowed: {}",
-                MAX_AMOUNT
+                "Mint amount exceeds maximum allowed: {MAX_AMOUNT}"
             ));
         }
 
@@ -698,7 +690,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Minted {} to {}", amount, to))
+        Ok(format!("Minted {amount} to {to}"))
     }
 
     /**
@@ -716,8 +708,7 @@ impl SmartContract {
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
             return Err(format!(
-                "Burn amount exceeds maximum allowed: {}",
-                MAX_AMOUNT
+                "Burn amount exceeds maximum allowed: {MAX_AMOUNT}"
             ));
         }
 
@@ -736,7 +727,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Burned {} from {}", amount, from))
+        Ok(format!("Burned {amount} from {from}"))
     }
 
     /**
@@ -747,12 +738,12 @@ impl SmartContract {
         let (secs, _) = Self::get_timestamp_nanos();
         self.state
             .metadata
-            .insert(format!("last_execution_{}", name), secs.to_string());
+            .insert(format!("last_execution_{name}"), secs.to_string());
         self.updated_at = secs;
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Executed custom function: {}", name))
+        Ok(format!("Executed custom function: {name}"))
     }
 
     /**
@@ -780,14 +771,13 @@ impl SmartContract {
 
         // Verificar que el token_id no exista
         if self.state.token_owners.contains_key(&token_id) {
-            return Err(format!("Token ID {} already exists", token_id));
+            return Err(format!("Token ID {token_id} already exists"));
         }
 
         // Límites de DoS: tokens por contrato
         if self.state.token_index.len() >= MAX_TOKENS_PER_CONTRACT {
             return Err(format!(
-                "Maximum tokens per contract reached: {}",
-                MAX_TOKENS_PER_CONTRACT
+                "Maximum tokens per contract reached: {MAX_TOKENS_PER_CONTRACT}"
             ));
         }
 
@@ -800,16 +790,14 @@ impl SmartContract {
             .unwrap_or(0);
         if owner_token_count >= MAX_TOKENS_PER_OWNER {
             return Err(format!(
-                "Maximum tokens per owner reached: {}",
-                MAX_TOKENS_PER_OWNER
+                "Maximum tokens per owner reached: {MAX_TOKENS_PER_OWNER}"
             ));
         }
 
         // Verificar límite de URI
         if !token_uri.is_empty() && token_uri.len() > MAX_TOKEN_URI_LENGTH {
             return Err(format!(
-                "Token URI exceeds maximum length ({} characters)",
-                MAX_TOKEN_URI_LENGTH
+                "Token URI exceeds maximum length ({MAX_TOKEN_URI_LENGTH} characters)"
             ));
         }
 
@@ -845,7 +833,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Minted NFT {} to {}", token_id, to))
+        Ok(format!("Minted NFT {token_id} to {to}"))
     }
 
     /**
@@ -879,11 +867,11 @@ impl SmartContract {
             .state
             .token_owners
             .get(&token_id)
-            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+            .ok_or_else(|| format!("Token ID {token_id} does not exist"))?;
 
         // Verificar permisos: el caller debe ser el owner o estar aprobado
         if current_owner != from {
-            return Err(format!("Token {} is not owned by {}", token_id, from));
+            return Err(format!("Token {token_id} is not owned by {from}"));
         }
 
         if caller != from {
@@ -891,8 +879,7 @@ impl SmartContract {
             let approved = self.state.token_approvals.get(&token_id);
             if approved.map(|a| a.as_str()) != Some(caller) {
                 return Err(format!(
-                    "Caller {} is not authorized to transfer token {}",
-                    caller, token_id
+                    "Caller {caller} is not authorized to transfer token {token_id}"
                 ));
             }
             // Limpiar approval después de transferir
@@ -936,8 +923,7 @@ impl SmartContract {
         self.update_integrity_hash();
 
         Ok(format!(
-            "Transferred NFT {} from {} to {}",
-            token_id, from, to
+            "Transferred NFT {token_id} from {from} to {to}"
         ))
     }
 
@@ -964,10 +950,10 @@ impl SmartContract {
             .state
             .token_owners
             .get(&token_id)
-            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+            .ok_or_else(|| format!("Token ID {token_id} does not exist"))?;
 
         if current_owner != owner {
-            return Err(format!("Token {} is not owned by {}", token_id, owner));
+            return Err(format!("Token {token_id} is not owned by {owner}"));
         }
 
         // Aprobar
@@ -981,7 +967,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Approved {} to transfer NFT {}", to, token_id))
+        Ok(format!("Approved {to} to transfer NFT {token_id}"))
     }
 
     /**
@@ -1015,10 +1001,10 @@ impl SmartContract {
             .state
             .token_owners
             .get(&token_id)
-            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+            .ok_or_else(|| format!("Token ID {token_id} does not exist"))?;
 
         if current_owner != from {
-            return Err(format!("Token {} is not owned by {}", token_id, from));
+            return Err(format!("Token {token_id} is not owned by {from}"));
         }
 
         // Verificar que el spender está aprobado
@@ -1026,12 +1012,11 @@ impl SmartContract {
             .state
             .token_approvals
             .get(&token_id)
-            .ok_or_else(|| format!("Token {} is not approved for transfer", token_id))?;
+            .ok_or_else(|| format!("Token {token_id} is not approved for transfer"))?;
 
         if approved != spender {
             return Err(format!(
-                "Spender {} is not approved to transfer token {}",
-                spender, token_id
+                "Spender {spender} is not approved to transfer token {token_id}"
             ));
         }
 
@@ -1075,8 +1060,7 @@ impl SmartContract {
         self.update_integrity_hash();
 
         Ok(format!(
-            "Transferred NFT {} from {} to {} via {}",
-            token_id, from, to, spender
+            "Transferred NFT {token_id} from {from} to {to} via {spender}"
         ))
     }
 
@@ -1164,14 +1148,14 @@ impl SmartContract {
         // Verificar que todos los tokens en token_owners están en token_index
         for token_id in self.state.token_owners.keys() {
             if !self.state.token_index.contains(token_id) {
-                return Err(format!("Token {} in owners but not in index", token_id));
+                return Err(format!("Token {token_id} in owners but not in index"));
             }
         }
 
         // Verificar que todos los tokens en token_index tienen owner
         for token_id in &self.state.token_index {
             if !self.state.token_owners.contains_key(token_id) {
-                return Err(format!("Token {} in index but has no owner", token_id));
+                return Err(format!("Token {token_id} in index but has no owner"));
             }
         }
 
@@ -1185,8 +1169,7 @@ impl SmartContract {
                 .unwrap_or(0) as u64;
             if *balance != actual_count {
                 return Err(format!(
-                    "Balance mismatch for owner {}: balance={}, actual tokens={}",
-                    owner, balance, actual_count
+                    "Balance mismatch for owner {owner}: balance={balance}, actual tokens={actual_count}"
                 ));
             }
         }
@@ -1197,14 +1180,12 @@ impl SmartContract {
                 if let Some(token_owner) = self.state.token_owners.get(token_id) {
                     if token_owner != owner {
                         return Err(format!(
-                            "Token {} owned by {} but in owner_to_tokens for {}",
-                            token_id, token_owner, owner
+                            "Token {token_id} owned by {token_owner} but in owner_to_tokens for {owner}"
                         ));
                     }
                 } else {
                     return Err(format!(
-                        "Token {} in owner_to_tokens for {} but has no owner",
-                        token_id, owner
+                        "Token {token_id} in owner_to_tokens for {owner} but has no owner"
                     ));
                 }
             }
@@ -1215,8 +1196,7 @@ impl SmartContract {
         let total_by_index = self.state.token_index.len() as u64;
         if total_by_owners != total_by_index {
             return Err(format!(
-                "Total supply mismatch: token_owners={}, token_index={}",
-                total_by_owners, total_by_index
+                "Total supply mismatch: token_owners={total_by_owners}, token_index={total_by_index}"
             ));
         }
 
@@ -1237,38 +1217,33 @@ impl SmartContract {
 
         // Validar que el token existe
         if !self.state.token_owners.contains_key(&token_id) {
-            return Err(format!("Token ID {} does not exist", token_id));
+            return Err(format!("Token ID {token_id} does not exist"));
         }
 
         // Validar límites de tamaño
         if metadata.name.len() > MAX_METADATA_NAME_LENGTH {
             return Err(format!(
-                "Metadata name exceeds maximum length ({} characters)",
-                MAX_METADATA_NAME_LENGTH
+                "Metadata name exceeds maximum length ({MAX_METADATA_NAME_LENGTH} characters)"
             ));
         }
         if metadata.description.len() > MAX_METADATA_DESCRIPTION_LENGTH {
             return Err(format!(
-                "Metadata description exceeds maximum length ({} characters)",
-                MAX_METADATA_DESCRIPTION_LENGTH
+                "Metadata description exceeds maximum length ({MAX_METADATA_DESCRIPTION_LENGTH} characters)"
             ));
         }
         if metadata.image.len() > MAX_METADATA_URL_LENGTH {
             return Err(format!(
-                "Metadata image URL exceeds maximum length ({} characters)",
-                MAX_METADATA_URL_LENGTH
+                "Metadata image URL exceeds maximum length ({MAX_METADATA_URL_LENGTH} characters)"
             ));
         }
         if metadata.external_url.len() > MAX_METADATA_URL_LENGTH {
             return Err(format!(
-                "Metadata external_url exceeds maximum length ({} characters)",
-                MAX_METADATA_URL_LENGTH
+                "Metadata external_url exceeds maximum length ({MAX_METADATA_URL_LENGTH} characters)"
             ));
         }
         if metadata.attributes.len() > MAX_METADATA_ATTRIBUTES {
             return Err(format!(
-                "Metadata attributes exceed maximum count ({})",
-                MAX_METADATA_ATTRIBUTES
+                "Metadata attributes exceed maximum count ({MAX_METADATA_ATTRIBUTES})"
             ));
         }
 
@@ -1276,14 +1251,12 @@ impl SmartContract {
         for attr in &metadata.attributes {
             if attr.trait_type.len() > MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH {
                 return Err(format!(
-                    "Attribute trait_type exceeds maximum length ({} characters)",
-                    MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH
+                    "Attribute trait_type exceeds maximum length ({MAX_ATTRIBUTE_TRAIT_TYPE_LENGTH} characters)"
                 ));
             }
             if attr.value.len() > MAX_ATTRIBUTE_VALUE_LENGTH {
                 return Err(format!(
-                    "Attribute value exceeds maximum length ({} characters)",
-                    MAX_ATTRIBUTE_VALUE_LENGTH
+                    "Attribute value exceeds maximum length ({MAX_ATTRIBUTE_VALUE_LENGTH} characters)"
                 ));
             }
         }
@@ -1315,17 +1288,16 @@ impl SmartContract {
             .state
             .token_owners
             .get(&token_id)
-            .ok_or_else(|| format!("Token ID {} does not exist", token_id))?;
+            .ok_or_else(|| format!("Token ID {token_id} does not exist"))?;
 
         if current_owner != owner {
-            return Err(format!("Token {} is not owned by {}", token_id, owner));
+            return Err(format!("Token {token_id} is not owned by {owner}"));
         }
 
         // Verificar permisos: el caller debe ser el owner
         if caller != owner {
             return Err(format!(
-                "Caller {} is not authorized to burn token {}",
-                caller, token_id
+                "Caller {caller} is not authorized to burn token {token_id}"
             ));
         }
 
@@ -1364,7 +1336,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!("Burned NFT {}", token_id))
+        Ok(format!("Burned NFT {token_id}"))
     }
 
     /**
@@ -1391,7 +1363,7 @@ impl SmartContract {
         }
 
         let event_key = format!("event_nft_transfer_{}", self.update_sequence);
-        let event_value = format!("from:{}|to:{}|token_id:{}", from, to, token_id);
+        let event_value = format!("from:{from}|to:{to}|token_id:{token_id}");
         self.state.metadata.insert(event_key, event_value);
     }
 
@@ -1420,8 +1392,7 @@ impl SmartContract {
 
         let event_key = format!("event_nft_approval_{}", self.update_sequence);
         let event_value = format!(
-            "owner:{}|approved:{}|token_id:{}",
-            owner, approved, token_id
+            "owner:{owner}|approved:{approved}|token_id:{token_id}"
         );
         self.state.metadata.insert(event_key, event_value);
     }
@@ -1488,7 +1459,7 @@ impl SmartContract {
 
         hasher.update(data.as_bytes());
         let hash = hasher.finalize();
-        format!("{:x}", hash)
+        format!("{hash:x}")
     }
 
     /**

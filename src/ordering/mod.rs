@@ -27,6 +27,7 @@ pub fn sign_block(block: &mut Block, key: &ed25519_dalek::SigningKey) {
     block.orderer_signature = Some(sig.to_bytes().to_vec());
 }
 
+#[allow(dead_code)]
 /// Verify a block's orderer signature against the orderer's public key.
 ///
 /// Returns:
@@ -58,6 +59,7 @@ pub fn verify_orderer_signature(
 pub trait OrderingBackend: Send + Sync {
     fn submit_tx(&self, tx: &Transaction) -> StorageResult<()>;
     fn cut_block(&self, height: u64, proposer: &str) -> StorageResult<Option<Block>>;
+    #[allow(dead_code)]
     fn pending_count(&self) -> usize;
 }
 

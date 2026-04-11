@@ -24,14 +24,17 @@ pub enum StorageError {
     #[error("Key not found: {0}")]
     KeyNotFound(String),
 
+    #[allow(dead_code)]
     /// Invalid key format
     #[error("Invalid key format: {0}")]
     InvalidKeyFormat(String),
 
+    #[allow(dead_code)]
     /// Block height mismatch
     #[error("Block height mismatch: expected {expected}, got {actual}")]
     BlockHeightMismatch { expected: u64, actual: u64 },
 
+    #[allow(dead_code)]
     /// Transaction validation failed
     #[error("Transaction validation failed: {0}")]
     TransactionValidationFailed(String),
@@ -56,10 +59,12 @@ pub enum StorageError {
     #[error("Column family not found: {0}")]
     ColumnFamilyNotFound(String),
 
+    #[allow(dead_code)]
     /// Schema version mismatch
     #[error("Schema version mismatch: expected {expected}, got {actual}")]
     SchemaMismatch { expected: u32, actual: u32 },
 
+    #[allow(dead_code)]
     /// Checkpoint error
     #[error("Checkpoint error: {0}")]
     CheckpointError(String),

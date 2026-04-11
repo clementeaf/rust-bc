@@ -70,8 +70,7 @@ impl PruningManager {
             for index in 0..keep_from_index {
                 if let Err(e) = self.block_storage.remove_block(index) {
                     eprintln!(
-                        "⚠️  Error eliminando bloque {} durante pruning: {}",
-                        index, e
+                        "⚠️  Error eliminando bloque {index} durante pruning: {e}"
                     );
                 } else {
                     pruned_count += 1;
@@ -80,8 +79,7 @@ impl PruningManager {
 
             if pruned_count > 0 {
                 println!(
-                    "🗑️  Pruning completado: {} bloques eliminados (manteniendo desde bloque {})",
-                    pruned_count, keep_from_index
+                    "🗑️  Pruning completado: {pruned_count} bloques eliminados (manteniendo desde bloque {keep_from_index})"
                 );
             }
 

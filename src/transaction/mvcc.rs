@@ -67,6 +67,7 @@ pub fn validate_rwset(rwset: &ReadWriteSet, state: &dyn WorldState) -> Result<()
     Ok(())
 }
 
+#[allow(dead_code)]
 /// Apply a block's endorsed transactions against the world state using MVCC.
 ///
 /// For each transaction:

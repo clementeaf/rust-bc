@@ -18,6 +18,7 @@ pub struct StoreBackedResolver {
 }
 
 impl StoreBackedResolver {
+    #[allow(dead_code)]
     pub fn new(store: Arc<dyn ChaincodePackageStore>) -> Self {
         Self { store }
     }
@@ -28,7 +29,7 @@ impl ChaincodeResolver for StoreBackedResolver {
         self.store
             .get_package(chaincode_id, "latest")?
             .ok_or_else(|| {
-                ChaincodeError::NotFound(format!("chaincode '{}' not found", chaincode_id))
+                ChaincodeError::NotFound(format!("chaincode '{chaincode_id}' not found"))
             })
     }
 }

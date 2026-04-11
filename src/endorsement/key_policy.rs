@@ -20,6 +20,7 @@ pub trait KeyEndorsementStore: Send + Sync {
     /// Return the policy for `key`, or `None` if no key-level policy exists.
     fn get_key_policy(&self, key: &str) -> StorageResult<Option<EndorsementPolicy>>;
 
+    #[allow(dead_code)]
     /// Remove the key-level policy for `key` (no-op if absent).
     fn delete_key_policy(&self, key: &str) -> StorageResult<()>;
 }

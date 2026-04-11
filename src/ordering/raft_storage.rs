@@ -49,7 +49,10 @@ impl RocksDbRaftStorage {
             let cf_handle = db.cf_handle(CF_RAFT).ok_or("missing raft CF")?;
             // Find the first entry key by iterating from the start.
             let mut first = 1u64;
-            for (key, _) in db.iterator_cf(&cf_handle, rocksdb::IteratorMode::Start).flatten() {
+            for (key, _) in db
+                .iterator_cf(&cf_handle, rocksdb::IteratorMode::Start)
+                .flatten()
+            {
                 if let Ok(key_str) = std::str::from_utf8(&key) {
                     if let Some(idx_str) = key_str.strip_prefix("entry:") {
                         if let Ok(idx) = idx_str.parse::<u64>() {
@@ -146,6 +149,7 @@ impl RocksDbRaftStorage {
         self.put_hard_state(hs)
     }
 
+    #[allow(dead_code)]
     /// Apply a snapshot — replace all state.
     pub fn apply_snapshot_data(&self, snap: &Snapshot) -> Result<(), String> {
         let cf = self.cf_handle()?;

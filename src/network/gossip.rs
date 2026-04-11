@@ -41,6 +41,7 @@ pub struct AliveMessage {
 }
 
 impl AliveMessage {
+    #[allow(dead_code)]
     /// Create a new alive message.
     ///
     /// `signature` should be produced by signing the canonical payload
@@ -63,6 +64,7 @@ impl AliveMessage {
         }
     }
 
+    #[allow(dead_code)]
     /// Create an alive message that includes the peer's latest block height.
     pub fn with_height(
         peer_address: impl Into<String>,
@@ -82,6 +84,7 @@ impl AliveMessage {
         }
     }
 
+    #[allow(dead_code)]
     /// Verify the signature against the provided public key bytes (Ed25519).
     ///
     /// Returns `true` when the signature matches. The canonical message that
@@ -152,6 +155,7 @@ pub fn parse_anchor_peers(env_value: &str) -> Vec<AnchorPeer> {
     peers
 }
 
+#[allow(dead_code)]
 /// Convert a `ChannelConfig`-style anchor peers map (`org_id → Vec<address>`)
 /// into a flat list of [`AnchorPeer`].
 pub fn anchor_peers_from_config(map: &HashMap<String, Vec<String>>) -> Vec<AnchorPeer> {
@@ -176,6 +180,7 @@ pub enum LeaderElectionMode {
 }
 
 impl LeaderElectionMode {
+    #[allow(dead_code)]
     /// Parse the `LEADER_ELECTION` env var. Defaults to `Static`.
     pub fn from_env() -> Self {
         match std::env::var("LEADER_ELECTION")
@@ -189,6 +194,7 @@ impl LeaderElectionMode {
     }
 }
 
+#[allow(dead_code)]
 /// Default interval (ms) between alive broadcasts.
 pub const ALIVE_INTERVAL_MS: u64 = 5000;
 
@@ -205,6 +211,7 @@ pub const STATE_BATCH_SIZE: usize = 50;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerStatus {
     Alive,
+    #[allow(dead_code)]
     Suspect,
 }
 
@@ -226,6 +233,7 @@ pub struct PeerLiveness {
 #[derive(Debug, Clone)]
 pub struct MembershipTable {
     inner: Arc<Mutex<HashMap<String, PeerLiveness>>>,
+    #[allow(dead_code)]
     /// Timeout in ms before a silent peer is marked suspect.
     pub timeout_ms: u64,
 }
@@ -238,12 +246,14 @@ impl MembershipTable {
         }
     }
 
+    #[allow(dead_code)]
     /// Record an alive message from a peer, updating or inserting its entry.
     /// `now_ms` is the current timestamp in the same epoch used for timeout checks.
     pub fn record_alive(&self, peer_address: &str, sequence: u64, now_ms: u64) {
         self.record_alive_full(peer_address, "", sequence, now_ms, 0);
     }
 
+    #[allow(dead_code)]
     /// Record an alive message that includes the peer's latest block height.
     pub fn record_alive_with_height(
         &self,
@@ -285,6 +295,7 @@ impl MembershipTable {
         }
     }
 
+    #[allow(dead_code)]
     /// Elect the leader for a given org using dynamic election.
     ///
     /// The leader is the alive peer with the lexicographically smallest
@@ -298,6 +309,7 @@ impl MembershipTable {
             .min()
     }
 
+    #[allow(dead_code)]
     /// Return peers whose reported `latest_height` exceeds `local_height`.
     /// These are candidates for pull-sync.
     pub fn peers_ahead_of(&self, local_height: u64) -> Vec<String> {
@@ -325,18 +337,21 @@ impl MembershipTable {
         newly_suspect
     }
 
+    #[allow(dead_code)]
     /// Get the current status of a peer, if known.
     pub fn status(&self, peer_address: &str) -> Option<PeerStatus> {
         let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table.get(peer_address).map(|e| e.status)
     }
 
+    #[allow(dead_code)]
     /// Remove a peer from the membership table entirely.
     pub fn remove(&self, peer_address: &str) {
         let mut table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         table.remove(peer_address);
     }
 
+    #[allow(dead_code)]
     /// Return all known peers and their status.
     pub fn all_peers(&self) -> Vec<(String, PeerStatus)> {
         let table = self.inner.lock().unwrap_or_else(|e| e.into_inner());

@@ -79,6 +79,7 @@ pub fn create_snapshot(
     })
 }
 
+#[allow(dead_code)]
 /// Restore a snapshot from a `.snap` file into the world state.
 ///
 /// Reads each line, decodes `{key}\t{version}\t{base64(data)}`, and calls
@@ -133,6 +134,7 @@ pub fn restore_snapshot(path: &Path, state: &dyn WorldState) -> StorageResult<St
     })
 }
 
+#[allow(dead_code)]
 /// Regenerate world state by replaying all blocks from the store.
 ///
 /// Iterates blocks `[0, latest]` in order. For each transaction ID found in
@@ -166,7 +168,6 @@ mod tests {
     use super::*;
     use crate::storage::memory::MemoryStore;
     use crate::storage::world_state::MemoryWorldState;
-
 
     #[test]
     fn create_snapshot_metadata() {

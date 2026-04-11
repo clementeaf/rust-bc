@@ -29,6 +29,7 @@ impl EventBus {
         Self { tx }
     }
 
+    #[allow(dead_code)]
     /// Create a new `EventBus` with a custom buffer capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         let (tx, _) = broadcast::channel(capacity);
@@ -51,6 +52,7 @@ impl EventBus {
         self.tx.subscribe()
     }
 
+    #[allow(dead_code)]
     /// Number of active receivers.
     pub fn receiver_count(&self) -> usize {
         self.tx.receiver_count()

@@ -73,6 +73,7 @@ impl WasmExecutor {
         })
     }
 
+    #[allow(dead_code)]
     /// Attach an [`EventBus`] so chaincode can emit [`BlockEvent::ChaincodeEvent`]s
     /// via the `set_event` host function.
     ///
@@ -83,6 +84,7 @@ impl WasmExecutor {
         self
     }
 
+    #[allow(dead_code)]
     /// Attach a [`KeyEndorsementStore`] so chaincode can call
     /// `set_key_endorsement_policy(key, policy_json)` to override the
     /// endorsement policy for individual state keys.
@@ -91,6 +93,7 @@ impl WasmExecutor {
         self
     }
 
+    #[allow(dead_code)]
     /// Set the maximum Wasm linear memory this executor will allow (in bytes).
     ///
     /// If a module tries to instantiate or grow memory beyond this limit,
@@ -103,12 +106,14 @@ impl WasmExecutor {
         self
     }
 
+    #[allow(dead_code)]
     /// Attach an [`AclProvider`] for cross-chaincode invocation ACL checks.
     pub fn with_acl_provider(mut self, acl: Arc<dyn AclProvider>) -> Self {
         self.acl_provider = Some(acl);
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_memory_limit(mut self, max_bytes: usize) -> Self {
         self.memory_limit = Some(max_bytes);
         self
@@ -429,7 +434,7 @@ impl WasmExecutor {
 
                     // ACL check: if an AclProvider is set, verify ChaincodeInvoke permission.
                     if let Some(acl) = &host.acl_provider {
-                        let resource = format!("chaincode/{}/invoke", cc_id);
+                        let resource = format!("chaincode/{cc_id}/invoke");
                         match acl.get_acl(&resource) {
                             Ok(None) => return -1, // No ACL entry → denied
                             Err(_) => return -1,

@@ -156,11 +156,11 @@ pub async fn connect_peer(
         // Ejecutar conexión y esperar resultado para poder retornar errores
         match node_clone.connect_to_peer(&address_str).await {
             Ok(_) => {
-                let response = ApiResponse::success(format!("Conectado a {}", address));
+                let response = ApiResponse::success(format!("Conectado a {address}"));
                 Ok(HttpResponse::Ok().json(response))
             }
             Err(e) => {
-                let error_msg = format!("Error conectando a {}: {}", address, e);
+                let error_msg = format!("Error conectando a {address}: {e}");
                 // Si es Network ID mismatch, retornar BadRequest
                 if e.to_string().contains("Network ID mismatch") {
                     let response: ApiResponse<String> = ApiResponse::error(error_msg);
@@ -305,11 +305,11 @@ pub async fn mine_block(
     {
         Ok(Ok((h, l, r, v))) => (h, l, r, v),
         Ok(Err(e)) => {
-            let error_msg = format!("Mining error: {}", e);
+            let error_msg = format!("Mining error: {e}");
             return Err(actix_web::error::ErrorInternalServerError(error_msg));
         }
         Err(e) => {
-            let error_msg = format!("Mining error: {:?}", e);
+            let error_msg = format!("Mining error: {e:?}");
             return Err(actix_web::error::ErrorInternalServerError(error_msg));
         }
     };
@@ -333,7 +333,7 @@ pub async fn mine_block(
     // Guardar en BlockStorage
     if let Some(ref storage) = state.block_storage {
         if let Err(e) = storage.save_block(&latest) {
-            eprintln!("⚠️  Error al guardar bloque en archivos: {}", e);
+            eprintln!("⚠️  Error al guardar bloque en archivos: {e}");
         }
     }
 
@@ -342,7 +342,7 @@ pub async fn mine_block(
         let mut checkpoint_manager = match checkpoint_mgr.lock() {
             Ok(manager) => manager,
             Err(e) => {
-                eprintln!("⚠️  Error al adquirir lock de checkpoint manager: {}", e);
+                eprintln!("⚠️  Error al adquirir lock de checkpoint manager: {e}");
                 return Err(actix_web::error::ErrorInternalServerError(
                     "Service temporarily unavailable",
                 ));
@@ -352,7 +352,7 @@ pub async fn mine_block(
             let blockchain = match state.blockchain.lock() {
                 Ok(bc) => bc,
                 Err(e) => {
-                    eprintln!("⚠️  Error al adquirir lock de blockchain: {}", e);
+                    eprintln!("⚠️  Error al adquirir lock de blockchain: {e}");
                     return Err(actix_web::error::ErrorInternalServerError(
                         "Service temporarily unavailable",
                     ));
@@ -370,7 +370,7 @@ pub async fn mine_block(
                 block_timestamp,
                 cumulative_difficulty,
             ) {
-                eprintln!("⚠️  Error creando checkpoint: {}", e);
+                eprintln!("⚠️  Error creando checkpoint: {e}");
             }
         }
     }
@@ -382,7 +382,7 @@ pub async fn mine_block(
             // El snapshot se creará en background desde main.rs
             // Aquí solo ejecutamos pruning
             if let Err(e) = pruning_mgr.prune_old_blocks(latest.index) {
-                eprintln!("⚠️  Error durante pruning: {}", e);
+                eprintln!("⚠️  Error durante pruning: {e}");
             }
         }
     }
@@ -744,8 +744,8 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
             r
         }
         Err(e) => {
-            eprintln!("[DEPLOY] ERROR al parsear JSON: {}", e);
-            let response: ApiResponse<String> = ApiResponse::error(format!("Invalid JSON: {}", e));
+            eprintln!("[DEPLOY] ERROR al parsear JSON: {e}");
+            let response: ApiResponse<String> = ApiResponse::error(format!("Invalid JSON: {e}"));
             return Ok(HttpResponse::BadRequest().json(response));
         }
     };
@@ -773,11 +773,11 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
         eprintln!("[DEPLOY] Write lock adquirido, llamando deploy_contract()...");
         match contract_manager.deploy_contract(contract.clone()) {
             Ok(addr) => {
-                eprintln!("[DEPLOY] deploy_contract() exitoso, address: {}", addr);
+                eprintln!("[DEPLOY] deploy_contract() exitoso, address: {addr}");
                 addr
             }
             Err(e) => {
-                eprintln!("[DEPLOY] ERROR en deploy_contract(): {}", e);
+                eprintln!("[DEPLOY] ERROR en deploy_contract(): {e}");
                 let response: ApiResponse<String> = ApiResponse::error(e);
                 return Ok(HttpResponse::BadRequest().json(response));
             }
@@ -802,8 +802,7 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
     let address_clone = address.clone();
     let response: ApiResponse<String> = ApiResponse::success(address);
     eprintln!(
-        "[DEPLOY] Deploy completado exitosamente, address: {}",
-        address_clone
+        "[DEPLOY] Deploy completado exitosamente, address: {address_clone}"
     );
     Ok(HttpResponse::Created().json(response))
 }
@@ -1256,7 +1255,7 @@ pub async fn execute_contract_function(
                         match node_clone.peers.lock() {
                             Ok(peers_guard) => peers_guard.len(),
                             Err(e) => {
-                                eprintln!("⚠️  Error al adquirir lock de peers: {}", e);
+                                eprintln!("⚠️  Error al adquirir lock de peers: {e}");
                                 0
                             }
                         }
@@ -1280,9 +1279,9 @@ pub async fn execute_contract_function(
             let error_msg = if e.contains("Insufficient") {
                 e
             } else if e.contains("not found") {
-                format!("Contract execution failed: {}", e)
+                format!("Contract execution failed: {e}")
             } else {
-                format!("Execution error: {}", e)
+                format!("Execution error: {e}")
             };
 
             let response: ApiResponse<String> = ApiResponse::error(error_msg);
@@ -1404,7 +1403,7 @@ pub async fn get_nft_owner(
             }
             None => {
                 let response: ApiResponse<String> =
-                    ApiResponse::error(format!("Token ID {} does not exist", token_id));
+                    ApiResponse::error(format!("Token ID {token_id} does not exist"));
                 Ok(HttpResponse::NotFound().json(response))
             }
         },
@@ -1437,7 +1436,7 @@ pub async fn get_nft_token_uri(
             }
             None => {
                 let response: ApiResponse<String> =
-                    ApiResponse::error(format!("Token ID {} does not exist", token_id));
+                    ApiResponse::error(format!("Token ID {token_id} does not exist"));
                 Ok(HttpResponse::NotFound().json(response))
             }
         },
@@ -1584,7 +1583,7 @@ pub async fn get_nft_token_by_index(
             }
             None => {
                 let response: ApiResponse<u64> =
-                    ApiResponse::error(format!("Token at index {} does not exist", index));
+                    ApiResponse::error(format!("Token at index {index} does not exist"));
                 Ok(HttpResponse::NotFound().json(response))
             }
         },
@@ -1616,8 +1615,7 @@ pub async fn get_nft_metadata(
             }
             None => {
                 let response: ApiResponse<NFTMetadata> = ApiResponse::error(format!(
-                    "Metadata for token ID {} does not exist",
-                    token_id
+                    "Metadata for token ID {token_id} does not exist"
                 ));
                 Ok(HttpResponse::NotFound().json(response))
             }
@@ -1657,7 +1655,7 @@ pub async fn set_nft_metadata(
                     drop(contract_manager);
 
                     let response: ApiResponse<String> =
-                        ApiResponse::success(format!("Metadata set for token {}", token_id));
+                        ApiResponse::success(format!("Metadata set for token {token_id}"));
                     Ok(HttpResponse::Ok().json(response))
                 }
                 Err(e) => {
@@ -1805,7 +1803,7 @@ pub async fn complete_unstake(
                 address.clone(),
                 amount,
                 0,
-                Some(format!("Unstaking: {} tokens", amount)),
+                Some(format!("Unstaking: {amount} tokens")),
             );
 
             // Las transacciones desde "STAKING" no requieren firma (son del sistema)
@@ -1939,8 +1937,7 @@ pub async fn claim_airdrop(
 
     if airdrop_wallet_balance < airdrop_amount {
         let response: ApiResponse<String> = ApiResponse::error(format!(
-            "Insufficient airdrop wallet balance. Required: {}, Available: {}",
-            airdrop_amount, airdrop_wallet_balance
+            "Insufficient airdrop wallet balance. Required: {airdrop_amount}, Available: {airdrop_wallet_balance}"
         ));
         return Ok(HttpResponse::PaymentRequired().json(response));
     }
@@ -1957,8 +1954,7 @@ pub async fn claim_airdrop(
             drop(wallet_manager);
             let response: ApiResponse<String> = ApiResponse::error(
                 format!(
-                    "Airdrop wallet '{}' not found. Please ensure the wallet exists (create it via /api/v1/wallets/create) and has sufficient balance. You can configure AIRDROP_WALLET environment variable to use a specific wallet address.",
-                    airdrop_wallet
+                    "Airdrop wallet '{airdrop_wallet}' not found. Please ensure the wallet exists (create it via /api/v1/wallets/create) and has sufficient balance. You can configure AIRDROP_WALLET environment variable to use a specific wallet address."
                 ),
             );
             return Ok(HttpResponse::BadRequest().json(response));

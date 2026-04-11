@@ -3,17 +3,26 @@
 /// Well-known ACL resources.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AclResource {
+    #[allow(dead_code)]
     ChaincodeInvoke,
+    #[allow(dead_code)]
     ChaincodeQuery,
+    #[allow(dead_code)]
     BlockEvents,
+    #[allow(dead_code)]
     ChannelConfig,
+    #[allow(dead_code)]
     PeerDiscovery,
+    #[allow(dead_code)]
     PrivateDataRead,
+    #[allow(dead_code)]
     PrivateDataWrite,
+    #[allow(dead_code)]
     Custom(String),
 }
 
 impl AclResource {
+    #[allow(dead_code)]
     /// Return the canonical string used as the ACL map key.
     pub fn resource_name(&self) -> &str {
         match self {

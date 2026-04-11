@@ -236,19 +236,19 @@ impl MultiSigContract {
 
         let result = match &operation.operation {
             MultiSigOperation::Transfer { to, amount } => {
-                format!("Transfer executed: {} tokens to {}", amount, to)
+                format!("Transfer executed: {amount} tokens to {to}")
             }
             MultiSigOperation::ConfigUpdate { key, value } => {
-                format!("Config updated: {} = {}", key, value)
+                format!("Config updated: {key} = {value}")
             }
             MultiSigOperation::MemberAdd { address } => {
-                format!("Member added: {}", address)
+                format!("Member added: {address}")
             }
             MultiSigOperation::MemberRemove { address } => {
-                format!("Member removed: {}", address)
+                format!("Member removed: {address}")
             }
             MultiSigOperation::ThresholdChange { new_threshold } => {
-                format!("Threshold changed to {}", new_threshold)
+                format!("Threshold changed to {new_threshold}")
             }
             MultiSigOperation::Custom { op_type, params } => {
                 format!(

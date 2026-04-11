@@ -10,6 +10,7 @@ use crate::storage::world_state::WorldState;
 
 /// Unified interface for invoking a chaincode regardless of its runtime.
 pub trait ChaincodeInvoker: Send + Sync {
+    #[allow(dead_code)]
     fn invoke(
         &self,
         state: Arc<dyn WorldState>,
@@ -23,6 +24,7 @@ pub struct WasmInvoker {
 }
 
 impl WasmInvoker {
+    #[allow(dead_code)]
     pub fn new(executor: crate::chaincode::executor::WasmExecutor) -> Self {
         Self { executor }
     }
@@ -48,6 +50,7 @@ pub struct ExternalInvoker {
 }
 
 impl ExternalInvoker {
+    #[allow(dead_code)]
     pub fn new(client: crate::chaincode::external::ExternalChaincodeClient) -> Self {
         Self { client }
     }

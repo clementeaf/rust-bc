@@ -1,9 +1,5 @@
 [toolchain]
-# Rust toolchain pinning for rust-bc Digital ID System
-# Ensures consistency across all developers and CI/CD environments
-# Using nightly for edition2024 support (base64ct dependency requirement)
-
-channel = "nightly-2024-12-19"
+# Nightly required for unsigned_is_multiple_of and wasmtime 36+ compatibility.
+channel = "nightly-2025-05-01"
 components = ["rustfmt", "clippy"]
-targets = ["x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"]
 profile = "minimal"

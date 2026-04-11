@@ -18,6 +18,7 @@ pub struct PublicKeyInfo {
     pub is_active: bool,
 }
 
+#[allow(dead_code)]
 /// Key pair for signing operations
 #[derive(Debug, Clone)]
 pub struct KeyPair {
@@ -29,6 +30,7 @@ pub struct KeyPair {
     pub created_at: u64,
 }
 
+#[allow(dead_code)]
 /// Key manager for identity
 pub struct KeyManager {
     /// Active keypair
@@ -38,6 +40,7 @@ pub struct KeyManager {
 }
 
 impl KeyManager {
+    #[allow(dead_code)]
     /// Create a new key manager with generated keypair
     pub fn new(timestamp: u64) -> Self {
         let signing_key = SigningKey::generate(&mut OsRng);
@@ -56,11 +59,13 @@ impl KeyManager {
         }
     }
 
+    #[allow(dead_code)]
     /// Get the current public key
     pub fn public_key(&self) -> [u8; 32] {
         self.active_key.public_key
     }
 
+    #[allow(dead_code)]
     /// Get all public keys (active + retired)
     pub fn all_public_keys(&self) -> Vec<PublicKeyInfo> {
         let mut keys = vec![PublicKeyInfo {
@@ -74,6 +79,7 @@ impl KeyManager {
         keys
     }
 
+    #[allow(dead_code)]
     /// Rotate to a new keypair
     pub fn rotate_key(&mut self, timestamp: u64) {
         // Archive current key as retired
@@ -97,17 +103,20 @@ impl KeyManager {
         };
     }
 
+    #[allow(dead_code)]
     /// Get the active signing key for creating signatures
     pub fn signing_key(&self) -> &SigningKey {
         &self.active_key.signing_key
     }
 
+    #[allow(dead_code)]
     /// Sign data with the active key
     pub fn sign(&self, data: &[u8]) -> [u8; 64] {
         let signature = self.active_key.signing_key.sign(data);
         signature.to_bytes()
     }
 
+    #[allow(dead_code)]
     /// Verify a signature with the active key
     pub fn verify(&self, data: &[u8], signature: &[u8; 64]) -> bool {
         let verifying_key = self.active_key.signing_key.verifying_key();
@@ -119,6 +128,7 @@ impl KeyManager {
         }
     }
 
+    #[allow(dead_code)]
     /// Verify a signature with any available key (including retired)
     pub fn verify_with_any_key(&self, data: &[u8], signature: &[u8; 64]) -> bool {
         // Try active key first
@@ -141,11 +151,13 @@ impl KeyManager {
         false
     }
 
+    #[allow(dead_code)]
     /// Get key creation timestamp
     pub fn key_created_at(&self) -> u64 {
         self.active_key.created_at
     }
 
+    #[allow(dead_code)]
     /// Number of retired keys
     pub fn retired_key_count(&self) -> usize {
         self.retired_keys.len()

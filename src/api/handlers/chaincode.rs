@@ -430,7 +430,7 @@ pub async fn simulate_chaincode(
 fn base64_encode(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes.iter().fold(String::new(), |mut s, b| {
-        let _ = write!(s, "{:02x}", b);
+        let _ = write!(s, "{b:02x}");
         s
     })
 }
@@ -445,6 +445,7 @@ pub struct SimulateQuery {
 #[derive(Debug, Deserialize)]
 pub struct SimulateRequest {
     pub function: String,
+    #[allow(dead_code)]
     #[serde(default)]
     pub args: Vec<String>,
 }

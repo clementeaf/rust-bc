@@ -372,8 +372,7 @@ impl TransactionValidator {
             let pending_count = sender_state.pending_transactions.len();
             if pending_count >= self.config.max_pending_per_sender {
                 return Err(format!(
-                    "Sender has too many pending transactions: {}",
-                    pending_count
+                    "Sender has too many pending transactions: {pending_count}"
                 ));
             }
         }
@@ -446,7 +445,7 @@ mod tests {
 
     fn create_test_tx(from: &str, to: &str, amount: u64, fee: u64) -> Transaction {
         Transaction {
-            id: format!("tx_{}_{}_{}", from, to, amount),
+            id: format!("tx_{from}_{to}_{amount}"),
             from: from.to_string(),
             to: to.to_string(),
             amount,

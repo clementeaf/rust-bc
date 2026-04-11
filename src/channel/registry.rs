@@ -9,9 +9,13 @@ use super::Channel;
 
 /// Trait for creating and querying channels
 pub trait ChannelRegistry: Send + Sync {
+    #[allow(dead_code)]
     fn create_channel(&self, channel: &Channel) -> StorageResult<()>;
+    #[allow(dead_code)]
     fn get_channel(&self, channel_id: &str) -> StorageResult<Channel>;
+    #[allow(dead_code)]
     fn list_channels(&self) -> StorageResult<Vec<Channel>>;
+    #[allow(dead_code)]
     fn update_channel(&self, channel: &Channel) -> StorageResult<()>;
 }
 

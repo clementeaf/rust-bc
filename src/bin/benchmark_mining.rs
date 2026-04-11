@@ -115,12 +115,10 @@ fn main() {
 
     println!("📊 SCALING ANALYSIS:");
     println!(
-        "   • Difficulty 2 is {:.1}x slower than Difficulty 1",
-        scaling_factor_2_to_1
+        "   • Difficulty 2 is {scaling_factor_2_to_1:.1}x slower than Difficulty 1"
     );
     println!(
-        "   • Difficulty 10 is {:.1}x slower than Difficulty 1",
-        scaling_factor_10_to_1
+        "   • Difficulty 10 is {scaling_factor_10_to_1:.1}x slower than Difficulty 1"
     );
 
     // Expected time calculation for 1-minute blocks
@@ -129,10 +127,9 @@ fn main() {
 
     println!();
     println!(
-        "🎯 TARGET BLOCK TIME: {} seconds",
-        target_block_time_seconds
+        "🎯 TARGET BLOCK TIME: {target_block_time_seconds} seconds"
     );
-    println!("   • Recommended Difficulty: {}", optimal_difficulty);
+    println!("   • Recommended Difficulty: {optimal_difficulty}");
     if let Some(result) = results.iter().find(|r| r.difficulty == optimal_difficulty) {
         println!("   • Expected Block Time: {:.2}s", result.time_seconds);
         println!("   • Average Hash Rate: {:.0} H/s", result.hash_rate);
@@ -171,7 +168,7 @@ fn main() {
         let batch_single = batch.avg_time_per_block;
         let efficiency = (single_diff1 / batch_single) * 100.0;
 
-        println!("   • Batch mining efficiency: {:.1}%", efficiency);
+        println!("   • Batch mining efficiency: {efficiency:.1}%");
         if efficiency > 90.0 {
             recommendations.push(
                 "✓ OPTIMAL: Batch mining maintains efficiency. Good for production nodes"
@@ -255,7 +252,7 @@ fn benchmark_single_difficulty(difficulty: u8) -> BenchmarkResult {
 
         // Safety timeout
         if start.elapsed().as_secs() > 120 {
-            eprintln!("⚠️  Timeout on difficulty {}", difficulty);
+            eprintln!("⚠️  Timeout on difficulty {difficulty}");
             break;
         }
     }

@@ -86,13 +86,12 @@ impl CheckpointManager {
                                         }
                                         Err(e) => {
                                             eprintln!(
-                                                "⚠️  Error deserializando checkpoint {}: {}",
-                                                index, e
+                                                "⚠️  Error deserializando checkpoint {index}: {e}"
                                             );
                                         }
                                     },
                                     Err(e) => {
-                                        eprintln!("⚠️  Error leyendo checkpoint {}: {}", index, e);
+                                        eprintln!("⚠️  Error leyendo checkpoint {index}: {e}");
                                     }
                                 }
                             }
@@ -140,13 +139,13 @@ impl CheckpointManager {
         };
 
         // Guardar en archivo
-        let filename = format!("checkpoint_{:07}.json", block_index);
+        let filename = format!("checkpoint_{block_index:07}.json");
         let path = self.checkpoints_dir.join(filename);
 
         let json = serde_json::to_string_pretty(&checkpoint).map_err(|e| {
             Error::new(
                 ErrorKind::InvalidData,
-                format!("Error serializando checkpoint: {}", e),
+                format!("Error serializando checkpoint: {e}"),
             )
         })?;
 
@@ -156,8 +155,7 @@ impl CheckpointManager {
         self.checkpoints.insert(block_index, checkpoint);
 
         println!(
-            "✅ Checkpoint creado en bloque {} (hash: {}...)",
-            block_index, hash_display
+            "✅ Checkpoint creado en bloque {block_index} (hash: {hash_display}...)"
         );
 
         Ok(())

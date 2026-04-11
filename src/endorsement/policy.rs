@@ -54,6 +54,7 @@ impl EndorsementPolicy {
         }
     }
 
+    #[allow(dead_code)]
     /// Evaluate the policy with an explicit signer-to-OU mapping.
     ///
     /// `signer_ous` maps each signer org ID to its OU ID.

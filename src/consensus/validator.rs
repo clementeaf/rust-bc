@@ -8,16 +8,19 @@ use crate::consensus::scheduler::SlotScheduler;
 /// Result of block validation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidityResult {
+    #[allow(dead_code)]
     /// Block is valid
     Valid,
     /// Block is invalid with reason
     Invalid(String),
 }
 
+#[allow(dead_code)]
 /// Block validator
 pub struct BlockValidator;
 
 impl BlockValidator {
+    #[allow(dead_code)]
     /// Validate a block's format
     pub fn validate_format(block: &DagBlock) -> ValidityResult {
         if block.hash == [0u8; 32] {
@@ -35,6 +38,7 @@ impl BlockValidator {
         ValidityResult::Valid
     }
 
+    #[allow(dead_code)]
     /// Validate block signature format (basic check, real verification deferred)
     pub fn validate_signature(block: &DagBlock) -> ValidityResult {
         if block.signature.iter().all(|&b| b == 0) && block.signature.len() == 64 {
@@ -44,6 +48,7 @@ impl BlockValidator {
         ValidityResult::Valid
     }
 
+    #[allow(dead_code)]
     /// Validate parent hash exists (for non-genesis blocks)
     pub fn validate_parent(block: &DagBlock) -> ValidityResult {
         if block.is_genesis() {
@@ -59,6 +64,7 @@ impl BlockValidator {
         ValidityResult::Valid
     }
 
+    #[allow(dead_code)]
     /// Validate slot assignment
     pub fn validate_slot(block: &DagBlock, scheduler: &SlotScheduler) -> ValidityResult {
         if !scheduler.validate_block_slot(block.slot, block.timestamp) {
@@ -79,6 +85,7 @@ impl BlockValidator {
         ValidityResult::Valid
     }
 
+    #[allow(dead_code)]
     /// Validate block height (must be >= parent height)
     pub fn validate_height(block: &DagBlock, parent_height: u64) -> ValidityResult {
         if block.height <= parent_height && !block.is_genesis() {

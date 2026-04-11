@@ -95,6 +95,7 @@ impl Gateway {
         }
     }
 
+    #[allow(dead_code)]
     /// Like [`new`] but with a discovery service for peer-aware endorsement.
     pub fn with_discovery(
         org_registry: Arc<dyn OrgRegistry>,
@@ -117,6 +118,7 @@ impl Gateway {
         }
     }
 
+    #[allow(dead_code)]
     /// Like [`new`] but with an event bus for block/transaction notifications.
     pub fn with_events(
         org_registry: Arc<dyn OrgRegistry>,
@@ -139,6 +141,7 @@ impl Gateway {
         }
     }
 
+    #[allow(dead_code)]
     /// Attach a Wasm executor for pre-ordering chaincode simulation.
     ///
     /// When set, `submit` will:
@@ -378,8 +381,7 @@ impl Gateway {
             for (i, rwset) in rwsets.iter().enumerate().skip(1) {
                 if rwset != reference {
                     return Err(GatewayError::Simulation(format!(
-                        "rwset mismatch between endorser 0 and endorser {} — non-deterministic chaincode",
-                        i,
+                        "rwset mismatch between endorser 0 and endorser {i} — non-deterministic chaincode",
                     )));
                 }
             }

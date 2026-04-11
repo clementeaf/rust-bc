@@ -24,30 +24,37 @@ pub enum ApiError {
     #[error("Storage error: {reason}")]
     StorageError { reason: String },
 
+    #[allow(dead_code)]
     #[error("Consensus error: {reason}")]
     ConsensusError { reason: String },
 
+    #[allow(dead_code)]
     #[error("Cryptography error: {reason}")]
     CryptoError { reason: String },
 
     #[error("Conflict: {reason}")]
     Conflict { reason: String },
 
+    #[allow(dead_code)]
     #[error("Invalid DID format")]
     InvalidDid,
 
+    #[allow(dead_code)]
     #[error("Invalid signature")]
     InvalidSignature,
 
+    #[allow(dead_code)]
     #[error("Credential expired")]
     CredentialExpired,
 
+    #[allow(dead_code)]
     #[error("Credential revoked")]
     CredentialRevoked,
 
     #[error("Internal server error: {reason}")]
     InternalError { reason: String },
 
+    #[allow(dead_code)]
     #[error("Unauthorized")]
     Unauthorized,
 
@@ -57,6 +64,7 @@ pub enum ApiError {
     #[error("{message}")]
     PaymentRequired { message: String },
 
+    #[allow(dead_code)]
     #[error("Rate limited")]
     RateLimited,
 

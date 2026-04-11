@@ -26,8 +26,8 @@ fn main() {
     for i in 1..=5 {
         let addr = format!("127.0.0.1:{}", 8081 + i);
         match manager.register_peer(addr.clone()) {
-            Ok(_) => println!("  ✅ {} registered", addr),
-            Err(e) => println!("  ❌ {} rejected: {}", addr, e),
+            Ok(_) => println!("  ✅ {addr} registered"),
+            Err(e) => println!("  ❌ {addr} rejected: {e}"),
         }
     }
 
@@ -55,8 +55,8 @@ fn main() {
 
     for (size, desc) in test_cases {
         match manager.validate_message_size(size) {
-            Ok(_) => println!("  ✅ {}: {} bytes - ALLOWED", desc, size),
-            Err(e) => println!("  ❌ {}: {} bytes - REJECTED ({})", desc, size, e),
+            Ok(_) => println!("  ✅ {desc}: {size} bytes - ALLOWED"),
+            Err(e) => println!("  ❌ {desc}: {size} bytes - REJECTED ({e})"),
         }
     }
     println!();
@@ -79,9 +79,9 @@ fn main() {
     );
     for i in 1..=7 {
         match manager.check_rate_limit(&peer, 1000) {
-            Ok(_) => println!("  ✅ Message {} - ALLOWED", i),
+            Ok(_) => println!("  ✅ Message {i} - ALLOWED"),
             Err(e) => {
-                println!("  ⚠️  Message {} - BLOCKED: {}", i, e);
+                println!("  ⚠️  Message {i} - BLOCKED: {e}");
                 manager.record_invalid_message(&peer, 10);
                 if let Some(stats) = manager.get_peer_stats(&peer) {
                     println!("     Peer score: {}", stats.score);
@@ -134,7 +134,7 @@ fn main() {
     let peer = "127.0.0.1:9001".to_string();
     manager.register_peer(peer.clone()).unwrap();
 
-    println!("Blacklisting peer: {}", peer);
+    println!("Blacklisting peer: {peer}");
     manager.blacklist_peer(&peer, "Detected as malicious node".to_string());
 
     let stats = manager.get_peer_stats(&peer).unwrap();
@@ -148,7 +148,7 @@ fn main() {
     println!("Attempting to send message from blacklisted peer:");
     match manager.check_rate_limit(&peer, 1000) {
         Ok(_) => println!("  ❌ Message allowed (should be blocked!)"),
-        Err(e) => println!("  ✅ Message blocked: {}", e),
+        Err(e) => println!("  ✅ Message blocked: {e}"),
     }
     println!();
 

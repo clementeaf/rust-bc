@@ -33,11 +33,11 @@ pub enum ContractError {
 impl std::fmt::Display for ContractError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ContractError::InvalidAddress(addr) => write!(f, "Invalid address: {}", addr),
+            ContractError::InvalidAddress(addr) => write!(f, "Invalid address: {addr}"),
             ContractError::InsufficientBalance => write!(f, "Insufficient balance"),
-            ContractError::TransactionFailed(msg) => write!(f, "Transaction failed: {}", msg),
-            ContractError::ContractCallFailed(msg) => write!(f, "Contract call failed: {}", msg),
-            ContractError::ProviderError(msg) => write!(f, "Provider error: {}", msg),
+            ContractError::TransactionFailed(msg) => write!(f, "Transaction failed: {msg}"),
+            ContractError::ContractCallFailed(msg) => write!(f, "Contract call failed: {msg}"),
+            ContractError::ProviderError(msg) => write!(f, "Provider error: {msg}"),
             ContractError::InvalidAmount => write!(f, "Invalid amount"),
             ContractError::NotAuthorized => write!(f, "Not authorized"),
         }
@@ -133,8 +133,7 @@ impl SmartContractConfig {
         // Ensure address starts with 0x and is 42 chars (0x + 40 hex)
         if !address.starts_with("0x") {
             return Err(ContractError::InvalidAddress(format!(
-                "Address must start with 0x: {}",
-                address
+                "Address must start with 0x: {address}"
             )));
         }
 
@@ -151,8 +150,7 @@ impl SmartContractConfig {
         for c in hex_part.chars() {
             if !c.is_ascii_hexdigit() {
                 return Err(ContractError::InvalidAddress(format!(
-                    "Address contains invalid hex character '{}': {}",
-                    c, address
+                    "Address contains invalid hex character '{c}': {address}"
                 )));
             }
         }

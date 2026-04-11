@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 /// Token bucket for rate limiting
 #[derive(Clone)]
 struct TokenBucket {
+    #[allow(dead_code)]
     tokens: f64,
     last_refill: Instant,
     capacity: f64,
@@ -13,6 +14,7 @@ struct TokenBucket {
 }
 
 impl TokenBucket {
+    #[allow(dead_code)]
     /// Create a new token bucket
     fn new(capacity: f64, refill_rate: f64) -> Self {
         TokenBucket {
@@ -51,6 +53,7 @@ impl TokenBucket {
 
 /// Rate limiter with per-IP token buckets
 pub struct RateLimiter {
+    #[allow(dead_code)]
     buckets: Arc<Mutex<HashMap<IpAddr, TokenBucket>>>,
     capacity: f64,
     refill_rate: f64,
@@ -72,6 +75,7 @@ impl RateLimiter {
         }
     }
 
+    #[allow(dead_code)]
     /// Check if request from IP should be allowed
     pub fn allow_request(&self, ip: IpAddr) -> bool {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
@@ -95,6 +99,7 @@ impl RateLimiter {
         allowed
     }
 
+    #[allow(dead_code)]
     /// Get remaining tokens for an IP
     pub fn get_remaining_tokens(&self, ip: IpAddr) -> f64 {
         let buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
@@ -109,6 +114,7 @@ impl RateLimiter {
         buckets.retain(|_, bucket| bucket.current_tokens() < bucket.capacity);
     }
 
+    #[allow(dead_code)]
     /// Reset rate limiter (clear all buckets)
     pub fn reset(&self) {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());

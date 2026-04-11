@@ -27,6 +27,7 @@ pub struct DagBlock {
 }
 
 impl DagBlock {
+    #[allow(dead_code)]
     /// Create a new DAG block
     pub fn new(
         hash: [u8; 32],
@@ -49,6 +50,7 @@ impl DagBlock {
         }
     }
 
+    #[allow(dead_code)]
     /// Add a transaction to this block
     pub fn add_transaction(&mut self, tx_hash: [u8; 32]) {
         self.transactions.push(tx_hash);
@@ -63,6 +65,7 @@ impl DagBlock {
 /// DAG vertex representing a block in the consensus graph
 #[derive(Debug, Clone)]
 pub struct DagVertex {
+    #[allow(dead_code)]
     /// Block data
     pub block: DagBlock,
     /// Children blocks (vertices that reference this as parent)
@@ -70,6 +73,7 @@ pub struct DagVertex {
 }
 
 impl DagVertex {
+    #[allow(dead_code)]
     /// Create a new DAG vertex
     pub fn new(block: DagBlock) -> Self {
         DagVertex {
@@ -98,6 +102,7 @@ pub struct DagEdge {
 }
 
 impl DagEdge {
+    #[allow(dead_code)]
     /// Create a new DAG edge
     pub fn new(from: [u8; 32], to: [u8; 32], weight: u64) -> Self {
         DagEdge { from, to, weight }
@@ -107,6 +112,7 @@ impl DagEdge {
 /// DAG representation as a collection of vertices
 #[derive(Debug)]
 pub struct Dag {
+    #[allow(dead_code)]
     /// Vertices indexed by block hash
     vertices: HashMap<[u8; 32], DagVertex>,
     /// Head block hash (most recent)
@@ -125,6 +131,7 @@ impl Dag {
         }
     }
 
+    #[allow(dead_code)]
     /// Add a block to the DAG
     pub fn add_block(&mut self, block: DagBlock) -> Result<(), String> {
         // Check for duplicate
@@ -155,6 +162,7 @@ impl Dag {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Get a block by hash
     pub fn get_block(&self, hash: &[u8; 32]) -> Option<DagBlock> {
         self.vertices.get(hash).map(|v| v.block.clone())
@@ -165,16 +173,19 @@ impl Dag {
         &self.vertices
     }
 
+    #[allow(dead_code)]
     /// Get DAG head (most recent block)
     pub fn head(&self) -> Option<[u8; 32]> {
         self.head
     }
 
+    #[allow(dead_code)]
     /// Get total blocks
     pub fn block_count(&self) -> u64 {
         self.block_count
     }
 
+    #[allow(dead_code)]
     /// Traverse DAG from head to genesis (following parents)
     pub fn traverse_parents(&self, start: [u8; 32]) -> Vec<DagBlock> {
         let mut path = Vec::new();
@@ -191,6 +202,7 @@ impl Dag {
         path
     }
 
+    #[allow(dead_code)]
     /// Get all children of a block
     pub fn get_children(&self, hash: &[u8; 32]) -> Vec<DagBlock> {
         self.vertices
@@ -204,6 +216,7 @@ impl Dag {
             .unwrap_or_default()
     }
 
+    #[allow(dead_code)]
     /// Check if DAG is linear (no forks)
     pub fn is_linear(&self) -> bool {
         for vertex in self.vertices.values() {
@@ -214,6 +227,7 @@ impl Dag {
         true
     }
 
+    #[allow(dead_code)]
     /// Get height of chain (from genesis to head)
     pub fn chain_height(&self) -> u64 {
         if let Some(head_hash) = self.head {
@@ -240,6 +254,7 @@ impl Dag {
         weight
     }
 
+    #[allow(dead_code)]
     /// Given a set of competing tip hashes, return the one that lies on the
     /// canonical chain, selecting the deepest (latest) one.
     ///

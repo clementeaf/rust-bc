@@ -108,6 +108,7 @@ impl RocksDbBlockStore {
         Ok(RocksDbBlockStore { db })
     }
 
+    #[allow(dead_code)]
     /// Open (or create) a per-channel RocksDB database.
     ///
     /// The database is placed at `<base_path>/channels/<channel_id>`, so each
@@ -230,7 +231,7 @@ impl RocksDbBlockStore {
 
     /// Zero-padded decimal height gives lexicographic == numeric ordering.
     fn block_key(height: u64) -> Vec<u8> {
-        format!("{:012}", height).into_bytes()
+        format!("{height:012}").into_bytes()
     }
 
     /// Secondary-index key: `{012-padded-height}:{tx_id}`.
@@ -238,12 +239,12 @@ impl RocksDbBlockStore {
     /// The fixed-width height prefix keeps all entries for a block contiguous
     /// and in numeric order, enabling a simple prefix range scan.
     fn tx_block_index_key(height: u64, tx_id: &str) -> Vec<u8> {
-        format!("{:012}:{}", height, tx_id).into_bytes()
+        format!("{height:012}:{tx_id}").into_bytes()
     }
 
     /// The prefix used to scan all index entries for `height`.
     fn tx_block_prefix(height: u64) -> Vec<u8> {
-        format!("{:012}:", height).into_bytes()
+        format!("{height:012}:").into_bytes()
     }
 
     /// Secondary-index key for the subject-DID index: `{subject_did}\x00{cred_id}`.
@@ -266,12 +267,13 @@ impl RocksDbBlockStore {
         prefix
     }
 
+    #[allow(dead_code)]
     /// Key-history entry key: `{state_key}\x00{version:012}`.
     fn history_key(state_key: &str, version: u64) -> Vec<u8> {
         let mut key = Vec::with_capacity(state_key.len() + 1 + 12);
         key.extend_from_slice(state_key.as_bytes());
         key.push(0x00);
-        key.extend_from_slice(format!("{:012}", version).as_bytes());
+        key.extend_from_slice(format!("{version:012}").as_bytes());
         key
     }
 
@@ -285,6 +287,7 @@ impl RocksDbBlockStore {
 
     // ── Key history ──────────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     /// Write a single history entry for a world-state key.
     pub fn write_history_entry(
         &self,
@@ -894,6 +897,7 @@ impl crate::acl::AclProvider for RocksDbBlockStore {
 }
 
 impl RocksDbBlockStore {
+    #[allow(dead_code)]
     /// Persist a [`ChannelConfig`] snapshot.
     ///
     /// Key format: `{channel_id}:{version:012}` — zero-padded so lexicographic
@@ -912,6 +916,7 @@ impl RocksDbBlockStore {
             .map_err(|e| StorageError::RocksDbError(e.to_string()))
     }
 
+    #[allow(dead_code)]
     /// Read a specific version of a channel's config. Returns `None` if not found.
     pub fn read_channel_config(
         &self,
@@ -931,6 +936,7 @@ impl RocksDbBlockStore {
         }
     }
 
+    #[allow(dead_code)]
     /// List all stored version numbers for `channel_id` in ascending order.
     pub fn list_channel_versions(&self, channel_id: &str) -> StorageResult<Vec<u64>> {
         let cf = self.cf_channel_configs()?;

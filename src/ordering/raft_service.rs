@@ -11,6 +11,7 @@ use crate::storage::traits::{Block, Transaction};
 pub struct RaftOrderingService {
     pub(crate) raft_node: Arc<Mutex<RaftNode>>,
     pub max_batch_size: usize,
+    #[allow(dead_code)]
     pub batch_timeout_ms: u64,
     signing_key: Option<ed25519_dalek::SigningKey>,
 }
@@ -48,6 +49,7 @@ impl RaftOrderingService {
         })
     }
 
+    #[allow(dead_code)]
     /// Create from a shared `RaftNode` — used when the tick loop and P2P
     /// handler share the same node instance.
     pub fn from_shared(
@@ -63,6 +65,7 @@ impl RaftOrderingService {
         }
     }
 
+    #[allow(dead_code)]
     /// Attach an Ed25519 signing key so `cut_block` signs each block.
     pub fn with_signing_key(mut self, key: ed25519_dalek::SigningKey) -> Self {
         self.signing_key = Some(key);

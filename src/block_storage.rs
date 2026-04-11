@@ -41,7 +41,7 @@ impl BlockStorage {
         let data = bincode::serialize(block).map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Error serializando bloque: {}", e),
+                format!("Error serializando bloque: {e}"),
             )
         })?;
 
@@ -78,14 +78,13 @@ impl BlockStorage {
                                 Ok(block) => blocks.push(block),
                                 Err(e) => {
                                     eprintln!(
-                                        "⚠️  Error deserializando bloque {}: {}",
-                                        filename_str, e
+                                        "⚠️  Error deserializando bloque {filename_str}: {e}"
                                     );
                                     continue;
                                 }
                             },
                             Err(e) => {
-                                eprintln!("⚠️  Error leyendo bloque {}: {}", filename_str, e);
+                                eprintln!("⚠️  Error leyendo bloque {filename_str}: {e}");
                                 continue;
                             }
                         }
@@ -127,7 +126,7 @@ impl BlockStorage {
      * @returns Result indicando éxito o error
      */
     pub fn remove_block(&self, index: u64) -> IoResult<()> {
-        let filename = format!("block_{:07}.dat", index);
+        let filename = format!("block_{index:07}.dat");
         let path = self.blocks_dir.join(filename);
 
         if path.exists() {

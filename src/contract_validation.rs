@@ -144,8 +144,7 @@ impl StateValidator {
             std::cmp::Ordering::Less => {
                 let leaked = self.total_supply - accounted;
                 ValidationResult::success().with_warning(format!(
-                    "Unaccounted tokens detected: {} tokens not tracked",
-                    leaked
+                    "Unaccounted tokens detected: {leaked} tokens not tracked"
                 ))
             }
         }

@@ -259,7 +259,7 @@ fn test_audit_trail_max_entries() {
             1000 + i,
             100 + i,
             "transfer".to_string(),
-            format!("user{}", i),
+            format!("user{i}"),
             details,
             true,
         );

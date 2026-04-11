@@ -11,6 +11,7 @@ use super::PeerDescriptor;
 /// Errors returned by the discovery service.
 #[derive(Debug, thiserror::Error)]
 pub enum DiscoveryError {
+    #[allow(dead_code)]
     #[error("peer not found: {0}")]
     PeerNotFound(String),
     #[error("no policy found for {0}")]
@@ -22,6 +23,7 @@ pub enum DiscoveryError {
 /// Registry of active peers with their capabilities.
 pub struct DiscoveryService {
     peers: Mutex<HashMap<String, PeerDescriptor>>,
+    #[allow(dead_code)]
     pub org_registry: Arc<dyn OrgRegistry>,
     pub policy_store: Arc<dyn PolicyStore>,
     metrics: Option<Arc<MetricsCollector>>,
@@ -55,6 +57,7 @@ impl DiscoveryService {
         }
     }
 
+    #[allow(dead_code)]
     /// Remove a peer entry; returns an error if the peer was not registered.
     pub fn unregister_peer(&self, address: &str) -> Result<(), DiscoveryError> {
         let count = {
@@ -70,6 +73,7 @@ impl DiscoveryService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Update the `last_heartbeat` timestamp for a registered peer.
     pub fn heartbeat(&self, address: &str, timestamp: u64) -> Result<(), DiscoveryError> {
         let mut map = self.peers.lock().unwrap_or_else(|e| e.into_inner());

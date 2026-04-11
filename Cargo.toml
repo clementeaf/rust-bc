@@ -49,7 +49,7 @@ prometheus = { version = "0.13", features = ["process"] }
 metrics = "0.21"
 metrics-exporter-prometheus = "0.12"
 rocksdb = "0.22"
-wasmtime = "21"
+wasmtime = "36"
 actix-ws = "0.3"
 raft = { version = "0.7", default-features = false, features = ["default-logger", "prost-codec"] }
 prost = "0.11"

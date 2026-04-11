@@ -18,16 +18,21 @@ use crate::storage::traits::BlockStore;
 /// Errors returned by the consensus engine.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ConsensusError {
+    #[allow(dead_code)]
     #[error("invalid block: {0}")]
     InvalidBlock(String),
+    #[allow(dead_code)]
     #[error("dag error: {0}")]
     DagError(String),
+    #[allow(dead_code)]
     #[error("storage error: {0}")]
     StorePersist(String),
+    #[allow(dead_code)]
     #[error("endorsement error: {0}")]
     EndorsementError(String),
 }
 
+#[allow(dead_code)]
 /// The consensus engine.
 ///
 /// # Example
@@ -52,12 +57,13 @@ pub struct ConsensusEngine {
 }
 
 impl ConsensusEngine {
+    #[allow(dead_code)]
     /// Create a new `ConsensusEngine`.
     ///
     /// - `config`       — slot duration and parallel-slot limits
     /// - `rule`         — fork-choice strategy
     /// - `validators`   — ordered list of validator identities used for
-    ///                    round-robin slot assignment
+    ///   round-robin slot assignment
     /// - `genesis_time` — UNIX timestamp of the first slot's start
     pub fn new(
         config: ConsensusConfig,
@@ -77,6 +83,7 @@ impl ConsensusEngine {
         }
     }
 
+    #[allow(dead_code)]
     /// Attach a `BlockStore` for persistence.  Blocks accepted after this call
     /// will be written to the store as well as the in-memory DAG.
     pub fn with_store(mut self, store: Box<dyn BlockStore>) -> Self {
@@ -84,6 +91,7 @@ impl ConsensusEngine {
         self
     }
 
+    #[allow(dead_code)]
     /// Attach an endorsement policy store and org registry.
     ///
     /// When set, `accept_block` will look up a policy keyed by `"block"` and
@@ -102,6 +110,7 @@ impl ConsensusEngine {
 
     // --- mutations ---
 
+    #[allow(dead_code)]
     /// Validate and insert a block into the DAG.
     ///
     /// Runs the full `BlockValidator` pipeline (format → signature → parent →
@@ -156,35 +165,41 @@ impl ConsensusEngine {
 
     // --- accessors ---
 
+    #[allow(dead_code)]
     /// Return the canonical chain as an ordered list of hashes (genesis → tip).
     pub fn canonical_chain(&self) -> Vec<[u8; 32]> {
         self.fork_choice.canonical_chain(&self.dag)
     }
 
+    #[allow(dead_code)]
     /// Return the canonical tip hash, i.e. the last block in the canonical
     /// chain.  Returns `None` when the DAG is empty.
     pub fn canonical_tip(&self) -> Option<[u8; 32]> {
         self.fork_choice
             .canonical_chain(&self.dag)
             .into_iter()
-            .last()
+            .next_back()
     }
 
+    #[allow(dead_code)]
     /// Total number of blocks in the DAG (including stale branches).
     pub fn block_count(&self) -> u64 {
         self.dag.block_count()
     }
 
+    #[allow(dead_code)]
     /// Borrow the underlying DAG (read-only).
     pub fn dag(&self) -> &Dag {
         &self.dag
     }
 
+    #[allow(dead_code)]
     /// Borrow the fork-choice engine (read-only).
     pub fn fork_choice(&self) -> &ForkChoice {
         &self.fork_choice
     }
 
+    #[allow(dead_code)]
     /// Borrow the slot scheduler (read-only).
     pub fn scheduler(&self) -> &SlotScheduler {
         &self.scheduler
@@ -372,7 +387,6 @@ mod tests {
 
     #[test]
     fn store_contains_block_after_accept() {
-
         // We need to share the store with the engine.
         // MemoryStore is Send+Sync so we can wrap in Arc and use a newtype.
         // Simpler: accept two blocks and check get_latest_height via a dedicated engine.

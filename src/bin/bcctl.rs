@@ -186,8 +186,7 @@ async fn cmd_status(client: &Client, json: bool) {
                 format!("\x1b[31m{health}\x1b[0m")
             };
             println!(
-                "{:<12} {:<20} {:<8} {:<8} {:<20}",
-                node, status_display, blocks, peers, short_hash
+                "{node:<12} {status_display:<20} {blocks:<8} {peers:<8} {short_hash:<20}"
             );
         }
     }

@@ -17,19 +17,18 @@ pub mod traits;
 pub mod world_state;
 
 pub use adapters::RocksDbBlockStore;
-pub use errors::{StorageError, StorageResult};
 pub use memory::MemoryStore;
 pub use traits::BlockStore;
-pub use world_state::{
-    composite_key, get_by_partial_key, parse_composite_key, MemoryWorldState, VersionedValue,
-    WorldState,
-};
+pub use world_state::{MemoryWorldState, WorldState};
 
 /// Storage configuration
 #[derive(Clone, Debug)]
 pub struct StorageConfig {
+    #[allow(dead_code)]
     pub path: String,
+    #[allow(dead_code)]
     pub max_retries: u32,
+    #[allow(dead_code)]
     pub retry_delay_ms: u64,
 }
 

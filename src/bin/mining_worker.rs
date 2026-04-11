@@ -167,10 +167,10 @@ impl MiningMetrics {
         let errors = self.api_errors.load(Ordering::Relaxed);
 
         println!("\n📊 Mining Statistics:");
-        println!("   Blocks mined: {}", blocks);
-        println!("   Transactions: {}", txs);
-        println!("   Errors: {}", errors);
-        println!("   Uptime: {:.2}s", elapsed);
+        println!("   Blocks mined: {blocks}");
+        println!("   Transactions: {txs}");
+        println!("   Errors: {errors}");
+        println!("   Uptime: {elapsed:.2}s");
         if blocks > 0 {
             println!("   Avg block time: {:.2}s", elapsed / blocks as f64);
             println!("   Block rate: {:.4} blocks/s", blocks as f64 / elapsed);
@@ -215,9 +215,9 @@ impl MiningWorker {
                         ))
                     }
                 }
-                Err(e) => Err(format!("JSON parse error: {}", e)),
+                Err(e) => Err(format!("JSON parse error: {e}")),
             },
-            Err(e) => Err(format!("Request failed: {}", e)),
+            Err(e) => Err(format!("Request failed: {e}")),
         }
     }
 
@@ -270,9 +270,9 @@ impl MiningWorker {
                         ))
                     }
                 }
-                Err(e) => Err(format!("JSON parse error: {}", e)),
+                Err(e) => Err(format!("JSON parse error: {e}")),
             },
-            Err(e) => Err(format!("Request failed: {}", e)),
+            Err(e) => Err(format!("Request failed: {e}")),
         }
     }
 
@@ -308,7 +308,7 @@ impl MiningWorker {
                         let time_since_last = last_block_time.elapsed().as_secs();
                         if time_since_last < self.config.min_block_interval {
                             let wait_time = self.config.min_block_interval - time_since_last;
-                            log::debug!("Min block interval not met, waiting {}s", wait_time);
+                            log::debug!("Min block interval not met, waiting {wait_time}s");
                             sleep(Duration::from_secs(wait_time)).await;
                         }
 
@@ -328,7 +328,7 @@ impl MiningWorker {
                                 last_block_time = Instant::now();
                             }
                             Err(e) => {
-                                eprintln!("❌ Block submission failed: {}", e);
+                                eprintln!("❌ Block submission failed: {e}");
                                 self.metrics.record_error();
                                 self.backoff_attempts += 1;
                                 let delay = self.backoff_delay();
@@ -340,11 +340,11 @@ impl MiningWorker {
                     sleep(Duration::from_secs(self.config.poll_interval)).await;
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Mempool fetch failed: {}", e);
+                    eprintln!("⚠️  Mempool fetch failed: {e}");
                     self.metrics.record_error();
                     self.backoff_attempts += 1;
                     let delay = self.backoff_delay();
-                    eprintln!("   Retrying in {:?}...", delay);
+                    eprintln!("   Retrying in {delay:?}...");
                     sleep(delay).await;
                 }
             }
@@ -369,7 +369,7 @@ async fn main() {
     let running = worker.running.clone();
     tokio::spawn(async move {
         if let Err(e) = tokio::signal::ctrl_c().await {
-            eprintln!("Failed to listen for Ctrl-C: {}", e);
+            eprintln!("Failed to listen for Ctrl-C: {e}");
         } else {
             println!("\n⏸️  Shutdown signal received...");
             running.store(false, Ordering::Relaxed);

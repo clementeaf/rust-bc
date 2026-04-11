@@ -1,5 +1,3 @@
-#![feature(unsigned_is_multiple_of)]
-#![allow(dead_code, unused_imports)]
 
 // Librería para tests de integración
 pub mod blockchain;

@@ -80,7 +80,7 @@ fn main() {
         } else {
             "❌ FAIL"
         };
-        println!("{}: {}", status, desc);
+        println!("{status}: {desc}");
         if !result.is_valid {
             println!("  Error: {}", result.errors.join(", "));
         }
@@ -104,7 +104,7 @@ fn main() {
 
     for (amount, fee, desc, should_pass) in amount_tests {
         let tx = Transaction {
-            id: format!("tx_amount_{}_{}_valid_test", amount, fee),
+            id: format!("tx_amount_{amount}_{fee}_valid_test"),
             from: "sender_addr_valid_minlength32char".to_string(),
             to: "receiver_addr_valid_minlength32ch".to_string(),
             amount,
@@ -120,7 +120,7 @@ fn main() {
         } else {
             "❌ FAIL"
         };
-        println!("{}: {} (amount={}, fee={})", status, desc, amount, fee);
+        println!("{status}: {desc} (amount={amount}, fee={fee})");
         if !result.is_valid && !result.errors.is_empty() {
             println!("  Error: {}", result.errors[0]);
         }
@@ -167,7 +167,7 @@ fn main() {
 
     for (sender, receiver, desc, should_pass) in addr_tests {
         let tx = Transaction {
-            id: format!("tx_addr_{}", desc),
+            id: format!("tx_addr_{desc}"),
             from: sender.to_string(),
             to: receiver.to_string(),
             amount: 100,
@@ -183,7 +183,7 @@ fn main() {
         } else {
             "❌ FAIL"
         };
-        println!("{}: {}", status, desc);
+        println!("{status}: {desc}");
     }
     println!();
 
@@ -237,8 +237,7 @@ fn main() {
     let result3 = validator.validate(&tx3_replay);
     let replay_blocked = !result3.is_valid;
     println!(
-        "🛡️  Replay attack (sequence=50): {} (BLOCKED)",
-        replay_blocked
+        "🛡️  Replay attack (sequence=50): {replay_blocked} (BLOCKED)"
     );
     if !result3.is_valid {
         println!("   Error: {}", result3.errors[0]);
@@ -269,7 +268,7 @@ fn main() {
 
     let result_second = validator.validate(&tx_dup);
     let duplicate_blocked = !result_second.is_valid;
-    println!("🛡️  Duplicate submission: {} (BLOCKED)", duplicate_blocked);
+    println!("🛡️  Duplicate submission: {duplicate_blocked} (BLOCKED)");
     if !result_second.is_valid {
         println!("   Error: {}", result_second.errors[0]);
     }
@@ -287,9 +286,9 @@ fn main() {
     for i in 1..=3 {
         for j in 1..=2 {
             let tx = Transaction {
-                id: format!("tx_stats_{}_{}_valid_test", i, j),
-                from: format!("sender_{}_valid_minlength32chr", i),
-                to: format!("receiver_{}_valid_minlength32c", j),
+                id: format!("tx_stats_{i}_{j}_valid_test"),
+                from: format!("sender_{i}_valid_minlength32chr"),
+                to: format!("receiver_{j}_valid_minlength32c"),
                 amount: 100 * i as u64,
                 fee: 1,
                 timestamp: 1000 + (i as u64 * 100) + j as u64,

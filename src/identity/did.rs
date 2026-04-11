@@ -28,10 +28,13 @@ pub struct DidDocument {
 /// DID status enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DidStatus {
+    #[allow(dead_code)]
     /// DID is active and usable
     Active,
+    #[allow(dead_code)]
     /// DID has been revoked
     Revoked,
+    #[allow(dead_code)]
     /// DID is temporarily suspended
     Suspended,
 }
@@ -48,6 +51,7 @@ pub struct DidMetadata {
 }
 
 impl DidDocument {
+    #[allow(dead_code)]
     /// Create a new DID document
     pub fn new(public_key_hash: String, timestamp: u64) -> Self {
         let did = Self::create_did(&public_key_hash);
@@ -70,9 +74,10 @@ impl DidDocument {
     /// Create DID string from public key hash
     /// Format: did:bc:<hex_pubkey_hash>
     pub fn create_did(pubkey_hash: &str) -> String {
-        format!("did:bc:{}", pubkey_hash)
+        format!("did:bc:{pubkey_hash}")
     }
 
+    #[allow(dead_code)]
     /// Generate a DID from raw public key bytes
     pub fn from_public_key(pubkey: &[u8]) -> String {
         let mut hasher = Sha256::new();
@@ -82,6 +87,7 @@ impl DidDocument {
         Self::create_did(&pubkey_hash)
     }
 
+    #[allow(dead_code)]
     /// Add a credential to this DID
     pub fn add_credential(&mut self, credential_id: String) {
         if !self.credentials.contains(&credential_id) {
@@ -89,34 +95,40 @@ impl DidDocument {
         }
     }
 
+    #[allow(dead_code)]
     /// Remove a credential from this DID
     pub fn remove_credential(&mut self, credential_id: &str) {
         self.credentials.retain(|id| id != credential_id);
     }
 
+    #[allow(dead_code)]
     /// Revoke this DID
     pub fn revoke(&mut self, timestamp: u64) {
         self.status = DidStatus::Revoked;
         self.updated_at = timestamp;
     }
 
+    #[allow(dead_code)]
     /// Suspend this DID
     pub fn suspend(&mut self, timestamp: u64) {
         self.status = DidStatus::Suspended;
         self.updated_at = timestamp;
     }
 
+    #[allow(dead_code)]
     /// Reactivate this DID
     pub fn reactivate(&mut self, timestamp: u64) {
         self.status = DidStatus::Active;
         self.updated_at = timestamp;
     }
 
+    #[allow(dead_code)]
     /// Check if DID is active
     pub fn is_active(&self) -> bool {
         self.status == DidStatus::Active
     }
 
+    #[allow(dead_code)]
     /// Parse a DID string and validate format
     pub fn parse(did_str: &str) -> Result<(), String> {
         if !did_str.starts_with("did:bc:") {

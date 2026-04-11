@@ -13,17 +13,15 @@ pub mod fork_choice;
 pub mod scheduler;
 pub mod validator;
 
-pub use dag::{Dag, DagBlock, DagEdge, DagVertex};
-pub use engine::{ConsensusEngine, ConsensusError};
-pub use fork_choice::{ForkChoice, ForkChoiceRule};
-pub use scheduler::SlotScheduler;
-pub use validator::{BlockValidator, ValidityResult};
 
 /// Consensus configuration
 #[derive(Clone, Debug)]
 pub struct ConsensusConfig {
+    #[allow(dead_code)]
     pub slot_duration_ms: u64,
+    #[allow(dead_code)]
     pub max_parallel_slots: u32,
+    #[allow(dead_code)]
     pub byzantine_fault_tolerance: f64,
 }
 

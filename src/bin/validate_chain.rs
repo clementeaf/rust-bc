@@ -30,7 +30,7 @@ fn main() {
     if !errors.is_empty() {
         println!("  Errors found:");
         for error in &errors {
-            println!("    - {}", error);
+            println!("    - {error}");
         }
     }
     println!();
@@ -51,7 +51,7 @@ fn main() {
     println!("Comparing two blockchain instances:");
     println!("  Chain A length: {}", blockchain_a.chain.len());
     println!("  Chain B length: {}", blockchain_b.chain.len());
-    println!("  Fork point (consensus up to block): {}", fork_point);
+    println!("  Fork point (consensus up to block): {fork_point}");
     println!("  Chain A diverges after: {} blocks", suffix_a.len());
     println!("  Chain B diverges after: {} blocks", suffix_b.len());
     println!();
@@ -134,7 +134,7 @@ fn main() {
             test.old, test.new, test.min, test.max_adj
         );
         if let Err(e) = result {
-            println!("  Reason: {}", e);
+            println!("  Reason: {e}");
         }
         println!();
     }

@@ -12,6 +12,7 @@ pub trait OrgRegistry: Send + Sync {
     fn register_org(&self, org: &Organization) -> StorageResult<()>;
     fn get_org(&self, org_id: &str) -> StorageResult<Organization>;
     fn list_orgs(&self) -> StorageResult<Vec<Organization>>;
+    #[allow(dead_code)]
     fn remove_org(&self, org_id: &str) -> StorageResult<()>;
 }
 

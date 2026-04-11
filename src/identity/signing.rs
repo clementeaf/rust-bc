@@ -16,6 +16,7 @@ pub enum SigningError {
     SignFailed(String),
     #[error("verification failed: {0}")]
     VerifyFailed(String),
+    #[allow(dead_code)]
     #[error("key not available: {0}")]
     KeyNotAvailable(String),
 }
@@ -41,6 +42,7 @@ impl std::fmt::Display for SigningAlgorithm {
 /// Signatures and public keys are returned as `Vec<u8>` to accommodate
 /// algorithms with different output sizes.
 pub trait SigningProvider: Send + Sync {
+    #[allow(dead_code)]
     /// The algorithm this provider uses.
     fn algorithm(&self) -> SigningAlgorithm;
 
@@ -63,6 +65,7 @@ pub struct SoftwareSigningProvider {
 }
 
 impl SoftwareSigningProvider {
+    #[allow(dead_code)]
     /// Create a provider from an existing signing key.
     pub fn from_key(signing_key: ed25519_dalek::SigningKey) -> Self {
         Self { signing_key }
@@ -142,6 +145,7 @@ impl MlDsaSigningProvider {
         }
     }
 
+    #[allow(dead_code)]
     /// Create a provider from existing key bytes.
     pub fn from_keys(pk_bytes: &[u8], sk_bytes: &[u8]) -> Result<Self, SigningError> {
         use pqcrypto_traits::sign::PublicKey as PqPk;

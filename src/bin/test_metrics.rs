@@ -96,8 +96,8 @@ fn main() {
         ];
 
         for metric in required_metrics {
-            assert!(output.contains(metric), "Metric {} not found", metric);
-            println!("✅ Metric found: {}", metric);
+            assert!(output.contains(metric), "Metric {metric} not found");
+            println!("✅ Metric found: {metric}");
         }
     }
     println!();
@@ -165,7 +165,7 @@ fn main() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 assert_eq!(parts.len(), 2, "Metric line should have name and value");
             }
-            println!("✅ Valid line: {}", line);
+            println!("✅ Valid line: {line}");
         }
     }
     println!();
@@ -183,10 +183,10 @@ fn main() {
         metrics.peers.store(8, Ordering::Relaxed);
 
         let output = metrics.generate_prometheus_format();
-        println!("\n{}", output);
+        println!("\n{output}");
 
         let line_count = output.lines().count();
-        println!("✅ Output contains {} lines", line_count);
+        println!("✅ Output contains {line_count} lines");
         assert!(line_count > 0);
     }
 

@@ -59,13 +59,13 @@ impl StateSnapshotManager {
      * @param block_index - Índice del bloque (usado para el nombre del archivo)
      */
     pub fn save_snapshot(&self, snapshot: &StateSnapshot, block_index: u64) -> IoResult<()> {
-        let filename = format!("snapshot_{:07}.json", block_index);
+        let filename = format!("snapshot_{block_index:07}.json");
         let path = self.snapshots_dir.join(filename);
 
         let json = serde_json::to_string_pretty(snapshot).map_err(|e| {
             std::io::Error::new(
                 ErrorKind::InvalidData,
-                format!("Error serializando snapshot: {}", e),
+                format!("Error serializando snapshot: {e}"),
             )
         })?;
 
@@ -119,7 +119,7 @@ impl StateSnapshotManager {
             let snapshot = serde_json::from_str::<StateSnapshot>(&json).map_err(|e| {
                 std::io::Error::new(
                     ErrorKind::InvalidData,
-                    format!("Error deserializando snapshot: {}", e),
+                    format!("Error deserializando snapshot: {e}"),
                 )
             })?;
             Ok(Some(snapshot))
@@ -178,10 +178,10 @@ impl StateSnapshotManager {
 
         let mut removed = 0;
         for index in snapshots_to_remove {
-            let filename = format!("snapshot_{:07}.json", index);
+            let filename = format!("snapshot_{index:07}.json");
             let path = self.snapshots_dir.join(filename);
             if let Err(e) = fs::remove_file(&path) {
-                eprintln!("⚠️  Error eliminando snapshot {}: {}", index, e);
+                eprintln!("⚠️  Error eliminando snapshot {index}: {e}");
             } else {
                 removed += 1;
             }

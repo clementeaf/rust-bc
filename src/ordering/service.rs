@@ -11,6 +11,7 @@ use crate::storage::{
 pub struct OrderingService {
     pub(crate) pending_txs: Mutex<VecDeque<Transaction>>,
     pub max_batch_size: usize,
+    #[allow(dead_code)]
     pub batch_timeout_ms: u64,
     metrics: Option<Arc<MetricsCollector>>,
     signing_key: Option<ed25519_dalek::SigningKey>,
@@ -50,12 +51,14 @@ impl OrderingService {
         }
     }
 
+    #[allow(dead_code)]
     /// Attach a metrics collector so `cut_block` increments `ordering_blocks_cut_total`.
     pub fn with_metrics(mut self, metrics: Arc<MetricsCollector>) -> Self {
         self.metrics = Some(metrics);
         self
     }
 
+    #[allow(dead_code)]
     /// Attach an Ed25519 signing key so `cut_block` signs each block.
     pub fn with_signing_key(mut self, key: ed25519_dalek::SigningKey) -> Self {
         self.signing_key = Some(key);
@@ -71,6 +74,7 @@ impl OrderingService {
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Enqueue an endorsed transaction for the next ordered block.
     ///
     /// Extracts the inner `Transaction` from the proposal and enqueues it.
@@ -134,6 +138,7 @@ impl OrderingService {
     }
 }
 
+#[allow(dead_code)]
 /// Continuously drain pending transactions into ordered blocks on a timer.
 ///
 /// Launched via `tokio::spawn` in `main.rs` when `role == Orderer || PeerAndOrderer`.

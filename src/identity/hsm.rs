@@ -13,14 +13,18 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum HsmError {
+    #[allow(dead_code)]
     #[error("PKCS#11 library not found: {0}")]
     LibraryNotFound(String),
+    #[allow(dead_code)]
     #[error("slot not found: {0}")]
     SlotNotFound(u64),
     #[error("authentication failed")]
     AuthFailed,
+    #[allow(dead_code)]
     #[error("key not found: {0}")]
     KeyNotFound(String),
+    #[allow(dead_code)]
     #[error("signing operation failed: {0}")]
     SignFailed(String),
     #[error("HSM feature not enabled")]
@@ -30,13 +34,18 @@ pub enum HsmError {
 /// Configuration for connecting to an HSM via PKCS#11.
 #[derive(Debug, Clone)]
 pub struct HsmConfig {
+    #[allow(dead_code)]
     pub pkcs11_lib: String,
+    #[allow(dead_code)]
     pub slot_id: u64,
+    #[allow(dead_code)]
     pub pin: String,
+    #[allow(dead_code)]
     pub key_label: String,
 }
 
 impl HsmConfig {
+    #[allow(dead_code)]
     /// Load configuration from environment variables.
     pub fn from_env() -> Result<Self, HsmError> {
         Ok(Self {
@@ -64,6 +73,7 @@ pub struct HsmSigningProvider {
 }
 
 impl HsmSigningProvider {
+    #[allow(dead_code)]
     /// Connect to an HSM and locate the signing key.
     ///
     /// This is a no-op stub when compiled without the `hsm` feature.

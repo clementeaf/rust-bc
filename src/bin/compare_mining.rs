@@ -33,18 +33,18 @@ fn main() {
     let mut results = Vec::new();
 
     for diff in 1..=difficulty {
-        println!("Testing difficulty {}...", diff);
+        println!("Testing difficulty {diff}...");
 
         // Sequential test
         let seq_time = benchmark_sequential(diff);
-        println!("  ✓ Sequential: {:.4}s", seq_time);
+        println!("  ✓ Sequential: {seq_time:.4}s");
 
         // Parallel test
         let par_time = benchmark_parallel(diff);
-        println!("  ✓ Parallel:   {:.4}s", par_time);
+        println!("  ✓ Parallel:   {par_time:.4}s");
 
         let speedup = seq_time / par_time;
-        println!("  ⚡ Speedup:   {:.2}x", speedup);
+        println!("  ⚡ Speedup:   {speedup:.2}x");
         println!();
 
         results.push(ComparisonResult {
@@ -76,7 +76,7 @@ fn main() {
 
     let avg_speedup = total_speedup / results.len() as f64;
     println!("{}", "─".repeat(50));
-    println!("Average Speedup: {:.2}x", avg_speedup);
+    println!("Average Speedup: {avg_speedup:.2}x");
     println!();
 
     // Recommendations
@@ -84,7 +84,7 @@ fn main() {
     println!();
 
     let num_cores = num_cpus::get();
-    println!("System Cores: {}", num_cores);
+    println!("System Cores: {num_cores}");
 
     if avg_speedup >= (num_cores as f64 * 0.8) {
         println!("✓ Excellent: Near-linear scaling achieved");
@@ -115,7 +115,7 @@ fn main() {
 
     if let Some(result) = results.iter().find(|r| r.difficulty == best_diff) {
         println!("For 30-second target block time:");
-        println!("  • Use difficulty: {}", best_diff);
+        println!("  • Use difficulty: {best_diff}");
         println!("  • Expected time: {:.2}s", result.parallel_time);
         println!(
             "  • Expected speedup from parallelization: {:.2}x",

@@ -12,6 +12,7 @@ const DEFAULT_LIMIT: usize = 20;
 pub struct PaginationParams {
     pub page: Option<usize>,
     pub limit: Option<usize>,
+    #[allow(dead_code)]
     pub cursor: Option<String>,
 }
 
@@ -31,7 +32,6 @@ impl PaginationParams {
         (self.page() - 1) * self.limit()
     }
 }
-
 
 /// Metadata about a paginated result set.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,11 +56,7 @@ impl<T: Serialize> PaginatedResponse<T> {
     pub fn new(data: Vec<T>, total: usize, params: &PaginationParams) -> Self {
         let page = params.page();
         let limit = params.limit();
-        let total_pages = if total == 0 {
-            1
-        } else {
-            total.div_ceil(limit)
-        };
+        let total_pages = if total == 0 { 1 } else { total.div_ceil(limit) };
         let has_next = page < total_pages;
 
         Self {

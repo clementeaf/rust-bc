@@ -10,6 +10,7 @@ pub struct ApiVersion {
 }
 
 impl ApiVersion {
+    #[allow(dead_code)]
     /// Create a new API version
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
         Self {
@@ -24,8 +25,7 @@ impl ApiVersion {
         let parts: Vec<&str> = version_str.split('.').collect();
         if parts.len() != 3 {
             return Err(format!(
-                "Invalid version format: expected 'major.minor.patch', got '{}'",
-                version_str
+                "Invalid version format: expected 'major.minor.patch', got '{version_str}'"
             ));
         }
 
@@ -57,6 +57,7 @@ impl ApiVersion {
         self.patch >= minimum.patch
     }
 
+    #[allow(dead_code)]
     /// Check if this version supports a feature
     pub fn supports_feature(&self, feature_introduced: ApiVersion) -> bool {
         self.is_compatible_with(feature_introduced)
@@ -87,6 +88,7 @@ impl std::fmt::Display for ApiVersion {
     }
 }
 
+#[allow(dead_code)]
 /// API feature version mapping
 #[derive(Clone, Debug)]
 pub struct ApiFeatureMatrix {
@@ -99,6 +101,7 @@ pub struct ApiFeatureMatrix {
 }
 
 impl ApiFeatureMatrix {
+    #[allow(dead_code)]
     /// Create a new feature matrix
     pub fn new(min_version: ApiVersion, current_version: ApiVersion) -> Self {
         Self {
@@ -108,6 +111,7 @@ impl ApiFeatureMatrix {
         }
     }
 
+    #[allow(dead_code)]
     /// Register a feature as available from a specific version
     pub fn add_feature(mut self, feature_name: &str, introduced_version: ApiVersion) -> Self {
         self.features
@@ -115,6 +119,7 @@ impl ApiFeatureMatrix {
         self
     }
 
+    #[allow(dead_code)]
     /// Check if a feature is available in a given version
     pub fn is_feature_available(&self, feature: &str, version: ApiVersion) -> bool {
         self.features
@@ -123,6 +128,7 @@ impl ApiFeatureMatrix {
             .unwrap_or(false)
     }
 
+    #[allow(dead_code)]
     /// Get all features available in a version
     pub fn get_available_features(&self, version: ApiVersion) -> Vec<String> {
         self.features
@@ -132,6 +138,7 @@ impl ApiFeatureMatrix {
             .collect()
     }
 
+    #[allow(dead_code)]
     /// Validate version is within supported range
     pub fn is_version_supported(&self, version: ApiVersion) -> bool {
         version >= self.min_version && version <= self.current_version
@@ -150,6 +157,7 @@ pub struct VersionNegotiation {
 }
 
 impl VersionNegotiation {
+    #[allow(dead_code)]
     /// Negotiate API version
     pub fn negotiate(
         requested: Option<&str>,
@@ -162,8 +170,7 @@ impl VersionNegotiation {
 
                 if !requested_version.is_compatible_with(minimum) || requested_version > current {
                     return Err(format!(
-                        "Requested version {} not supported. Supported range: {}-{}",
-                        requested_version, minimum, current
+                        "Requested version {requested_version} not supported. Supported range: {minimum}-{current}"
                     ));
                 }
 
@@ -181,6 +188,7 @@ impl VersionNegotiation {
         }
     }
 
+    #[allow(dead_code)]
     /// Negotiate with fallback to latest compatible
     pub fn negotiate_with_fallback(
         requested: Option<&str>,

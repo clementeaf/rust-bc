@@ -76,6 +76,7 @@ pub trait PrivateDataStore: Send + Sync {
         value: &[u8],
     ) -> StorageResult<[u8; 32]>;
 
+    #[allow(dead_code)]
     /// Store `value` together with TTL metadata so it can later be purged.
     ///
     /// `written_at_height` is the block height at which the data is written.
@@ -279,6 +280,7 @@ impl CollectionRegistry for MemoryCollectionRegistry {
 pub enum PrivateDataError {
     #[error("invalid collection: {0}")]
     InvalidCollection(String),
+    #[allow(dead_code)]
     #[error("access denied: org '{0}' is not a member of collection '{1}'")]
     AccessDenied(String, String),
 }

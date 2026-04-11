@@ -116,7 +116,7 @@ mod comprehensive_storage_tests {
                 parent_hash: [0u8; 32],
                 merkle_root: [1u8; 32],
                 transactions: vec![format!("tx{}", i)],
-                proposer: format!("proposer{}", i),
+                proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
@@ -218,7 +218,7 @@ mod comprehensive_storage_tests {
                 parent_hash: [0u8; 32],
                 merkle_root: [1u8; 32],
                 transactions: vec![format!("tx{}", i)],
-                proposer: format!("proposer{}", i),
+                proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
@@ -232,7 +232,7 @@ mod comprehensive_storage_tests {
         let store = RocksDbBlockStore::new("/tmp/test_batch_multi_tx").unwrap();
         let txs = (1..=5)
             .map(|i| Transaction {
-                id: format!("tx{}", i),
+                id: format!("tx{i}"),
                 block_height: i as u64,
                 timestamp: 1000 + i as u64,
                 input_did: "did:bc:input".to_string(),
@@ -253,8 +253,8 @@ mod comprehensive_storage_tests {
                 timestamp: 1000 + i,
                 parent_hash: [0u8; 32],
                 merkle_root: [1u8; 32],
-                transactions: (1..=10).map(|j| format!("tx{}_{}", i, j)).collect(),
-                proposer: format!("proposer{}", i),
+                transactions: (1..=10).map(|j| format!("tx{i}_{j}")).collect(),
+                proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
                 endorsements: vec![],
                 orderer_signature: None,
@@ -371,7 +371,7 @@ mod comprehensive_storage_tests {
             timestamp: 1000,
             parent_hash: [0u8; 32],
             merkle_root: [1u8; 32],
-            transactions: (1..=1000).map(|i| format!("tx{:04}", i)).collect(),
+            transactions: (1..=1000).map(|i| format!("tx{i:04}")).collect(),
             proposer: "proposer".to_string(),
             signature: vec![2u8; 64],
             endorsements: vec![],
@@ -697,7 +697,7 @@ mod comprehensive_storage_tests {
         let start = Instant::now();
         for i in 1..=1000 {
             let tx = Transaction {
-                id: format!("tx{}", i),
+                id: format!("tx{i}"),
                 block_height: i as u64,
                 timestamp: 1000 + i as u64,
                 input_did: "did:bc:input".to_string(),

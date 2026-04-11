@@ -50,7 +50,7 @@ impl BlockStore for MemoryStore {
             .unwrap()
             .get(&height)
             .cloned()
-            .ok_or_else(|| StorageError::KeyNotFound(format!("BLK:{:012}", height)))
+            .ok_or_else(|| StorageError::KeyNotFound(format!("BLK:{height:012}")))
     }
 
     fn write_transaction(&self, tx: &Transaction) -> StorageResult<()> {
@@ -67,7 +67,7 @@ impl BlockStore for MemoryStore {
             .unwrap()
             .get(tx_id)
             .cloned()
-            .ok_or_else(|| StorageError::KeyNotFound(format!("TX:{}", tx_id)))
+            .ok_or_else(|| StorageError::KeyNotFound(format!("TX:{tx_id}")))
     }
 
     fn write_identity(&self, identity: &IdentityRecord) -> StorageResult<()> {

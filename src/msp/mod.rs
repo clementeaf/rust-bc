@@ -13,8 +13,10 @@ pub trait CrlStore: Send + Sync {
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum MspError {
+    #[allow(dead_code)]
     #[error("public key is not registered under this MSP")]
     UnknownKey,
+    #[allow(dead_code)]
     #[error("key with serial {serial} has been revoked")]
     Revoked { serial: String },
 }
@@ -31,6 +33,7 @@ pub struct Msp {
 }
 
 impl Msp {
+    #[allow(dead_code)]
     pub fn new(msp_id: impl Into<String>, org_id: impl Into<String>) -> Self {
         Self {
             msp_id: msp_id.into(),
@@ -40,6 +43,7 @@ impl Msp {
         }
     }
 
+    #[allow(dead_code)]
     /// Revoke a key by its serial (hex-encoded public key bytes).
     pub fn revoke(&mut self, serial: &str) {
         if !self.revoked_serials.iter().any(|s| s == serial) {
@@ -47,6 +51,7 @@ impl Msp {
         }
     }
 
+    #[allow(dead_code)]
     /// Validate that `public_key` is a registered root key for this MSP and has
     /// not been revoked. The serial is the lowercase hex encoding of the key bytes.
     pub fn validate_identity(&self, public_key: &[u8; 32]) -> Result<(), MspError> {

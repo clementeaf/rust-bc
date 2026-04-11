@@ -58,6 +58,7 @@ pub fn tick_and_collect(node: &mut RaftNode) -> Vec<(u64, Vec<u8>)> {
         .collect()
 }
 
+#[allow(dead_code)]
 /// Deliver a raw raft message (from the network) into the node.
 pub fn deliver_raw(node: &mut RaftNode, data: &[u8]) -> Result<(), String> {
     let msg = decode_raft_msg(data).map_err(|e| format!("decode error: {e}"))?;

@@ -1,6 +1,3 @@
-#![feature(unsigned_is_multiple_of)]
-#![allow(dead_code, unused_imports)]
-
 mod acl;
 mod airdrop;
 mod api;
@@ -170,19 +167,19 @@ async fn async_main() -> std::io::Result<()> {
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(30);
 
-    let db_path = format!("{}.db", db_name);
-    let blocks_dir = format!("{}_blocks", db_name);
-    let snapshots_dir = format!("{}_snapshots", db_name);
-    let checkpoints_dir = format!("{}_checkpoints", db_name);
+    let db_path = format!("{db_name}.db");
+    let blocks_dir = format!("{db_name}_blocks");
+    let snapshots_dir = format!("{db_name}_snapshots");
+    let checkpoints_dir = format!("{db_name}_checkpoints");
 
     println!("🚀 Iniciando Blockchain API Server...");
-    println!("📊 Dificultad: {}", difficulty);
-    println!("💾 Base de datos: {}", db_path);
-    println!("📁 Directorio de bloques: {}", blocks_dir);
-    println!("📸 Directorio de snapshots: {}", snapshots_dir);
-    println!("🌐 Puerto API: {}", api_port);
-    println!("📡 Puerto P2P: {}", p2p_port);
-    println!("🌍 Network ID: {}", network_id);
+    println!("📊 Dificultad: {difficulty}");
+    println!("💾 Base de datos: {db_path}");
+    println!("📁 Directorio de bloques: {blocks_dir}");
+    println!("📸 Directorio de snapshots: {snapshots_dir}");
+    println!("🌐 Puerto API: {api_port}");
+    println!("📡 Puerto P2P: {p2p_port}");
+    println!("🌍 Network ID: {network_id}");
     if !bootstrap_nodes.is_empty() {
         println!("🔗 Bootstrap nodes: {}", bootstrap_nodes.join(", "));
     }
@@ -196,8 +193,7 @@ async fn async_main() -> std::io::Result<()> {
         );
     }
     println!(
-        "🔍 Auto-discovery: intervalo {}s, max conexiones {}, delay inicial {}s",
-        auto_discovery_interval, auto_discovery_max_connections, auto_discovery_initial_delay
+        "🔍 Auto-discovery: intervalo {auto_discovery_interval}s, max conexiones {auto_discovery_max_connections}, delay inicial {auto_discovery_initial_delay}s"
     );
 
     // Inicializar BlockStorage (nuevo sistema)
@@ -207,7 +203,7 @@ async fn async_main() -> std::io::Result<()> {
             Some(storage)
         }
         Err(e) => {
-            eprintln!("⚠️  Error al inicializar BlockStorage: {}", e);
+            eprintln!("⚠️  Error al inicializar BlockStorage: {e}");
             None
         }
     };
@@ -219,7 +215,7 @@ async fn async_main() -> std::io::Result<()> {
             Some(manager)
         }
         Err(e) => {
-            eprintln!("⚠️  Error al inicializar StateSnapshotManager: {}", e);
+            eprintln!("⚠️  Error al inicializar StateSnapshotManager: {e}");
             None
         }
     };
@@ -251,7 +247,7 @@ async fn async_main() -> std::io::Result<()> {
                 if let Some(ref storage) = block_storage {
                     for block in &bc.chain {
                         if let Err(e) = storage.save_block(block) {
-                            eprintln!("⚠️  Error al guardar bloque génesis: {}", e);
+                            eprintln!("⚠️  Error al guardar bloque génesis: {e}");
                         }
                     }
                 }
@@ -259,8 +255,7 @@ async fn async_main() -> std::io::Result<()> {
             }
             Err(e) => {
                 eprintln!(
-                    "⚠️  Error al cargar bloques desde archivos: {}, creando nueva blockchain",
-                    e
+                    "⚠️  Error al cargar bloques desde archivos: {e}, creando nueva blockchain"
                 );
                 let mut bc = Blockchain::new(difficulty);
                 bc.create_genesis_block();
@@ -268,7 +263,7 @@ async fn async_main() -> std::io::Result<()> {
                 if let Some(ref storage) = block_storage {
                     for block in &bc.chain {
                         if let Err(e) = storage.save_block(block) {
-                            eprintln!("⚠️  Error al guardar bloque génesis: {}", e);
+                            eprintln!("⚠️  Error al guardar bloque génesis: {e}");
                         }
                     }
                 }
@@ -325,7 +320,7 @@ async fn async_main() -> std::io::Result<()> {
                 ReconstructedState::from_blockchain(&blockchain.chain)
             }
             Err(e) => {
-                eprintln!("⚠️  Error al cargar snapshot: {}, reconstruyendo...", e);
+                eprintln!("⚠️  Error al cargar snapshot: {e}, reconstruyendo...");
                 ReconstructedState::from_blockchain(&blockchain.chain)
             }
         }
@@ -333,7 +328,7 @@ async fn async_main() -> std::io::Result<()> {
         // Sin snapshot manager, reconstruir normalmente
         let block_count = blockchain.chain.len();
         if block_count > 10 {
-            println!("🔄 Reconstruyendo estado desde {} bloques...", block_count);
+            println!("🔄 Reconstruyendo estado desde {block_count} bloques...");
         }
         let state = ReconstructedState::from_blockchain(&blockchain.chain);
         if block_count > 10 {
@@ -365,7 +360,7 @@ async fn async_main() -> std::io::Result<()> {
                     reconstructed_state.validators.clone(),
                 );
                 if let Err(e) = snapshot_mgr.save_snapshot(&snapshot, latest_block.index) {
-                    eprintln!("⚠️  Error al guardar snapshot: {}", e);
+                    eprintln!("⚠️  Error al guardar snapshot: {e}");
                 } else {
                     println!("📸 Snapshot guardado (bloque {})", latest_block.index);
                 }
@@ -414,8 +409,7 @@ async fn async_main() -> std::io::Result<()> {
             let count = manager.checkpoint_count();
             if count > 0 {
                 println!(
-                    "✅ CheckpointManager inicializado: {} checkpoints cargados",
-                    count
+                    "✅ CheckpointManager inicializado: {count} checkpoints cargados"
                 );
             } else {
                 println!("✅ CheckpointManager inicializado (sin checkpoints previos)");
@@ -423,7 +417,7 @@ async fn async_main() -> std::io::Result<()> {
             Some(Arc::new(Mutex::new(manager)))
         }
         Err(e) => {
-            eprintln!("⚠️  Error al inicializar CheckpointManager: {}", e);
+            eprintln!("⚠️  Error al inicializar CheckpointManager: {e}");
             None
         }
     };
@@ -458,7 +452,7 @@ async fn async_main() -> std::io::Result<()> {
         }
         Ok(None) => None,
         Err(e) => {
-            eprintln!("❌ Error al cargar ClientConfig TLS P2P: {}", e);
+            eprintln!("❌ Error al cargar ClientConfig TLS P2P: {e}");
             return Err(std::io::Error::other(e.to_string()));
         }
     };
@@ -641,9 +635,7 @@ async fn async_main() -> std::io::Result<()> {
                 match raft_result {
                     Ok(svc) => {
                         log::info!(
-                            "Ordering backend: Raft (node_id={}, peers={})",
-                            raft_id,
-                            peer_map_raw
+                            "Ordering backend: Raft (node_id={raft_id}, peers={peer_map_raw})"
                         );
                         let raft_arc = svc.raft_node.clone();
                         shared_raft_node = Some(raft_arc.clone());
@@ -679,8 +671,7 @@ async fn async_main() -> std::io::Result<()> {
             }
             Err(e) => {
                 log::error!("STORAGE_BACKEND=rocksdb but failed to open RocksDB at {path}: {e}");
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(std::io::Error::other(
                     format!("RocksDB failed to open at {path}: {e}"),
                 ));
             }
@@ -758,8 +749,7 @@ async fn async_main() -> std::io::Result<()> {
             _ => {
                 if !algo.is_empty() && algo.to_lowercase() != "ed25519" {
                     log::warn!(
-                        "Unknown SIGNING_ALGORITHM='{}', falling back to Ed25519",
-                        algo
+                        "Unknown SIGNING_ALGORITHM='{algo}', falling back to Ed25519"
                     );
                 }
                 log::info!("Signing algorithm: Ed25519");
@@ -890,8 +880,7 @@ async fn async_main() -> std::io::Result<()> {
             Some(pruning) => pruning,
             None => {
                 eprintln!("⚠️  Pruning manager no disponible para tarea periódica");
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(std::io::Error::other(
                     "Pruning manager not available",
                 ));
             }
@@ -925,8 +914,7 @@ async fn async_main() -> std::io::Result<()> {
 
                         if should_create {
                             println!(
-                                "📸 Creando snapshot automático en bloque {}",
-                                current_block_index
+                                "📸 Creando snapshot automático en bloque {current_block_index}"
                             );
 
                             // Reconstruir estado para el snapshot
@@ -973,7 +961,7 @@ async fn async_main() -> std::io::Result<()> {
                             if let Err(e) =
                                 snapshot_mgr_clone.save_snapshot(&snapshot, latest_block.index)
                             {
-                                eprintln!("⚠️  Error al guardar snapshot automático: {}", e);
+                                eprintln!("⚠️  Error al guardar snapshot automático: {e}");
                             } else {
                                 println!(
                                     "✅ Snapshot automático guardado (bloque {})",
@@ -985,7 +973,7 @@ async fn async_main() -> std::io::Result<()> {
                                 if let Err(e) =
                                     pruning_mgr_clone.prune_old_blocks(current_block_index)
                                 {
-                                    eprintln!("⚠️  Error durante pruning automático: {}", e);
+                                    eprintln!("⚠️  Error durante pruning automático: {e}");
                                 }
                             }
                         }
@@ -994,15 +982,14 @@ async fn async_main() -> std::io::Result<()> {
             }
             Err(e) => {
                 eprintln!(
-                    "⚠️  No se pudo crear StateSnapshotManager para tarea periódica: {}",
-                    e
+                    "⚠️  No se pudo crear StateSnapshotManager para tarea periódica: {e}"
                 );
             }
         }
     }
 
-    println!("🌐 Servidor API iniciado en http://127.0.0.1:{}", api_port);
-    println!("📡 Servidor P2P iniciado en 127.0.0.1:{}", p2p_port);
+    println!("🌐 Servidor API iniciado en http://127.0.0.1:{api_port}");
+    println!("📡 Servidor P2P iniciado en 127.0.0.1:{p2p_port}");
     println!("📚 Documentación de API:");
     println!("   GET  /api/v1/blocks (gateway envelope)");
     println!("   GET  /api/v1/blocks/index/{{index}}");
@@ -1055,7 +1042,7 @@ async fn async_main() -> std::io::Result<()> {
 
     let server_handle = tokio::spawn(async move {
         if let Err(e) = node_for_server.start_server(p2p_port).await {
-            eprintln!("Error en servidor P2P: {}", e);
+            eprintln!("Error en servidor P2P: {e}");
         }
     });
 
@@ -1077,14 +1064,14 @@ async fn async_main() -> std::io::Result<()> {
     let tls_reload_params = tls_reload_params_from_env();
 
     let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let api_bind = format!("{}:{}", bind_addr, api_port);
+    let api_bind = format!("{bind_addr}:{api_port}");
 
     // Configurar límite de tamaño para JSON (256KB por defecto, aumentamos a 1MB)
     let json_config = web::JsonConfig::default()
         .limit(1_048_576) // 1MB
         .error_handler(|err, _req| {
-            eprintln!("[JSON ERROR] Error al deserializar JSON: {:?}", err);
-            actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {}", err))
+            eprintln!("[JSON ERROR] Error al deserializar JSON: {err:?}");
+            actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {err}"))
         });
 
     let audit_store_for_mw: Arc<dyn crate::audit::AuditStore> = app_state
@@ -1112,9 +1099,9 @@ async fn async_main() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .app_data(json_config.clone())
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
-                eprintln!("[JSON CONFIG ERROR] Error en deserialización: {:?}", err);
+                eprintln!("[JSON CONFIG ERROR] Error en deserialización: {err:?}");
                 eprintln!("[JSON CONFIG ERROR] Request path: {}", _req.path());
-                actix_web::error::ErrorBadRequest(format!("JSON error: {}", err))
+                actix_web::error::ErrorBadRequest(format!("JSON error: {err}"))
             }))
             .configure(config_routes)
             .configure(ApiRoutes::configure_metrics)
@@ -1139,18 +1126,17 @@ async fn async_main() -> std::io::Result<()> {
 
     let api_handle = match load_tls_config_from_env() {
         Ok(Some(tls_config)) => {
-            println!("🔐 TLS habilitado en {}", api_bind);
+            println!("🔐 TLS habilitado en {api_bind}");
             server.bind_rustls_0_23(&api_bind, tls_config)?
         }
         Ok(None) => {
             println!(
-                "⚠️  TLS no configurado — API en texto plano en {}",
-                api_bind
+                "⚠️  TLS no configurado — API en texto plano en {api_bind}"
             );
             server.bind(&api_bind)?
         }
         Err(e) => {
-            eprintln!("❌ Error al cargar configuración TLS: {}", e);
+            eprintln!("❌ Error al cargar configuración TLS: {e}");
             return Err(std::io::Error::other(e.to_string()));
         }
     }
@@ -1166,7 +1152,7 @@ async fn async_main() -> std::io::Result<()> {
                 match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup()) {
                     Ok(s) => s,
                     Err(e) => {
-                        log::error!("No se pudo registrar SIGHUP: {}", e);
+                        log::error!("No se pudo registrar SIGHUP: {e}");
                         return;
                     }
                 };
@@ -1185,8 +1171,7 @@ async fn async_main() -> std::io::Result<()> {
                         }
                         Err(e) => {
                             log::error!(
-                                "Error al recargar certificados TLS: {}. Servidor sin cambios.",
-                                e
+                                "Error al recargar certificados TLS: {e}. Servidor sin cambios."
                             );
                         }
                     },
@@ -1209,8 +1194,7 @@ async fn async_main() -> std::io::Result<()> {
             loop {
                 ticker.tick().await;
                 log::info!(
-                    "Recarga TLS periódica (intervalo {}s) — verificando certificados...",
-                    interval_secs
+                    "Recarga TLS periódica (intervalo {interval_secs}s) — verificando certificados..."
                 );
                 match &params {
                     None => log::debug!("TLS no configurado; recarga periódica omitida."),
@@ -1224,8 +1208,7 @@ async fn async_main() -> std::io::Result<()> {
                         }
                         Err(e) => {
                             log::error!(
-                                "Error en recarga TLS periódica: {}. Servidor sin cambios.",
-                                e
+                                "Error en recarga TLS periódica: {e}. Servidor sin cambios."
                             );
                         }
                     },
@@ -1233,8 +1216,7 @@ async fn async_main() -> std::io::Result<()> {
             }
         });
         log::info!(
-            "Recarga TLS automática habilitada cada {} segundos.",
-            interval_secs
+            "Recarga TLS automática habilitada cada {interval_secs} segundos."
         );
     }
 

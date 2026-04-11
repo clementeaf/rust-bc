@@ -111,6 +111,7 @@ impl BalanceCache {
      * Obtiene estadísticas del caché
      * @returns (tamaño del caché, último índice de bloque)
      */
+    #[allow(dead_code)]
     pub fn stats(&self) -> (usize, u64) {
         let balances = self.balances.lock().unwrap_or_else(|e| e.into_inner());
         let last_index = self

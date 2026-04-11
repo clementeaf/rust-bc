@@ -1,5 +1,6 @@
 use prometheus::{Counter, CounterVec, HistogramVec, IntGauge, Registry};
 
+#[allow(dead_code)]
 /// Prometheus metrics for rust-bc API
 #[derive(Clone)]
 pub struct ApiMetrics {
@@ -18,6 +19,7 @@ pub struct ApiMetrics {
 }
 
 impl ApiMetrics {
+    #[allow(dead_code)]
     /// Create and register all metrics with the given registry
     pub fn new(registry: &Registry) -> Result<Self, prometheus::Error> {
         let http_requests_total = CounterVec::new(
@@ -70,6 +72,7 @@ impl ApiMetrics {
         })
     }
 
+    #[allow(dead_code)]
     /// Record a successful HTTP request
     pub fn record_request_success(&self, method: &str, path: &str, duration_secs: f64) {
         self.http_requests_total
@@ -80,6 +83,7 @@ impl ApiMetrics {
             .observe(duration_secs);
     }
 
+    #[allow(dead_code)]
     /// Record a failed HTTP request
     pub fn record_request_error(
         &self,
@@ -96,21 +100,25 @@ impl ApiMetrics {
             .observe(duration_secs);
     }
 
+    #[allow(dead_code)]
     /// Update fork count in consensus
     pub fn set_fork_count(&self, count: i64) {
         self.consensus_fork_count.set(count);
     }
 
+    #[allow(dead_code)]
     /// Update pending transaction count
     pub fn set_pending_tx_count(&self, count: i64) {
         self.mempool_pending_transactions.set(count);
     }
 
+    #[allow(dead_code)]
     /// Increment DIDs created
     pub fn increment_dids_created(&self) {
         self.identity_dids_total.inc();
     }
 
+    #[allow(dead_code)]
     /// Increment credentials issued
     pub fn increment_credentials_issued(&self) {
         self.credentials_issued_total.inc();

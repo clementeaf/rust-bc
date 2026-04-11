@@ -16,6 +16,7 @@ pub struct Organization {
 }
 
 impl Organization {
+    #[allow(dead_code)]
     /// Create a new organization. Returns `None` if `admin_dids` is empty.
     pub fn new(
         org_id: impl Into<String>,
