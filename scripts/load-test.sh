@@ -85,37 +85,37 @@ end_time=$((START_TIME + DURATION))
 while [[ $(date +%s) -lt $end_time ]]; do
     batch_start=$(date +%s%N)
 
-    # Send a batch of transactions (10 at a time for efficiency)
+    # Send a batch of transactions (10 concurrent via background subshells)
     for i in $(seq 1 10); do
         tx_count=$((tx_count + 1))
         tx_id="load-test-tx-${tx_count}"
+        ts_now=$(date +%s)
 
-        tx_start=$(date +%s%N)
-        resp=$($CURL -X POST "$NODE/api/v1/store/transactions" \
-            -H "Content-Type: application/json" \
-            -d "{
-                \"id\": \"${tx_id}\",
-                \"block_height\": 0,
-                \"timestamp\": $(date +%s),
-                \"input_did\": \"did:bc:${WALLET_ADDR}\",
-                \"output_recipient\": \"did:bc:recipient\",
-                \"amount\": 1,
-                \"state\": \"pending\"
-            }" 2>/dev/null)
-        tx_end=$(date +%s%N)
+        (
+            tx_start=$(date +%s%N)
+            # Retry once on 429 (rate limited)
+            for attempt in 1 2; do
+                http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
+                    -X POST "$NODE/api/v1/store/transactions" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"id\":\"${tx_id}\",\"block_height\":0,\"timestamp\":${ts_now},\"input_did\":\"did:bc:${WALLET_ADDR}\",\"output_recipient\":\"did:bc:recipient\",\"amount\":1,\"state\":\"pending\"}")
+                if [[ "$http_code" != "429" ]]; then break; fi
+                sleep 0.1
+            done
+            tx_end=$(date +%s%N)
+            latency_ns=$((tx_end - tx_start))
+            latency_ms=$(echo "scale=2; $latency_ns / 1000000" | bc)
 
-        # Calculate latency in ms
-        latency_ns=$((tx_end - tx_start))
-        latency_ms=$(echo "scale=2; $latency_ns / 1000000" | bc)
-
-        status=$(echo "$resp" | jq -r '.status_code // 0' 2>/dev/null)
-        if [[ "$status" == "201" || "$status" == "200" ]]; then
-            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-            echo "$latency_ms" >> "$LATENCY_FILE"
-        else
-            ERROR_COUNT=$((ERROR_COUNT + 1))
-        fi
+            if [[ "$http_code" == "201" || "$http_code" == "200" ]]; then
+                echo "OK $latency_ms" >> "$LATENCY_FILE"
+            elif [[ "$http_code" == "429" ]]; then
+                echo "THROTTLED $latency_ms" >> "$LATENCY_FILE"
+            else
+                echo "ERR $http_code" >> "$LATENCY_FILE"
+            fi
+        ) &
     done
+    wait
 
     # Progress every 10 seconds
     elapsed=$(($(date +%s) - START_TIME))
@@ -144,28 +144,45 @@ echo ""
 END_HEIGHT=$($CURL "$NODE/api/v1/store/blocks/latest" 2>/dev/null | jq -r '.data // 0')
 BLOCKS_CREATED=$((END_HEIGHT - START_HEIGHT))
 
-# Calculate latency percentiles
-if [[ -s "$LATENCY_FILE" ]]; then
-    TOTAL_SAMPLES=$(wc -l < "$LATENCY_FILE" | tr -d ' ')
-    P50=$(sort -n "$LATENCY_FILE" | awk "NR==int($TOTAL_SAMPLES*0.50)")
-    P95=$(sort -n "$LATENCY_FILE" | awk "NR==int($TOTAL_SAMPLES*0.95)")
-    P99=$(sort -n "$LATENCY_FILE" | awk "NR==int($TOTAL_SAMPLES*0.99)")
-    MIN=$(sort -n "$LATENCY_FILE" | head -1)
-    MAX=$(sort -n "$LATENCY_FILE" | tail -1)
-    AVG=$(awk '{sum+=$1} END {printf "%.2f", sum/NR}' "$LATENCY_FILE")
+# Parse results from latency file (lines: "OK 12.34", "THROTTLED 12.34", or "ERR 415")
+SUCCESS_COUNT=$(grep -c "^OK " "$LATENCY_FILE" 2>/dev/null | tr -d '[:space:]' || true)
+THROTTLED_COUNT=$(grep -c "^THROTTLED " "$LATENCY_FILE" 2>/dev/null | tr -d '[:space:]' || true)
+ERROR_COUNT=$(grep -c "^ERR " "$LATENCY_FILE" 2>/dev/null | tr -d '[:space:]' || true)
+SUCCESS_COUNT=${SUCCESS_COUNT:-0}
+THROTTLED_COUNT=${THROTTLED_COUNT:-0}
+ERROR_COUNT=${ERROR_COUNT:-0}
+
+# Extract latency values from successful requests
+LATENCY_ONLY=$(mktemp)
+grep "^OK " "$LATENCY_FILE" 2>/dev/null | awk '{print $2}' > "$LATENCY_ONLY"
+
+if [[ -s "$LATENCY_ONLY" ]]; then
+    TOTAL_SAMPLES=$(wc -l < "$LATENCY_ONLY" | tr -d '[:space:]')
+    P50=$(sort -n "$LATENCY_ONLY" | awk "NR==int($TOTAL_SAMPLES*0.50)")
+    P95=$(sort -n "$LATENCY_ONLY" | awk "NR==int($TOTAL_SAMPLES*0.95)")
+    P99=$(sort -n "$LATENCY_ONLY" | awk "NR==int($TOTAL_SAMPLES*0.99)")
+    MIN=$(sort -n "$LATENCY_ONLY" | head -1)
+    MAX=$(sort -n "$LATENCY_ONLY" | tail -1)
+    AVG=$(awk '{sum+=$1} END {printf "%.2f", sum/NR}' "$LATENCY_ONLY")
 else
     P50="N/A"; P95="N/A"; P99="N/A"; MIN="N/A"; MAX="N/A"; AVG="N/A"
 fi
+rm -f "$LATENCY_ONLY"
 
+TOTAL_SENT=$((SUCCESS_COUNT + THROTTLED_COUNT + ERROR_COUNT))
 ACTUAL_TPS=$((SUCCESS_COUNT / (ACTUAL_DURATION > 0 ? ACTUAL_DURATION : 1)))
-ERROR_RATE=$(echo "scale=2; $ERROR_COUNT * 100 / ($SUCCESS_COUNT + $ERROR_COUNT + 1)" | bc)
+if [[ $TOTAL_SENT -gt 0 ]]; then
+    ERROR_RATE=$(echo "scale=2; $ERROR_COUNT * 100 / $TOTAL_SENT" | bc)
+else
+    ERROR_RATE="0"
+fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Load Test Results"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Duration:        ${ACTUAL_DURATION}s"
-echo "  Transactions:    ${SUCCESS_COUNT} ok / ${ERROR_COUNT} errors"
+echo "  Transactions:    ${SUCCESS_COUNT} ok / ${THROTTLED_COUNT} throttled / ${ERROR_COUNT} errors"
 echo "  Throughput:      ${ACTUAL_TPS} tx/s (actual)"
 echo "  Error rate:      ${ERROR_RATE}%"
 echo "  Blocks created:  ${BLOCKS_CREATED} (height ${START_HEIGHT} → ${END_HEIGHT})"
