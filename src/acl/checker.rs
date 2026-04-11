@@ -51,10 +51,8 @@ pub fn check_access(
 mod tests {
     use super::*;
     use crate::acl::provider::MemoryAclProvider;
-    use crate::acl::AclProvider as _;
     use crate::endorsement::policy::EndorsementPolicy;
     use crate::endorsement::policy_store::MemoryPolicyStore;
-    use crate::endorsement::PolicyStore as _;
 
     fn setup() -> (MemoryAclProvider, MemoryPolicyStore) {
         let acl = MemoryAclProvider::new();

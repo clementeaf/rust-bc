@@ -65,8 +65,8 @@ mod tests {
         def.approvals.insert("org1".to_string(), true);
         def.approvals.insert("org2".to_string(), false);
 
-        assert_eq!(def.approvals["org1"], true);
-        assert_eq!(def.approvals["org2"], false);
+        assert!(def.approvals["org1"]);
+        assert!(!def.approvals["org2"]);
     }
 
     #[test]

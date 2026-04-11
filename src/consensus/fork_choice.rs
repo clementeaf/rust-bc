@@ -83,11 +83,8 @@ impl ForkChoice {
 
         let mut chain = vec![current];
 
-        loop {
-            let children = match dag.vertices().get(&current) {
-                Some(v) => v.children.clone(),
-                None => break,
-            };
+        while let Some(v) = dag.vertices().get(&current) {
+            let children = v.children.clone();
 
             if children.is_empty() {
                 break;
@@ -110,6 +107,7 @@ impl ForkChoice {
     }
 
     /// Recursively find the maximum block height reachable from `hash`.
+    #[allow(clippy::only_used_in_recursion)]
     fn max_height_in_subtree(&self, dag: &Dag, hash: &[u8; 32]) -> u64 {
         let vertex = match dag.vertices().get(hash) {
             Some(v) => v,

@@ -445,7 +445,7 @@ mod tests {
         // Register the peer
         let req = test::TestRequest::post()
             .uri("/api/v1/discovery/register")
-            .set_json(&valid_peer_json())
+            .set_json(valid_peer_json())
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 201);
@@ -478,7 +478,7 @@ mod tests {
 
         let req = test::TestRequest::post()
             .uri("/api/v1/discovery/register")
-            .set_json(&valid_peer_json())
+            .set_json(valid_peer_json())
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 404);

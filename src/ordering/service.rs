@@ -16,6 +16,12 @@ pub struct OrderingService {
     signing_key: Option<ed25519_dalek::SigningKey>,
 }
 
+impl Default for OrderingService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrderingService {
     /// Create a new `OrderingService` reading config from env:
     /// - `ORDERING_BATCH_SIZE` (default 100)

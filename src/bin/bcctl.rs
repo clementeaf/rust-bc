@@ -278,15 +278,13 @@ async fn cmd_channels(client: &Client, node: &str, json: bool) {
         Ok(resp) => {
             if json {
                 print_json(&resp["data"]);
-            } else {
-                if let Some(arr) = resp["data"].as_array() {
-                    for ch in arr {
-                        println!("  {}", ch.as_str().unwrap_or("-"));
-                    }
-                    println!("{} channels", arr.len());
-                } else {
-                    println!("No channels");
+            } else if let Some(arr) = resp["data"].as_array() {
+                for ch in arr {
+                    println!("  {}", ch.as_str().unwrap_or("-"));
                 }
+                println!("{} channels", arr.len());
+            } else {
+                println!("No channels");
             }
         }
         Err(e) => eprintln!("Error: {e}"),

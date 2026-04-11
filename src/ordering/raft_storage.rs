@@ -49,14 +49,12 @@ impl RocksDbRaftStorage {
             let cf_handle = db.cf_handle(CF_RAFT).ok_or("missing raft CF")?;
             // Find the first entry key by iterating from the start.
             let mut first = 1u64;
-            for item in db.iterator_cf(&cf_handle, rocksdb::IteratorMode::Start) {
-                if let Ok((key, _)) = item {
-                    if let Ok(key_str) = std::str::from_utf8(&key) {
-                        if let Some(idx_str) = key_str.strip_prefix("entry:") {
-                            if let Ok(idx) = idx_str.parse::<u64>() {
-                                first = idx;
-                                break;
-                            }
+            for (key, _) in db.iterator_cf(&cf_handle, rocksdb::IteratorMode::Start).flatten() {
+                if let Ok(key_str) = std::str::from_utf8(&key) {
+                    if let Some(idx_str) = key_str.strip_prefix("entry:") {
+                        if let Ok(idx) = idx_str.parse::<u64>() {
+                            first = idx;
+                            break;
                         }
                     }
                 }
@@ -185,13 +183,11 @@ impl RocksDbRaftStorage {
         };
         // Reverse iterate to find the last entry key.
         let iter = self.db.iterator_cf(&cf, rocksdb::IteratorMode::End);
-        for item in iter {
-            if let Ok((key, _)) = item {
-                if let Ok(key_str) = std::str::from_utf8(&key) {
-                    if let Some(idx_str) = key_str.strip_prefix("entry:") {
-                        if let Ok(idx) = idx_str.parse::<u64>() {
-                            return idx;
-                        }
+        for (key, _) in iter.flatten() {
+            if let Ok(key_str) = std::str::from_utf8(&key) {
+                if let Some(idx_str) = key_str.strip_prefix("entry:") {
+                    if let Ok(idx) = idx_str.parse::<u64>() {
+                        return idx;
                     }
                 }
             }
@@ -336,10 +332,12 @@ mod tests {
 
         let mut entries = Vec::new();
         for i in 1..=5u64 {
-            let mut e = Entry::default();
-            e.index = i;
-            e.term = 1;
-            e.data = format!("data-{i}").into_bytes().into();
+            let e = Entry {
+                index: i,
+                term: 1,
+                data: format!("data-{i}").into_bytes(),
+                ..Default::default()
+            };
             entries.push(e);
         }
         storage.append_entries(&entries).unwrap();
@@ -362,9 +360,11 @@ mod tests {
         };
         storage.initialize(&cs).unwrap();
 
-        let mut e = Entry::default();
-        e.index = 10;
-        e.term = 2;
+        let e = Entry {
+            index: 10,
+            term: 2,
+            ..Default::default()
+        };
         storage.append_entries(&[e]).unwrap();
 
         assert_eq!(storage.last_index().unwrap(), 10);
@@ -380,10 +380,11 @@ mod tests {
                 ..Default::default()
             };
             storage.initialize(&cs).unwrap();
-            let mut hs = HardState::default();
-            hs.term = 5;
-            hs.vote = 1;
-            hs.commit = 3;
+            let hs = HardState {
+                term: 5,
+                vote: 1,
+                commit: 3,
+            };
             storage.set_hardstate(&hs).unwrap();
         }
         // Reopen
@@ -404,10 +405,12 @@ mod tests {
                 ..Default::default()
             };
             storage.initialize(&cs).unwrap();
-            let mut e = Entry::default();
-            e.index = 1;
-            e.term = 1;
-            e.data = b"persistent".to_vec().into();
+            let e = Entry {
+                index: 1,
+                term: 1,
+                data: b"persistent".to_vec(),
+                ..Default::default()
+            };
             storage.append_entries(&[e]).unwrap();
         }
         let storage = RocksDbRaftStorage::new(dir.path()).unwrap();

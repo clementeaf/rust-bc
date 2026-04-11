@@ -425,7 +425,7 @@ mod tests {
         for (org_id, pk) in orgs {
             let org = Organization::new(
                 *org_id,
-                &format!("{org_id}MSP"),
+                format!("{org_id}MSP"),
                 vec![format!("did:bc:{org_id}:admin")],
                 vec![],
                 vec![*pk],

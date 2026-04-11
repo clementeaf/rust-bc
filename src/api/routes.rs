@@ -8,6 +8,7 @@ use crate::api::handlers::{
 /// API routes configuration
 pub struct ApiRoutes;
 
+#[allow(dead_code)]
 impl ApiRoutes {
     /// Full configuration: metrics + standalone `/api/v1` scope with scaffold routes.
     /// Used by integration tests that don't load the legacy router.

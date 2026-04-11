@@ -6,11 +6,8 @@ pub trait ApiGateway {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_api_gateway_trait() {
-        // Trait definition compiles
-        assert!(true);
+        // Trait definition compiles — no runtime assertion needed
     }
 }

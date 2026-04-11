@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(body["data"]["policy_satisfied"], false);
 
         let def = def_store.get_definition("cc1", "1.0").unwrap().unwrap();
-        assert_eq!(def.approvals["org1"], true);
+        assert!(def.approvals["org1"]);
     }
 
     #[actix_web::test]

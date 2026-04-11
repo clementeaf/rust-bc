@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_storage_result_ok() {
         let result: StorageResult<i32> = Ok(42);
-        assert_eq!(result.unwrap(), 42);
+        assert_eq!(result.ok(), Some(42));
     }
 
     #[test]

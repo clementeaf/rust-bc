@@ -152,8 +152,6 @@ impl super::OrderingBackend for RaftOrderingService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ordering::raft_node::RaftNode;
-    use raft::prelude::*;
 
     fn make_tx(id: &str) -> Transaction {
         Transaction {

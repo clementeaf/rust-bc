@@ -108,7 +108,7 @@ impl CouchDbWorldState {
     }
 
     fn get_doc(&self, key: &str) -> StorageResult<Option<CouchDoc>> {
-        let resp = block_on_async(self.client.get(&self.doc_url(key)).send())
+        let resp = block_on_async(self.client.get(self.doc_url(key)).send())
             .map_err(|e| StorageError::Other(format!("CouchDB get: {e}")))?;
 
         if resp.status().as_u16() == 404 {
@@ -122,7 +122,7 @@ impl CouchDbWorldState {
     }
 
     fn put_doc(&self, doc: &CouchDoc) -> StorageResult<String> {
-        let resp = block_on_async(self.client.put(&self.doc_url(&doc.id)).json(doc).send())
+        let resp = block_on_async(self.client.put(self.doc_url(&doc.id)).json(doc).send())
             .map_err(|e| StorageError::Other(format!("CouchDB put: {e}")))?;
 
         if !resp.status().is_success() {
@@ -212,7 +212,7 @@ impl WorldState for CouchDbWorldState {
         let mut results = Vec::new();
         for row in all_docs.rows {
             // Exclude the end key (half-open range like BTreeMap).
-            if row.id >= end.to_string() {
+            if row.id.as_str() >= end {
                 continue;
             }
             if let Some(doc) = row.doc {

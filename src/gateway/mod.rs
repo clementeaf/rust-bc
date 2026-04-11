@@ -15,7 +15,6 @@ use crate::endorsement::types::Endorsement;
 use crate::events::types::BlockEvent;
 use crate::events::EventBus;
 use crate::network::{Message, Node};
-use crate::ordering::service::OrderingService;
 use crate::storage::traits::{BlockStore, Transaction};
 use crate::storage::world_state::WorldState;
 use crate::transaction::mvcc;
@@ -466,6 +465,7 @@ mod tests {
     use crate::endorsement::policy::EndorsementPolicy;
     use crate::endorsement::policy_store::MemoryPolicyStore;
     use crate::endorsement::registry::MemoryOrgRegistry;
+    use crate::ordering::service::OrderingService;
     use crate::storage::memory::MemoryStore;
 
     fn make_tx(id: &str) -> Transaction {
@@ -483,7 +483,7 @@ mod tests {
     fn make_org(id: &str) -> Organization {
         Organization::new(
             id,
-            &format!("{id}MSP"),
+            format!("{id}MSP"),
             vec![format!("did:bc:{id}:admin")],
             vec![],
             vec![],

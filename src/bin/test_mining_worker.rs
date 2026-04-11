@@ -14,7 +14,6 @@
  * Usage:
  *   cargo run --release --bin test_mining_worker
  */
-
 /// Configuration tests
 #[allow(dead_code)]
 mod config_tests {

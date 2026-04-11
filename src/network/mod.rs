@@ -1,5 +1,8 @@
 pub mod gossip;
 
+// Type alias for the gossip block sender to reduce type complexity.
+type GossipBlockTx = Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>;
+
 // Standard library
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -55,6 +58,7 @@ impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> A
  * Tipos de mensajes en la red P2P
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::enum_variant_names)]
 pub enum Message {
     Ping,
     Pong,
@@ -188,7 +192,7 @@ pub struct Node {
     /// New storage layer (present when STORAGE_BACKEND is configured).
     pub store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
     /// Sender side of the push-gossip channel for newly accepted blocks.
-    pub gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
+    pub gossip_block_tx: GossipBlockTx,
     /// Gossip membership table for alive-based liveness tracking.
     pub membership: gossip::MembershipTable,
     /// Organization ID of this node (used in alive messages and endorsements).
@@ -673,7 +677,7 @@ impl Node {
         role: NodeRole,
         ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
-        gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
+        gossip_block_tx: GossipBlockTx,
         membership: gossip::MembershipTable,
         chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
         world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
@@ -816,7 +820,7 @@ impl Node {
         role: NodeRole,
         ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
-        gossip_block_tx: Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>,
+        gossip_block_tx: GossipBlockTx,
         membership: Option<&gossip::MembershipTable>,
         chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
         world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
@@ -839,40 +843,36 @@ impl Node {
                 let mut blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
 
                 // Resolver conflicto usando la regla de la cadena más larga
-                if blocks.len() > blockchain.chain.len() {
-                    if Self::is_valid_chain(&blocks) {
-                        // Validar transacciones si tenemos wallet_manager
-                        let should_replace = if let Some(wm) = &wallet_manager {
-                            let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                            blockchain.resolve_conflict(&blocks, &wm_guard)
-                        } else {
-                            // Sin wallet_manager, solo validar estructura
-                            blockchain.chain = blocks.clone();
-                            true
-                        };
+                if blocks.len() > blockchain.chain.len() && Self::is_valid_chain(&blocks) {
+                    // Validar transacciones si tenemos wallet_manager
+                    let should_replace = if let Some(wm) = &wallet_manager {
+                        let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
+                        blockchain.resolve_conflict(&blocks, &wm_guard)
+                    } else {
+                        // Sin wallet_manager, solo validar estructura
+                        blockchain.chain = blocks.clone();
+                        true
+                    };
 
-                        if should_replace {
-                            println!("✅ Blockchain sincronizada: {} bloques (reemplazada por cadena más larga)", blocks.len());
+                    if should_replace {
+                        println!("✅ Blockchain sincronizada: {} bloques (reemplazada por cadena más larga)", blocks.len());
 
-                            // Sincronizar wallets desde la nueva blockchain
-                            if let Some(wm) = &wallet_manager {
-                                let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                                wm_guard.sync_from_blockchain(&blockchain.chain);
-                            }
+                        // Sincronizar wallets desde la nueva blockchain
+                        if let Some(wm) = &wallet_manager {
+                            let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
+                            wm_guard.sync_from_blockchain(&blockchain.chain);
+                        }
 
-                            // Guardar bloques en BlockStorage
-                            if let Some(ref storage) = block_storage {
-                                for block in &blockchain.chain {
-                                    if let Err(e) = storage.save_block(block) {
-                                        eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
-                                    }
+                        // Guardar bloques en BlockStorage
+                        if let Some(ref storage) = block_storage {
+                            for block in &blockchain.chain {
+                                if let Err(e) = storage.save_block(block) {
+                                    eprintln!("⚠️  Error guardando bloque en archivos: {}", e);
                                 }
                             }
-                        } else {
-                            println!("⚠️  Cadena recibida no pasó validación de transacciones");
                         }
                     } else {
-                        println!("⚠️  Cadena recibida no es válida");
+                        println!("⚠️  Cadena recibida no pasó validación de transacciones");
                     }
                 } else if blocks.len() == blockchain.chain.len() {
                     // Misma longitud: verificar si hay diferencias (fork)
@@ -3134,12 +3134,14 @@ mod tests {
         }
     }
 
-    fn empty_process_message_args() -> (
+    type ProcessMsgArgs = (
         Arc<Mutex<HashSet<String>>>,
         Arc<Mutex<crate::blockchain::Blockchain>>,
         Arc<Mutex<HashMap<String, (u64, String)>>>,
         Arc<Mutex<HashMap<String, (u64, usize)>>>,
-    ) {
+    );
+
+    fn empty_process_message_args() -> ProcessMsgArgs {
         (
             Arc::new(Mutex::new(HashSet::new())),
             Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),

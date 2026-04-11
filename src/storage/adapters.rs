@@ -25,7 +25,6 @@ use super::world_state::{VersionedValue, WorldState};
 use crate::chaincode::{ChaincodeError, ChaincodePackageStore};
 use crate::endorsement::org::Organization;
 use crate::endorsement::registry::OrgRegistry;
-use crate::msp::CrlStore;
 use crate::private_data::{sha256, PrivateDataStore};
 
 const CF_BLOCKS: &str = "blocks";
@@ -1042,11 +1041,9 @@ impl crate::private_data::CollectionRegistry for RocksDbBlockStore {
             Err(_) => return Vec::new(),
         };
         let mut result = Vec::new();
-        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
-            if let Ok((_, value)) = item {
-                if let Ok(col) = serde_json::from_slice(&value) {
-                    result.push(col);
-                }
+        for (_, value) in self.db.iterator_cf(&cf, IteratorMode::Start).flatten() {
+            if let Ok(col) = serde_json::from_slice(&value) {
+                result.push(col);
             }
         }
         result
@@ -1102,6 +1099,7 @@ impl crate::chaincode::ChaincodeDefinitionStore for RocksDbBlockStore {
 mod tests {
     use super::*;
     use crate::acl::AclProvider;
+    use crate::msp::CrlStore;
     use tempfile::TempDir;
 
     fn tmp_store() -> (RocksDbBlockStore, TempDir) {
@@ -1535,7 +1533,7 @@ mod tests {
     fn make_org(id: &str) -> Organization {
         Organization::new(
             id,
-            &format!("{id}MSP"),
+            format!("{id}MSP"),
             vec![format!("did:bc:{id}:admin")],
             vec![],
             vec![],
@@ -1885,7 +1883,7 @@ mod tests {
         assert_eq!(history[0].version, 1);
         assert_eq!(history[0].data, b"v1");
         assert_eq!(history[1].version, 2);
-        assert_eq!(history[2].is_delete, true);
+        assert!(history[2].is_delete);
         assert_eq!(history[2].data, Vec::<u8>::new());
     }
 

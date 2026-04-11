@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod comprehensive_storage_tests {
     use crate::storage::adapters::RocksDbBlockStore;
-    use crate::storage::errors::{StorageError, StorageResult};
+    use crate::storage::errors::StorageError;
     use crate::storage::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
     use std::time::Instant;
 
@@ -630,37 +630,21 @@ mod comprehensive_storage_tests {
 
     // ... (10 more migration tests would go here)
     #[test]
-    fn test_migration_placeholder_1() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_1() {}
     #[test]
-    fn test_migration_placeholder_2() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_2() {}
     #[test]
-    fn test_migration_placeholder_3() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_3() {}
     #[test]
-    fn test_migration_placeholder_4() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_4() {}
     #[test]
-    fn test_migration_placeholder_5() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_5() {}
     #[test]
-    fn test_migration_placeholder_6() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_6() {}
     #[test]
-    fn test_migration_placeholder_7() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_7() {}
     #[test]
-    fn test_migration_placeholder_8() {
-        assert!(true);
-    }
+    fn test_migration_placeholder_8() {}
 
     // ========== PERFORMANCE VALIDATION (15 tests) ==========
 
@@ -729,51 +713,27 @@ mod comprehensive_storage_tests {
 
     // ... (12 more perf tests as placeholders)
     #[test]
-    fn test_perf_placeholder_1() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_1() {}
     #[test]
-    fn test_perf_placeholder_2() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_2() {}
     #[test]
-    fn test_perf_placeholder_3() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_3() {}
     #[test]
-    fn test_perf_placeholder_4() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_4() {}
     #[test]
-    fn test_perf_placeholder_5() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_5() {}
     #[test]
-    fn test_perf_placeholder_6() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_6() {}
     #[test]
-    fn test_perf_placeholder_7() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_7() {}
     #[test]
-    fn test_perf_placeholder_8() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_8() {}
     #[test]
-    fn test_perf_placeholder_9() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_9() {}
     #[test]
-    fn test_perf_placeholder_10() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_10() {}
     #[test]
-    fn test_perf_placeholder_11() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_11() {}
     #[test]
-    fn test_perf_placeholder_12() {
-        assert!(true);
-    }
+    fn test_perf_placeholder_12() {}
 }

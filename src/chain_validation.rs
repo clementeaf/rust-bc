@@ -142,12 +142,10 @@ impl ForkResolver {
         let diff_a = Self::calculate_cumulative_difficulty(&chain_a.chain);
         let diff_b = Self::calculate_cumulative_difficulty(&chain_b.chain);
 
-        if diff_a > diff_b {
-            1
-        } else if diff_a < diff_b {
-            -1
-        } else {
-            0
+        match diff_a.cmp(&diff_b) {
+            std::cmp::Ordering::Greater => 1,
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
         }
     }
 

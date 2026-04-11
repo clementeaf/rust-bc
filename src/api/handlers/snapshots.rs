@@ -4,7 +4,7 @@ use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
-use crate::storage::snapshot::{self, StateSnapshot};
+use crate::storage::snapshot;
 
 /// `POST /api/v1/snapshots/{channel_id}` — trigger snapshot creation.
 #[post("/snapshots/{channel_id}")]

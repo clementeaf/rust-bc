@@ -166,7 +166,7 @@ mod tests {
     use super::*;
     use crate::storage::memory::MemoryStore;
     use crate::storage::world_state::MemoryWorldState;
-    use std::sync::Arc;
+
 
     #[test]
     fn create_snapshot_metadata() {

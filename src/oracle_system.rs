@@ -1149,7 +1149,7 @@ mod tests {
 
         // Both should be accepted in test mode with proper spacing
         let sig_future = OracleRegistry::generate_signature("oracle1", 50000, acceptable_future);
-        let sig_past = OracleRegistry::generate_signature("oracle1", 50000, acceptable_past);
+        let _sig_past = OracleRegistry::generate_signature("oracle1", 50000, acceptable_past);
 
         let result1 = registry.submit_price_report(
             "oracle1",

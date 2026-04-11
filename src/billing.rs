@@ -65,7 +65,7 @@ impl BillingTier {
     /**
      * Obtiene el tier desde un string
      */
-    pub fn from_str(s: &str) -> Option<BillingTier> {
+    pub fn from_tier_str(s: &str) -> Option<BillingTier> {
         match s.to_lowercase().as_str() {
             "free" => Some(BillingTier::Free),
             "basic" => Some(BillingTier::Basic),
@@ -85,6 +85,12 @@ pub struct UsageStats {
     pub wallets_created: u64,
     pub requests_today: u64,
     pub last_reset: u64,
+}
+
+impl Default for UsageStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UsageStats {

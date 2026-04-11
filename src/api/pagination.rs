@@ -8,7 +8,7 @@ const MAX_LIMIT: usize = 100;
 const DEFAULT_LIMIT: usize = 20;
 
 /// Query parameters for paginated endpoints.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct PaginationParams {
     pub page: Option<usize>,
     pub limit: Option<usize>,
@@ -23,7 +23,7 @@ impl PaginationParams {
 
     /// Effective page size, capped at `MAX_LIMIT`.
     pub fn limit(&self) -> usize {
-        self.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT).max(1)
+        self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
     }
 
     /// Offset for database/store queries (0-based).
@@ -32,15 +32,6 @@ impl PaginationParams {
     }
 }
 
-impl Default for PaginationParams {
-    fn default() -> Self {
-        Self {
-            page: None,
-            limit: None,
-            cursor: None,
-        }
-    }
-}
 
 /// Metadata about a paginated result set.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -68,7 +59,7 @@ impl<T: Serialize> PaginatedResponse<T> {
         let total_pages = if total == 0 {
             1
         } else {
-            (total + limit - 1) / limit
+            total.div_ceil(limit)
         };
         let has_next = page < total_pages;
 

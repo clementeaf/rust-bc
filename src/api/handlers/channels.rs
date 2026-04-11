@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn update_channel_config_applies_update_and_increments_version() {
-        use crate::channel::config::{ChannelConfig, ConfigTransaction, ConfigUpdateType};
+        use crate::channel::config::{ConfigTransaction, ConfigUpdateType};
 
         let state = make_state_with_channel("ch1");
 

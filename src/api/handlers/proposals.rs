@@ -96,17 +96,13 @@ pub async fn submit_endorsed_transaction(
         (state.org_registry.as_ref(), state.policy_store.as_ref())
     {
         let tx_id = &endorsed.proposal.tx.id;
-        match policy_store.get_policy(tx_id) {
-            Ok(policy) => {
-                validate_endorsements(&endorsed.endorsements, &policy, registry.as_ref(), None)
-                    .map_err(|e| ApiError::ValidationError {
-                        field: "endorsements".to_string(),
-                        reason: e.to_string(),
-                    })?;
-            }
-            // No policy registered for this tx — accept as-is.
-            Err(_) => {}
-        }
+        if let Ok(policy) = policy_store.get_policy(tx_id) {
+            validate_endorsements(&endorsed.endorsements, &policy, registry.as_ref(), None)
+                .map_err(|e| ApiError::ValidationError {
+                    field: "endorsements".to_string(),
+                    reason: e.to_string(),
+                })?;
+        } // No policy registered for this tx — accept as-is.
     }
 
     // Forward to ordering service via node if available.

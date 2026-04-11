@@ -15,7 +15,7 @@ pub async fn create_block(
     req: web::Json<CreateBlockRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    match block_creation::try_create_block(state.get_ref(), &*req) {
+    match block_creation::try_create_block(state.get_ref(), &req) {
         Ok(hash) => {
             let body = ApiResponse::success(hash, trace_id);
             Ok(HttpResponse::Created().json(body))

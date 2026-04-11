@@ -249,7 +249,7 @@ mod tests {
         for (org_id, pk) in orgs {
             let org = Organization::new(
                 *org_id,
-                &format!("{org_id}MSP"),
+                format!("{org_id}MSP"),
                 vec![format!("did:bc:{org_id}:admin")],
                 vec![],
                 vec![*pk],
@@ -442,7 +442,7 @@ mod tests {
     #[test]
     fn no_write_keys_fails_when_chaincode_policy_not_met() {
         let (_, pk1) = make_keypair();
-        let payload = [13u8; 32];
+        let _payload = [13u8; 32];
 
         let reg = setup_registry_with_orgs(&[("org1", pk1)]);
         let policy = EndorsementPolicy::AllOf(vec!["org1".into()]);

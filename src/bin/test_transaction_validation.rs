@@ -109,7 +109,7 @@ fn main() {
             to: "receiver_addr_valid_minlength32ch".to_string(),
             amount,
             fee,
-            timestamp: 2000 + amount as u64,
+            timestamp: 2000 + amount,
             signature: "sig".to_string(),
             data: None,
         };

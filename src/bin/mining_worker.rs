@@ -126,7 +126,7 @@ impl MiningConfig {
             worker_threads: env::var("MINER_WORKER_THREADS")
                 .ok()
                 .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| num_cpus::get()),
+                .unwrap_or_else(num_cpus::get),
         }
     }
 }

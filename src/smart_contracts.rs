@@ -173,6 +173,12 @@ pub struct ContractState {
     pub token_index: Vec<u64>, // Lista ordenada de todos los token_ids (para enumeración)
 }
 
+impl Default for ContractState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContractState {
     pub fn new() -> Self {
         ContractState {

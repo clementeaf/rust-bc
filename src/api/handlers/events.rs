@@ -149,10 +149,9 @@ async fn poll_blocks(
 
     let mut blocks = Vec::new();
     for h in from_height..=latest {
-        match store.read_block(h) {
-            Ok(block) => blocks.push(block),
-            Err(_) => {} // height may not exist yet — skip
-        }
+        if let Ok(block) = store.read_block(h) {
+            blocks.push(block);
+        } // height may not exist yet — skip
     }
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(blocks, trace_id)))

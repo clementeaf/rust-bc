@@ -140,7 +140,7 @@ impl ConsensusEngine {
                 timestamp: block.timestamp,
                 parent_hash: block.parent_hash,
                 merkle_root: block.hash,
-                transactions: block.transactions.iter().map(|h| hex::encode(h)).collect(),
+                transactions: block.transactions.iter().map(hex::encode).collect(),
                 proposer: block.proposer.clone(),
                 signature: block.signature,
                 endorsements: vec![],
@@ -372,8 +372,6 @@ mod tests {
 
     #[test]
     fn store_contains_block_after_accept() {
-        use crate::storage::{BlockStore as _, MemoryStore};
-        use std::sync::Arc;
 
         // We need to share the store with the engine.
         // MemoryStore is Send+Sync so we can wrap in Arc and use a newtype.

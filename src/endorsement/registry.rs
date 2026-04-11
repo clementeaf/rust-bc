@@ -78,7 +78,7 @@ mod tests {
     fn make_org(id: &str) -> Organization {
         Organization::new(
             id,
-            &format!("{id}MSP"),
+            format!("{id}MSP"),
             vec![format!("did:bc:{id}:admin")],
             vec![],
             vec![],

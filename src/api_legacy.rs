@@ -607,7 +607,7 @@ pub async fn create_api_key(
     state: web::Data<AppState>,
     req: web::Json<CreateAPIKeyRequest>,
 ) -> ActixResult<HttpResponse> {
-    let tier = match BillingTier::from_str(&req.tier) {
+    let tier = match BillingTier::from_tier_str(&req.tier) {
         Some(t) => t,
         None => {
             let response: ApiResponse<String> = ApiResponse::error(

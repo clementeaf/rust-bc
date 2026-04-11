@@ -209,10 +209,10 @@ mod tests {
             .any(|(k, v)| k == "Access-Control-Allow-Origin" && v == "*"));
         assert!(headers
             .iter()
-            .any(|(k, v)| k == "Access-Control-Allow-Methods"));
+            .any(|(k, _v)| k == "Access-Control-Allow-Methods"));
         assert!(headers
             .iter()
-            .any(|(k, v)| k == "Access-Control-Allow-Headers"));
+            .any(|(k, _v)| k == "Access-Control-Allow-Headers"));
     }
 
     #[test]

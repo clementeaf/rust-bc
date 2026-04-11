@@ -1,4 +1,5 @@
 #![feature(unsigned_is_multiple_of)]
+#![allow(dead_code, unused_imports)]
 
 mod acl;
 mod airdrop;

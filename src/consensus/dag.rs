@@ -286,11 +286,8 @@ impl Dag {
 
         let mut chain = vec![genesis];
 
-        loop {
-            let children = match self.vertices.get(&genesis) {
-                Some(v) => v.children.clone(),
-                None => break,
-            };
+        while let Some(v) = self.vertices.get(&genesis) {
+            let children = v.children.clone();
 
             if children.is_empty() {
                 break;

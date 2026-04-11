@@ -122,7 +122,7 @@ fn test_rate_limiter_check_and_record_allowed() {
 
     for i in 0..5 {
         let result = limiter.check_and_record("transfer".to_string(), 100 + i * 10);
-        assert_eq!(result.valid, true);
+        assert!(result.valid);
     }
 }
 

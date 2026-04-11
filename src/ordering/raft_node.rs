@@ -86,7 +86,7 @@ impl RaftNode {
             voters: peers.clone(),
             ..Default::default()
         };
-        persistent.initialize(&cs).map_err(|e| RaftError::Init(e))?;
+        persistent.initialize(&cs).map_err(RaftError::Init)?;
 
         // Load persisted state into MemStorage so RawNode can use it.
         let initial = raft::Storage::initial_state(&persistent)
@@ -231,7 +231,7 @@ impl RaftNode {
         snap.mut_metadata().index = last_applied;
         snap.mut_metadata().term = last_term;
         *snap.mut_metadata().mut_conf_state() = cs;
-        snap.data = data.into();
+        snap.data = data;
         Ok(snap)
     }
 

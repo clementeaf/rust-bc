@@ -5,7 +5,6 @@
 /// the handshake succeeds without a trusted CA.
 ///
 /// mTLS tests generate fresh certs via rcgen so that the SAN matches "localhost".
-
 const TEST_CERT_PEM: &str = include_str!("fixtures/test_cert.pem");
 const TEST_KEY_PEM: &str = include_str!("fixtures/test_key.pem");
 

@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
-use crate::msp::CrlStore;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RevokeBody {
@@ -86,6 +85,7 @@ pub async fn get_msp_info(
 mod tests {
     use super::*;
     use actix_web::{test, App};
+    use crate::msp::CrlStore;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, RwLock};
 

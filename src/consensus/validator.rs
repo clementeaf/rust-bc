@@ -50,12 +50,10 @@ impl BlockValidator {
             if block.parent_hash != [0u8; 32] {
                 return ValidityResult::Invalid("Genesis block must have zero parent".to_string());
             }
-        } else {
-            if block.parent_hash == [0u8; 32] {
-                return ValidityResult::Invalid(
-                    "Non-genesis block cannot have zero parent".to_string(),
-                );
-            }
+        } else if block.parent_hash == [0u8; 32] {
+            return ValidityResult::Invalid(
+                "Non-genesis block cannot have zero parent".to_string(),
+            );
         }
 
         ValidityResult::Valid

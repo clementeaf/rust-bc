@@ -86,7 +86,7 @@ fn build_endorsement_fixture(n_orgs: usize) -> EndorsementFixture {
 
         let org = Organization::new(
             &org_id,
-            &format!("org{i}MSP"),
+            format!("org{i}MSP"),
             vec![format!("did:bc:{org_id}:admin")],
             vec![],
             vec![pk],

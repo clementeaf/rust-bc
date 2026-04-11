@@ -133,19 +133,21 @@ impl StateValidator {
     pub fn validate_balance_integrity(&self) -> ValidationResult {
         let accounted = self.total_in_circulation + self.total_locked + self.total_reserved;
 
-        if accounted == self.total_supply {
-            ValidationResult::success()
-        } else if accounted > self.total_supply {
-            ValidationResult::failure(ValidationError::BalanceMismatch {
-                expected: self.total_supply,
-                actual: accounted,
-            })
-        } else {
-            let leaked = self.total_supply - accounted;
-            ValidationResult::success().with_warning(format!(
-                "Unaccounted tokens detected: {} tokens not tracked",
-                leaked
-            ))
+        match accounted.cmp(&self.total_supply) {
+            std::cmp::Ordering::Equal => ValidationResult::success(),
+            std::cmp::Ordering::Greater => {
+                ValidationResult::failure(ValidationError::BalanceMismatch {
+                    expected: self.total_supply,
+                    actual: accounted,
+                })
+            }
+            std::cmp::Ordering::Less => {
+                let leaked = self.total_supply - accounted;
+                ValidationResult::success().with_warning(format!(
+                    "Unaccounted tokens detected: {} tokens not tracked",
+                    leaked
+                ))
+            }
         }
     }
 

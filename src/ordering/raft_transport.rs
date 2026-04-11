@@ -117,9 +117,11 @@ mod tests {
 
     #[test]
     fn encode_decode_roundtrip() {
-        let mut msg = RaftMsg::default();
-        msg.to = 2;
-        msg.from = 1;
+        let msg = RaftMsg {
+            to: 2,
+            from: 1,
+            ..Default::default()
+        };
         let bytes = encode_raft_msg(&msg);
         let decoded = decode_raft_msg(&bytes).unwrap();
         assert_eq!(decoded.to, 2);

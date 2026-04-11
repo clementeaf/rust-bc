@@ -5,9 +5,7 @@
 //! duration. Records are append-only in RocksDB (CF `audit_log`).
 
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-
-use crate::storage::errors::{StorageError, StorageResult};
+use crate::storage::errors::StorageResult;
 
 /// A single audit log entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
