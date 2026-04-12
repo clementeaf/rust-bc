@@ -223,11 +223,11 @@ Same as C2 — when TLS is off, `X-Org-Id` header controls private data access.
 | Priority | Fix | Files | Status |
 |----------|-----|-------|--------|
 | **P0** | Add `enforce_acl` to all legacy routes + verify `miner_address` ownership | `api_legacy.rs` | DONE |
-| **P0** | Reject ACL-protected requests when TLS is disabled (or require alt auth) | `api/errors.rs` | OPEN (enforce_acl strict mode already denies missing identity) |
+| **P0** | Reject header-based identity in strict mode (X-Org-Id, X-Msp-Role only in permissive) | `api/errors.rs` | DONE |
 | **P1** | Rate limiter: remove billing exempt, fix logging | `middleware.rs` | DONE |
 | **P1** | Replace `is_double_spend` with `tx.id` uniqueness | `blockchain.rs` | DONE |
 | **P1** | Add timestamp drift validation | `transaction_validation.rs` | DONE |
-| **P1** | Integrate `NetworkSecurityManager` into P2P loop or remove | `network_security.rs` | OPEN |
+| **P1** | Integrate `NetworkSecurityManager` into P2P loop | `network_security.rs`, `network/mod.rs` | DONE |
 | **P2** | Document `jwt_secret` as reserved, not active auth | `api/mod.rs` | DONE |
 | **P2** | Add Wasm module hash verification at install | `api/handlers/chaincode.rs` | DONE |
 | **P2** | Replace `eprintln!` debug logging with `log::debug!` | `api_legacy.rs` | DONE |

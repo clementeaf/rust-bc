@@ -209,16 +209,11 @@ pub fn enforce_acl(
 ) -> Result<(), ApiError> {
     // ── MSP role check ───────────────────────────────────────────────────
     if let Some(required) = required_role_for_resource(resource) {
-        // Try TLS-derived role first, then X-Msp-Role header.
+        // Try TLS-derived role first (authoritative).
         let tls_role = {
             let ext = request.extensions();
             ext.get::<TlsIdentity>().and_then(|id| id.role)
         };
-        let caller_role_str = request
-            .headers()
-            .get("X-Msp-Role")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
 
         if let Some(tls_r) = tls_role {
             if !role_satisfies(tls_r, required) {
@@ -229,29 +224,38 @@ pub fn enforce_acl(
                 });
             }
             // TLS role satisfied — skip header check.
-        } else if !caller_role_str.is_empty() {
-            match serde_json::from_str::<crate::msp::MspRole>(&format!("\"{caller_role_str}\"")) {
-                Ok(caller_role) => {
-                    if !role_satisfies(caller_role, required) {
+        } else if acl_permissive() {
+            // Permissive mode: accept X-Msp-Role header as fallback (dev only).
+            let caller_role_str = request
+                .headers()
+                .get("X-Msp-Role")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("");
+            if !caller_role_str.is_empty() {
+                match serde_json::from_str::<crate::msp::MspRole>(&format!("\"{caller_role_str}\""))
+                {
+                    Ok(caller_role) => {
+                        if !role_satisfies(caller_role, required) {
+                            return Err(ApiError::Forbidden {
+                                reason: format!(
+                                    "MSP role '{caller_role_str}' insufficient for resource '{resource}' (requires '{required:?}')"
+                                ),
+                            });
+                        }
+                    }
+                    Err(_) => {
                         return Err(ApiError::Forbidden {
-                            reason: format!(
-                                "MSP role '{caller_role_str}' insufficient for resource '{resource}' (requires '{required:?}')"
-                            ),
+                            reason: format!("invalid X-Msp-Role header: '{caller_role_str}'"),
                         });
                     }
                 }
-                Err(_) => {
-                    return Err(ApiError::Forbidden {
-                        reason: format!("invalid X-Msp-Role header: '{caller_role_str}'"),
-                    });
-                }
             }
-        }
-        // No TLS identity and no X-Msp-Role header.
-        if !acl_permissive() {
+            // Permissive mode — allow even without role header.
+        } else {
+            // Strict mode, no TLS identity — deny.
             return Err(ApiError::Forbidden {
                 reason: format!(
-                    "missing X-Msp-Role header for resource '{resource}' (requires '{required:?}')"
+                    "TLS identity required for resource '{resource}' (requires '{required:?}')"
                 ),
             });
         }
@@ -269,8 +273,8 @@ pub fn enforce_acl(
         });
     };
 
-    // Try TLS-derived identity first (set by TLS identity middleware),
-    // then fall back to X-Org-Id header.
+    // TLS-derived identity is authoritative. X-Org-Id header is only
+    // accepted in permissive mode to prevent spoofing in non-mTLS deploys.
     let tls_org = {
         let ext = request.extensions();
         ext.get::<TlsIdentity>().map(|id| id.org_id.clone())
@@ -278,20 +282,26 @@ pub fn enforce_acl(
     let header_org;
     let caller_org = if let Some(ref org) = tls_org {
         org.as_str()
-    } else {
+    } else if acl_permissive() {
+        // Permissive mode: accept X-Org-Id header as fallback (dev only).
         header_org = request
             .headers()
             .get("X-Org-Id")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         header_org
+    } else {
+        // Strict mode, no TLS identity — deny.
+        return Err(ApiError::Forbidden {
+            reason: format!(
+                "TLS identity required for resource '{resource}' (no X-Org-Id fallback in strict mode)"
+            ),
+        });
     };
 
     if caller_org.is_empty() && !acl_permissive() {
         return Err(ApiError::Forbidden {
-            reason: format!(
-                "missing caller identity (X-Org-Id header or TLS cert) for resource '{resource}'"
-            ),
+            reason: format!("missing caller identity for resource '{resource}'"),
         });
     }
     let orgs: Vec<&str> = if caller_org.is_empty() {

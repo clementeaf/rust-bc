@@ -20,6 +20,7 @@ use crate::block_storage::BlockStorage;
 use crate::blockchain::{Block, Blockchain};
 use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
+use crate::network_security::NetworkSecurityManager;
 use crate::ordering::NodeRole;
 use crate::smart_contracts::{ContractManager, SmartContract};
 use crate::transaction_validation::TransactionValidator;
@@ -213,6 +214,8 @@ pub struct Node {
     #[allow(dead_code)]
     /// Monotonically increasing alive sequence counter.
     pub alive_sequence: Arc<Mutex<u64>>,
+    /// P2P-level security: peer scoring, reputation, per-peer rate limiting.
+    pub network_security: Arc<Mutex<NetworkSecurityManager>>,
     /// Anchor peers for cross-org gossip discovery (parsed from `ANCHOR_PEERS` env).
     pub anchor_peers: Vec<gossip::AnchorPeer>,
     /// Externally reachable address (from `P2P_EXTERNAL_ADDRESS` env, e.g. `node1:8081`).
@@ -386,6 +389,7 @@ impl Node {
             membership: gossip::MembershipTable::new(gossip::ALIVE_TIMEOUT_MS),
             org_id: std::env::var("ORG_ID").unwrap_or_else(|_| "default".to_string()),
             alive_sequence: Arc::new(Mutex::new(0)),
+            network_security: Arc::new(Mutex::new(NetworkSecurityManager::with_defaults())),
             anchor_peers: std::env::var("ANCHOR_PEERS")
                 .map(|v| gossip::parse_anchor_peers(&v))
                 .unwrap_or_default(),
@@ -547,6 +551,7 @@ impl Node {
         let raft_node = self.raft_node.clone();
         let private_data_store = self.private_data_store.clone();
         let collection_registry = self.collection_registry.clone();
+        let net_security = self.network_security.clone();
 
         // Push-gossip channel: newly accepted blocks are sent here and forwarded
         // to GOSSIP_FANOUT random peers by the background gossip task.
@@ -598,6 +603,7 @@ impl Node {
                     let raft_node_clone = raft_node.clone();
                     let private_data_store_clone = private_data_store.clone();
                     let collection_registry_clone = collection_registry.clone();
+                    let net_security_clone = net_security.clone();
 
                     tokio::spawn(async move {
                         let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone
@@ -639,6 +645,7 @@ impl Node {
                             raft_node_clone,
                             private_data_store_clone,
                             collection_registry_clone,
+                            net_security_clone,
                         )
                         .await
                         {
@@ -684,10 +691,20 @@ impl Node {
         raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
         private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
         collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
+        net_security: Arc<Mutex<NetworkSecurityManager>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
         let mut buffer = vec![0u8; p2p_handler_buffer_size()];
         let mut first_message = true;
+
+        // Register peer with NetworkSecurityManager
+        {
+            let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
+            if let Err(e) = sec.register_peer(peer_addr_str.clone()) {
+                log::warn!("P2P connection rejected for {peer_addr_str}: {e}");
+                return Err(e.into());
+            }
+        }
 
         // Limpiar rate limit antiguo (más de 1 minuto)
         {
@@ -715,10 +732,20 @@ impl Node {
             }
         }
 
+        let connection_result: Result<(), Box<dyn std::error::Error>> = async {
         loop {
             let n = stream.read(&mut buffer).await?;
             if n == 0 {
                 break;
+            }
+
+            // Per-peer rate limiting and reputation check
+            {
+                let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
+                if let Err(e) = sec.check_rate_limit(&peer_addr_str, n) {
+                    log::warn!("P2P rate limit for {peer_addr_str}: {e}");
+                    break;
+                }
             }
 
             let message_str = String::from_utf8_lossy(&buffer[..n]);
@@ -787,10 +814,24 @@ impl Node {
                     let response_json = serde_json::to_string(&response_msg)?;
                     stream.write_all(response_json.as_bytes()).await?;
                 }
+
+                // Record valid message for reputation
+                {
+                    let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
+                    sec.record_valid_message(&peer_addr_str, n);
+                }
             }
         }
-
         Ok(())
+        }.await;
+
+        // Always unregister peer on disconnect
+        {
+            let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
+            sec.unregister_peer(&peer_addr_str);
+        }
+
+        connection_result
     }
 
     /**

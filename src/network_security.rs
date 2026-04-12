@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 /**
  * Network Security Layer
  *
@@ -17,6 +15,7 @@ use std::time::SystemTime;
  * Peer reputation and scoring system
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PeerScore {
     pub address: String,
     pub score: i32,
@@ -28,6 +27,7 @@ pub struct PeerScore {
     pub blacklist_reason: Option<String>,
 }
 
+#[allow(dead_code)]
 impl PeerScore {
     pub fn new(address: String) -> Self {
         let now = SystemTime::now()
@@ -64,6 +64,7 @@ impl PeerScore {
  * Rate limiting configuration and tracking
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RateLimitConfig {
     pub max_messages_per_second: u32,
     pub max_bytes_per_second: u64,
@@ -90,6 +91,7 @@ impl Default for RateLimitConfig {
  * Rate limiting state for a single peer
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PeerRateLimit {
     pub address: String,
     pub messages_this_second: u32,
@@ -263,6 +265,7 @@ impl NetworkSecurityManager {
     /**
      * Record rejected/invalid message from peer (penalizes bad behavior)
      */
+    #[allow(dead_code)]
     pub fn record_invalid_message(&mut self, address: &str, penalty: i32) {
         if let Some(score) = self.peer_scores.get_mut(address) {
             score.messages_rejected += 1;
@@ -299,6 +302,7 @@ impl NetworkSecurityManager {
     /**
      * Blacklist a peer permanently
      */
+    #[allow(dead_code)]
     pub fn blacklist_peer(&mut self, address: &str, reason: String) {
         if let Some(score) = self.peer_scores.get_mut(address) {
             score.is_blacklisted = true;
@@ -310,6 +314,7 @@ impl NetworkSecurityManager {
     /**
      * Get peer statistics
      */
+    #[allow(dead_code)]
     pub fn get_peer_stats(&self, address: &str) -> Option<PeerStatistics> {
         self.peer_scores.get(address).map(|score| PeerStatistics {
             address: score.address.clone(),
@@ -329,6 +334,7 @@ impl NetworkSecurityManager {
     /**
      * Get all peer statistics
      */
+    #[allow(dead_code)]
     pub fn get_all_peer_stats(&self) -> Vec<PeerStatistics> {
         self.peer_scores
             .values()
@@ -351,6 +357,7 @@ impl NetworkSecurityManager {
     /**
      * Cleanup old connections
      */
+    #[allow(dead_code)]
     pub fn cleanup_inactive_peers(&mut self, max_inactive_seconds: u64) {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -370,6 +377,7 @@ impl NetworkSecurityManager {
  * Peer statistics for reporting
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PeerStatistics {
     pub address: String,
     pub score: i32,
