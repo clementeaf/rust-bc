@@ -28,6 +28,9 @@ pub struct ApiConfig {
     pub port: u16,
     pub rate_limit_per_minute: u32,
     pub max_request_size_bytes: usize,
+    /// Reserved for future JWT bearer-token middleware. Currently loaded at
+    /// startup and validated in production but **not used for request
+    /// authentication** — mTLS + ACL is the active auth mechanism.
     pub jwt_secret: String,
 }
 

@@ -62,6 +62,14 @@ Handlers split by domain in `handlers/`:
 
 Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_code, message, data?, error?, timestamp, trace_id }`.
 
+**Security layers:**
+- All mutation endpoints (legacy + scaffold) call `enforce_acl()` from `api/errors.rs`. Strict mode (default) denies requests without TLS identity or `X-Org-Id`/`X-Msp-Role` headers.
+- `mine_block` additionally verifies `miner_address` belongs to a registered wallet.
+- `RateLimitMiddleware` (sliding window) wraps all routes except `/health`.
+- Chaincode install computes SHA-256 of Wasm bytes; optional `expected_hash` query param for supply-chain verification.
+- `jwt_secret` is loaded but reserved for future use — mTLS + ACL is the active auth mechanism.
+- See `docs/SECURITY-AUDIT.md` for the full audit and remediation status.
+
 ### AppState (`src/app_state.rs`)
 Central shared state. Legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store` coexist independently.
 
@@ -96,7 +104,8 @@ Services initialized at startup (all use in-memory backends by default):
 | `BOOTSTRAP_NODES` | — | Comma-separated `host:port` list |
 | `SEED_NODES` | — | Always-tried peer list |
 | `ACL_MODE` | *(strict)* | Set to `permissive` to allow all requests without identity |
-| `JWT_SECRET` | `change-me-in-production` | Secret for JWT token signing |
+| `JWT_SECRET` | `change-me-in-production` | Reserved for future JWT middleware (not used for auth yet) |
+| `CHECKPOINT_HMAC_SECRET` | `checkpoint-dev-secret` | HMAC key for checkpoint file integrity verification |
 | `P2P_RESPONSE_BUFFER_BYTES` | 262144 | Buffer size for `send_and_wait` responses (256 KB) |
 | `P2P_HANDLER_BUFFER_BYTES` | 65536 | Buffer size for per-connection message handler (64 KB) |
 | `P2P_SYNC_BUFFER_BYTES` | 4194304 | Buffer size for pull-based state sync (4 MB) |

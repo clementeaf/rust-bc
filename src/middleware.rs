@@ -179,7 +179,7 @@ where
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        eprintln!(
+        log::debug!(
             "[MIDDLEWARE] Request recibida: {} {}",
             req.method(),
             req.path()
@@ -191,10 +191,8 @@ where
         let fut = self.service.call(req);
 
         Box::pin(async move {
-            // Rutas públicas que no requieren rate limiting estricto
-            let public_paths = ["/api/v1/health", "/api/v1/billing/create-key"];
-
-            let is_public = public_paths.iter().any(|p| path.starts_with(p));
+            // Only health check is exempt from rate limiting
+            let is_public = path.starts_with("/api/v1/health");
 
             if !is_public {
                 let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());

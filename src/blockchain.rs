@@ -821,15 +821,12 @@ impl Blockchain {
      * Verifica si una transacción es doble gasto
      */
     fn is_double_spend(&self, tx: &Transaction) -> bool {
+        // Primary check: reject if a transaction with the same ID already exists
+        // in the confirmed chain (prevents replay of confirmed transactions).
         self.chain
             .iter()
             .flat_map(|block| &block.transactions)
-            .any(|existing_tx| {
-                existing_tx.from == tx.from
-                    && existing_tx.id != tx.id
-                    && existing_tx.amount == tx.amount
-                    && existing_tx.timestamp == tx.timestamp
-            })
+            .any(|existing_tx| existing_tx.id == tx.id)
     }
 
     /**

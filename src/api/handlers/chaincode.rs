@@ -1,5 +1,6 @@
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
@@ -10,6 +11,7 @@ use crate::app_state::AppState;
 pub struct InstallQuery {
     pub chaincode_id: String,
     pub version: String,
+    pub expected_hash: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,6 +87,23 @@ pub async fn install_chaincode(
         });
     }
 
+    // Compute SHA-256 hash of the Wasm bytes for integrity verification.
+    let hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(&body);
+        hex::encode(hasher.finalize())
+    };
+
+    // If the caller provided an expected hash, verify it matches.
+    if let Some(ref expected) = query.expected_hash {
+        if !expected.eq_ignore_ascii_case(&hash) {
+            return Err(ApiError::ValidationError {
+                field: "expected_hash".to_string(),
+                reason: format!("SHA-256 mismatch: expected {expected}, got {hash}"),
+            });
+        }
+    }
+
     let store = state
         .chaincode_package_store
         .as_ref()
@@ -97,6 +116,13 @@ pub async fn install_chaincode(
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
+
+    log::info!(
+        "Chaincode {} v{} installed, sha256: {}",
+        query.chaincode_id,
+        query.version,
+        hash
+    );
 
     // Auto-create a ChaincodeDefinition with Installed status so the full
     // lifecycle (approve → commit) works without a separate seeding step.

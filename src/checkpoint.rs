@@ -1,8 +1,14 @@
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Error, ErrorKind, Result as IoResult};
 use std::path::{Path, PathBuf};
+
+type HmacSha256 = Hmac<Sha256>;
+
+const DEV_HMAC_SECRET: &str = "checkpoint-dev-secret";
 
 /**
  * Representa un checkpoint en la blockchain
@@ -14,6 +20,8 @@ pub struct Checkpoint {
     pub block_hash: String,
     pub timestamp: u64,
     pub cumulative_difficulty: u64, // Dificultad acumulada hasta este punto
+    #[serde(default)]
+    pub hmac: String, // HMAC-SHA256 hex-encoded integrity tag
 }
 
 /**
@@ -25,6 +33,7 @@ pub struct CheckpointManager {
     checkpoint_interval: u64, // Cada cuántos bloques crear checkpoint (default: 2000)
     max_reorg_depth: u64,     // Profundidad máxima permitida de reorganización (default: 2000)
     checkpoints: HashMap<u64, Checkpoint>, // Cache en memoria
+    hmac_secret: Vec<u8>,     // Node-local HMAC secret for checkpoint integrity
 }
 
 impl CheckpointManager {
@@ -39,6 +48,32 @@ impl CheckpointManager {
         checkpoint_interval: Option<u64>,
         max_reorg_depth: Option<u64>,
     ) -> IoResult<Self> {
+        let hmac_secret = match std::env::var("CHECKPOINT_HMAC_SECRET") {
+            Ok(secret) if !secret.is_empty() => secret.into_bytes(),
+            _ => {
+                log::warn!(
+                    "CHECKPOINT_HMAC_SECRET not set — using deterministic dev secret. \
+                     Set CHECKPOINT_HMAC_SECRET in production!"
+                );
+                DEV_HMAC_SECRET.as_bytes().to_vec()
+            }
+        };
+
+        Self::with_hmac_secret(
+            checkpoints_dir,
+            checkpoint_interval,
+            max_reorg_depth,
+            hmac_secret,
+        )
+    }
+
+    /// Creates a CheckpointManager with an explicit HMAC secret (useful for tests).
+    pub fn with_hmac_secret(
+        checkpoints_dir: impl AsRef<Path>,
+        checkpoint_interval: Option<u64>,
+        max_reorg_depth: Option<u64>,
+        hmac_secret: Vec<u8>,
+    ) -> IoResult<Self> {
         let checkpoints_dir = checkpoints_dir.as_ref().to_path_buf();
 
         // Crear directorio si no existe
@@ -51,6 +86,7 @@ impl CheckpointManager {
             checkpoint_interval: checkpoint_interval.unwrap_or(2000),
             max_reorg_depth: max_reorg_depth.unwrap_or(2000),
             checkpoints: HashMap::new(),
+            hmac_secret,
         };
 
         // Cargar checkpoints existentes
@@ -82,7 +118,24 @@ impl CheckpointManager {
                                 match fs::read_to_string(&path) {
                                     Ok(json) => match serde_json::from_str::<Checkpoint>(&json) {
                                         Ok(checkpoint) => {
-                                            self.checkpoints.insert(index, checkpoint);
+                                            let expected_hmac = compute_checkpoint_hmac(
+                                                &self.hmac_secret,
+                                                checkpoint.block_index,
+                                                &checkpoint.block_hash,
+                                                checkpoint.timestamp,
+                                                checkpoint.cumulative_difficulty,
+                                            );
+                                            if checkpoint.hmac.is_empty() {
+                                                log::warn!(
+                                                    "Checkpoint {index} has no HMAC (legacy file) — skipping"
+                                                );
+                                            } else if checkpoint.hmac != expected_hmac {
+                                                log::warn!(
+                                                    "Checkpoint {index} has invalid HMAC — skipping (possible tampering)"
+                                                );
+                                            } else {
+                                                self.checkpoints.insert(index, checkpoint);
+                                            }
                                         }
                                         Err(e) => {
                                             eprintln!(
@@ -131,11 +184,20 @@ impl CheckpointManager {
         // Guardar hash para el mensaje antes de moverlo
         let hash_display = block_hash[..std::cmp::min(16, block_hash.len())].to_string();
 
+        let hmac_tag = compute_checkpoint_hmac(
+            &self.hmac_secret,
+            block_index,
+            &block_hash,
+            timestamp,
+            cumulative_difficulty,
+        );
+
         let checkpoint = Checkpoint {
             block_index,
             block_hash,
             timestamp,
             cumulative_difficulty,
+            hmac: hmac_tag,
         };
 
         // Guardar en archivo
@@ -293,4 +355,18 @@ impl CheckpointManager {
     pub fn get_latest_checkpoint_index(&self) -> Option<u64> {
         self.checkpoints.keys().max().copied()
     }
+}
+
+/// Compute HMAC-SHA256 over the canonical checkpoint data.
+fn compute_checkpoint_hmac(
+    secret: &[u8],
+    block_index: u64,
+    block_hash: &str,
+    timestamp: u64,
+    cumulative_difficulty: u64,
+) -> String {
+    let message = format!("{block_index}:{block_hash}:{timestamp}:{cumulative_difficulty}");
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC-SHA256 accepts any key length");
+    mac.update(message.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
 }

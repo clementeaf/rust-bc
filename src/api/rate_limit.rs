@@ -1,3 +1,6 @@
+// TODO: Wire RateLimiter into Actix middleware to replace/complement
+// the sliding-window RateLimitMiddleware in middleware.rs.
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
@@ -5,16 +8,16 @@ use std::time::{Duration, Instant};
 
 /// Token bucket for rate limiting
 #[derive(Clone)]
+#[allow(dead_code)]
 struct TokenBucket {
-    #[allow(dead_code)]
     tokens: f64,
     last_refill: Instant,
     capacity: f64,
     refill_rate: f64, // tokens per second
 }
 
+#[allow(dead_code)]
 impl TokenBucket {
-    #[allow(dead_code)]
     /// Create a new token bucket
     fn new(capacity: f64, refill_rate: f64) -> Self {
         TokenBucket {
@@ -52,8 +55,8 @@ impl TokenBucket {
 }
 
 /// Rate limiter with per-IP token buckets
+#[allow(dead_code)]
 pub struct RateLimiter {
-    #[allow(dead_code)]
     buckets: Arc<Mutex<HashMap<IpAddr, TokenBucket>>>,
     capacity: f64,
     refill_rate: f64,
@@ -61,6 +64,7 @@ pub struct RateLimiter {
     last_cleanup: Arc<Mutex<Instant>>,
 }
 
+#[allow(dead_code)]
 impl RateLimiter {
     /// Create a new rate limiter
     /// capacity: maximum tokens per bucket
@@ -75,7 +79,6 @@ impl RateLimiter {
         }
     }
 
-    #[allow(dead_code)]
     /// Check if request from IP should be allowed
     pub fn allow_request(&self, ip: IpAddr) -> bool {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
@@ -99,7 +102,6 @@ impl RateLimiter {
         allowed
     }
 
-    #[allow(dead_code)]
     /// Get remaining tokens for an IP
     pub fn get_remaining_tokens(&self, ip: IpAddr) -> f64 {
         let buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
@@ -114,7 +116,6 @@ impl RateLimiter {
         buckets.retain(|_, bucket| bucket.current_tokens() < bucket.capacity);
     }
 
-    #[allow(dead_code)]
     /// Reset rate limiter (clear all buckets)
     pub fn reset(&self) {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());

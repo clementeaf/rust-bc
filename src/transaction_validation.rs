@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 /**
  * Transaction Validation Gate
  *
@@ -27,6 +25,10 @@ pub struct ValidationConfig {
     pub fee_multiplier: f64, // Adjust fees based on network congestion
     pub enable_sequence_tracking: bool,
     pub max_pending_per_sender: usize,
+    /// Maximum allowed clock drift into the future (seconds)
+    pub max_future_drift_secs: u64,
+    /// Maximum age of a transaction timestamp (seconds)
+    pub max_past_age_secs: u64,
 }
 
 impl Default for ValidationConfig {
@@ -40,6 +42,8 @@ impl Default for ValidationConfig {
             fee_multiplier: 1.0,
             enable_sequence_tracking: true,
             max_pending_per_sender: 100,
+            max_future_drift_secs: 30,
+            max_past_age_secs: 600, // 10 minutes
         }
     }
 }
@@ -48,6 +52,7 @@ impl Default for ValidationConfig {
  * Sender sequence state for replay attack prevention
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct SenderState {
     pub address: String,
     pub last_confirmed_sequence: u64,
@@ -86,6 +91,7 @@ impl SenderState {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn confirm_sequence(&mut self, sequence: u64) {
         self.last_confirmed_sequence = sequence;
         self.pending_transactions.retain(|&s| s != sequence);
@@ -96,12 +102,14 @@ impl SenderState {
  * Transaction validation result
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValidationResult {
     pub is_valid: bool,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 }
 
+#[allow(dead_code)]
 impl ValidationResult {
     pub fn valid() -> Self {
         ValidationResult {
@@ -169,6 +177,13 @@ impl TransactionValidator {
             return result;
         }
 
+        // 2b. Timestamp drift validation
+        if let Err(e) = self.validate_timestamp(tx) {
+            result.is_valid = false;
+            result.errors.push(e);
+            return result;
+        }
+
         // 3. Amount validation
         if let Err(e) = self.validate_amounts(tx) {
             result.is_valid = false;
@@ -229,6 +244,30 @@ impl TransactionValidator {
         }
 
         result
+    }
+
+    /// Reject transactions whose timestamp is too far in the future or too old.
+    fn validate_timestamp(&self, tx: &Transaction) -> Result<(), String> {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        if tx.timestamp > now + self.config.max_future_drift_secs {
+            return Err(format!(
+                "Transaction timestamp {} is too far in the future (max drift {}s)",
+                tx.timestamp, self.config.max_future_drift_secs
+            ));
+        }
+
+        if now.saturating_sub(tx.timestamp) > self.config.max_past_age_secs {
+            return Err(format!(
+                "Transaction timestamp {} is too old (max age {}s)",
+                tx.timestamp, self.config.max_past_age_secs
+            ));
+        }
+
+        Ok(())
     }
 
     /**
@@ -383,6 +422,7 @@ impl TransactionValidator {
     /**
      * Confirm transaction (mark as processed)
      */
+    #[allow(dead_code)]
     pub fn confirm_transaction(&mut self, tx: &Transaction) {
         if let Some(sender_state) = self.sender_states.get_mut(&tx.from) {
             sender_state.confirm_sequence(tx.timestamp);
@@ -392,6 +432,7 @@ impl TransactionValidator {
     /**
      * Get sender state
      */
+    #[allow(dead_code)]
     pub fn get_sender_state(&self, address: &str) -> Option<SenderState> {
         self.sender_states.get(address).cloned()
     }
@@ -399,6 +440,7 @@ impl TransactionValidator {
     /**
      * Cleanup old transaction records
      */
+    #[allow(dead_code)]
     pub fn cleanup_old_records(&mut self, max_age_seconds: u64) {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -412,6 +454,7 @@ impl TransactionValidator {
     /**
      * Get validation statistics
      */
+    #[allow(dead_code)]
     pub fn get_stats(&self) -> ValidationStats {
         ValidationStats {
             tracked_senders: self.sender_states.len(),
@@ -433,6 +476,7 @@ impl TransactionValidator {
  * Validation statistics
  */
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ValidationStats {
     pub tracked_senders: usize,
     pub seen_transactions: usize,
@@ -443,6 +487,13 @@ pub struct ValidationStats {
 mod tests {
     use super::*;
 
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
     fn create_test_tx(from: &str, to: &str, amount: u64, fee: u64) -> Transaction {
         Transaction {
             id: format!("tx_{from}_{to}_{amount}"),
@@ -450,7 +501,7 @@ mod tests {
             to: to.to_string(),
             amount,
             fee,
-            timestamp: 100,
+            timestamp: now_secs(),
             signature: "sig".to_string(),
             data: None,
         }
@@ -497,7 +548,7 @@ mod tests {
             to: "addr2".to_string(),
             amount: 0,
             fee: 0,
-            timestamp: 100,
+            timestamp: now_secs(),
             signature: "sig".to_string(),
             data: None,
         };
@@ -511,7 +562,8 @@ mod tests {
         let mut validator = TransactionValidator::with_defaults();
         let tx1 = create_test_tx("addr1", "addr2", 100, 1);
         let mut tx2 = create_test_tx("addr1", "addr3", 50, 1);
-        tx2.timestamp = 50; // Earlier timestamp
+        // Use a timestamp earlier than tx1 but still within drift window
+        tx2.timestamp = tx1.timestamp.saturating_sub(5);
         tx2.id = "tx_different".to_string(); // Different ID to avoid duplicate check
 
         let result1 = validator.validate(&tx1);
@@ -521,7 +573,7 @@ mod tests {
         validator.confirm_transaction(&tx1);
 
         let result2 = validator.validate(&tx2);
-        assert!(!result2.is_valid); // Should fail because timestamp 50 < last_confirmed 100
+        assert!(!result2.is_valid); // Should fail because timestamp < last_confirmed
     }
 
     #[test]
@@ -533,7 +585,7 @@ mod tests {
             to: "addr2_with_valid_length_____".to_string(),
             amount: 100,
             fee: 1,
-            timestamp: 100,
+            timestamp: now_secs(),
             signature: "sig".to_string(),
             data: None,
         };

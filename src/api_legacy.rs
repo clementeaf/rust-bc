@@ -3,14 +3,34 @@ use std::time::SystemTime;
 
 // External crates
 use actix_web::web::Bytes;
-use actix_web::{web, HttpResponse, Result as ActixResult};
+use actix_web::{web, HttpRequest, HttpResponse, Result as ActixResult};
 use serde::{Deserialize, Serialize};
 
 // Crate modules
+use crate::api::errors::enforce_acl;
 use crate::app_state::AppState;
 use crate::billing::{BillingTier, UsageStats};
 use crate::models::{Transaction, Wallet};
 use crate::smart_contracts::{ContractFunction, NFTMetadata, SmartContract};
+
+/// Enforce ACL for legacy handlers. Returns `Ok(())` on success or an
+/// `HttpResponse` (403 Forbidden) that the caller should return immediately.
+fn enforce_acl_legacy(
+    state: &AppState,
+    resource: &str,
+    http_req: &HttpRequest,
+) -> Result<(), HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        resource,
+        http_req,
+    )
+    .map_err(|e| {
+        let response: ApiResponse<String> = ApiResponse::error(e.to_string());
+        HttpResponse::Forbidden().json(response)
+    })
+}
 
 /**
  * Response estándar de la API
@@ -86,8 +106,12 @@ pub async fn get_wallet_balance(
  */
 pub async fn create_wallet(
     state: web::Data<AppState>,
-    http_req: actix_web::HttpRequest,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     let api_key = http_req
         .headers()
         .get("X-API-Key")
@@ -148,7 +172,12 @@ pub async fn get_wallet_transactions(
 pub async fn connect_peer(
     state: web::Data<AppState>,
     address: web::Path<String>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Admin", &http_req) {
+        return Ok(resp);
+    }
+
     if let Some(node) = &state.node {
         let address_str = address.clone();
         let node_clone = node.clone();
@@ -200,7 +229,14 @@ pub async fn get_peers(state: web::Data<AppState>) -> ActixResult<HttpResponse> 
 /**
  * Sincroniza la blockchain con todos los peers
  */
-pub async fn sync_blockchain(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
+pub async fn sync_blockchain(
+    state: web::Data<AppState>,
+    http_req: HttpRequest,
+) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Admin", &http_req) {
+        return Ok(resp);
+    }
+
     if let Some(node) = &state.node {
         let node_clone = node.clone();
 
@@ -233,7 +269,26 @@ pub struct MineBlockRequest {
 pub async fn mine_block(
     state: web::Data<AppState>,
     req: web::Json<MineBlockRequest>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
+    // Verify miner_address belongs to a known wallet
+    {
+        let wm = state
+            .wallet_manager
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if wm.get_wallet(&req.miner_address).is_none() {
+            let response: ApiResponse<String> = ApiResponse::error(
+                "miner_address does not correspond to a registered wallet".to_string(),
+            );
+            return Ok(HttpResponse::Forbidden().json(response));
+        }
+    }
+
     let max_txs = req.max_transactions.unwrap_or(10);
     let transactions = {
         let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
@@ -713,18 +768,19 @@ pub struct ExecuteContractRequest {
 pub async fn deploy_contract_debug(
     state: web::Data<AppState>,
     body: Bytes,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
-    eprintln!("[DEPLOY DEBUG] ========================================");
-    eprintln!("[DEPLOY DEBUG] Request recibido en endpoint debug");
-    eprintln!("[DEPLOY DEBUG] Body length: {}", body.len());
+    log::debug!("[DEPLOY DEBUG] ========================================");
+    log::debug!("[DEPLOY DEBUG] Request recibido en endpoint debug");
+    log::debug!("[DEPLOY DEBUG] Body length: {}", body.len());
     let body_str = String::from_utf8_lossy(&body);
-    eprintln!(
+    log::debug!(
         "[DEPLOY DEBUG] Body (first 500 chars): {}",
         &body_str[..body_str.len().min(500)]
     );
 
     // Llamar directamente a deploy_contract con el body
-    deploy_contract(state, body).await
+    deploy_contract(state, body, http_req).await
 }
 
 /**
@@ -732,29 +788,37 @@ pub async fn deploy_contract_debug(
  * NOTA: Este endpoint tiene problemas con el extractor JSON de Actix-Web.
  * Usar /contracts/debug como alternativa funcional.
  */
-pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixResult<HttpResponse> {
-    eprintln!("[DEPLOY] ========================================");
-    eprintln!("[DEPLOY] FUNCIÓN deploy_contract() EJECUTADA");
-    eprintln!("[DEPLOY] Body recibido, length: {}", body.len());
+pub async fn deploy_contract(
+    state: web::Data<AppState>,
+    body: Bytes,
+    http_req: HttpRequest,
+) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
+    log::debug!("[DEPLOY] ========================================");
+    log::debug!("[DEPLOY] FUNCIÓN deploy_contract() EJECUTADA");
+    log::debug!("[DEPLOY] Body recibido, length: {}", body.len());
 
     // Parsear JSON manualmente (igual que el endpoint debug)
     let req: DeployContractRequest = match serde_json::from_slice(&body) {
         Ok(r) => {
-            eprintln!("[DEPLOY] JSON parseado exitosamente");
+            log::debug!("[DEPLOY] JSON parseado exitosamente");
             r
         }
         Err(e) => {
-            eprintln!("[DEPLOY] ERROR al parsear JSON: {e}");
+            log::debug!("[DEPLOY] ERROR al parsear JSON: {e}");
             let response: ApiResponse<String> = ApiResponse::error(format!("Invalid JSON: {e}"));
             return Ok(HttpResponse::BadRequest().json(response));
         }
     };
 
-    eprintln!("[DEPLOY] Request recibido exitosamente");
-    eprintln!("[DEPLOY] Tipo: {}, Owner: {}", req.contract_type, req.owner);
-    eprintln!("[DEPLOY] Name: {}, Symbol: {:?}", req.name, req.symbol);
+    log::debug!("[DEPLOY] Request recibido exitosamente");
+    log::debug!("[DEPLOY] Tipo: {}, Owner: {}", req.contract_type, req.owner);
+    log::debug!("[DEPLOY] Name: {}, Symbol: {:?}", req.name, req.symbol);
 
-    eprintln!("[DEPLOY] Creando SmartContract::new()...");
+    log::debug!("[DEPLOY] Creando SmartContract::new()...");
     let contract = SmartContract::new(
         req.owner.clone(),
         req.contract_type.clone(),
@@ -764,33 +828,33 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
         req.decimals,
     );
 
-    eprintln!("[DEPLOY] Adquiriendo write lock de contract_manager...");
+    log::debug!("[DEPLOY] Adquiriendo write lock de contract_manager...");
     let address = {
         let mut contract_manager = state
             .contract_manager
             .write()
             .unwrap_or_else(|e| e.into_inner());
-        eprintln!("[DEPLOY] Write lock adquirido, llamando deploy_contract()...");
+        log::debug!("[DEPLOY] Write lock adquirido, llamando deploy_contract()...");
         match contract_manager.deploy_contract(contract.clone()) {
             Ok(addr) => {
-                eprintln!("[DEPLOY] deploy_contract() exitoso, address: {addr}");
+                log::debug!("[DEPLOY] deploy_contract() exitoso, address: {addr}");
                 addr
             }
             Err(e) => {
-                eprintln!("[DEPLOY] ERROR en deploy_contract(): {e}");
+                log::debug!("[DEPLOY] ERROR en deploy_contract(): {e}");
                 let response: ApiResponse<String> = ApiResponse::error(e);
                 return Ok(HttpResponse::BadRequest().json(response));
             }
         }
     };
-    eprintln!("[DEPLOY] Write lock liberado");
+    log::debug!("[DEPLOY] Write lock liberado");
 
     // Los contratos se mantienen en memoria (ContractManager)
     // No necesitan persistencia adicional ya que se reconstruyen desde blockchain
 
     // Broadcast del contrato a todos los peers
     if let Some(node) = &state.node {
-        eprintln!("[DEPLOY] Iniciando broadcast a peers...");
+        log::debug!("[DEPLOY] Iniciando broadcast a peers...");
         let node_clone = node.clone();
         let contract_clone = contract.clone();
         tokio::spawn(async move {
@@ -798,10 +862,10 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
         });
     }
 
-    eprintln!("[DEPLOY] Creando respuesta exitosa...");
+    log::debug!("[DEPLOY] Creando respuesta exitosa...");
     let address_clone = address.clone();
     let response: ApiResponse<String> = ApiResponse::success(address);
-    eprintln!("[DEPLOY] Deploy completado exitosamente, address: {address_clone}");
+    log::debug!("[DEPLOY] Deploy completado exitosamente, address: {address_clone}");
     Ok(HttpResponse::Created().json(response))
 }
 
@@ -919,7 +983,12 @@ pub async fn execute_contract_function(
     state: web::Data<AppState>,
     address: web::Path<String>,
     req: web::Json<ExecuteContractRequest>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     // Extraer caller de la request primero para rate limiting
     // Para ERC-20, el caller debe venir en params para transfer, approve, transferFrom
     // Para NFT, el caller puede venir en params o ser "from" para transferNFT
@@ -1637,7 +1706,12 @@ pub async fn set_nft_metadata(
     state: web::Data<AppState>,
     path: web::Path<(String, u64)>,
     req: web::Json<SetNFTMetadataRequest>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     let (contract_address, token_id) = path.into_inner();
     let mut contract_manager = state
         .contract_manager
@@ -1694,7 +1768,12 @@ pub struct UnstakeRequest {
 pub async fn stake(
     state: web::Data<AppState>,
     req: web::Json<StakeRequest>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     // Verificar balance antes de stakear
     let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
     let balance = blockchain.calculate_balance(&req.address);
@@ -1766,7 +1845,12 @@ pub async fn stake(
 pub async fn request_unstake(
     state: web::Data<AppState>,
     req: web::Json<UnstakeRequest>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     match state
         .staking_manager
         .request_unstake(&req.address, req.amount)
@@ -1790,7 +1874,12 @@ pub async fn request_unstake(
 pub async fn complete_unstake(
     state: web::Data<AppState>,
     address: web::Path<String>,
+    http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
+        return Ok(resp);
+    }
+
     match state.staking_manager.complete_unstake(&address) {
         Ok(amount) => {
             // Crear transacción especial de unstaking: "STAKING" -> address
@@ -1888,8 +1977,12 @@ pub struct ClaimAirdropRequest {
 pub async fn claim_airdrop(
     state: web::Data<AppState>,
     req: web::Json<ClaimAirdropRequest>,
-    peer_addr: actix_web::HttpRequest,
+    peer_addr: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &peer_addr) {
+        return Ok(resp);
+    }
+
     let node_address = req.node_address.clone();
 
     // Rate limiting: máximo 10 claims por minuto por IP

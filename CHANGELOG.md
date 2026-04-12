@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-12 (Security Hardening — P0/P1/P2)
+
+**P0 — ACL enforcement on legacy routes**
+- All 12 mutation endpoints in `api_legacy.rs` now call `enforce_acl` (mine, deploy, execute, connect, sync, stake, unstake, airdrop, wallet, nft metadata)
+- `mine_block` verifies `miner_address` belongs to a registered wallet
+- Debug `eprintln!("[DEPLOY]...")` replaced with `log::debug!`
+
+**P1 — Double-spend and replay prevention**
+- `is_double_spend` rewritten: matches by `tx.id` uniqueness across confirmed chain
+- New `validate_timestamp` rejects transactions >30s in the future or >10min old
+- Rate limiter: `/billing/create-key` no longer exempt; middleware logging via `log::debug!`
+- Removed blanket `#![allow(dead_code)]` from `transaction_validation.rs`; per-item allows only
+
+**P2 — Integrity and supply-chain hardening**
+- Checkpoint files now include HMAC-SHA256 tag (env `CHECKPOINT_HMAC_SECRET`); tampered/legacy files skipped on load
+- Chaincode install computes and logs SHA-256 of Wasm bytes; optional `expected_hash` query param for verification
+- `jwt_secret` documented as reserved (not used for auth — mTLS + ACL is active)
+
+**Tests:** 992 passed, 0 failed, 0 clippy warnings
+
+---
+
 ### 2026-04-12 (Chaincode Install Fix)
 
 - Input validation middleware now exempts `/chaincode/install` from the JSON-only Content-Type check, allowing `application/octet-stream` for Wasm binary uploads
