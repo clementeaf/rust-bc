@@ -12,7 +12,12 @@ use rust_bc::{
     billing::BillingManager,
     blockchain::Blockchain,
     cache::BalanceCache,
-    consensus::{ConsensusConfig, ConsensusEngine, DagBlock, ForkChoiceRule},
+    consensus::{
+        ConsensusConfig,
+        dag::DagBlock,
+        engine::ConsensusEngine,
+        fork_choice::ForkChoiceRule,
+    },
     metrics::MetricsCollector,
     models::{Mempool, WalletManager},
     smart_contracts::ContractManager,
