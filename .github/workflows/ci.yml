@@ -72,8 +72,9 @@ jobs:
 
       - name: Verify no failures
         run: |
-          if grep -q "FAILED" test-output.txt; then
+          if grep -qE "[1-9][0-9]* failed" test-output.txt; then
             echo "Tests failed!"
+            grep "test result:" test-output.txt
             exit 1
           fi
           echo "All tests passed"
