@@ -154,9 +154,7 @@ impl CheckpointManager {
         // Guardar en cache
         self.checkpoints.insert(block_index, checkpoint);
 
-        println!(
-            "✅ Checkpoint creado en bloque {block_index} (hash: {hash_display}...)"
-        );
+        println!("✅ Checkpoint creado en bloque {block_index} (hash: {hash_display}...)");
 
         Ok(())
     }

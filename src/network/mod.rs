@@ -234,9 +234,7 @@ pub fn parse_peer_allowlist(env_value: &str) -> Option<HashSet<String>> {
                 set.insert(addr.to_string());
             }
             Err(_) => {
-                eprintln!(
-                    "⚠️  PEER_ALLOWLIST: entrada ignorada (no es dirección válida): {t:?}"
-                );
+                eprintln!("⚠️  PEER_ALLOWLIST: entrada ignorada (no es dirección válida): {t:?}");
             }
         }
     }
@@ -750,9 +748,7 @@ impl Node {
                         if let Some(their_p2p_addr) = p2p_address {
                             let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
                             peers_guard.insert(their_p2p_addr.clone());
-                            println!(
-                                "📡 Peer agregado desde conexión entrante: {their_p2p_addr}"
-                            );
+                            println!("📡 Peer agregado desde conexión entrante: {their_p2p_addr}");
                         }
                         first_message = false;
                     }
@@ -1510,15 +1506,11 @@ impl Node {
                 let wasm_bytes = match cc_store.get_package(&chaincode_id, "latest") {
                     Ok(Some(bytes)) => bytes,
                     Ok(None) => {
-                        eprintln!(
-                            "ProposalRequest rejected: chaincode '{chaincode_id}' not found"
-                        );
+                        eprintln!("ProposalRequest rejected: chaincode '{chaincode_id}' not found");
                         return Ok(None);
                     }
                     Err(e) => {
-                        eprintln!(
-                            "ProposalRequest error loading chaincode '{chaincode_id}': {e}"
-                        );
+                        eprintln!("ProposalRequest error loading chaincode '{chaincode_id}': {e}");
                         return Ok(None);
                     }
                 };
@@ -1617,9 +1609,7 @@ impl Node {
                             false
                         }
                     } else {
-                        eprintln!(
-                            "[private-data] rejected: unknown collection '{collection}'"
-                        );
+                        eprintln!("[private-data] rejected: unknown collection '{collection}'");
                         false
                     }
                 } else {
@@ -1722,9 +1712,7 @@ impl Node {
                 }
             } else {
                 // Si el peer no envía network_id, asumimos compatibilidad (backward compatibility)
-                println!(
-                    "⚠️  Peer {address} no envió network_id, asumiendo compatibilidad"
-                );
+                println!("⚠️  Peer {address} no envió network_id, asumiendo compatibilidad");
             }
 
             // Si el peer envió su dirección P2P, usarla; si no, usar la dirección de conexión
@@ -1905,9 +1893,7 @@ impl Node {
                     connected += 1;
                 }
                 Err(e) => {
-                    println!(
-                        "⚠️  No se pudo conectar a bootstrap node {bootstrap_addr}: {e}"
-                    );
+                    println!("⚠️  No se pudo conectar a bootstrap node {bootstrap_addr}: {e}");
                     failed += 1;
                 }
             }
@@ -2638,19 +2624,13 @@ impl Node {
                         "✅ {synced} contratos sincronizados desde {address} ({duration_ms}ms, {errors} errores)"
                     );
                 } else if errors > 0 {
-                    println!(
-                        "⚠️  {errors} contratos rechazados desde {address} por validación"
-                    );
+                    println!("⚠️  {errors} contratos rechazados desde {address} por validación");
                 } else {
-                    println!(
-                        "ℹ️  No hay contratos nuevos para sincronizar desde {address}"
-                    );
+                    println!("ℹ️  No hay contratos nuevos para sincronizar desde {address}");
                 }
             }
         } else {
-            println!(
-                "⚠️  Respuesta inválida al solicitar contratos desde {address}"
-            );
+            println!("⚠️  Respuesta inválida al solicitar contratos desde {address}");
         }
 
         Ok(())

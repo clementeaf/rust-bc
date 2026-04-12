@@ -801,9 +801,7 @@ pub async fn deploy_contract(state: web::Data<AppState>, body: Bytes) -> ActixRe
     eprintln!("[DEPLOY] Creando respuesta exitosa...");
     let address_clone = address.clone();
     let response: ApiResponse<String> = ApiResponse::success(address);
-    eprintln!(
-        "[DEPLOY] Deploy completado exitosamente, address: {address_clone}"
-    );
+    eprintln!("[DEPLOY] Deploy completado exitosamente, address: {address_clone}");
     Ok(HttpResponse::Created().json(response))
 }
 
@@ -1614,9 +1612,8 @@ pub async fn get_nft_metadata(
                 Ok(HttpResponse::Ok().json(response))
             }
             None => {
-                let response: ApiResponse<NFTMetadata> = ApiResponse::error(format!(
-                    "Metadata for token ID {token_id} does not exist"
-                ));
+                let response: ApiResponse<NFTMetadata> =
+                    ApiResponse::error(format!("Metadata for token ID {token_id} does not exist"));
                 Ok(HttpResponse::NotFound().json(response))
             }
         },

@@ -13,7 +13,6 @@ pub mod fork_choice;
 pub mod scheduler;
 pub mod validator;
 
-
 /// Consensus configuration
 #[derive(Clone, Debug)]
 pub struct ConsensusConfig {

@@ -69,9 +69,7 @@ impl PruningManager {
             let mut pruned_count = 0;
             for index in 0..keep_from_index {
                 if let Err(e) = self.block_storage.remove_block(index) {
-                    eprintln!(
-                        "⚠️  Error eliminando bloque {index} durante pruning: {e}"
-                    );
+                    eprintln!("⚠️  Error eliminando bloque {index} durante pruning: {e}");
                 } else {
                     pruned_count += 1;
                 }

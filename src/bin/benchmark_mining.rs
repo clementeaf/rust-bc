@@ -114,21 +114,15 @@ fn main() {
     let scaling_factor_10_to_1 = results[9].time_seconds / results[0].time_seconds;
 
     println!("📊 SCALING ANALYSIS:");
-    println!(
-        "   • Difficulty 2 is {scaling_factor_2_to_1:.1}x slower than Difficulty 1"
-    );
-    println!(
-        "   • Difficulty 10 is {scaling_factor_10_to_1:.1}x slower than Difficulty 1"
-    );
+    println!("   • Difficulty 2 is {scaling_factor_2_to_1:.1}x slower than Difficulty 1");
+    println!("   • Difficulty 10 is {scaling_factor_10_to_1:.1}x slower than Difficulty 1");
 
     // Expected time calculation for 1-minute blocks
     let target_block_time_seconds = 60.0;
     let optimal_difficulty = find_optimal_difficulty(&results, target_block_time_seconds);
 
     println!();
-    println!(
-        "🎯 TARGET BLOCK TIME: {target_block_time_seconds} seconds"
-    );
+    println!("🎯 TARGET BLOCK TIME: {target_block_time_seconds} seconds");
     println!("   • Recommended Difficulty: {optimal_difficulty}");
     if let Some(result) = results.iter().find(|r| r.difficulty == optimal_difficulty) {
         println!("   • Expected Block Time: {:.2}s", result.time_seconds);

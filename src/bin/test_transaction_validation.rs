@@ -236,9 +236,7 @@ fn main() {
 
     let result3 = validator.validate(&tx3_replay);
     let replay_blocked = !result3.is_valid;
-    println!(
-        "🛡️  Replay attack (sequence=50): {replay_blocked} (BLOCKED)"
-    );
+    println!("🛡️  Replay attack (sequence=50): {replay_blocked} (BLOCKED)");
     if !result3.is_valid {
         println!("   Error: {}", result3.errors[0]);
     }

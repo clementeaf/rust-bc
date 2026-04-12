@@ -371,9 +371,7 @@ impl SmartContract {
 
         // Límite máximo para prevenir problemas de serialización y DoS
         if token_id > MAX_TOKEN_ID {
-            return Err(format!(
-                "Token ID exceeds maximum allowed: {MAX_TOKEN_ID}"
-            ));
+            return Err(format!("Token ID exceeds maximum allowed: {MAX_TOKEN_ID}"));
         }
 
         Ok(())
@@ -662,9 +660,7 @@ impl SmartContract {
         // Límite máximo de amount
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!(
-                "Mint amount exceeds maximum allowed: {MAX_AMOUNT}"
-            ));
+            return Err(format!("Mint amount exceeds maximum allowed: {MAX_AMOUNT}"));
         }
 
         // Verificar límite de supply si existe
@@ -707,9 +703,7 @@ impl SmartContract {
         // Límite máximo de amount
         const MAX_AMOUNT: u64 = 1_000_000_000_000;
         if amount > MAX_AMOUNT {
-            return Err(format!(
-                "Burn amount exceeds maximum allowed: {MAX_AMOUNT}"
-            ));
+            return Err(format!("Burn amount exceeds maximum allowed: {MAX_AMOUNT}"));
         }
 
         let from_balance = *self.state.balances.get(from).unwrap_or(&0);
@@ -922,9 +916,7 @@ impl SmartContract {
         self.update_sequence += 1;
         self.update_integrity_hash();
 
-        Ok(format!(
-            "Transferred NFT {token_id} from {from} to {to}"
-        ))
+        Ok(format!("Transferred NFT {token_id} from {from} to {to}"))
     }
 
     /**
@@ -1391,9 +1383,7 @@ impl SmartContract {
         }
 
         let event_key = format!("event_nft_approval_{}", self.update_sequence);
-        let event_value = format!(
-            "owner:{owner}|approved:{approved}|token_id:{token_id}"
-        );
+        let event_value = format!("owner:{owner}|approved:{approved}|token_id:{token_id}");
         self.state.metadata.insert(event_key, event_value);
     }
 

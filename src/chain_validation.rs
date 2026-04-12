@@ -56,9 +56,7 @@ impl ChainValidator {
             // Validar referencias entre bloques (solo para bloques no-génesis)
             if i > 0 {
                 if block.previous_hash != chain[i - 1].hash {
-                    errors.push(format!(
-                        "Bloque {i} referencia bloque anterior incorrecto"
-                    ));
+                    errors.push(format!("Bloque {i} referencia bloque anterior incorrecto"));
                 }
 
                 // Validar que timestamp sea monótonamente creciente (con margen)

@@ -10,7 +10,6 @@ pub mod hsm;
 pub mod keys;
 pub mod signing;
 
-
 /// Identity configuration
 #[derive(Clone, Debug)]
 pub struct IdentityConfig {

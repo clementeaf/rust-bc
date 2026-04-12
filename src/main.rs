@@ -408,9 +408,7 @@ async fn async_main() -> std::io::Result<()> {
         Ok(manager) => {
             let count = manager.checkpoint_count();
             if count > 0 {
-                println!(
-                    "✅ CheckpointManager inicializado: {count} checkpoints cargados"
-                );
+                println!("✅ CheckpointManager inicializado: {count} checkpoints cargados");
             } else {
                 println!("✅ CheckpointManager inicializado (sin checkpoints previos)");
             }
@@ -671,9 +669,9 @@ async fn async_main() -> std::io::Result<()> {
             }
             Err(e) => {
                 log::error!("STORAGE_BACKEND=rocksdb but failed to open RocksDB at {path}: {e}");
-                return Err(std::io::Error::other(
-                    format!("RocksDB failed to open at {path}: {e}"),
-                ));
+                return Err(std::io::Error::other(format!(
+                    "RocksDB failed to open at {path}: {e}"
+                )));
             }
         }
     } else {
@@ -748,9 +746,7 @@ async fn async_main() -> std::io::Result<()> {
             }
             _ => {
                 if !algo.is_empty() && algo.to_lowercase() != "ed25519" {
-                    log::warn!(
-                        "Unknown SIGNING_ALGORITHM='{algo}', falling back to Ed25519"
-                    );
+                    log::warn!("Unknown SIGNING_ALGORITHM='{algo}', falling back to Ed25519");
                 }
                 log::info!("Signing algorithm: Ed25519");
                 Arc::new(crate::identity::signing::SoftwareSigningProvider::generate())
@@ -880,9 +876,7 @@ async fn async_main() -> std::io::Result<()> {
             Some(pruning) => pruning,
             None => {
                 eprintln!("⚠️  Pruning manager no disponible para tarea periódica");
-                return Err(std::io::Error::other(
-                    "Pruning manager not available",
-                ));
+                return Err(std::io::Error::other("Pruning manager not available"));
             }
         };
 
@@ -981,9 +975,7 @@ async fn async_main() -> std::io::Result<()> {
                 });
             }
             Err(e) => {
-                eprintln!(
-                    "⚠️  No se pudo crear StateSnapshotManager para tarea periódica: {e}"
-                );
+                eprintln!("⚠️  No se pudo crear StateSnapshotManager para tarea periódica: {e}");
             }
         }
     }
@@ -1130,9 +1122,7 @@ async fn async_main() -> std::io::Result<()> {
             server.bind_rustls_0_23(&api_bind, tls_config)?
         }
         Ok(None) => {
-            println!(
-                "⚠️  TLS no configurado — API en texto plano en {api_bind}"
-            );
+            println!("⚠️  TLS no configurado — API en texto plano en {api_bind}");
             server.bind(&api_bind)?
         }
         Err(e) => {
@@ -1215,9 +1205,7 @@ async fn async_main() -> std::io::Result<()> {
                 }
             }
         });
-        log::info!(
-            "Recarga TLS automática habilitada cada {interval_secs} segundos."
-        );
+        log::info!("Recarga TLS automática habilitada cada {interval_secs} segundos.");
     }
 
     // Tarea periódica para limpiar peers desconectados (cada 60 segundos)
