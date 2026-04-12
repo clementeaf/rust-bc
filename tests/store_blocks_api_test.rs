@@ -13,10 +13,7 @@ use rust_bc::{
     blockchain::Blockchain,
     cache::BalanceCache,
     consensus::{
-        ConsensusConfig,
-        dag::DagBlock,
-        engine::ConsensusEngine,
-        fork_choice::ForkChoiceRule,
+        dag::DagBlock, engine::ConsensusEngine, fork_choice::ForkChoiceRule, ConsensusConfig,
     },
     metrics::MetricsCollector,
     models::{Mempool, WalletManager},
