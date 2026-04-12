@@ -37,7 +37,9 @@ pub enum ConsensusError {
 ///
 /// # Example
 /// ```rust
-/// use rust_bc::consensus::{ConsensusEngine, ConsensusConfig, ForkChoiceRule};
+/// use rust_bc::consensus::ConsensusConfig;
+/// use rust_bc::consensus::engine::ConsensusEngine;
+/// use rust_bc::consensus::fork_choice::ForkChoiceRule;
 ///
 /// let validators = vec!["alice".to_string()];
 /// let engine = ConsensusEngine::new(

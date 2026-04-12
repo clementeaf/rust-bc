@@ -24,7 +24,7 @@ pub enum ForkChoiceRule {
 /// Fork choice engine.
 ///
 /// ```rust
-/// use rust_bc::consensus::{ForkChoice, ForkChoiceRule};
+/// use rust_bc::consensus::fork_choice::{ForkChoice, ForkChoiceRule};
 /// let fc = ForkChoice::new(ForkChoiceRule::LongestChain);
 /// ```
 #[derive(Debug, Clone)]
