@@ -101,7 +101,7 @@ See [BENCHMARKS-FULL.md](docs/BENCHMARKS-FULL.md).
 
 ```bash
 cargo test              # 992 unit + integration tests
-./scripts/e2e-test.sh   # 42 E2E assertions on Docker network
+./scripts/e2e-test.sh   # 71 E2E assertions on Docker network
 ```
 
 ## License

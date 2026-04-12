@@ -195,7 +195,7 @@ cd deploy && ./generate-tls.sh
 ./scripts/bcctl.sh logs node1 100  # Tail container logs
 
 # E2E test suite (requires running Docker network)
-./scripts/e2e-test.sh              # 42 assertions across 12 categories
+./scripts/e2e-test.sh              # 71 assertions across 20 categories
 ./scripts/e2e-test.sh --verbose    # Show full API responses
 ```
 

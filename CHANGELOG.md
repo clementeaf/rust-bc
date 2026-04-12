@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-12 (Chaincode Install Fix)
+
+- Input validation middleware now exempts `/chaincode/install` from the JSON-only Content-Type check, allowing `application/octet-stream` for Wasm binary uploads
+- E2E test suite: 69 passed, 0 failed (previously 62 passed, 4 failed on chaincode lifecycle)
+
+---
+
 ### 2026-04-11 (Audit Hardening)
 
 **Wasmtime upgrade (v21 → v36)**
