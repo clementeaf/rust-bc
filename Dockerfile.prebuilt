@@ -1,0 +1,39 @@
+# Fast Docker image — uses a pre-compiled binary from the host.
+# Build with: ./scripts/build-fast.sh
+#
+# ~5 seconds vs ~8 minutes for the full Dockerfile.
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 1000 rustbc && \
+    mkdir -p /app/data && \
+    chown -R rustbc:rustbc /app
+
+WORKDIR /app
+
+# Copy pre-compiled binary from build context
+COPY target/x86_64-unknown-linux-gnu/release/rust-bc /usr/local/bin/rust-bc
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+USER root
+
+ENV API_PORT=8080
+ENV P2P_PORT=8081
+ENV DB_NAME=blockchain
+ENV DIFFICULTY=1
+ENV RUST_LOG=info
+
+EXPOSE 8080 8081
+VOLUME ["/app/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
