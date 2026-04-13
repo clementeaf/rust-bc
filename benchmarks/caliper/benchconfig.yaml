@@ -1,0 +1,84 @@
+# Hyperledger Caliper benchmark configuration for rust-bc.
+#
+# Measures: throughput (TPS), latency (p50/p95/p99), error rate
+# across standard blockchain operations.
+#
+# Usage:
+#   npx caliper launch manager \
+#     --caliper-benchconfig benchconfig.yaml \
+#     --caliper-networkconfig networkconfig.json \
+#     --caliper-workspace .
+
+test:
+  name: rust-bc-benchmark
+  description: Comprehensive performance benchmark for rust-bc
+  workers:
+    number: 5
+
+  rounds:
+    # ── Round 1: Simple store writes (baseline) ─────────────────────
+    - label: store-write
+      description: Write transactions to store
+      txNumber: 5000
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 200
+      workload:
+        module: workloads/store-write.js
+
+    # ── Round 2: Read operations ────────────────────────────────────
+    - label: store-read
+      description: Read transactions from store
+      txNumber: 5000
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 500
+      workload:
+        module: workloads/store-read.js
+
+    # ── Round 3: Mining throughput ──────────────────────────────────
+    - label: mining
+      description: Mine blocks with pending transactions
+      txNumber: 100
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 5
+      workload:
+        module: workloads/mine.js
+
+    # ── Round 4: Smart contract execution ───────────────────────────
+    - label: erc20-transfer
+      description: ERC-20 token transfers
+      txNumber: 2000
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 100
+      workload:
+        module: workloads/erc20-transfer.js
+
+    # ── Round 5: Mixed workload (realistic) ─────────────────────────
+    - label: mixed-workload
+      description: 60% reads, 30% writes, 10% contracts
+      txNumber: 10000
+      rateControl:
+        type: fixed-rate
+        opts:
+          tps: 300
+      workload:
+        module: workloads/mixed.js
+
+    # ── Round 6: Ramp test (find ceiling) ───────────────────────────
+    - label: ramp-throughput
+      description: Gradually increase TPS until errors
+      txNumber: 20000
+      rateControl:
+        type: linear-rate
+        opts:
+          startingTps: 50
+          finishingTps: 1000
+      workload:
+        module: workloads/store-write.js

@@ -1,0 +1,34 @@
+{
+    "name": "rust-bc-network",
+    "version": "1.0",
+    "caliper": {
+        "blockchain": "custom",
+        "command": {
+            "start": "echo 'Network assumed running'",
+            "end": "echo 'Done'"
+        }
+    },
+    "info": {
+        "blockchain": "rust-bc",
+        "consensus": "PoS + Raft ordering",
+        "cryptography": "Ed25519 / ML-DSA-65",
+        "storage": "RocksDB"
+    },
+    "nodes": [
+        {
+            "name": "peer0.org1",
+            "url": "https://127.0.0.1:8080",
+            "org": "org1"
+        },
+        {
+            "name": "peer0.org2",
+            "url": "https://127.0.0.1:8082",
+            "org": "org2"
+        },
+        {
+            "name": "orderer0",
+            "url": "https://127.0.0.1:8086",
+            "org": "orderer"
+        }
+    ]
+}
