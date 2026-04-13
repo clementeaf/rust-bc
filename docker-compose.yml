@@ -2,7 +2,7 @@ version: '3.8'
 
 x-node-defaults: &node-defaults
   image: ghcr.io/clementeaf/rust-bc:latest
-  build: .  # Fallback: local build if image not available
+  platform: linux/amd64
   restart: unless-stopped
   networks:
     - bc-net
