@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-13 (Debug build stack overflow fix)
+
+- `async_main` refactored into `async_main` + `async_main_inner` with `Box::pin` indirection
+- The 1200-line async state machine now lives on the heap instead of the thread stack
+- Fixes stack overflow that prevented `cargo run` (debug mode) from starting
+- Stack size reduced from 64 MB back to 16 MB (sufficient with heap-allocated future)
+- Release mode was unaffected (optimizations already collapsed the state machine)
+
+---
+
 ### 2026-04-12 (Security Hardening — P0/P1/P2)
 
 **P0 — ACL enforcement on legacy routes**

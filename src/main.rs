@@ -71,12 +71,13 @@ use transaction_validation::TransactionValidator;
  * Función principal - Inicia el servidor API
  */
 fn main() -> std::io::Result<()> {
-    // Actix route registration creates deeply nested generic types that
-    // exceed the default 8 MB stack. Spawn the async runtime on a thread
-    // with a 16 MB stack to accommodate.
+    // Actix route registration creates deeply nested generic types whose
+    // async state machine exceeds the default 8 MB stack in debug builds.
+    // We use a 16 MB stack (enough for release) and Box::pin the large
+    // sub-futures so that they live on the heap instead of the stack.
     let builder = std::thread::Builder::new()
         .name("main-rt".into())
-        .stack_size(32 * 1024 * 1024);
+        .stack_size(16 * 1024 * 1024);
     let handle = builder
         .spawn(|| actix_rt::System::new().block_on(async_main()))
         .expect("failed to spawn main runtime thread");
@@ -84,6 +85,13 @@ fn main() -> std::io::Result<()> {
 }
 
 async fn async_main() -> std::io::Result<()> {
+    // Box::pin moves the enormous state machine (1200+ lines of locals and
+    // await points) from the thread stack to the heap, preventing stack
+    // overflow in unoptimized debug builds.
+    Box::pin(async_main_inner()).await
+}
+
+async fn async_main_inner() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
     let difficulty = env::var("DIFFICULTY")

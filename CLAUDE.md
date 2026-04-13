@@ -22,8 +22,8 @@ cargo test write_and_read_block_roundtrip
 cargo test -- --nocapture
 
 # Start the server (default: API 8080, P2P 8081)
-cargo run
-cargo run -- 8080 8081
+cargo run --bin rust-bc
+cargo run --bin rust-bc -- 8080 8081
 
 # Lint
 cargo clippy -- -D warnings
