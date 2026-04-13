@@ -1048,8 +1048,18 @@ async fn async_main() -> std::io::Result<()> {
     }
 
     let rate_limit_config = middleware::RateLimitConfig {
-        requests_per_minute: 20,
-        requests_per_hour: 1000,
+        requests_per_minute: std::env::var("RATE_LIMIT_PER_MINUTE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(100),
+        requests_per_hour: std::env::var("RATE_LIMIT_PER_HOUR")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3000),
+        requests_per_second: std::env::var("RATE_LIMIT_PER_SECOND")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20),
     };
 
     // Parámetros de recarga TLS (para SIGHUP)

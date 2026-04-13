@@ -18,13 +18,15 @@ use std::{
 pub struct RateLimitConfig {
     pub requests_per_minute: u32,
     pub requests_per_hour: u32,
+    pub requests_per_second: u32,
 }
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
         RateLimitConfig {
             requests_per_minute: 100,
-            requests_per_hour: 1000,
+            requests_per_hour: 3000,
+            requests_per_second: 20,
         }
     }
 }
@@ -85,7 +87,7 @@ impl RateLimitInfo {
             .filter(|&&time| time > second_ago)
             .count();
 
-        if recent_requests >= 5 {
+        if recent_requests >= config.requests_per_second as usize {
             return false;
         }
 

@@ -46,6 +46,9 @@ services:
       BOOTSTRAP_NODES: "node2:8081,node3:8081"
       ANCHOR_PEERS: "org1:node1:8081,org2:node2:8081"
       ACL_MODE: "${ACL_MODE:-permissive}"
+      RATE_LIMIT_PER_SECOND: "${RATE_LIMIT_PER_SECOND:-20}"
+      RATE_LIMIT_PER_MINUTE: "${RATE_LIMIT_PER_MINUTE:-600}"
+      RATE_LIMIT_PER_HOUR: "${RATE_LIMIT_PER_HOUR:-10000}"
     volumes:
       - node1-data:/app/data
       - ./deploy/tls:/tls:ro

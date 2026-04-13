@@ -56,7 +56,7 @@ echo "[pre-flight] Node is healthy."
 
 # Create a wallet for the test
 echo "[pre-flight] Creating test wallet..."
-wallet=$($CURL -X POST "$NODE/api/v1/wallets" -H "Content-Type: application/json" 2>/dev/null)
+wallet=$($CURL -X POST "$NODE/api/v1/wallets/create" -H "Content-Type: application/json" -d '{}' 2>/dev/null)
 WALLET_ADDR=$(echo "$wallet" | jq -r '.data.address // empty' 2>/dev/null)
 if [[ -z "$WALLET_ADDR" ]]; then
     echo "WARNING: Could not create wallet. Proceeding with raw transactions."
