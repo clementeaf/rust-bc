@@ -140,6 +140,9 @@ pub struct TransactionValidator {
     pub config: ValidationConfig,
     pub sender_states: HashMap<String, SenderState>,
     pub seen_transaction_ids: HashMap<String, u64>, // tx_id -> timestamp
+    /// Content hashes to detect replayed transactions with different IDs.
+    /// Key: SHA-256 of `{from}:{to}:{amount}:{fee}:{data}`, Value: timestamp.
+    seen_content_hashes: HashMap<String, u64>,
     /// Optional persistent store for seen tx IDs (survives restarts).
     pub(crate) store: Option<std::sync::Arc<dyn crate::storage::traits::BlockStore>>,
 }
@@ -150,6 +153,7 @@ impl TransactionValidator {
             config,
             sender_states: HashMap::new(),
             seen_transaction_ids: HashMap::new(),
+            seen_content_hashes: HashMap::new(),
             store: None,
         }
     }
@@ -190,12 +194,22 @@ impl TransactionValidator {
             return result;
         }
 
-        // 2. Duplicate check
+        // 2. Duplicate check (by ID)
         if self.seen_transaction_ids.contains_key(&tx.id) {
             result.is_valid = false;
             result
                 .errors
-                .push("Transaction already seen (duplicate)".to_string());
+                .push("Transaction already seen (duplicate ID)".to_string());
+            return result;
+        }
+
+        // 2a. Content-hash duplicate check (prevents replay with different ID)
+        let content_hash = Self::content_hash(tx);
+        if self.seen_content_hashes.contains_key(&content_hash) {
+            result.is_valid = false;
+            result
+                .errors
+                .push("Transaction with identical content already seen (replay)".to_string());
             return result;
         }
 
@@ -249,6 +263,7 @@ impl TransactionValidator {
             .unwrap_or_default()
             .as_secs();
         self.seen_transaction_ids.insert(tx.id.clone(), now);
+        self.seen_content_hashes.insert(content_hash, now);
         if let Some(store) = &self.store {
             let _ = store.mark_tx_seen(&tx.id, now);
         }
@@ -269,6 +284,21 @@ impl TransactionValidator {
         }
 
         result
+    }
+
+    /// Compute a content hash of a transaction's payload (excluding ID).
+    /// Used to detect replayed transactions submitted with different UUIDs.
+    fn content_hash(tx: &Transaction) -> String {
+        use sha2::{Digest, Sha256};
+        let data = format!(
+            "{}:{}:{}:{}:{}",
+            tx.from,
+            tx.to,
+            tx.amount,
+            tx.fee,
+            tx.data.as_deref().unwrap_or(""),
+        );
+        hex::encode(Sha256::digest(data.as_bytes()))
     }
 
     /// Reject transactions whose timestamp is too far in the future or too old.
@@ -473,6 +503,8 @@ impl TransactionValidator {
             .as_secs();
 
         self.seen_transaction_ids
+            .retain(|_, &mut timestamp| now - timestamp < max_age_seconds);
+        self.seen_content_hashes
             .retain(|_, &mut timestamp| now - timestamp < max_age_seconds);
 
         // Also clean persistent store

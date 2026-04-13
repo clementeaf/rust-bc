@@ -299,15 +299,29 @@ async fn gossip_loop(
             Err(_) => continue,
         };
         for addr in chosen {
-            match open_peer_stream(&addr, tls_connector.as_deref()).await {
-                Ok(mut stream) => {
-                    if let Err(e) =
-                        tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes()).await
+            // Retry once on failure (handles transient load)
+            let mut sent = false;
+            for attempt in 0..2 {
+                if let Ok(mut stream) =
+                    open_peer_stream(&addr, tls_connector.as_deref()).await
+                {
+                    if tokio::io::AsyncWriteExt::write_all(
+                        &mut stream,
+                        msg_json.as_bytes(),
+                    )
+                    .await
+                    .is_ok()
                     {
-                        eprintln!("gossip: error sending block to {addr}: {e}");
+                        sent = true;
+                        break;
                     }
                 }
-                Err(e) => eprintln!("gossip: could not connect to {addr}: {e}"),
+                if attempt == 0 {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                }
+            }
+            if !sent {
+                log::warn!("gossip: failed to send block to {addr} after 2 attempts");
             }
         }
     }

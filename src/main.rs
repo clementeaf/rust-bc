@@ -1271,6 +1271,20 @@ async fn async_main() -> std::io::Result<()> {
         }
     });
 
+    // Anti-entropy: periodically sync with peers to recover from missed gossip
+    let node_for_antientropy = node_arc.clone();
+    let _antientropy_handle = tokio::spawn(async move {
+        // Wait for network to stabilize
+        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            if let Err(e) = node_for_antientropy.sync_with_all_peers().await {
+                log::debug!("Anti-entropy sync: {e}");
+            }
+        }
+    });
+
     // ── Graceful shutdown ─────────────────────────────────────────────────────
     //
     // Wait for the API server to finish OR a termination signal (Ctrl-C /
