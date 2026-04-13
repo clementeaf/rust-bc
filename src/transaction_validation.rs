@@ -253,7 +253,7 @@ impl TransactionValidator {
             .unwrap_or_default()
             .as_secs();
 
-        if tx.timestamp > now + self.config.max_future_drift_secs {
+        if tx.timestamp > now.saturating_add(self.config.max_future_drift_secs) {
             return Err(format!(
                 "Transaction timestamp {} is too far in the future (max drift {}s)",
                 tx.timestamp, self.config.max_future_drift_secs
