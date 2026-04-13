@@ -116,6 +116,7 @@ pub async fn store_write_credential(
     body: web::Json<crate::storage::traits::Credential>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
+    super::validation::validate_store_credential(&body)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;

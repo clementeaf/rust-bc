@@ -18,3 +18,4 @@ pub mod proposals;
 pub mod snapshots;
 pub mod transactions;
 pub mod utilities;
+pub mod validation;

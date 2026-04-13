@@ -10,6 +10,8 @@ use crate::api::models::{CreateTransactionRequest, MempoolResponse};
 use crate::app_state::AppState;
 use crate::models::Transaction;
 
+use super::validation::validate_store_transaction;
+
 /// POST /api/v1/transactions — valida y encola en el mempool.
 #[post("/transactions")]
 pub async fn create_transaction(
@@ -199,6 +201,7 @@ pub async fn store_write_transaction(
         "peer/Propose",
         &req,
     )?;
+    validate_store_transaction(&body)?;
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;
