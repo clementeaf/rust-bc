@@ -14,6 +14,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Stack size reduced from 64 MB back to 16 MB (sufficient with heap-allocated future)
 - Release mode was unaffected (optimizations already collapsed the state machine)
 
+### 2026-04-13 (E2E test suite compatibility fixes)
+
+- Force HTTP/1.1 in e2e script to avoid HTTP/2 negotiation failures with rustls
+- Prefer Homebrew curl (OpenSSL) over macOS system curl (LibreSSL) to fix `bad_record_mac` on POST requests
+- E2E result: 104 passed, 0 failed across 26 categories
+
 ---
 
 ### 2026-04-12 (Security Hardening — P0/P1/P2)

@@ -14,7 +14,14 @@ NODE3="https://127.0.0.1:8084"
 ORDERER="https://127.0.0.1:8086"
 ORDERER2="https://127.0.0.1:8088"
 ORDERER3="https://127.0.0.1:8090"
-CURL="curl -sk --max-time 30"
+# Prefer Homebrew curl (OpenSSL) over macOS system curl (LibreSSL) to avoid
+# TLS bad_record_mac errors on POST requests with rustls servers.
+if [[ -x /opt/homebrew/opt/curl/bin/curl ]]; then
+    CURL_BIN=/opt/homebrew/opt/curl/bin/curl
+else
+    CURL_BIN=curl
+fi
+CURL="$CURL_BIN -sk --http1.1 --max-time 30"
 VERBOSE="${1:-}"
 
 PASSED=0
