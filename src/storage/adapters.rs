@@ -624,6 +624,72 @@ impl BlockStore for RocksDbBlockStore {
 
         Ok(creds)
     }
+
+    fn mark_tx_seen(&self, tx_id: &str, timestamp: u64) -> StorageResult<()> {
+        let cf = self.cf_meta()?;
+        let key = format!("seen_tx:{tx_id}");
+        self.db
+            .put_cf(&cf, key.as_bytes(), timestamp.to_be_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn is_tx_seen(&self, tx_id: &str) -> StorageResult<bool> {
+        let cf = self.cf_meta()?;
+        let key = format!("seen_tx:{tx_id}");
+        let exists = self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .is_some();
+        Ok(exists)
+    }
+
+    fn load_seen_txs(&self) -> StorageResult<Vec<(String, u64)>> {
+        let cf = self.cf_meta()?;
+        let prefix = b"seen_tx:";
+        let iter = self
+            .db
+            .iterator_cf(&cf, IteratorMode::From(prefix, Direction::Forward));
+
+        let mut result = Vec::new();
+        for item in iter {
+            let (key, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            if !key.starts_with(prefix) {
+                break;
+            }
+            let tx_id = std::str::from_utf8(&key[prefix.len()..])
+                .map_err(|e| StorageError::DataCorrupted(e.to_string()))?
+                .to_string();
+            let ts = if value.len() == 8 {
+                u64::from_be_bytes(value[..8].try_into().unwrap())
+            } else {
+                0
+            };
+            result.push((tx_id, ts));
+        }
+        Ok(result)
+    }
+
+    fn cleanup_seen_txs(&self, max_age_secs: u64) -> StorageResult<u64> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let entries = self.load_seen_txs()?;
+        let cf = self.cf_meta()?;
+        let mut removed = 0u64;
+        for (tx_id, ts) in entries {
+            if now.saturating_sub(ts) > max_age_secs {
+                let key = format!("seen_tx:{tx_id}");
+                self.db
+                    .delete_cf(&cf, key.as_bytes())
+                    .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
 }
 
 impl OrgRegistry for RocksDbBlockStore {

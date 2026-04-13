@@ -152,6 +152,27 @@ pub trait BlockStore: Send + Sync {
     /// Returns an empty `Vec` when no credentials are indexed for that subject.
     fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>>;
 
+    /// Mark a transaction ID as seen (for replay prevention).
+    /// Stores `tx_id → timestamp` so it survives node restarts.
+    fn mark_tx_seen(&self, _tx_id: &str, _timestamp: u64) -> StorageResult<()> {
+        Ok(()) // No-op default for stores that don't support persistence
+    }
+
+    /// Check if a transaction ID has been seen before.
+    fn is_tx_seen(&self, _tx_id: &str) -> StorageResult<bool> {
+        Ok(false) // Default: not seen (no persistence)
+    }
+
+    /// Load all seen transaction IDs. Returns `(tx_id, timestamp)` pairs.
+    fn load_seen_txs(&self) -> StorageResult<Vec<(String, u64)>> {
+        Ok(vec![]) // Default: empty
+    }
+
+    /// Remove seen transaction IDs older than `max_age_secs`.
+    fn cleanup_seen_txs(&self, _max_age_secs: u64) -> StorageResult<u64> {
+        Ok(0) // Default: no-op
+    }
+
     /// Return a page of blocks plus the total count for pagination.
     ///
     /// Default implementation iterates `[offset, offset+limit)` by height.
@@ -223,6 +244,18 @@ impl<T: BlockStore> BlockStore for Arc<T> {
 
     fn list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)> {
         (**self).list_blocks(offset, limit)
+    }
+    fn mark_tx_seen(&self, tx_id: &str, timestamp: u64) -> StorageResult<()> {
+        (**self).mark_tx_seen(tx_id, timestamp)
+    }
+    fn is_tx_seen(&self, tx_id: &str) -> StorageResult<bool> {
+        (**self).is_tx_seen(tx_id)
+    }
+    fn load_seen_txs(&self) -> StorageResult<Vec<(String, u64)>> {
+        (**self).load_seen_txs()
+    }
+    fn cleanup_seen_txs(&self, max_age_secs: u64) -> StorageResult<u64> {
+        (**self).cleanup_seen_txs(max_age_secs)
     }
 }
 

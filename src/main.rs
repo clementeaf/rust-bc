@@ -60,7 +60,7 @@ use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
-use storage::{MemoryStore, RocksDbBlockStore};
+use storage::{BlockStore, MemoryStore, RocksDbBlockStore};
 use tls::{
     load_client_config_from_env, load_tls_config_from_env, reload_tls_config,
     tls_reload_params_from_env,
@@ -420,7 +420,7 @@ async fn async_main() -> std::io::Result<()> {
         }
     };
 
-    // Inicializar TransactionValidator
+    // Inicializar TransactionValidator (store attached later for persistence)
     let transaction_validator = Arc::new(Mutex::new(TransactionValidator::with_defaults()));
 
     let node_address = SocketAddr::from(([0, 0, 0, 0], p2p_port));
@@ -678,8 +678,25 @@ async fn async_main() -> std::io::Result<()> {
         None
     };
 
+    // Attach persistent store to TransactionValidator for replay prevention
+    if let Some(ref db) = shared_rocksdb {
+        let mut tv = transaction_validator
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Ok(entries) = db.load_seen_txs() {
+            let count = entries.len();
+            for (tx_id, ts) in entries {
+                tv.seen_transaction_ids.insert(tx_id, ts);
+            }
+            if count > 0 {
+                log::info!("Loaded {count} seen transaction IDs from RocksDB");
+            }
+        }
+        tv.store = Some(db.clone());
+    }
+
     if shared_rocksdb.is_some() {
-        log::info!("Services: persistent (RocksDB) — orgs, policies, ACLs, CRL, chaincode, collections, private data");
+        log::info!("Services: persistent (RocksDB) — orgs, policies, ACLs, CRL, chaincode, collections, private data, seen tx IDs");
     } else {
         log::info!("Services: in-memory — data will be lost on restart");
     }
@@ -1072,7 +1089,7 @@ async fn async_main() -> std::io::Result<()> {
     let json_config = web::JsonConfig::default()
         .limit(1_048_576) // 1MB
         .error_handler(|err, _req| {
-            eprintln!("[JSON ERROR] Error al deserializar JSON: {err:?}");
+            log::debug!("[JSON ERROR] Error al deserializar JSON: {err:?}");
             actix_web::error::ErrorBadRequest(format!("JSON deserialization error: {err}"))
         });
 
@@ -1100,9 +1117,9 @@ async fn async_main() -> std::io::Result<()> {
             .wrap(crate::api::middleware::InputValidationMiddleware::default())
             .app_data(web::Data::new(app_state.clone()))
             .app_data(json_config.clone())
+            .app_data(web::PayloadConfig::default().limit(10_485_760)) // 10MB max for raw payloads (chaincode)
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
-                eprintln!("[JSON CONFIG ERROR] Error en deserialización: {err:?}");
-                eprintln!("[JSON CONFIG ERROR] Request path: {}", _req.path());
+                log::debug!("[JSON] Deserialization error on {}: {err:?}", _req.path());
                 actix_web::error::ErrorBadRequest(format!("JSON error: {err}"))
             }))
             .configure(config_routes)

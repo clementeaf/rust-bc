@@ -820,6 +820,14 @@ impl Node {
                     let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
                     sec.record_valid_message(&peer_addr_str, n);
                 }
+            } else {
+                // Failed to deserialize — penalize peer reputation
+                let mut sec = net_security.lock().unwrap_or_else(|e| e.into_inner());
+                sec.record_invalid_message(&peer_addr_str, 10);
+                if sec.peer_scores.get(&peer_addr_str).is_some_and(|s| s.is_banned()) {
+                    log::warn!("P2P peer {peer_addr_str} banned after invalid messages");
+                    break;
+                }
             }
         }
         Ok(())

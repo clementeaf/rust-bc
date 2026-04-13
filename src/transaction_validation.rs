@@ -140,6 +140,8 @@ pub struct TransactionValidator {
     pub config: ValidationConfig,
     pub sender_states: HashMap<String, SenderState>,
     pub seen_transaction_ids: HashMap<String, u64>, // tx_id -> timestamp
+    /// Optional persistent store for seen tx IDs (survives restarts).
+    pub(crate) store: Option<std::sync::Arc<dyn crate::storage::traits::BlockStore>>,
 }
 
 impl TransactionValidator {
@@ -148,11 +150,31 @@ impl TransactionValidator {
             config,
             sender_states: HashMap::new(),
             seen_transaction_ids: HashMap::new(),
+            store: None,
         }
     }
 
     pub fn with_defaults() -> Self {
         TransactionValidator::new(ValidationConfig::default())
+    }
+
+    /// Attach a persistent store and load previously seen transaction IDs.
+    #[allow(dead_code)]
+    pub fn with_store(
+        mut self,
+        store: std::sync::Arc<dyn crate::storage::traits::BlockStore>,
+    ) -> Self {
+        if let Ok(entries) = store.load_seen_txs() {
+            let count = entries.len();
+            for (tx_id, ts) in entries {
+                self.seen_transaction_ids.insert(tx_id, ts);
+            }
+            if count > 0 {
+                log::info!("Loaded {count} seen transaction IDs from persistent store");
+            }
+        }
+        self.store = Some(store);
+        self
     }
 
     /**
@@ -221,12 +243,15 @@ impl TransactionValidator {
             return result;
         }
 
-        // Record transaction if valid
+        // Record transaction if valid (in-memory + persistent store)
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
         self.seen_transaction_ids.insert(tx.id.clone(), now);
+        if let Some(store) = &self.store {
+            let _ = store.mark_tx_seen(&tx.id, now);
+        }
 
         // Initialize sender state if needed
         if !self.sender_states.contains_key(&tx.from) {
@@ -449,6 +474,11 @@ impl TransactionValidator {
 
         self.seen_transaction_ids
             .retain(|_, &mut timestamp| now - timestamp < max_age_seconds);
+
+        // Also clean persistent store
+        if let Some(store) = &self.store {
+            let _ = store.cleanup_seen_txs(max_age_seconds);
+        }
     }
 
     /**
