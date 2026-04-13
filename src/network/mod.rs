@@ -2382,9 +2382,23 @@ impl Node {
         let msg_json = serde_json::to_string(&get_blocks_msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
 
-        let mut buffer = [0; 4096];
-        let n = stream.read(&mut buffer).await?;
-        let response_str = String::from_utf8_lossy(&buffer[..n]);
+        // Use the sync buffer (default 4 MB) to handle large chains.
+        let mut buffer = vec![0u8; p2p_sync_buffer_size()];
+        let mut total_read = 0;
+        // Read until connection closes or buffer is full.
+        loop {
+            let n = stream.read(&mut buffer[total_read..]).await?;
+            if n == 0 {
+                break;
+            }
+            total_read += n;
+            // Try parsing after each read — the peer may close the
+            // connection after sending the full message.
+            if serde_json::from_slice::<Message>(&buffer[..total_read]).is_ok() {
+                break;
+            }
+        }
+        let response_str = String::from_utf8_lossy(&buffer[..total_read]);
 
         if let Ok(Message::Blocks(blocks)) = serde_json::from_str(&response_str) {
             let mut blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
