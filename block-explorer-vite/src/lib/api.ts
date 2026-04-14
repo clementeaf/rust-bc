@@ -1,0 +1,273 @@
+import axios from 'axios';
+
+const API_URL = '/api/v1';
+
+const client = axios.create({ baseURL: API_URL, timeout: 10000 });
+
+function unwrap<T>(body: unknown): T {
+  const r = body as Record<string, unknown>;
+  if (r.status === 'Success' && r.data != null) return r.data as T;
+  if (r.success === true && r.data != null) return r.data as T;
+  const msg =
+    typeof r.message === 'string' ? r.message : 'Request failed';
+  throw new Error(msg);
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface Block {
+  index: number;
+  timestamp: number;
+  transactions: Transaction[];
+  previous_hash: string;
+  hash: string;
+  nonce: number;
+  difficulty: number;
+  merkle_root: string;
+}
+
+export interface Transaction {
+  id: string;
+  from: string;
+  to: string;
+  amount: number;
+  fee: number;
+  data?: string | null;
+  timestamp: number;
+  signature: string;
+}
+
+export interface Wallet {
+  address: string;
+  balance: number;
+  public_key?: string;
+}
+
+export interface Stats {
+  blockchain: {
+    block_count: number;
+    total_transactions: number;
+    difficulty: number;
+    latest_block_hash: string;
+    latest_block_index: number;
+    total_coinbase: number;
+    unique_addresses: number;
+  };
+  mempool: { pending_transactions: number; total_fees_pending: number };
+  network: { connected_peers: number };
+}
+
+export interface Validator {
+  address: string;
+  staked_amount: number;
+  is_active: boolean;
+  total_rewards: number;
+  created_at: number;
+  last_validated_block: number;
+  validation_count: number;
+  slash_count: number;
+  unstaking_requested: boolean;
+  unstake_start_time: number | null;
+}
+
+export interface SmartContract {
+  address: string;
+  code: string;
+  state: Record<string, unknown>;
+  created_at: number;
+  updated_at: number;
+  update_sequence: number;
+}
+
+export interface AirdropStatistics {
+  total_nodes: number;
+  eligible_nodes: number;
+  claimed_nodes: number;
+  pending_claims: number;
+  total_distributed: number;
+  airdrop_amount_per_node: number;
+  max_eligible_nodes: number;
+  tiers_count: number;
+}
+
+export interface AirdropTier {
+  tier_id: number;
+  name: string;
+  min_block_index: number;
+  max_block_index: number;
+  base_amount: number;
+  bonus_per_block: number;
+  bonus_per_uptime_day: number;
+}
+
+export interface NodeTracking {
+  node_address: string;
+  blocks_validated: number;
+  is_eligible: boolean;
+  airdrop_claimed: boolean;
+  eligibility_tier: number;
+  uptime_seconds: number;
+}
+
+export interface IdentityRecord {
+  did: string;
+  created_at: number;
+  updated_at: number;
+  status: string;
+}
+
+export interface Credential {
+  id: string;
+  issuer_did: string;
+  subject_did: string;
+  cred_type: string;
+  issued_at: number;
+  expires_at: number;
+  revoked_at: number | null;
+}
+
+// ── API calls ───────────────────────────────────────────────────────────────
+
+export const getBlocks = () =>
+  client.get('/blocks').then((r) => unwrap<Block[]>(r.data));
+
+export const getBlockByHash = (hash: string) =>
+  client.get(`/blocks/${hash}`).then((r) => unwrap<Block>(r.data));
+
+export const getBlockByIndex = (idx: number) =>
+  client.get(`/blocks/index/${idx}`).then((r) => unwrap<Block>(r.data));
+
+export const getWallet = (addr: string) =>
+  client.get(`/wallets/${addr}`).then((r) => unwrap<Wallet>(r.data));
+
+export const getWalletTransactions = (addr: string) =>
+  client.get(`/wallets/${addr}/transactions`).then((r) => {
+    try {
+      return unwrap<Transaction[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const getStats = () =>
+  client.get('/stats').then((r) => unwrap<Stats>(r.data));
+
+export const getMempool = () =>
+  client.get('/mempool').then((r) => {
+    const d = unwrap<{ count: number; transactions: Transaction[] } | Transaction[]>(r.data);
+    return Array.isArray(d) ? d : d.transactions;
+  });
+
+export const getValidators = () =>
+  client.get('/staking/validators').then((r) => {
+    try {
+      return unwrap<Validator[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const getAllContracts = () =>
+  client.get('/contracts').then((r) => {
+    try {
+      return unwrap<SmartContract[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const getContract = (addr: string) =>
+  client.get(`/contracts/${addr}`).then((r) => unwrap<SmartContract>(r.data));
+
+export const getAirdropStatistics = () =>
+  client.get('/airdrop/statistics').then((r) => unwrap<AirdropStatistics>(r.data));
+
+export const getAirdropTiers = () =>
+  client.get('/airdrop/tiers').then((r) => {
+    try {
+      return unwrap<AirdropTier[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const getEligibleNodes = () =>
+  client.get('/airdrop/eligible').then((r) => {
+    try {
+      return unwrap<NodeTracking[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const searchByHash = async (
+  hash: string,
+): Promise<{ type: 'block' | 'contract' | 'wallet'; id: string }> => {
+  try {
+    await getBlockByHash(hash);
+    return { type: 'block', id: hash };
+  } catch {
+    try {
+      await getContract(hash);
+      return { type: 'contract', id: hash };
+    } catch {
+      await getWallet(hash);
+      return { type: 'wallet', id: hash };
+    }
+  }
+};
+
+// Wallet creation & mining (for demo)
+export const createWallet = () =>
+  client.post('/wallets/create', {}).then((r) => unwrap<Wallet>(r.data));
+
+export const mineBlock = (minerAddress: string) =>
+  client.post('/mine', { miner_address: minerAddress }).then((r) => r.data);
+
+export const sendTransaction = (from: string, to: string, amount: number, fee: number) =>
+  client.post('/transactions', { from, to, amount, fee }).then((r) => r.data);
+
+// ── Identity & Credentials ──────────────────────────────────────────────────
+
+export const createIdentity = (did: string, status: string) => {
+  const now = Math.floor(Date.now() / 1000);
+  return client
+    .post('/store/identities', {
+      did,
+      created_at: now,
+      updated_at: now,
+      status,
+    })
+    .then((r) => unwrap<IdentityRecord>(r.data));
+};
+
+export const getIdentity = (did: string) =>
+  client.get(`/store/identities/${encodeURIComponent(did)}`).then((r) => unwrap<IdentityRecord>(r.data));
+
+export const createCredential = (
+  id: string,
+  issuer_did: string,
+  subject_did: string,
+  cred_type: string,
+  issued_at: number,
+  expires_at: number,
+) =>
+  client
+    .post('/store/credentials', {
+      id,
+      issuer_did,
+      subject_did,
+      cred_type,
+      issued_at,
+      expires_at,
+      revoked_at: null,
+    })
+    .then((r) => unwrap<Credential>(r.data));
+
+export const getCredential = (credId: string) =>
+  client.get(`/store/credentials/${encodeURIComponent(credId)}`).then((r) => unwrap<Credential>(r.data));
+
+export const getCredentialsBySubject = (subjectDid: string) =>
+  client
+    .get(`/store/credentials/by-subject/${encodeURIComponent(subjectDid)}`)
+    .then((r) => unwrap<Credential[]>(r.data));

@@ -422,7 +422,7 @@ impl Node {
     pub fn p2p_address(&self) -> String {
         self.announce_address
             .clone()
-            .unwrap_or_else(|| self.p2p_address())
+            .unwrap_or_else(|| self.address.to_string())
     }
 
     /**

@@ -25,6 +25,9 @@ cargo test -- --nocapture
 cargo run --bin rust-bc
 cargo run --bin rust-bc -- 8080 8081
 
+# Interactive demo (no Docker needed)
+./scripts/try-it.sh
+
 # Lint
 cargo clippy -- -D warnings
 cargo fmt
@@ -41,7 +44,7 @@ The original in-memory `Blockchain` struct plus a file-backed `BlockStorage`. Lo
 Clean trait-based persistence introduced in Fases I–VI:
 - `traits.rs` — `BlockStore` trait + data types (`Block`, `Transaction`, `IdentityRecord`, `Credential`). A blanket `impl<T: BlockStore> BlockStore for Arc<T>` lets `Arc<MemoryStore>` be used as `Box<dyn BlockStore>`.
 - `memory.rs` — `MemoryStore`: HashMap-backed, used as default and in tests.
-- `adapters.rs` — `RocksDbBlockStore`: Column Families (`blocks`, `transactions`, `identities`, `credentials`, `meta`, `tx_by_block`). Secondary index `tx_by_block` uses key `{012-padded-height}:{tx_id}` for prefix scans.
+- `adapters.rs` — `RocksDbBlockStore`: Column Families (`blocks`, `transactions`, `identities`, `credentials`, `meta`, `tx_by_block`). On open, static names are merged with `RocksDB::list_cf` so extra families on disk (e.g. `private_*`) are opened. Secondary index `tx_by_block` uses key `{012-padded-height}:{tx_id}` for prefix scans.
 - `errors.rs` — `StorageError` enum.
 - `comprehensive_tests.rs` — cross-store integration tests.
 
@@ -84,7 +87,16 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/consensus/` — DAG, fork choice, validator scheduling
 - `src/identity/` — DID + key management + pluggable signing (`SigningProvider` trait with Ed25519 and ML-DSA-65 implementations)
 - `src/tls.rs`, `src/pki.rs` — mutual TLS, certificate provisioning
-- `src/network.rs` — P2P node, peer discovery
+- `src/network/mod.rs` — P2P node, peer discovery
+
+### Block explorers (optional UIs)
+
+| Path | Stack | Notes |
+|---|---|---|
+| `block-explorer-vite/` | Vite + React | `npm install` / `npm run dev`; proxies `/api` to the node (HTTPS target and env in `vite.config.ts`). |
+| `block-explorer/` | Next.js | Older explorer; same API contract. |
+
+Neither is required to run the node.
 
 ## Environment variables
 

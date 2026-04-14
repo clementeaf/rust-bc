@@ -16,6 +16,7 @@ use rocksdb::{
 };
 
 type RocksDB = DBWithThreadMode<MultiThreaded>;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -93,16 +94,26 @@ impl RocksDbBlockStore {
     /// All five column families are created automatically when missing,
     /// so this works on both new and existing databases.
     pub fn new(path: impl AsRef<Path>) -> StorageResult<Self> {
+        let path = path.as_ref();
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.create_missing_column_families(true);
 
-        let cf_descriptors: Vec<ColumnFamilyDescriptor> = ALL_CFS
-            .iter()
-            .map(|&name| ColumnFamilyDescriptor::new(name, Options::default()))
+        // Static CFs plus any already on disk (e.g. `private_*` from PrivateDataStore::ensure_private_cf).
+        // Opening without listing existing CFs causes: "Column families not opened: private_...".
+        let mut cf_names: BTreeSet<String> = ALL_CFS.iter().map(|s| (*s).to_string()).collect();
+        if let Ok(existing) = RocksDB::list_cf(&opts, path) {
+            for name in existing {
+                cf_names.insert(name);
+            }
+        }
+
+        let cf_descriptors: Vec<ColumnFamilyDescriptor> = cf_names
+            .into_iter()
+            .map(|name| ColumnFamilyDescriptor::new(name, Options::default()))
             .collect();
 
-        let db = RocksDB::open_cf_descriptors(&opts, path.as_ref(), cf_descriptors)
+        let db = RocksDB::open_cf_descriptors(&opts, path, cf_descriptors)
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
 
         Ok(RocksDbBlockStore { db })

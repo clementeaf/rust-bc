@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-14
+
+**Node**
+- Fix infinite recursion in `Node::p2p_address()` when no announce address is set (fallback is `address`).
+- RocksDB open now unions static CFs with `list_cf` on disk so dynamic families (e.g. `private_*` from private data) open without startup errors.
+
+**Tooling**
+- `docker-compose.yml`: removed obsolete top-level `version` (Compose v2).
+- `scripts/try-it.sh`: local demo without Docker.
+- `tests/fuzz_tests.proptest-regressions`: proptest regression seeds.
+
+**Explorer**
+- `block-explorer-vite/`: Vite + React UI for the HTTP API; dev server proxies API calls to the node (see `vite.config.ts` / `VITE_API_PROXY_TARGET`). Plain-language flows for identities and credentials.
+
+---
+
 ### 2026-04-13 (Debug build stack overflow fix)
 
 - `async_main` refactored into `async_main` + `async_main_inner` with `Box::pin` indirection
