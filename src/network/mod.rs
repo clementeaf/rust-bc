@@ -302,15 +302,10 @@ async fn gossip_loop(
             // Retry once on failure (handles transient load)
             let mut sent = false;
             for attempt in 0..2 {
-                if let Ok(mut stream) =
-                    open_peer_stream(&addr, tls_connector.as_deref()).await
-                {
-                    if tokio::io::AsyncWriteExt::write_all(
-                        &mut stream,
-                        msg_json.as_bytes(),
-                    )
-                    .await
-                    .is_ok()
+                if let Ok(mut stream) = open_peer_stream(&addr, tls_connector.as_deref()).await {
+                    if tokio::io::AsyncWriteExt::write_all(&mut stream, msg_json.as_bytes())
+                        .await
+                        .is_ok()
                     {
                         sent = true;
                         break;
