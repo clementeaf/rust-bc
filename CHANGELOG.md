@@ -18,6 +18,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `ConsensusEngine.with_bft()` — BFT mode validates CommitQC on non-genesis blocks (phase, hash match, quorum)
 - 76 BFT unit tests, 143 total consensus tests
 
+**Consensus — Wire protocol & backend abstraction (Phase 4)**
+- `consensus::backend` — `ConsensusBackend` trait (Raft/BFT selection), `ConsensusMode` enum, `CONSENSUS_MODE` env var
+- P2P `Message` enum: `BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange` variants
+- 147 total consensus tests
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 

@@ -144,6 +144,32 @@ pub enum Message {
         /// Whether the peer accepted and stored the data.
         accepted: bool,
     },
+
+    // ── BFT consensus messages ──────────────────────────────────────────────
+
+    /// Leader broadcasts a block proposal for a BFT round.
+    BftProposal {
+        round: u64,
+        block_hash: [u8; 32],
+        leader_id: String,
+        /// Serialized block data (the full proposed block).
+        block_data: Vec<u8>,
+    },
+    /// Validator vote for a BFT phase (Prepare / PreCommit / Commit).
+    BftVote(crate::consensus::bft::types::VoteMessage),
+    /// A formed quorum certificate broadcast to peers.
+    BftQuorumCertificate(crate::consensus::bft::types::QuorumCertificate),
+    /// View change: validator signals round timeout and proposes advancing.
+    BftViewChange {
+        /// The round that timed out.
+        timed_out_round: u64,
+        /// The new round being proposed.
+        new_round: u64,
+        /// Validator sending the view change.
+        voter_id: String,
+        /// Highest commit QC this validator has seen (proof of progress).
+        highest_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
+    },
 }
 
 /**
@@ -1687,6 +1713,16 @@ impl Node {
             Message::PrivateDataAck { .. } => {
                 // Acks are read directly by the dissemination logic via
                 // send_and_wait(). Ignore unsolicited acks.
+                Ok(None)
+            }
+
+            // BFT consensus messages — handled by the BFT round manager
+            // outside of the generic message handler. Log and ignore here.
+            Message::BftProposal { .. }
+            | Message::BftVote(_)
+            | Message::BftQuorumCertificate(_)
+            | Message::BftViewChange { .. } => {
+                log::debug!("BFT message received in generic handler — ignored (handled by BFT subsystem)");
                 Ok(None)
             }
         }

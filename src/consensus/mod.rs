@@ -7,6 +7,7 @@
 //! - Byzantine fault tolerance
 //! - Thread-safe parallel mining
 
+pub mod backend;
 pub mod bft;
 pub mod dag;
 pub mod engine;

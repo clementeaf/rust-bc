@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use super::types::{BftPhase, QcError, QuorumCertificate, VoteMessage};
+use super::types::{QcError, QuorumCertificate, VoteMessage};
 
 /// Minimum number of validators required for Byzantine fault tolerance.
 /// With n < 4, f = 0 and the network has zero Byzantine tolerance.
@@ -155,7 +155,7 @@ impl SignatureVerifier for RejectVoterVerifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::consensus::bft::types::VoteMessage;
+    use crate::consensus::bft::types::{BftPhase, VoteMessage};
 
     fn validators(n: usize) -> Vec<String> {
         (0..n).map(|i| format!("v{i}")).collect()
