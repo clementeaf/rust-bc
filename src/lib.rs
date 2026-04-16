@@ -49,6 +49,7 @@ pub mod ordering;
 pub mod pki;
 pub mod private_data;
 pub mod tls;
+pub mod tokenomics;
 pub mod transaction;
 
 pub use app_state::AppState;

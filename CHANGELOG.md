@@ -35,6 +35,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `Gateway.commit_block_parallel()` — batch commit integrating ordering, parallel execution, block persistence, and event emission; returns `BatchTxResult` with parallelism metrics
 - 28 new tests (15 parallel + 9 executor + 4 gateway integration), 30 total gateway tests
 
+**Protocol-Native Tokenomics (Phase 3)**
+- `tokenomics::economics` — 100M NOTA supply cap, halving issuance curve (50→25→12...), capped block rewards, 80/20 fee split (burn/proposer), EIP-1559 dynamic base fee, epoch tracking, `process_block()` state machine
+- `tokenomics::storage_deposit` — `DepositLedger` for lock/refund lifecycle: proportional to data size, min deposit floor, delta refund on updates, full refund on delete
+- 44 new tests (24 economics + 20 storage deposit)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
