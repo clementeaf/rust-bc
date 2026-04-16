@@ -43,6 +43,7 @@ pub mod channel;
 pub mod discovery;
 pub mod endorsement;
 pub mod events;
+pub mod bridge;
 pub mod gateway;
 pub mod msp;
 pub mod ordering;

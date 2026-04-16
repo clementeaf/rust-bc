@@ -40,6 +40,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `tokenomics::storage_deposit` — `DepositLedger` for lock/refund lifecycle: proportional to data size, min deposit floor, delta refund on updates, full refund on delete
 - 44 new tests (24 economics + 20 storage deposit)
 
+**Cross-Chain Bridge (Phase 4)**
+- `bridge::types` — chain registry, message envelope with routing/sequencing, transfer records, inclusion proof structures
+- `bridge::escrow` — `EscrowVault` for lock/release (outbound) and mint/burn (inbound) with multi-chain wrapped token balances
+- `bridge::verifier` — Merkle tree builder and inclusion proof verification (SHA-256, power-of-two padding, tamper detection)
+- `bridge::protocol` — `BridgeEngine` orchestrating chain registry, outbound initiate, inbound verify+mint, replay protection, confirmation threshold checks
+- 43 new tests (5 types + 16 escrow + 11 verifier + 11 protocol)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
