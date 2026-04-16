@@ -91,6 +91,8 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/identity/` — DID + key management + pluggable signing (`SigningProvider` trait with Ed25519 and ML-DSA-65 implementations)
 - `src/tls.rs`, `src/pki.rs` — mutual TLS, certificate provisioning
 - `src/network/mod.rs` — P2P node, peer discovery, BFT message types (`BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange`)
+- `src/transaction/parallel.rs` — conflict detector (RAW/WAW/WAR) + wave scheduler; groups non-conflicting txs for concurrent execution
+- `src/transaction/executor.rs` — wave-parallel block executor: MVCC validate per wave, apply writes in deterministic order, `to_legacy_results()` adapter
 
 ### Block explorers (optional UIs)
 
