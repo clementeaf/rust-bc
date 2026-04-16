@@ -11,7 +11,7 @@
 //! - **WAR (write-after-read)**: TX_b writes a key that TX_a reads → TX_b depends on TX_a
 //! - **RAR (read-after-read)**: no conflict — both can run in parallel
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::rwset::ReadWriteSet;
 
@@ -82,6 +82,7 @@ pub fn schedule_batch(txs: &[TxWithRwSet]) -> BatchSchedule {
     //    Only look at i < j (earlier txs in batch order).
     let mut deps: Vec<HashSet<usize>> = vec![HashSet::new(); n];
 
+    #[allow(clippy::needless_range_loop)]
     for j in 1..n {
         let (reads_j, writes_j) = &key_sets[j];
         for i in 0..j {

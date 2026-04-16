@@ -87,6 +87,17 @@ pub enum ProposalError {
     NotProposer,
 }
 
+/// Parameters for submitting a new proposal.
+pub struct SubmitParams<'a> {
+    pub proposer: &'a str,
+    pub action: ProposalAction,
+    pub description: &'a str,
+    pub deposit: u64,
+    pub required_deposit: u64,
+    pub current_height: u64,
+    pub voting_period: u64,
+}
+
 /// Proposal store.
 pub struct ProposalStore {
     proposals: Mutex<HashMap<ProposalId, Proposal>>,
@@ -107,14 +118,17 @@ impl ProposalStore {
     /// balance and deduct the deposit externally.
     pub fn submit(
         &self,
-        proposer: &str,
-        action: ProposalAction,
-        description: &str,
-        deposit: u64,
-        required_deposit: u64,
-        current_height: u64,
-        voting_period: u64,
+        params: SubmitParams<'_>,
     ) -> Result<ProposalId, ProposalError> {
+        let SubmitParams {
+            proposer,
+            action,
+            description,
+            deposit,
+            required_deposit,
+            current_height,
+            voting_period,
+        } = params;
         if deposit < required_deposit {
             return Err(ProposalError::InsufficientDeposit {
                 required: required_deposit,
@@ -299,13 +313,33 @@ mod tests {
         }
     }
 
+    fn sp<'a>(
+        proposer: &'a str,
+        action: ProposalAction,
+        desc: &'a str,
+        deposit: u64,
+        required: u64,
+        height: u64,
+        period: u64,
+    ) -> SubmitParams<'a> {
+        SubmitParams {
+            proposer,
+            action,
+            description: desc,
+            deposit,
+            required_deposit: required,
+            current_height: height,
+            voting_period: period,
+        }
+    }
+
     // --- submit ---
 
     #[test]
     fn submit_proposal() {
         let s = store();
         let id = s
-            .submit("alice", param_change("min_tx_fee", 5), "raise fee", 10_000, 10_000, 100, 1000)
+            .submit(sp("alice", param_change("min_tx_fee", 5), "raise fee", 10_000, 10_000, 100, 1000))
             .unwrap();
         assert_eq!(id, 1);
 
@@ -320,7 +354,7 @@ mod tests {
     fn submit_insufficient_deposit() {
         let s = store();
         let err = s
-            .submit("alice", param_change("min_tx_fee", 5), "", 100, 10_000, 0, 1000)
+            .submit(sp("alice", param_change("min_tx_fee", 5), "", 100, 10_000, 0, 1000))
             .unwrap_err();
         assert!(matches!(err, ProposalError::InsufficientDeposit { .. }));
     }
@@ -329,7 +363,7 @@ mod tests {
     fn submit_empty_changes_rejected() {
         let s = store();
         let action = ProposalAction::ParamChange { changes: vec![] };
-        let err = s.submit("alice", action, "", 10_000, 10_000, 0, 1000).unwrap_err();
+        let err = s.submit(sp("alice", action, "", 10_000, 10_000, 0, 1000)).unwrap_err();
         assert!(matches!(err, ProposalError::EmptyChanges));
     }
 
@@ -340,15 +374,15 @@ mod tests {
             title: "Upgrade plan".into(),
             description: "Details...".into(),
         };
-        let id = s.submit("alice", action, "signal", 10_000, 10_000, 0, 1000).unwrap();
+        let id = s.submit(sp("alice", action, "signal", 10_000, 10_000, 0, 1000)).unwrap();
         assert_eq!(s.get(id).unwrap().status, ProposalStatus::Voting);
     }
 
     #[test]
     fn ids_increment() {
         let s = store();
-        let id1 = s.submit("a", param_change("k", 1), "", 100, 100, 0, 10).unwrap();
-        let id2 = s.submit("b", param_change("k", 2), "", 100, 100, 0, 10).unwrap();
+        let id1 = s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 10)).unwrap();
+        let id2 = s.submit(sp("b", param_change("k", 2), "", 100, 100, 0, 10)).unwrap();
         assert_eq!(id1, 1);
         assert_eq!(id2, 2);
     }
@@ -358,7 +392,7 @@ mod tests {
     #[test]
     fn pass_and_execute_lifecycle() {
         let s = store();
-        let id = s.submit("alice", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
+        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
 
         // Can't pass before voting ends.
         let err = s.mark_passed(id, 50, 50).unwrap_err();
@@ -384,7 +418,7 @@ mod tests {
     #[test]
     fn reject_proposal() {
         let s = store();
-        let id = s.submit("alice", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
+        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
         s.mark_rejected(id, 100).unwrap();
         assert_eq!(s.get(id).unwrap().status, ProposalStatus::Rejected);
     }
@@ -392,7 +426,7 @@ mod tests {
     #[test]
     fn reject_already_passed_fails() {
         let s = store();
-        let id = s.submit("alice", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
+        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
         s.mark_passed(id, 100, 50).unwrap();
         let err = s.mark_rejected(id, 110).unwrap_err();
         assert!(matches!(err, ProposalError::InvalidState { .. }));
@@ -403,7 +437,7 @@ mod tests {
     #[test]
     fn cancel_by_proposer() {
         let s = store();
-        let id = s.submit("alice", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
+        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
         let p = s.cancel(id, "alice", 50).unwrap();
         assert_eq!(p.status, ProposalStatus::Cancelled);
     }
@@ -411,7 +445,7 @@ mod tests {
     #[test]
     fn cancel_by_non_proposer_fails() {
         let s = store();
-        let id = s.submit("alice", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
+        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
         let err = s.cancel(id, "bob", 50).unwrap_err();
         assert!(matches!(err, ProposalError::NotProposer));
     }
@@ -421,9 +455,9 @@ mod tests {
     #[test]
     fn list_by_status() {
         let s = store();
-        s.submit("a", param_change("k", 1), "", 100, 100, 0, 100).unwrap();
-        s.submit("b", param_change("k", 2), "", 100, 100, 0, 100).unwrap();
-        let id3 = s.submit("c", param_change("k", 3), "", 100, 100, 0, 100).unwrap();
+        s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        s.submit(sp("b", param_change("k", 2), "", 100, 100, 0, 100)).unwrap();
+        let id3 = s.submit(sp("c", param_change("k", 3), "", 100, 100, 0, 100)).unwrap();
         s.mark_rejected(id3, 100).unwrap();
 
         assert_eq!(s.list_by_status(ProposalStatus::Voting).len(), 2);

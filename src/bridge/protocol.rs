@@ -67,7 +67,7 @@ impl ChainRegistry {
             .lock()
             .unwrap()
             .get(&chain_id.0)
-            .map_or(false, |c| c.active)
+            .is_some_and(|c| c.active)
     }
 }
 

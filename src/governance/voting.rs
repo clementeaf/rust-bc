@@ -375,7 +375,15 @@ mod tests {
             changes: vec![(keys::MIN_TX_FEE.to_string(), ParamValue::U64(5))],
         };
         let pid = proposals
-            .submit("alice", action, "raise min fee to 5", deposit, deposit, 1000, voting_period)
+            .submit(super::super::proposals::SubmitParams {
+                proposer: "alice",
+                action,
+                description: "raise min fee to 5",
+                deposit,
+                required_deposit: deposit,
+                current_height: 1000,
+                voting_period,
+            })
             .unwrap();
 
         // 2. Validators vote (total stake = 10000).

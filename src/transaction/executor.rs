@@ -14,12 +14,9 @@
 //! Determinism guarantee: transactions within a wave are always applied in
 //! ascending index order, so all validators produce identical state transitions.
 
-use std::sync::Arc;
-
 use super::endorsed::EndorsedTransaction;
 use super::mvcc;
 use super::parallel::{schedule_batch, BatchSchedule, TxWithRwSet};
-use super::rwset::ReadWriteSet;
 use crate::storage::traits::Transaction;
 use crate::storage::WorldState;
 
@@ -155,7 +152,7 @@ mod tests {
     use crate::endorsement::types::Endorsement;
     use crate::storage::MemoryWorldState;
     use crate::transaction::proposal::TransactionProposal;
-    use crate::transaction::rwset::{KVRead, KVWrite};
+    use crate::transaction::rwset::{KVRead, KVWrite, ReadWriteSet};
 
     fn ws() -> MemoryWorldState {
         MemoryWorldState::new()
