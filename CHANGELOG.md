@@ -6,6 +6,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-16
+
+**Consensus — BFT primitives (Phase 1)**
+- New `consensus::bft` module with HotStuff-inspired BFT types
+- `VoteMessage`: validator vote with phase-aware signing payload (domain separation)
+- `QuorumCertificate`: aggregated proof with `(phase, block_hash, round)` consistency checks
+- `BftPhase` enum: Prepare → PreCommit → Commit → Decide
+- `QuorumValidator`: verifies quorum threshold (`2f + 1`), duplicate detection, signature validation
+- `SignatureVerifier` trait: pluggable signature backend (Ed25519 / ML-DSA-65)
+- `ensure_bft_viable()` guard: rejects validator sets with fewer than 4 nodes
+- `HashSet`-backed validator registry for O(1) lookup and dedup
+- 35 unit tests covering quorum math, BFT tolerance boundaries, and attack vectors
+
+**Documentation**
+- `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
+
 ### 2026-04-14
 
 **Node**
