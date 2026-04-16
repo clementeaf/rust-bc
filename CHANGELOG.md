@@ -8,16 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-16
 
-**Consensus — BFT primitives (Phase 1)**
-- New `consensus::bft` module with HotStuff-inspired BFT types
-- `VoteMessage`: validator vote with phase-aware signing payload (domain separation)
-- `QuorumCertificate`: aggregated proof with `(phase, block_hash, round)` consistency checks
-- `BftPhase` enum: Prepare → PreCommit → Commit → Decide
-- `QuorumValidator`: verifies quorum threshold (`2f + 1`), duplicate detection, signature validation
-- `SignatureVerifier` trait: pluggable signature backend (Ed25519 / ML-DSA-65)
-- `ensure_bft_viable()` guard: rejects validator sets with fewer than 4 nodes
-- `HashSet`-backed validator registry for O(1) lookup and dedup
-- 35 unit tests covering quorum math, BFT tolerance boundaries, and attack vectors
+**Consensus — BFT (Phases 1–3)**
+- `consensus::bft::types` — `VoteMessage`, `QuorumCertificate`, `BftPhase` (Prepare→PreCommit→Commit→Decide), phase-aware signing payload for domain separation
+- `consensus::bft::quorum` — `QuorumValidator` (2f+1 threshold), `SignatureVerifier` trait, `ensure_bft_viable()` guard (min 4 validators)
+- `consensus::bft::vote_collector` — accumulates votes per (phase, round, hash), signals quorum
+- `consensus::bft::round` — event-driven state machine per round: AwaitingProposal→Preparing→PreCommitting→Committing→Decided/Failed
+- `consensus::bft::round_manager` — orchestrates rounds with round-robin leader rotation, exponential backoff timeouts (3s–30s), highest QC tracking
+- `DagBlock.commit_qc` — optional `QuorumCertificate` field for BFT-decided blocks
+- `ConsensusEngine.with_bft()` — BFT mode validates CommitQC on non-genesis blocks (phase, hash match, quorum)
+- 76 BFT unit tests, 143 total consensus tests
 
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap

@@ -128,6 +128,7 @@ impl<V: SignatureVerifier> QuorumValidator<V> {
 
 /// Test-only signature verifier that accepts any non-empty signature.
 #[cfg(test)]
+#[derive(Clone)]
 pub struct AcceptAllVerifier;
 
 #[cfg(test)]
@@ -139,6 +140,7 @@ impl SignatureVerifier for AcceptAllVerifier {
 
 /// Test-only verifier that rejects signatures from specific voters.
 #[cfg(test)]
+#[derive(Clone)]
 pub struct RejectVoterVerifier {
     pub reject: HashSet<String>,
 }

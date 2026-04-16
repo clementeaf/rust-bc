@@ -84,7 +84,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `chaincode_package_store`, `chaincode_definition_store` — chaincode lifecycle
 
 ### Other subsystems
-- `src/consensus/` — DAG, fork choice, validator scheduling, BFT primitives (`bft/` submodule: `VoteMessage`, `QuorumCertificate`, `QuorumValidator` with `2f+1` threshold, `BftPhase` enum for HotStuff-style Prepare→PreCommit→Commit→Decide, `SignatureVerifier` trait)
+- `src/consensus/` — DAG, fork choice, validator scheduling, HotStuff-inspired BFT layer (`bft/` submodule: types, quorum validation, vote collector, round state machine, round manager with leader rotation and liveness timeouts). `ConsensusEngine` supports BFT mode via `with_bft()` — validates CommitQC on block acceptance. `DagBlock` carries optional `commit_qc`.
 - `src/identity/` — DID + key management + pluggable signing (`SigningProvider` trait with Ed25519 and ML-DSA-65 implementations)
 - `src/tls.rs`, `src/pki.rs` — mutual TLS, certificate provisioning
 - `src/network/mod.rs` — P2P node, peer discovery

@@ -30,6 +30,9 @@ pub enum ConsensusError {
     #[allow(dead_code)]
     #[error("endorsement error: {0}")]
     EndorsementError(String),
+    #[allow(dead_code)]
+    #[error("BFT error: {0}")]
+    BftError(String),
 }
 
 #[allow(dead_code)]
@@ -56,6 +59,28 @@ pub struct ConsensusEngine {
     store: Option<Box<dyn BlockStore>>,
     policy_store: Option<Box<dyn PolicyStore>>,
     org_registry: Option<Box<dyn OrgRegistry>>,
+    /// When set, blocks must carry a valid CommitQC to be accepted.
+    /// Uses a boxed trait-object verifier so the engine is not generic over V.
+    bft_quorum_validator:
+        Option<crate::consensus::bft::quorum::QuorumValidator<BoxedVerifier>>,
+}
+
+/// Type-erased signature verifier so `ConsensusEngine` stays non-generic.
+pub struct BoxedVerifier(Box<dyn crate::consensus::bft::quorum::SignatureVerifier>);
+
+impl crate::consensus::bft::quorum::SignatureVerifier for BoxedVerifier {
+    fn verify(&self, voter_id: &str, payload: &[u8], signature: &[u8]) -> bool {
+        self.0.verify(voter_id, payload, signature)
+    }
+}
+
+impl Clone for BoxedVerifier {
+    fn clone(&self) -> Self {
+        // QuorumValidator only needs Clone for creating VoteCollectors.
+        // ConsensusEngine uses validate_qc directly, which doesn't clone.
+        // This clone impl is required by the trait bound but never called here.
+        panic!("BoxedVerifier::clone not supported — use validate_qc directly")
+    }
 }
 
 impl ConsensusEngine {
@@ -82,6 +107,7 @@ impl ConsensusEngine {
             store: None,
             policy_store: None,
             org_registry: None,
+            bft_quorum_validator: None,
         }
     }
 
@@ -110,18 +136,66 @@ impl ConsensusEngine {
         self
     }
 
+    #[allow(dead_code)]
+    /// Enable BFT mode: blocks must carry a valid CommitQC to be accepted.
+    ///
+    /// Pass a `SignatureVerifier` implementation and the validator set.
+    /// Genesis blocks are exempt from the QC requirement.
+    pub fn with_bft(
+        mut self,
+        validators: Vec<String>,
+        verifier: Box<dyn crate::consensus::bft::quorum::SignatureVerifier>,
+    ) -> Self {
+        let qv = crate::consensus::bft::quorum::QuorumValidator::new(
+            validators,
+            BoxedVerifier(verifier),
+        );
+        self.bft_quorum_validator = Some(qv);
+        self
+    }
+
     // --- mutations ---
 
     #[allow(dead_code)]
     /// Validate and insert a block into the DAG.
     ///
     /// Runs the full `BlockValidator` pipeline (format → signature → parent →
-    /// slot) before inserting.  Returns the block's hash on success.
+    /// slot) before inserting.  When BFT mode is enabled, non-genesis blocks
+    /// must carry a valid `commit_qc`.  Returns the block's hash on success.
     pub fn accept_block(&mut self, block: DagBlock) -> Result<[u8; 32], ConsensusError> {
         match BlockValidator::validate(&block, &self.scheduler) {
             ValidityResult::Valid => {}
             ValidityResult::Invalid(reason) => {
                 return Err(ConsensusError::InvalidBlock(reason));
+            }
+        }
+
+        // BFT quorum check: non-genesis blocks must carry a valid CommitQC.
+        if let Some(ref bft_qv) = self.bft_quorum_validator {
+            if !block.is_genesis() {
+                let qc = block
+                    .commit_qc
+                    .as_ref()
+                    .ok_or_else(|| ConsensusError::BftError("missing commit QC".into()))?;
+
+                // QC must be for the Commit phase.
+                if qc.phase != crate::consensus::bft::types::BftPhase::Commit {
+                    return Err(ConsensusError::BftError(format!(
+                        "expected Commit QC, got {:?}",
+                        qc.phase
+                    )));
+                }
+
+                // QC block_hash must match the block being accepted.
+                if qc.block_hash != block.hash {
+                    return Err(ConsensusError::BftError(
+                        "QC block_hash does not match block hash".into(),
+                    ));
+                }
+
+                bft_qv
+                    .validate_qc(qc)
+                    .map_err(|e| ConsensusError::BftError(e.to_string()))?;
             }
         }
 
@@ -439,5 +513,129 @@ mod tests {
         let mut e = engine();
         let result = e.accept_block(valid_block(1, 0, 0));
         assert!(result.is_ok());
+    }
+
+    // --- BFT integration ---
+
+    /// Test verifier that accepts any non-empty signature.
+    struct TestBftVerifier;
+    impl crate::consensus::bft::quorum::SignatureVerifier for TestBftVerifier {
+        fn verify(&self, _voter_id: &str, _payload: &[u8], signature: &[u8]) -> bool {
+            !signature.is_empty()
+        }
+    }
+
+    fn bft_engine() -> ConsensusEngine {
+        let validators: Vec<String> = (0..4).map(|i| format!("v{i}")).collect();
+        ConsensusEngine::new(
+            ConsensusConfig::default(),
+            ForkChoiceRule::HeaviestSubtree,
+            vec!["v1".to_string()],
+            0,
+        )
+        .with_bft(validators, Box::new(TestBftVerifier))
+    }
+
+    fn make_commit_qc(block_hash: [u8; 32]) -> crate::consensus::bft::types::QuorumCertificate {
+        use crate::consensus::bft::types::{BftPhase, QuorumCertificate, VoteMessage};
+
+        let votes: Vec<VoteMessage> = (0..3)
+            .map(|i| VoteMessage {
+                block_hash,
+                round: 0,
+                phase: BftPhase::Commit,
+                voter_id: format!("v{i}"),
+                signature: vec![1u8; 64],
+            })
+            .collect();
+        QuorumCertificate::new(BftPhase::Commit, block_hash, 0, votes).unwrap()
+    }
+
+    #[test]
+    fn bft_engine_accepts_genesis_without_qc() {
+        let mut e = bft_engine();
+        // Genesis blocks are exempt from QC requirement.
+        let result = e.accept_block(valid_block(1, 0, 0));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn bft_engine_rejects_block_without_qc() {
+        let mut e = bft_engine();
+        e.accept_block(valid_block(1, 0, 0)).unwrap();
+        // Non-genesis block without QC.
+        let result = e.accept_block(valid_block(2, 1, 1));
+        assert!(matches!(result, Err(ConsensusError::BftError(_))));
+    }
+
+    #[test]
+    fn bft_engine_accepts_block_with_valid_qc() {
+        let mut e = bft_engine();
+        e.accept_block(valid_block(1, 0, 0)).unwrap();
+
+        let mut block = valid_block(2, 1, 1);
+        block.commit_qc = Some(make_commit_qc(mk(2)));
+        let result = e.accept_block(block);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn bft_engine_rejects_qc_with_wrong_block_hash() {
+        let mut e = bft_engine();
+        e.accept_block(valid_block(1, 0, 0)).unwrap();
+
+        let mut block = valid_block(2, 1, 1);
+        // QC is for block_hash(99), but block hash is mk(2).
+        block.commit_qc = Some(make_commit_qc([99u8; 32]));
+        let result = e.accept_block(block);
+        assert!(matches!(result, Err(ConsensusError::BftError(_))));
+    }
+
+    #[test]
+    fn bft_engine_rejects_qc_with_wrong_phase() {
+        use crate::consensus::bft::types::{BftPhase, QuorumCertificate, VoteMessage};
+        let mut e = bft_engine();
+        e.accept_block(valid_block(1, 0, 0)).unwrap();
+
+        // Build a Prepare QC instead of Commit.
+        let votes: Vec<VoteMessage> = (0..3)
+            .map(|i| VoteMessage {
+                block_hash: mk(2),
+                round: 0,
+                phase: BftPhase::Prepare,
+                voter_id: format!("v{i}"),
+                signature: vec![1u8; 64],
+            })
+            .collect();
+        let prepare_qc = QuorumCertificate::new(BftPhase::Prepare, mk(2), 0, votes).unwrap();
+
+        let mut block = valid_block(2, 1, 1);
+        block.commit_qc = Some(prepare_qc);
+        let result = e.accept_block(block);
+        assert!(matches!(result, Err(ConsensusError::BftError(_))));
+    }
+
+    #[test]
+    fn bft_engine_rejects_qc_with_insufficient_votes() {
+        use crate::consensus::bft::types::{BftPhase, QuorumCertificate, VoteMessage};
+        let mut e = bft_engine();
+        e.accept_block(valid_block(1, 0, 0)).unwrap();
+
+        // Only 2 votes (threshold=3 for n=4).
+        let votes: Vec<VoteMessage> = (0..2)
+            .map(|i| VoteMessage {
+                block_hash: mk(2),
+                round: 0,
+                phase: BftPhase::Commit,
+                voter_id: format!("v{i}"),
+                signature: vec![1u8; 64],
+            })
+            .collect();
+        let qc = QuorumCertificate::new(BftPhase::Commit, mk(2), 0, votes).unwrap();
+
+        let mut block = valid_block(2, 1, 1);
+        block.commit_qc = Some(qc);
+        let result = e.accept_block(block);
+        assert!(matches!(result, Err(ConsensusError::BftError(_))));
     }
 }

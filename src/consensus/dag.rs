@@ -24,6 +24,9 @@ pub struct DagBlock {
     pub signature: Vec<u8>,
     /// Transaction hashes included in block
     pub transactions: Vec<[u8; 32]>,
+    /// BFT commit quorum certificate (present when block was decided via BFT).
+    /// `None` for legacy/PoW blocks or genesis.
+    pub commit_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
 }
 
 impl DagBlock {
@@ -47,6 +50,7 @@ impl DagBlock {
             proposer,
             signature,
             transactions: Vec::new(),
+            commit_qc: None,
         }
     }
 
