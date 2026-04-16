@@ -18,6 +18,9 @@ cargo test storage::adapters
 # Run a single test by name
 cargo test write_and_read_block_roundtrip
 
+# Run BFT E2E tests (adversarial scenarios)
+cargo test --test bft_e2e
+
 # Run with stdout (useful for debugging)
 cargo test -- --nocapture
 

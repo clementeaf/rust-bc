@@ -23,6 +23,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - P2P `Message` enum: `BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange` variants
 - 147 total consensus tests
 
+**Consensus — Adversarial E2E tests**
+- `tests/bft_e2e.rs` — 16 integration tests simulating multi-node BFT networks
+- Scenarios: happy path (4/7/10 nodes), equivocation attacks, crash faults, silent leaders with view change, network partitions (minority/majority), partition healing, alternating partitions, 100-round stress tests, mixed faults across rounds
+- Safety assertion: no two honest nodes decide different blocks for the same round
+- Liveness assertion: progress with up to f Byzantine faults, stall below threshold
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
