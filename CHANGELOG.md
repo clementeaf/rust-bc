@@ -47,6 +47,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `bridge::protocol` — `BridgeEngine` orchestrating chain registry, outbound initiate, inbound verify+mint, replay protection, confirmation threshold checks
 - 43 new tests (5 types + 16 escrow + 11 verifier + 11 protocol)
 
+**On-Chain Governance (Phase 5)**
+- `governance::params` — typed parameter registry with protocol defaults (block size, fees, slashing, quorum, thresholds)
+- `governance::proposals` — proposal lifecycle: submit with deposit → vote → pass/reject → timelock → execute/cancel, with status filtering and ID sequencing
+- `governance::voting` — stake-weighted voting (Yes/No/Abstain), quorum check against total staked power, pass threshold on yes/(yes+no), abstain counts for quorum only, full governance integration test
+- 34 new tests (7 params + 13 proposals + 14 voting including end-to-end flow)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 

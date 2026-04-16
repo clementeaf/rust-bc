@@ -45,6 +45,7 @@ pub mod endorsement;
 pub mod events;
 pub mod bridge;
 pub mod gateway;
+pub mod governance;
 pub mod msp;
 pub mod ordering;
 pub mod pki;

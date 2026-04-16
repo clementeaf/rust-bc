@@ -96,6 +96,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/tokenomics/economics.rs` — NOTA supply cap (100M), halving rewards, capped issuance, 80/20 fee burn/proposer split, EIP-1559 dynamic base fee, epoch-based `process_block()` state machine
 - `src/tokenomics/storage_deposit.rs` — `DepositLedger`: lock tokens proportional to data size on state writes, refund on delete, delta on update
 - `src/bridge/` — cross-chain bridge: chain registry, message envelope, escrow vault (lock/release outbound, mint/burn inbound), Merkle inclusion proof verifier, `BridgeEngine` with replay protection and confirmation thresholds
+- `src/governance/` — on-chain governance: typed `ParamRegistry` with protocol defaults, `ProposalStore` (submit→vote→pass→timelock→execute lifecycle), stake-weighted `VoteStore` (Yes/No/Abstain, quorum + threshold checks)
 
 ### Block explorers (optional UIs)
 
