@@ -82,7 +82,7 @@ Central shared state. Legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store
 Services initialized at startup (all use in-memory backends by default):
 - `org_registry`, `policy_store` — endorsement infrastructure
 - `discovery_service` — peer registration and endorsement plans
-- `gateway` — endorse → order → commit pipeline
+- `gateway` — endorse → order → commit pipeline; `commit_block_parallel()` for wave-parallel batch execution with MVCC
 - `private_data_store`, `collection_registry` — private data collections
 - `chaincode_package_store`, `chaincode_definition_store` — chaincode lifecycle
 

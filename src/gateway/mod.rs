@@ -17,6 +17,8 @@ use crate::events::EventBus;
 use crate::network::{Message, Node};
 use crate::storage::traits::{BlockStore, Transaction};
 use crate::storage::world_state::WorldState;
+use crate::transaction::endorsed::EndorsedTransaction;
+use crate::transaction::executor;
 use crate::transaction::mvcc;
 use crate::transaction::rwset::ReadWriteSet;
 
@@ -47,6 +49,23 @@ pub struct TxResult {
     /// `true` = writes applied to world state; `false` = mvcc_conflict (block
     /// still contains the TX but its writes were NOT applied).
     pub valid: bool,
+}
+
+/// Result of a batch parallel commit.
+#[derive(Debug, Clone)]
+pub struct BatchTxResult {
+    /// Block height where the batch was committed.
+    pub block_height: u64,
+    /// Number of transactions that passed MVCC and were applied.
+    pub committed_count: usize,
+    /// Number of transactions rejected due to MVCC conflicts.
+    pub conflict_count: usize,
+    /// Number of execution waves (1 = fully parallel, N = fully sequential).
+    pub wave_count: usize,
+    /// Parallelism ratio: total_txs / wave_count.
+    pub parallelism_ratio: f64,
+    /// Per-transaction outcomes (tx_id, outcome).
+    pub outcomes: Vec<(String, executor::TxOutcome)>,
 }
 
 /// Orchestrates the endorse → order → commit lifecycle for a single node.
@@ -295,6 +314,76 @@ impl Gateway {
             tx_id,
             block_height,
             valid: tx_valid,
+        })
+    }
+
+    /// Commit a batch of endorsed transactions using wave-parallel execution.
+    ///
+    /// This is the parallel alternative to the single-tx `submit()` flow.
+    /// Transactions are analyzed for key conflicts, grouped into non-conflicting
+    /// waves, and each wave is validated+applied against the world state.
+    ///
+    /// Returns per-tx outcomes and parallelism metrics. The block is written to
+    /// the store regardless of individual tx validity (Fabric-compatible).
+    #[allow(dead_code)]
+    pub fn commit_block_parallel(
+        &self,
+        channel_id: &str,
+        endorsed_txs: &[EndorsedTransaction],
+    ) -> Result<BatchTxResult, GatewayError> {
+        let ws = self.world_state.as_ref().ok_or_else(|| {
+            GatewayError::Ordering("world_state required for parallel commit".into())
+        })?;
+
+        // 1. Submit all txs to ordering service.
+        for etx in endorsed_txs {
+            self.ordering_service
+                .submit_tx(&etx.proposal.tx)
+                .map_err(|e| GatewayError::Ordering(e.to_string()))?;
+        }
+
+        // 2. Cut a block from the ordering service.
+        let next_height = self.store.get_latest_height().unwrap_or(0) + 1;
+        let block = self
+            .ordering_service
+            .cut_block(next_height, "gateway")
+            .map_err(|e| GatewayError::Ordering(e.to_string()))?
+            .ok_or_else(|| GatewayError::Ordering("cut_block returned no block".into()))?;
+
+        let block_height = block.height;
+
+        // 3. Persist the block.
+        self.store
+            .write_block(&block)
+            .map_err(|e| GatewayError::Storage(e.to_string()))?;
+
+        // 4. Execute txs in wave-parallel order.
+        let exec_result = executor::execute_block_parallel(endorsed_txs, ws.as_ref());
+
+        // 5. Emit events.
+        if let Some(ref bus) = self.event_bus {
+            bus.publish(BlockEvent::BlockCommitted {
+                channel_id: channel_id.to_string(),
+                height: block_height,
+                tx_count: endorsed_txs.len(),
+            });
+            for (tx_id, outcome) in &exec_result.outcomes {
+                bus.publish(BlockEvent::TransactionCommitted {
+                    channel_id: channel_id.to_string(),
+                    tx_id: tx_id.clone(),
+                    block_height,
+                    valid: matches!(outcome, executor::TxOutcome::Committed),
+                });
+            }
+        }
+
+        Ok(BatchTxResult {
+            block_height,
+            committed_count: exec_result.committed_count,
+            conflict_count: exec_result.conflict_count,
+            wave_count: exec_result.schedule.wave_count,
+            parallelism_ratio: exec_result.schedule.parallelism_ratio,
+            outcomes: exec_result.outcomes,
         })
     }
 
@@ -935,5 +1024,128 @@ mod tests {
             "sequential non-conflicting TXs should both be valid"
         );
         assert_eq!(ws.get("asset:1").unwrap().unwrap().version, 2);
+    }
+
+    // ── parallel commit tests ─────────────────────────────────────────────
+
+    fn make_endorsed(
+        id: &str,
+        reads: &[(&str, u64)],
+        writes: &[(&str, &[u8])],
+    ) -> EndorsedTransaction {
+        use crate::endorsement::types::Endorsement;
+        use crate::transaction::proposal::TransactionProposal;
+        use crate::transaction::rwset::{KVRead, KVWrite, ReadWriteSet};
+
+        let rw = ReadWriteSet {
+            reads: reads
+                .iter()
+                .map(|(k, v)| KVRead {
+                    key: k.to_string(),
+                    version: *v,
+                })
+                .collect(),
+            writes: writes
+                .iter()
+                .map(|(k, v)| KVWrite {
+                    key: k.to_string(),
+                    value: v.to_vec(),
+                })
+                .collect(),
+        };
+        EndorsedTransaction {
+            proposal: TransactionProposal {
+                tx: make_tx(id),
+                creator_did: "did:test:creator".to_string(),
+                creator_signature: vec![0u8; 64],
+                rwset: rw.clone(),
+            },
+            endorsements: vec![Endorsement {
+                signer_did: "did:test:org1".to_string(),
+                org_id: "Org1".to_string(),
+                signature: vec![0u8; 64],
+                payload_hash: [0u8; 32],
+                timestamp: 0,
+            }],
+            rwset: rw,
+        }
+    }
+
+    fn gateway_with_world_state() -> (Gateway, Arc<crate::storage::MemoryWorldState>) {
+        let ws = Arc::new(crate::storage::MemoryWorldState::new());
+        let gw = Gateway::new(
+            Arc::new(MemoryOrgRegistry::new()),
+            Arc::new(MemoryPolicyStore::new()),
+            Arc::new(OrderingService::with_config(1000, 5000)),
+            Arc::new(MemoryStore::new()),
+        );
+        let gw = Gateway {
+            world_state: Some(ws.clone()),
+            ..gw
+        };
+        (gw, ws)
+    }
+
+    #[test]
+    fn parallel_commit_independent_txs_all_committed() {
+        let (gw, ws) = gateway_with_world_state();
+        ws.put("a", b"v1").unwrap();
+        ws.put("b", b"v1").unwrap();
+
+        let txs = vec![
+            make_endorsed("tx1", &[("a", 1)], &[("a", b"a2")]),
+            make_endorsed("tx2", &[("b", 1)], &[("b", b"b2")]),
+        ];
+
+        let result = gw.commit_block_parallel("ch1", &txs).unwrap();
+        assert_eq!(result.committed_count, 2);
+        assert_eq!(result.conflict_count, 0);
+        assert_eq!(result.wave_count, 1, "independent txs → 1 wave");
+        assert_eq!(ws.get("a").unwrap().unwrap().data, b"a2");
+        assert_eq!(ws.get("b").unwrap().unwrap().data, b"b2");
+    }
+
+    #[test]
+    fn parallel_commit_conflicting_txs_one_rejected() {
+        let (gw, ws) = gateway_with_world_state();
+        ws.put("k", b"v1").unwrap();
+
+        let txs = vec![
+            make_endorsed("tx1", &[("k", 1)], &[("k", b"v2")]),
+            make_endorsed("tx2", &[("k", 1)], &[("k", b"v3")]),
+        ];
+
+        let result = gw.commit_block_parallel("ch1", &txs).unwrap();
+        assert_eq!(result.committed_count, 1);
+        assert_eq!(result.conflict_count, 1);
+        assert_eq!(result.wave_count, 2, "WAW conflict → 2 waves");
+    }
+
+    #[test]
+    fn parallel_commit_empty_block() {
+        let (gw, _ws) = gateway_with_world_state();
+        let result = gw.commit_block_parallel("ch1", &[]);
+        // Empty endorsed txs → ordering service returns no block.
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parallel_commit_metrics_reported() {
+        let (gw, ws) = gateway_with_world_state();
+        for i in 0..4 {
+            ws.put(&format!("k{i}"), b"v1").unwrap();
+        }
+
+        let txs: Vec<EndorsedTransaction> = (0..4)
+            .map(|i| {
+                let key = format!("k{i}");
+                make_endorsed(&format!("tx{i}"), &[(&key, 1)], &[(&key, b"v2")])
+            })
+            .collect();
+
+        let result = gw.commit_block_parallel("ch1", &txs).unwrap();
+        assert_eq!(result.wave_count, 1);
+        assert!((result.parallelism_ratio - 4.0).abs() < f64::EPSILON);
+        assert_eq!(result.block_height, 1);
     }
 }

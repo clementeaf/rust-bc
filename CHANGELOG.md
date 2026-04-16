@@ -29,10 +29,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Safety assertion: no two honest nodes decide different blocks for the same round
 - Liveness assertion: progress with up to f Byzantine faults, stall below threshold
 
-**Parallel Transaction Execution (Phase 2, steps 1–2)**
+**Parallel Transaction Execution (Phase 2)**
 - `transaction::parallel` — conflict detector (RAW/WAW/WAR), dependency graph, wave scheduler with longest-path topological sort
 - `transaction::executor` — wave-parallel block executor: MVCC validate + apply writes per wave, deterministic ordering within waves, legacy format adapter
-- 24 new tests (15 parallel + 9 executor), 80 total transaction tests
+- `Gateway.commit_block_parallel()` — batch commit integrating ordering, parallel execution, block persistence, and event emission; returns `BatchTxResult` with parallelism metrics
+- 28 new tests (15 parallel + 9 executor + 4 gateway integration), 30 total gateway tests
 
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
