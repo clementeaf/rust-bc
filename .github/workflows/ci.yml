@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, feature/*, hotfix/*, release/*]
   pull_request:
     branches: [main, develop]
 
@@ -11,11 +11,10 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   ACL_MODE: permissive
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   check:
-    name: Check + Clippy
+    name: Format + Clippy + Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +37,14 @@ jobs:
       - name: Check formatting
         run: cargo fmt -- --check
 
-      - name: Clippy
-        run: cargo clippy -- -D warnings 2>&1 | tail -20 || true
+      - name: Clippy (allow dead_code for not-yet-wired modules)
+        run: cargo clippy -- -D warnings -A dead_code
 
       - name: Build
         run: cargo check --all-targets
 
   test:
-    name: Unit Tests
+    name: Unit + Integration Tests
     runs-on: ubuntu-latest
     needs: check
     steps:
@@ -64,20 +63,45 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run tests
+      - name: Run all tests
         run: |
           cargo test 2>&1 | tee test-output.txt
-          # Extract results
           grep "^test result" test-output.txt
 
       - name: Verify no failures
         run: |
           if grep -qE "[1-9][0-9]* failed" test-output.txt; then
-            echo "Tests failed!"
+            echo "::error::Tests failed!"
             grep "test result:" test-output.txt
             exit 1
           fi
           echo "All tests passed"
+
+  bench:
+    name: Release Benchmarks
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: TPS benchmarks (release)
+        run: cargo test --release --test tps_benchmark --test full_benchmark -- --nocapture 2>&1 | tee bench-output.txt
+
+      - name: Report TPS
+        run: grep "TPS" bench-output.txt || echo "No TPS lines found"
 
   e2e:
     name: E2E Tests (Docker)
@@ -101,11 +125,9 @@ jobs:
       - name: Health check
         run: |
           set -euo pipefail
-          # Same envelope as scripts/e2e-test.sh (.data.status == "healthy"); fail if any port never becomes ready.
           for port in 8080 8082 8084 8086; do
             ok=0
             for i in $(seq 1 45); do
-              code=""
               resp=$(curl -sk --max-time 10 -w "\n%{http_code}" "https://127.0.0.1:${port}/api/v1/health" 2>/dev/null || true)
               code=$(echo "$resp" | tail -n1)
               body=$(echo "$resp" | sed '$d')
@@ -118,12 +140,7 @@ jobs:
             done
             if [[ "$ok" -ne 1 ]]; then
               echo "::error::Timed out waiting for healthy API on port ${port}"
-              echo "docker compose ps -a:"
               docker compose ps -a || true
-              echo "curl probe (http code + body snippet):"
-              curl -sS -k --max-time 10 -w "\nHTTP_CODE:%{http_code}\n" "https://127.0.0.1:${port}/api/v1/health" 2>&1 | head -c 2000 || true
-              echo
-              echo "Recent node1 logs:"
               docker compose logs node1 --tail 120 2>&1 || true
               exit 1
             fi
