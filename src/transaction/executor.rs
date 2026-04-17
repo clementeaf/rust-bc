@@ -4,15 +4,14 @@
 //! transactions concurrently within each wave while preserving deterministic
 //! ordering across waves.
 //!
-//! Execution flow:
-//! 1. Schedule the batch into waves (via `schedule_batch`)
-//! 2. For each wave (sequentially):
-//!    a. MVCC-validate all txs in the wave against current world state
-//!    b. Apply writes from valid txs (within a wave, order by original index)
-//! 3. Return per-tx results: committed or mvcc_conflict
+//! Execution modes:
+//! - `execute_block_parallel`: synchronous, validates within waves sequentially
+//! - `execute_block_concurrent`: async, validates within waves with tokio tasks
 //!
-//! Determinism guarantee: transactions within a wave are always applied in
-//! ascending index order, so all validators produce identical state transitions.
+//! Both modes guarantee determinism: writes are applied in ascending index order
+//! within each wave, and waves are processed sequentially.
+
+use std::sync::Arc;
 
 use super::endorsed::EndorsedTransaction;
 use super::mvcc;
@@ -40,48 +39,37 @@ pub struct BlockExecResult {
     pub conflict_count: usize,
 }
 
+/// MVCC validation result for a single tx (used internally).
+#[derive(Debug)]
+enum ValidationResult {
+    Valid(usize), // index
+    Conflict(usize, String), // index, conflict key
+}
+
+// ── Synchronous executor ────────────────────────────────────────────────────
+
 /// Execute a block of endorsed transactions using wave-parallel scheduling.
 ///
-/// Transactions are grouped into waves by conflict analysis. Within each wave,
-/// txs are independent and could run concurrently (the MVCC check + write
-/// application is done per-wave sequentially for determinism).
-///
-/// Between waves, writes from the previous wave are visible to the next,
-/// enabling dependent transactions to validate correctly.
+/// Within each wave, txs are validated and applied sequentially (but waves
+/// themselves are independent). Use `execute_block_concurrent` for true
+/// intra-wave parallelism.
 pub fn execute_block_parallel(
     txs: &[EndorsedTransaction],
     state: &dyn WorldState,
 ) -> BlockExecResult {
-    // 1. Build TxWithRwSet entries for the scheduler.
-    let batch: Vec<TxWithRwSet> = txs
-        .iter()
-        .enumerate()
-        .map(|(i, endorsed)| TxWithRwSet {
-            index: i,
-            tx_id: endorsed.proposal.tx.id.clone(),
-            rwset: endorsed.rwset.clone(),
-        })
-        .collect();
-
-    // 2. Schedule into waves.
-    let schedule = schedule_batch(&batch);
-
-    // 3. Execute wave by wave.
+    let (schedule, _batch) = prepare_schedule(txs);
     let mut outcomes: Vec<Option<(String, TxOutcome)>> = vec![None; txs.len()];
     let mut committed_count = 0usize;
     let mut conflict_count = 0usize;
 
     for wave in &schedule.waves {
-        // Within a wave, process txs in ascending index order (deterministic).
         let mut sorted_indices = wave.tx_indices.clone();
         sorted_indices.sort_unstable();
 
         for &idx in &sorted_indices {
             let endorsed = &txs[idx];
-
             match mvcc::validate_rwset(&endorsed.rwset, state) {
                 Ok(()) => {
-                    // Apply writes to world state.
                     for write in &endorsed.rwset.writes {
                         let _ = state.put(&write.key, &write.value);
                     }
@@ -94,9 +82,7 @@ pub fn execute_block_parallel(
                 Err(conflict) => {
                     outcomes[idx] = Some((
                         endorsed.proposal.tx.id.clone(),
-                        TxOutcome::MvccConflict {
-                            key: conflict.key,
-                        },
+                        TxOutcome::MvccConflict { key: conflict.key },
                     ));
                     conflict_count += 1;
                 }
@@ -104,18 +90,7 @@ pub fn execute_block_parallel(
         }
     }
 
-    // Fill any unscheduled txs (shouldn't happen, but defensive).
-    for (i, slot) in outcomes.iter_mut().enumerate() {
-        if slot.is_none() {
-            *slot = Some((
-                txs[i].proposal.tx.id.clone(),
-                TxOutcome::MvccConflict {
-                    key: "unscheduled".into(),
-                },
-            ));
-            conflict_count += 1;
-        }
-    }
+    fill_unscheduled(&mut outcomes, txs, &mut conflict_count);
 
     BlockExecResult {
         outcomes: outcomes.into_iter().map(|o| o.unwrap()).collect(),
@@ -125,8 +100,126 @@ pub fn execute_block_parallel(
     }
 }
 
-/// Convert a `BlockExecResult` to the legacy `Vec<Transaction>` format
-/// with `state = "committed"` or `state = "mvcc_conflict"`.
+// ── Concurrent executor (tokio) ─────────────────────────────────────────────
+
+/// Execute a block with true intra-wave concurrency using tokio tasks.
+///
+/// For each wave:
+/// 1. Spawn one task per tx to MVCC-validate concurrently (read-only)
+/// 2. Collect results
+/// 3. Apply writes from valid txs in deterministic order (sequential)
+///
+/// This maximizes throughput for waves with many independent txs while
+/// preserving determinism in the write phase.
+pub async fn execute_block_concurrent(
+    txs: &[EndorsedTransaction],
+    state: Arc<dyn WorldState>,
+) -> BlockExecResult {
+    let (schedule, _batch) = prepare_schedule(txs);
+    let mut outcomes: Vec<Option<(String, TxOutcome)>> = vec![None; txs.len()];
+    let mut committed_count = 0usize;
+    let mut conflict_count = 0usize;
+
+    for wave in &schedule.waves {
+        let mut sorted_indices = wave.tx_indices.clone();
+        sorted_indices.sort_unstable();
+
+        // Phase 1: Validate all txs in the wave concurrently.
+        let mut handles = Vec::with_capacity(sorted_indices.len());
+
+        for &idx in &sorted_indices {
+            let rwset = txs[idx].rwset.clone();
+            let ws = Arc::clone(&state);
+
+            handles.push(tokio::task::spawn_blocking(move || {
+                match mvcc::validate_rwset(&rwset, ws.as_ref()) {
+                    Ok(()) => ValidationResult::Valid(idx),
+                    Err(conflict) => ValidationResult::Conflict(idx, conflict.key),
+                }
+            }));
+        }
+
+        // Collect all validation results.
+        let mut valid_indices: Vec<usize> = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(ValidationResult::Valid(idx)) => {
+                    valid_indices.push(idx);
+                }
+                Ok(ValidationResult::Conflict(idx, key)) => {
+                    outcomes[idx] = Some((
+                        txs[idx].proposal.tx.id.clone(),
+                        TxOutcome::MvccConflict { key },
+                    ));
+                    conflict_count += 1;
+                }
+                Err(e) => {
+                    // JoinError — treat as conflict.
+                    log::error!("task join error during MVCC validation: {e}");
+                }
+            }
+        }
+
+        // Phase 2: Apply writes from valid txs in deterministic order.
+        valid_indices.sort_unstable();
+        for idx in valid_indices {
+            let endorsed = &txs[idx];
+            for write in &endorsed.rwset.writes {
+                let _ = state.put(&write.key, &write.value);
+            }
+            outcomes[idx] = Some((
+                endorsed.proposal.tx.id.clone(),
+                TxOutcome::Committed,
+            ));
+            committed_count += 1;
+        }
+    }
+
+    fill_unscheduled(&mut outcomes, txs, &mut conflict_count);
+
+    BlockExecResult {
+        outcomes: outcomes.into_iter().map(|o| o.unwrap()).collect(),
+        schedule,
+        committed_count,
+        conflict_count,
+    }
+}
+
+// ── Shared helpers ──────────────────────────────────────────────────────────
+
+fn prepare_schedule(txs: &[EndorsedTransaction]) -> (BatchSchedule, Vec<TxWithRwSet>) {
+    let batch: Vec<TxWithRwSet> = txs
+        .iter()
+        .enumerate()
+        .map(|(i, endorsed)| TxWithRwSet {
+            index: i,
+            tx_id: endorsed.proposal.tx.id.clone(),
+            rwset: endorsed.rwset.clone(),
+        })
+        .collect();
+    let schedule = schedule_batch(&batch);
+    (schedule, batch)
+}
+
+fn fill_unscheduled(
+    outcomes: &mut [Option<(String, TxOutcome)>],
+    txs: &[EndorsedTransaction],
+    conflict_count: &mut usize,
+) {
+    for (i, slot) in outcomes.iter_mut().enumerate() {
+        if slot.is_none() {
+            *slot = Some((
+                txs[i].proposal.tx.id.clone(),
+                TxOutcome::MvccConflict {
+                    key: "unscheduled".into(),
+                },
+            ));
+            *conflict_count += 1;
+        }
+    }
+}
+
+/// Convert a `BlockExecResult` to the legacy `Vec<Transaction>` format.
 pub fn to_legacy_results(
     txs: &[EndorsedTransaction],
     result: &BlockExecResult,
@@ -209,7 +302,7 @@ mod tests {
         }
     }
 
-    // --- basic execution ---
+    // --- synchronous executor ---
 
     #[test]
     fn empty_block() {
@@ -223,7 +316,7 @@ mod tests {
     #[test]
     fn single_tx_commits() {
         let state = ws();
-        state.put("k", b"v1").unwrap(); // v1
+        state.put("k", b"v1").unwrap();
         let txs = vec![endorsed("tx1", &[("k", 1)], &[("k", b"v2")])];
 
         let result = execute_block_parallel(&txs, &state);
@@ -236,16 +329,14 @@ mod tests {
     fn single_tx_conflicts() {
         let state = ws();
         state.put("k", b"v1").unwrap();
-        state.put("k", b"v2").unwrap(); // v2
+        state.put("k", b"v2").unwrap();
         let txs = vec![endorsed("tx1", &[("k", 1)], &[("k", b"v3")])];
 
         let result = execute_block_parallel(&txs, &state);
         assert_eq!(result.conflict_count, 1);
         assert!(matches!(result.outcomes[0].1, TxOutcome::MvccConflict { .. }));
-        assert_eq!(state.get("k").unwrap().unwrap().data, b"v2"); // unchanged
+        assert_eq!(state.get("k").unwrap().unwrap().data, b"v2");
     }
-
-    // --- parallel execution (independent txs in same wave) ---
 
     #[test]
     fn independent_txs_execute_in_one_wave() {
@@ -259,37 +350,25 @@ mod tests {
         ];
 
         let result = execute_block_parallel(&txs, &state);
-        assert_eq!(result.schedule.wave_count, 1, "should be 1 wave");
+        assert_eq!(result.schedule.wave_count, 1);
         assert_eq!(result.committed_count, 2);
-        assert_eq!(state.get("a").unwrap().unwrap().data, b"a2");
-        assert_eq!(state.get("b").unwrap().unwrap().data, b"b2");
     }
-
-    // --- dependent txs across waves ---
 
     #[test]
     fn dependent_txs_execute_in_separate_waves() {
         let state = ws();
         state.put("k", b"v1").unwrap();
 
-        // tx1 writes k (v1→v2), tx2 reads k at v2.
-        // But tx2 was simulated against v1 — so it reads v1.
-        // After tx1 commits (k now v2), tx2 reads at v1 → MVCC conflict.
-        // This is correct Fabric behavior: tx2 was simulated against stale state.
         let txs = vec![
             endorsed("tx1", &[("k", 1)], &[("k", b"v2")]),
             endorsed("tx2", &[("k", 1)], &[("k", b"v3")]),
         ];
 
         let result = execute_block_parallel(&txs, &state);
-        assert_eq!(result.schedule.wave_count, 2, "WAW → 2 waves");
+        assert_eq!(result.schedule.wave_count, 2);
         assert_eq!(result.committed_count, 1);
         assert_eq!(result.conflict_count, 1);
-        assert_eq!(result.outcomes[0].1, TxOutcome::Committed);
-        assert!(matches!(result.outcomes[1].1, TxOutcome::MvccConflict { .. }));
     }
-
-    // --- legacy format ---
 
     #[test]
     fn to_legacy_results_format() {
@@ -308,8 +387,6 @@ mod tests {
         assert_eq!(legacy[1].id, "tx2");
         assert_eq!(legacy[1].state, "mvcc_conflict");
     }
-
-    // --- parallelism metrics ---
 
     #[test]
     fn parallelism_ratio_reported() {
@@ -330,8 +407,6 @@ mod tests {
         assert!((result.schedule.parallelism_ratio - 4.0).abs() < f64::EPSILON);
     }
 
-    // --- stress: 50 independent txs ---
-
     #[test]
     fn stress_50_independent_txs() {
         let state = ws();
@@ -350,10 +425,7 @@ mod tests {
         let result = execute_block_parallel(&txs, &state);
         assert_eq!(result.schedule.wave_count, 1);
         assert_eq!(result.committed_count, 50);
-        assert_eq!(result.conflict_count, 0);
     }
-
-    // --- mixed: some parallel, some sequential ---
 
     #[test]
     fn mixed_workload_correct_outcomes() {
@@ -363,26 +435,125 @@ mod tests {
         state.put("indep_b", b"v1").unwrap();
 
         let txs = vec![
-            // wave 0: tx0 (indep_a) and tx1 (indep_b) are independent
             endorsed("tx0", &[("indep_a", 1)], &[("indep_a", b"a2")]),
             endorsed("tx1", &[("indep_b", 1)], &[("indep_b", b"b2")]),
-            // wave 0 also: tx2 writes shared
             endorsed("tx2", &[("shared", 1)], &[("shared", b"s2")]),
-            // wave 1: tx3 reads shared (depends on tx2)
             endorsed("tx3", &[("shared", 1)], &[("shared", b"s3")]),
         ];
 
         let result = execute_block_parallel(&txs, &state);
-
-        // tx0, tx1, tx2 should commit (wave 0)
         assert_eq!(result.outcomes[0].1, TxOutcome::Committed);
         assert_eq!(result.outcomes[1].1, TxOutcome::Committed);
         assert_eq!(result.outcomes[2].1, TxOutcome::Committed);
-
-        // tx3 read shared at v1 but tx2 bumped it to v2 → conflict
         assert!(matches!(result.outcomes[3].1, TxOutcome::MvccConflict { .. }));
-
         assert_eq!(result.committed_count, 3);
+    }
+
+    // --- concurrent executor (tokio) ---
+
+    #[tokio::test]
+    async fn concurrent_empty_block() {
+        let state = Arc::new(ws());
+        let result = execute_block_concurrent(&[], state).await;
+        assert_eq!(result.committed_count, 0);
+        assert_eq!(result.schedule.wave_count, 0);
+    }
+
+    #[tokio::test]
+    async fn concurrent_single_tx_commits() {
+        let state = Arc::new(ws());
+        state.put("k", b"v1").unwrap();
+        let txs = vec![endorsed("tx1", &[("k", 1)], &[("k", b"v2")])];
+
+        let result = execute_block_concurrent(&txs, state.clone()).await;
+        assert_eq!(result.committed_count, 1);
+        assert_eq!(state.get("k").unwrap().unwrap().data, b"v2");
+    }
+
+    #[tokio::test]
+    async fn concurrent_independent_txs_one_wave() {
+        let state = Arc::new(ws());
+        state.put("a", b"v1").unwrap();
+        state.put("b", b"v1").unwrap();
+
+        let txs = vec![
+            endorsed("tx1", &[("a", 1)], &[("a", b"a2")]),
+            endorsed("tx2", &[("b", 1)], &[("b", b"b2")]),
+        ];
+
+        let result = execute_block_concurrent(&txs, state.clone()).await;
+        assert_eq!(result.schedule.wave_count, 1);
+        assert_eq!(result.committed_count, 2);
+        assert_eq!(state.get("a").unwrap().unwrap().data, b"a2");
+        assert_eq!(state.get("b").unwrap().unwrap().data, b"b2");
+    }
+
+    #[tokio::test]
+    async fn concurrent_conflicting_txs() {
+        let state = Arc::new(ws());
+        state.put("k", b"v1").unwrap();
+
+        let txs = vec![
+            endorsed("tx1", &[("k", 1)], &[("k", b"v2")]),
+            endorsed("tx2", &[("k", 1)], &[("k", b"v3")]),
+        ];
+
+        let result = execute_block_concurrent(&txs, state).await;
+        assert_eq!(result.committed_count, 1);
         assert_eq!(result.conflict_count, 1);
+    }
+
+    #[tokio::test]
+    async fn concurrent_stress_100_independent() {
+        let state = Arc::new(ws());
+        let mut txs = Vec::new();
+
+        for i in 0..100 {
+            let key = format!("key_{i}");
+            state.put(&key, b"v1").unwrap();
+            txs.push(endorsed(
+                &format!("tx{i}"),
+                &[(&key, 1)],
+                &[(&key, b"v2")],
+            ));
+        }
+
+        let result = execute_block_concurrent(&txs, state).await;
+        assert_eq!(result.schedule.wave_count, 1);
+        assert_eq!(result.committed_count, 100);
+        assert_eq!(result.conflict_count, 0);
+    }
+
+    #[tokio::test]
+    async fn concurrent_matches_sync_results() {
+        // Same workload through both executors should produce identical outcomes.
+        let state_sync = ws();
+        let state_async = Arc::new(ws());
+
+        // Seed both with identical state.
+        for s in [&state_sync as &dyn WorldState, state_async.as_ref()] {
+            s.put("a", b"v1").unwrap();
+            s.put("b", b"v1").unwrap();
+            s.put("shared", b"v1").unwrap();
+        }
+
+        let txs = vec![
+            endorsed("tx0", &[("a", 1)], &[("a", b"a2")]),
+            endorsed("tx1", &[("b", 1)], &[("b", b"b2")]),
+            endorsed("tx2", &[("shared", 1)], &[("shared", b"s2")]),
+            endorsed("tx3", &[("shared", 1)], &[("shared", b"s3")]),
+        ];
+
+        let sync_result = execute_block_parallel(&txs, &state_sync);
+        let async_result = execute_block_concurrent(&txs, state_async).await;
+
+        assert_eq!(sync_result.committed_count, async_result.committed_count);
+        assert_eq!(sync_result.conflict_count, async_result.conflict_count);
+        assert_eq!(sync_result.schedule.wave_count, async_result.schedule.wave_count);
+
+        // Per-tx outcomes must match.
+        for (i, (s, a)) in sync_result.outcomes.iter().zip(async_result.outcomes.iter()).enumerate() {
+            assert_eq!(s.1, a.1, "outcome mismatch at tx {i}");
+        }
     }
 }

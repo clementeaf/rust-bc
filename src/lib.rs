@@ -46,6 +46,7 @@ pub mod events;
 pub mod bridge;
 pub mod gateway;
 pub mod governance;
+pub mod light_client;
 pub mod msp;
 pub mod ordering;
 pub mod pki;

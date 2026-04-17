@@ -53,6 +53,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `governance::voting` — stake-weighted voting (Yes/No/Abstain), quorum check against total staked power, pass threshold on yes/(yes+no), abstain counts for quorum only, full governance integration test
 - 34 new tests (7 params + 13 proposals + 14 voting including end-to-end flow)
 
+**Concurrent Execution & Light Client**
+- `transaction::executor::execute_block_concurrent()` — async tokio executor: spawns validation tasks per tx within each wave, applies writes deterministically after all validations complete
+- `light_client::header` — compact `BlockHeader` (~300 bytes vs ~10 KB full block), `HeaderChain` with hash integrity and parent linkage verification
+- `light_client::client` — `LightClient` with BFT header verification (CommitQC validation), state proof verification via Merkle proofs against synced headers, 100-header sync stress test
+- 30 new tests (6 concurrent executor + 13 header + 11 client)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
