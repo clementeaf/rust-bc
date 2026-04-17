@@ -1,8 +1,8 @@
 # rust-bc vs IOTA Rebased — Gap Analysis
 
-> Last updated: 2026-04-16
+> Last updated: 2026-04-16 (post Phase 5 + extras)
 >
-> Objective: Track competitive gaps between rust-bc and IOTA Rebased, document progress, and guide the next implementation phases.
+> Objective: Track competitive gaps between rust-bc and IOTA Rebased.
 
 ---
 
@@ -25,91 +25,87 @@ IOTA pivoted in late 2024 from its original Tangle (feeless DAG) and abandoned I
 
 ---
 
-## Current Status — Gaps Closed
+## Completed Phases
 
-### Phase 1 — BFT Consensus ✅ DONE
+### Phase 1 — BFT Consensus ✅
 
-Replaced Raft-only consensus with a selectable Raft/BFT backend.
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Protocol** | Mysticeti (leaderless DAG BFT) | HotStuff-inspired (leader-based, 3-phase) |
+| **Fault tolerance** | f = (n-1)/3 | f = (n-1)/3 |
+| **Backend selection** | DPoS only | Raft (CFT) or BFT selectable via `CONSENSUS_MODE` |
 
-**Implemented (`src/consensus/bft/`):**
-- `types.rs` — `VoteMessage`, `QuorumCertificate`, `BftPhase` (Prepare→PreCommit→Commit→Decide) with phase-aware signing payload (domain separation)
-- `quorum.rs` — `QuorumValidator` (2f+1 threshold), `SignatureVerifier` trait, `ensure_bft_viable()` guard (min 4 validators), `HashSet`-backed validator registry
-- `vote_collector.rs` — accumulates votes per (phase, round, block_hash), signals quorum
-- `round.rs` — event-driven state machine: AwaitingProposal→Preparing→PreCommitting→Committing→Decided/Failed
-- `round_manager.rs` — orchestrates rounds with round-robin leader rotation, exponential backoff timeouts (3s base, 30s cap), highest QC tracking
-- `backend.rs` — `ConsensusBackend` trait, `ConsensusMode` enum (Raft/Bft), `CONSENSUS_MODE` env var
-- `engine.rs` — `with_bft()` builder, CommitQC validation on block acceptance (phase, hash, quorum)
-- `dag.rs` — `DagBlock.commit_qc` field
-- `network/mod.rs` — P2P message types: `BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange`
+**Implemented:** `consensus::bft/` — types, quorum validation (2f+1), vote collector, round state machine, round manager (leader rotation, exponential backoff), P2P message types, `ConsensusEngine.with_bft()`, `DagBlock.commit_qc`.
 
-**Verified (`tests/bft_e2e.rs`):**
-- 147 unit tests + 16 adversarial E2E integration tests
-- Scenarios: 4/7/10-node networks, equivocation attacks, crash faults, silent leaders with view change, network partitions (minority/majority), partition healing, alternating partitions, 100-round stress tests, mixed faults across rounds
-- Safety verified: no two honest nodes decide different blocks
-- Liveness verified: progress with up to f faults, stall below threshold
+**Verified:** 147 unit tests + 16 adversarial E2E tests (4/7/10-node networks, equivocation, crash faults, silent leaders, partitions, 100-round stress).
 
-**Design choice:** HotStuff-inspired (leader-based, 3-phase) rather than Mysticeti (leaderless DAG). Simpler, well-understood, and Raft remains as `ConsensusMode::Raft` for permissioned deployments.
+### Phase 2 — Parallel Transaction Execution ✅
+
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Model** | Object-centric (Sui-style), automatic | Wave scheduling via RW set conflict analysis |
+| **Parallelism** | At VM level | At batch level (waves) + intra-wave tokio tasks |
+
+**Implemented:** `transaction::parallel` — conflict detector (RAW/WAW/WAR), dependency graph, wave scheduler. `transaction::executor` — synchronous wave executor + `execute_block_concurrent()` with tokio `spawn_blocking` per tx within each wave. `Gateway.commit_block_parallel()` integrates ordering, execution, persistence, and events.
+
+**Verified:** 15 conflict tests + 15 executor tests (sync + async, 100-tx stress, sync/async result parity) + 4 gateway integration tests.
+
+### Phase 3 — Protocol-Native Tokenomics ✅
+
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Supply** | 4.6B, no hard cap, ~6% inflation | 100M hard cap, halving issuance (50→25→12...) |
+| **Fees** | Burned (deflationary) | 80% burned / 20% proposer, EIP-1559 dynamic base fee |
+| **Storage** | Storage deposits | Storage deposits (proportional to data size) |
+
+**Implemented:** `tokenomics::economics` — `MAX_SUPPLY`, halving curve, capped rewards, fee split, dynamic base fee (adjusts ±12.5% per block by utilization), epoch tracking, `process_block()` state machine. `tokenomics::storage_deposit` — `DepositLedger` (lock/refund/update lifecycle).
+
+**Verified:** 24 economics tests + 20 storage deposit tests (lifecycle, stress 1000 deposits).
+
+### Phase 4 — Cross-Chain Bridges ✅
+
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Connectivity** | 150+ chains in production | Bridge framework with chain registry, escrow, proof verification |
+| **Status** | Production | Infrastructure ready, no live chain connected yet |
+
+**Implemented:** `bridge::types` — chain registry, message envelope, transfer records. `bridge::escrow` — `EscrowVault` (lock/release outbound, mint/burn inbound, multi-chain wrapped tokens). `bridge::verifier` — SHA-256 Merkle tree builder + inclusion proof verification. `bridge::protocol` — `BridgeEngine` (chain registry, transfer initiation, inbound verify+mint, replay protection, confirmation thresholds).
+
+**Verified:** 5 type tests + 16 escrow tests + 11 verifier tests (tamper, 1000-leaf stress) + 11 protocol tests (unknown chain, inactive, confirmations, invalid proof, replay).
+
+### Phase 5 — On-Chain Governance ✅
+
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Governance** | On-chain voting | Proposals, stake-weighted voting, timelock execution |
+
+**Implemented:** `governance::params` — typed `ParamRegistry` with 10 protocol defaults. `governance::proposals` — `ProposalStore` (submit with deposit → vote → pass/reject → timelock → execute/cancel). `governance::voting` — `VoteStore` (Yes/No/Abstain, quorum against total staked power, pass threshold on yes/(yes+no), abstain counts for quorum only).
+
+**Verified:** 7 param tests + 13 proposal tests + 14 voting tests (including end-to-end governance flow).
+
+### Extra — Concurrent Execution + Light Client ✅
+
+| Aspect | IOTA | rust-bc |
+|--------|------|---------|
+| **Intra-wave parallelism** | Native (VM-level) | tokio `spawn_blocking` per tx |
+| **Light clients** | Supported | `LightClient` with BFT header verification + state proofs |
+
+**Implemented:** `execute_block_concurrent()` — async tokio executor. `light_client::header` — compact `BlockHeader` (~300 bytes), `HeaderChain`. `light_client::client` — `LightClient` with BFT CommitQC verification and Merkle state proof verification.
+
+**Verified:** 6 concurrent executor tests (async parity with sync) + 13 header tests + 11 client tests (BFT verification, state proofs, 100-header sync).
 
 ---
 
-## Remaining Gaps — Ordered by Impact
+## Remaining Gaps (honest assessment)
 
-### Phase 2 — Parallel Transaction Execution (next priority)
-
-| Aspect | IOTA | rust-bc |
-|--------|------|---------|
-| **Model** | Object-centric (like Sui) — automatic parallel execution | Sequential chaincode executor |
-| **TPS impact** | 50,000+ | ~18.7K (single-node ordering) |
-
-**Foundation that already exists:**
-- `chaincode/invoker.rs` tracks read-set/write-set per invocation
-- `chaincode/simulation.rs` provides read-only evaluation with RW tracking
-- `endorsement/` validates endorsements after simulation
-
-**What needs to be built:**
-1. Conflict detector: given a batch of txs, build a dependency graph from their read/write sets
-2. Parallel executor: group non-conflicting txs into waves, execute each wave concurrently
-3. Deterministic ordering: ensure all validators produce the same execution result regardless of parallelism
-
-**Expected impact:** 2-4x throughput improvement, closing the gap to ~40-75K TPS.
-
-### Phase 3 — Protocol-Native Tokenomics
-
-| Aspect | IOTA | rust-bc |
-|--------|------|---------|
-| **Fee model** | Gas fees burned (deflationary) | SaaS billing tiers (Free/$49/$299) |
-| **Storage** | Storage deposits (lock tokens, refund on delete) | None |
-| **Inflation** | ~6% annual, offset by fee burning | No formal model |
-| **Staking** | DPoS, 10-15% APY | Basic staking with fixed rewards |
-
-**What needs to be built:**
-1. Fee burning: tx fees → burn address (reduce supply)
-2. Storage deposits: lock NOTA when creating on-chain objects, refund on deletion
-3. Formal issuance curve: predictable block rewards with decay schedule
-4. Validator economics: align staking rewards with BFT security needs
-
-### Phase 4 — Cross-Chain Bridges
-
-| Aspect | IOTA | rust-bc |
-|--------|------|---------|
-| **Connectivity** | 150+ chains, native bridges | Zero cross-chain |
-
-**Options:**
-- **IBC**: Well-defined standard, growing ecosystem
-- **EVM bridge**: Access Ethereum/L2 liquidity
-- **Light client verification**: Required foundation for trustless bridges
-
-### Phase 5 — On-Chain Governance
-
-| Aspect | IOTA | rust-bc |
-|--------|------|---------|
-| **Governance** | On-chain voting (decided the Rebased pivot) | Off-chain only |
-
-**What needs to be built:**
-1. Proposal submission with deposit
-2. Stake-weighted voting
-3. Timelock execution of approved proposals
-4. Parameter change governance (block size, fees, slashing)
+| # | Gap | Impact | Detail |
+|---|-----|--------|--------|
+| 1 | **Real-world TPS** | High | 18.7K TPS benchmarked (single-node). Concurrent executor improves this but needs load testing under BFT with 4+ nodes. IOTA claims 50K+. |
+| 2 | **Live bridge** | High | Bridge framework is complete but no chain is connected. IOTA has 150+ chains in production. Next step: connect Ethereum or Cosmos testnet. |
+| 3 | **DPoS validator selection** | Medium | Staking exists but validator selection is not proportional to stake. IOTA has full DPoS with 150 validators. |
+| 4 | **Developer ecosystem** | Medium | Python SDK + JS SDK + Vite explorer. IOTA has Move language, dApp Kit, mature docs. |
+| 5 | **Public testnet** | Medium | Docker local only. Need a public testnet for community testing. |
+| 6 | **EVM compatibility** | Low | IOTA has EVM on L2. rust-bc has Wasm (multi-language). Different tradeoff, not a direct gap. |
 
 ---
 
@@ -117,20 +113,41 @@ Replaced Raft-only consensus with a selectable Raft/BFT backend.
 
 | Area | Detail |
 |------|--------|
-| **Post-Quantum Crypto** | ML-DSA-65 (FIPS 204) integrated end-to-end. IOTA has no PQC. |
-| **Resource footprint** | ~50 MB/node vs 128 GB RAM per IOTA validator. Orders of magnitude lighter. |
-| **Enterprise permissioned** | mTLS, ACL, org registry, endorsement policies, private data collections, Raft option. IOTA is public-only. |
-| **Dual consensus** | Raft (permissioned) or BFT (semi-public) selectable at runtime. IOTA is DPoS-only. |
-| **Fabric compatibility** | Endorse→Order→Commit pipeline, chaincode lifecycle. Direct migration path from Hyperledger Fabric. |
-| **Security posture** | Audit 10/10 closed, FIPS KAT self-tests, Wasmtime v36 (15 CVEs patched), zero clippy warnings. |
-| **Wasm chaincode** | Any language that compiles to Wasm (Rust, Go, C, AssemblyScript). Move is Move-only. |
+| **Post-Quantum Crypto** | ML-DSA-65 (FIPS 204) integrated end-to-end. IOTA has no PQC. Regulatory advantage growing in 2026-2027. |
+| **Resource footprint** | ~50 MB/node vs 128 GB RAM per IOTA validator. 2500x lighter. Decisive for IoT and edge. |
+| **Dual consensus** | Raft (enterprise) or BFT (semi-public) selectable via env var. IOTA is DPoS-only. |
+| **Enterprise permissioned** | mTLS, ACL, org registry, endorsement policies, private data, Fabric-compatible pipeline. IOTA is public-only. |
+| **Dynamic base fee** | EIP-1559 style fee adjustment by congestion. IOTA has static fees. |
+| **Light client** | BFT-verified header chain + Merkle state proofs. Enables IoT/mobile without full node. |
+| **Security posture** | Audit 10/10, FIPS KAT self-tests, Wasmtime v36, 2500+ tests, zero clippy warnings. |
+| **Wasm chaincode** | Any language (Rust, Go, C, AssemblyScript). Move is Move-only. |
+
+---
+
+## Test Coverage Summary
+
+| Module | Tests |
+|--------|-------|
+| BFT consensus (unit) | 147 |
+| BFT E2E adversarial | 16 |
+| Parallel execution | 15 |
+| Executor (sync + concurrent) | 15 |
+| Gateway | 30 |
+| Tokenomics | 44 |
+| Bridge | 43 |
+| Governance | 34 |
+| Light client | 24 |
+| Pre-existing tests | ~880 |
+| **Total suite** | **~2500+ executions, 0 failures** |
 
 ---
 
 ## Strategic Positioning
 
-**Enterprise/permissioned (primary):** rust-bc is competitive now — BFT + Raft selectable, PQC, mTLS, 50 MB footprint, Fabric-compatible pipeline. IOTA does not compete in this space.
+**Enterprise/permissioned:** rust-bc wins. PQC + 50 MB footprint + Fabric compat + dual consensus + private data. No competitor matches this combination.
 
-**Public/semi-public (secondary):** Requires closing parallel execution and tokenomics gaps. With those two, rust-bc competes in the niche of lightweight PQC-ready blockchain for IoT and edge computing — where IOTA's 128 GB validator requirement is prohibitive.
+**IoT/edge computing:** rust-bc has a natural advantage. 50 MB nodes, PQC for long-lived devices, light client for constrained devices. IOTA's 128 GB validator requirement is prohibitive.
 
-**Differentiator to exploit:** PQC + lightweight footprint. No other L1 combines post-quantum signatures with sub-100 MB node requirements. This positions rust-bc uniquely for regulated industries (finance, government, defense) and resource-constrained deployments (IoT, edge, embedded).
+**Public/semi-public:** rust-bc competes structurally (BFT, governance, tokenomics, bridges). Gap is in ecosystem maturity and live network effects. Next steps: public testnet, connect a live bridge, DPoS validator selection.
+
+**Unique differentiator:** No other L1 combines post-quantum signatures + sub-100 MB nodes + Fabric compatibility + dynamic fees + light clients. This positions rust-bc for regulated industries (finance, government, defense) and resource-constrained deployments.
