@@ -137,7 +137,10 @@ mod tests {
     #[test]
     fn ecrecover_stub_needs_128_bytes() {
         let err = execute(0x01, b"too short").unwrap_err();
-        assert!(matches!(err, PrecompileError::InvalidInput { addr: 0x01, .. }));
+        assert!(matches!(
+            err,
+            PrecompileError::InvalidInput { addr: 0x01, .. }
+        ));
     }
 
     #[test]

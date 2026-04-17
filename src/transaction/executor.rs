@@ -42,7 +42,7 @@ pub struct BlockExecResult {
 /// MVCC validation result for a single tx (used internally).
 #[derive(Debug)]
 enum ValidationResult {
-    Valid(usize), // index
+    Valid(usize),            // index
     Conflict(usize, String), // index, conflict key
 }
 
@@ -73,10 +73,7 @@ pub fn execute_block_parallel(
                     for write in &endorsed.rwset.writes {
                         let _ = state.put(&write.key, &write.value);
                     }
-                    outcomes[idx] = Some((
-                        endorsed.proposal.tx.id.clone(),
-                        TxOutcome::Committed,
-                    ));
+                    outcomes[idx] = Some((endorsed.proposal.tx.id.clone(), TxOutcome::Committed));
                     committed_count += 1;
                 }
                 Err(conflict) => {
@@ -131,12 +128,12 @@ pub async fn execute_block_concurrent(
             let rwset = txs[idx].rwset.clone();
             let ws = Arc::clone(&state);
 
-            handles.push(tokio::task::spawn_blocking(move || {
-                match mvcc::validate_rwset(&rwset, ws.as_ref()) {
+            handles.push(tokio::task::spawn_blocking(
+                move || match mvcc::validate_rwset(&rwset, ws.as_ref()) {
                     Ok(()) => ValidationResult::Valid(idx),
                     Err(conflict) => ValidationResult::Conflict(idx, conflict.key),
-                }
-            }));
+                },
+            ));
         }
 
         // Collect all validation results.
@@ -167,10 +164,7 @@ pub async fn execute_block_concurrent(
             for write in &endorsed.rwset.writes {
                 let _ = state.put(&write.key, &write.value);
             }
-            outcomes[idx] = Some((
-                endorsed.proposal.tx.id.clone(),
-                TxOutcome::Committed,
-            ));
+            outcomes[idx] = Some((endorsed.proposal.tx.id.clone(), TxOutcome::Committed));
             committed_count += 1;
         }
     }
@@ -263,11 +257,7 @@ mod tests {
         }
     }
 
-    fn endorsed(
-        id: &str,
-        reads: &[(&str, u64)],
-        writes: &[(&str, &[u8])],
-    ) -> EndorsedTransaction {
+    fn endorsed(id: &str, reads: &[(&str, u64)], writes: &[(&str, &[u8])]) -> EndorsedTransaction {
         let rw = ReadWriteSet {
             reads: reads
                 .iter()
@@ -334,7 +324,10 @@ mod tests {
 
         let result = execute_block_parallel(&txs, &state);
         assert_eq!(result.conflict_count, 1);
-        assert!(matches!(result.outcomes[0].1, TxOutcome::MvccConflict { .. }));
+        assert!(matches!(
+            result.outcomes[0].1,
+            TxOutcome::MvccConflict { .. }
+        ));
         assert_eq!(state.get("k").unwrap().unwrap().data, b"v2");
     }
 
@@ -415,11 +408,7 @@ mod tests {
         for i in 0..50 {
             let key = format!("key_{i}");
             state.put(&key, b"v1").unwrap();
-            txs.push(endorsed(
-                &format!("tx{i}"),
-                &[(&key, 1)],
-                &[(&key, b"v2")],
-            ));
+            txs.push(endorsed(&format!("tx{i}"), &[(&key, 1)], &[(&key, b"v2")]));
         }
 
         let result = execute_block_parallel(&txs, &state);
@@ -445,7 +434,10 @@ mod tests {
         assert_eq!(result.outcomes[0].1, TxOutcome::Committed);
         assert_eq!(result.outcomes[1].1, TxOutcome::Committed);
         assert_eq!(result.outcomes[2].1, TxOutcome::Committed);
-        assert!(matches!(result.outcomes[3].1, TxOutcome::MvccConflict { .. }));
+        assert!(matches!(
+            result.outcomes[3].1,
+            TxOutcome::MvccConflict { .. }
+        ));
         assert_eq!(result.committed_count, 3);
     }
 
@@ -511,11 +503,7 @@ mod tests {
         for i in 0..100 {
             let key = format!("key_{i}");
             state.put(&key, b"v1").unwrap();
-            txs.push(endorsed(
-                &format!("tx{i}"),
-                &[(&key, 1)],
-                &[(&key, b"v2")],
-            ));
+            txs.push(endorsed(&format!("tx{i}"), &[(&key, 1)], &[(&key, b"v2")]));
         }
 
         let result = execute_block_concurrent(&txs, state).await;
@@ -549,10 +537,18 @@ mod tests {
 
         assert_eq!(sync_result.committed_count, async_result.committed_count);
         assert_eq!(sync_result.conflict_count, async_result.conflict_count);
-        assert_eq!(sync_result.schedule.wave_count, async_result.schedule.wave_count);
+        assert_eq!(
+            sync_result.schedule.wave_count,
+            async_result.schedule.wave_count
+        );
 
         // Per-tx outcomes must match.
-        for (i, (s, a)) in sync_result.outcomes.iter().zip(async_result.outcomes.iter()).enumerate() {
+        for (i, (s, a)) in sync_result
+            .outcomes
+            .iter()
+            .zip(async_result.outcomes.iter())
+            .enumerate()
+        {
             assert_eq!(s.1, a.1, "outcome mismatch at tx {i}");
         }
     }

@@ -76,11 +76,7 @@ impl Faucet {
     ///
     /// Returns the drip result on success. The caller is responsible for
     /// actually crediting the tokens to the recipient's balance.
-    pub fn drip(
-        &self,
-        recipient: &str,
-        current_block: u64,
-    ) -> Result<DripResult, FaucetError> {
+    pub fn drip(&self, recipient: &str, current_block: u64) -> Result<DripResult, FaucetError> {
         if !self.config.enabled {
             return Err(FaucetError::Disabled);
         }

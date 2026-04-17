@@ -4,5 +4,5 @@
 //! A light client tracks block headers and validates Merkle proofs against
 //! them, trusting the BFT quorum for header authenticity.
 
-pub mod header;
 pub mod client;
+pub mod header;

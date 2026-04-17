@@ -324,11 +324,23 @@ mod tests {
     }
 
     fn leader_round(round: u64, leader: &str) -> BftRound<AcceptAllVerifier> {
-        BftRound::new(round, leader.into(), leader.into(), validators(), AcceptAllVerifier)
+        BftRound::new(
+            round,
+            leader.into(),
+            leader.into(),
+            validators(),
+            AcceptAllVerifier,
+        )
     }
 
     fn follower_round(round: u64, node: &str, leader: &str) -> BftRound<AcceptAllVerifier> {
-        BftRound::new(round, node.into(), leader.into(), validators(), AcceptAllVerifier)
+        BftRound::new(
+            round,
+            node.into(),
+            leader.into(),
+            validators(),
+            AcceptAllVerifier,
+        )
     }
 
     // --- initial state ---
@@ -420,34 +432,82 @@ mod tests {
         assert_eq!(r.state(), RoundState::Preparing);
 
         // 2. Collect 3 Prepare votes (threshold=3 for n=4).
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::Prepare, 1, 0, "v0")));
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::Prepare, 1, 0, "v1")));
-        let action =
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::Prepare, 1, 0, "v2")));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Prepare,
+            1,
+            0,
+            "v0",
+        )));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Prepare,
+            1,
+            0,
+            "v1",
+        )));
+        let action = r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Prepare,
+            1,
+            0,
+            "v2",
+        )));
         assert!(matches!(
             action,
-            RoundAction::PhaseComplete { phase: BftPhase::Prepare, .. }
+            RoundAction::PhaseComplete {
+                phase: BftPhase::Prepare,
+                ..
+            }
         ));
         assert_eq!(r.state(), RoundState::PreCommitting);
         assert!(r.prepare_qc().is_some());
 
         // 3. Collect 3 PreCommit votes.
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::PreCommit, 1, 0, "v0")));
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::PreCommit, 1, 0, "v1")));
-        let action =
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::PreCommit, 1, 0, "v2")));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::PreCommit,
+            1,
+            0,
+            "v0",
+        )));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::PreCommit,
+            1,
+            0,
+            "v1",
+        )));
+        let action = r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::PreCommit,
+            1,
+            0,
+            "v2",
+        )));
         assert!(matches!(
             action,
-            RoundAction::PhaseComplete { phase: BftPhase::PreCommit, .. }
+            RoundAction::PhaseComplete {
+                phase: BftPhase::PreCommit,
+                ..
+            }
         ));
         assert_eq!(r.state(), RoundState::Committing);
         assert!(r.precommit_qc().is_some());
 
         // 4. Collect 3 Commit votes → Decide.
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::Commit, 1, 0, "v0")));
-        r.process(RoundEvent::Vote(make_test_vote(BftPhase::Commit, 1, 0, "v1")));
-        let action =
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::Commit, 1, 0, "v2")));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Commit,
+            1,
+            0,
+            "v0",
+        )));
+        r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Commit,
+            1,
+            0,
+            "v1",
+        )));
+        let action = r.process(RoundEvent::Vote(make_test_vote(
+            BftPhase::Commit,
+            1,
+            0,
+            "v2",
+        )));
         match action {
             RoundAction::Decide {
                 block_hash: decided_hash,
@@ -484,13 +544,28 @@ mod tests {
             block_hash: block_hash(1),
         });
         for voter in &["v0", "v1", "v2"] {
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::Prepare, 1, 0, voter)));
+            r.process(RoundEvent::Vote(make_test_vote(
+                BftPhase::Prepare,
+                1,
+                0,
+                voter,
+            )));
         }
         for voter in &["v0", "v1", "v2"] {
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::PreCommit, 1, 0, voter)));
+            r.process(RoundEvent::Vote(make_test_vote(
+                BftPhase::PreCommit,
+                1,
+                0,
+                voter,
+            )));
         }
         for voter in &["v0", "v1", "v2"] {
-            r.process(RoundEvent::Vote(make_test_vote(BftPhase::Commit, 1, 0, voter)));
+            r.process(RoundEvent::Vote(make_test_vote(
+                BftPhase::Commit,
+                1,
+                0,
+                voter,
+            )));
         }
         assert_eq!(r.state(), RoundState::Decided);
 
@@ -504,7 +579,10 @@ mod tests {
     fn votes_before_proposal_ignored() {
         let mut r = leader_round(0, "v0");
         let action = r.process(RoundEvent::Vote(make_test_vote(
-            BftPhase::Prepare, 1, 0, "v1",
+            BftPhase::Prepare,
+            1,
+            0,
+            "v1",
         )));
         assert_eq!(action, RoundAction::None);
     }
@@ -519,7 +597,10 @@ mod tests {
         // Commit vote during Prepare phase — routed to Commit collector, which
         // doesn't exist yet (state is Preparing), so it's a no-op.
         let action = r.process(RoundEvent::Vote(make_test_vote(
-            BftPhase::Commit, 1, 0, "v0",
+            BftPhase::Commit,
+            1,
+            0,
+            "v0",
         )));
         assert_eq!(action, RoundAction::None);
     }

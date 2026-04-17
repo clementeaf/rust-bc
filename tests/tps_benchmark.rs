@@ -7,14 +7,14 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use rust_bc::endorsement::types::Endorsement;
+use rust_bc::storage::traits::Transaction;
 use rust_bc::storage::MemoryWorldState;
+use rust_bc::storage::WorldState;
 use rust_bc::transaction::endorsed::EndorsedTransaction;
 use rust_bc::transaction::executor::{execute_block_concurrent, execute_block_parallel};
 use rust_bc::transaction::proposal::TransactionProposal;
 use rust_bc::transaction::rwset::{KVRead, KVWrite, ReadWriteSet};
-use rust_bc::endorsement::types::Endorsement;
-use rust_bc::storage::traits::Transaction;
-use rust_bc::storage::WorldState;
 
 fn make_tx(id: &str) -> Transaction {
     Transaction {
@@ -156,7 +156,11 @@ fn bench_sync_500_independent() {
     assert_eq!(result.committed_count, 500);
     // Debug mode overhead is ~5-10x; these thresholds are for unoptimized builds.
     // Release mode (`cargo test --release`) reaches 20K+ TPS.
-    assert!(bench.tps > 1_000.0, "expected >1K TPS (debug), got {:.0}", bench.tps);
+    assert!(
+        bench.tps > 1_000.0,
+        "expected >1K TPS (debug), got {:.0}",
+        bench.tps
+    );
 }
 
 #[test]
@@ -207,7 +211,11 @@ fn bench_sync_1000_mixed() {
     eprintln!("{bench}");
 
     // Should have some parallelism (not 1000 waves).
-    assert!(bench.tps > 1_000.0, "expected >1K TPS (debug), got {:.0}", bench.tps);
+    assert!(
+        bench.tps > 1_000.0,
+        "expected >1K TPS (debug), got {:.0}",
+        bench.tps
+    );
     assert!(result.committed_count > 100, "expected >100 committed");
 }
 
@@ -282,9 +290,17 @@ async fn bench_sync_vs_concurrent_parity() {
 
     assert_eq!(sync_result.committed_count, async_result.committed_count);
     assert_eq!(sync_result.conflict_count, async_result.conflict_count);
-    assert_eq!(sync_result.schedule.wave_count, async_result.schedule.wave_count);
+    assert_eq!(
+        sync_result.schedule.wave_count,
+        async_result.schedule.wave_count
+    );
 
-    for (i, (s, a)) in sync_result.outcomes.iter().zip(async_result.outcomes.iter()).enumerate() {
+    for (i, (s, a)) in sync_result
+        .outcomes
+        .iter()
+        .zip(async_result.outcomes.iter())
+        .enumerate()
+    {
         assert_eq!(s.1, a.1, "outcome mismatch at tx {i}");
     }
 }

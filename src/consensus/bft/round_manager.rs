@@ -106,8 +106,7 @@ impl<V: SignatureVerifier + Clone> RoundManager<V> {
 
     /// Current timeout in ms (with exponential backoff).
     pub fn current_timeout_ms(&self) -> u64 {
-        let timeout = self.config.base_timeout_ms
-            * 2u64.saturating_pow(self.consecutive_timeouts);
+        let timeout = self.config.base_timeout_ms * 2u64.saturating_pow(self.consecutive_timeouts);
         timeout.min(self.config.max_timeout_ms)
     }
 
@@ -279,7 +278,9 @@ mod tests {
         m.start();
         let action = m.on_timeout();
         match action {
-            ManagerAction::NewRound { round, leader_id, .. } => {
+            ManagerAction::NewRound {
+                round, leader_id, ..
+            } => {
                 assert_eq!(round, 1);
                 assert_eq!(leader_id, "v1");
             }
@@ -369,9 +370,7 @@ mod tests {
     #[test]
     fn events_before_start_are_noop() {
         let mut m = manager("v0");
-        let action = m.process_event(RoundEvent::Vote(make_vote(
-            BftPhase::Prepare, 1, 0, "v0",
-        )));
+        let action = m.process_event(RoundEvent::Vote(make_vote(BftPhase::Prepare, 1, 0, "v0")));
         assert_eq!(action, ManagerAction::None);
     }
 
@@ -384,7 +383,9 @@ mod tests {
         for expected_round in 0..3u64 {
             let action = m.start_round(expected_round);
             match action {
-                ManagerAction::NewRound { round, leader_id, .. } => {
+                ManagerAction::NewRound {
+                    round, leader_id, ..
+                } => {
                     assert_eq!(round, expected_round);
                     let expected_leader = format!("v{}", expected_round % 4);
                     assert_eq!(leader_id, expected_leader);

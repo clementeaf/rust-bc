@@ -200,7 +200,8 @@ mod tests {
     #[test]
     fn cast_vote_ok() {
         let s = store();
-        s.cast_vote(1, "alice", VoteOption::Yes, 1000, 50, 100).unwrap();
+        s.cast_vote(1, "alice", VoteOption::Yes, 1000, 50, 100)
+            .unwrap();
         let vote = s.get_vote(1, "alice").unwrap();
         assert_eq!(vote.option, VoteOption::Yes);
         assert_eq!(vote.power, 1000);
@@ -209,30 +210,39 @@ mod tests {
     #[test]
     fn cast_vote_duplicate_rejected() {
         let s = store();
-        s.cast_vote(1, "alice", VoteOption::Yes, 1000, 50, 100).unwrap();
-        let err = s.cast_vote(1, "alice", VoteOption::No, 1000, 60, 100).unwrap_err();
+        s.cast_vote(1, "alice", VoteOption::Yes, 1000, 50, 100)
+            .unwrap();
+        let err = s
+            .cast_vote(1, "alice", VoteOption::No, 1000, 60, 100)
+            .unwrap_err();
         assert!(matches!(err, VotingError::AlreadyVoted(1)));
     }
 
     #[test]
     fn cast_vote_zero_power_rejected() {
         let s = store();
-        let err = s.cast_vote(1, "alice", VoteOption::Yes, 0, 50, 100).unwrap_err();
+        let err = s
+            .cast_vote(1, "alice", VoteOption::Yes, 0, 50, 100)
+            .unwrap_err();
         assert!(matches!(err, VotingError::ZeroPower));
     }
 
     #[test]
     fn cast_vote_after_deadline_rejected() {
         let s = store();
-        let err = s.cast_vote(1, "alice", VoteOption::Yes, 1000, 100, 100).unwrap_err();
+        let err = s
+            .cast_vote(1, "alice", VoteOption::Yes, 1000, 100, 100)
+            .unwrap_err();
         assert!(matches!(err, VotingError::VotingEnded(1)));
     }
 
     #[test]
     fn different_proposals_independent() {
         let s = store();
-        s.cast_vote(1, "alice", VoteOption::Yes, 100, 50, 200).unwrap();
-        s.cast_vote(2, "alice", VoteOption::No, 100, 50, 200).unwrap();
+        s.cast_vote(1, "alice", VoteOption::Yes, 100, 50, 200)
+            .unwrap();
+        s.cast_vote(2, "alice", VoteOption::No, 100, 50, 200)
+            .unwrap();
         assert_eq!(s.get_vote(1, "alice").unwrap().option, VoteOption::Yes);
         assert_eq!(s.get_vote(2, "alice").unwrap().option, VoteOption::No);
     }
@@ -243,8 +253,10 @@ mod tests {
     fn tally_narrow_reject_at_threshold_boundary() {
         let s = store();
         // 2000 yes / 3000 total = 66% — just below 67% threshold.
-        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100).unwrap();
-        s.cast_vote(1, "v2", VoteOption::Yes, 1000, 10, 100).unwrap();
+        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100)
+            .unwrap();
+        s.cast_vote(1, "v2", VoteOption::Yes, 1000, 10, 100)
+            .unwrap();
         s.cast_vote(1, "v3", VoteOption::No, 1000, 10, 100).unwrap();
 
         let result = s.tally(1, 3000, 33, 67);
@@ -255,8 +267,10 @@ mod tests {
     #[test]
     fn tally_passed_with_supermajority() {
         let s = store();
-        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100).unwrap();
-        s.cast_vote(1, "v2", VoteOption::Yes, 1000, 10, 100).unwrap();
+        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100)
+            .unwrap();
+        s.cast_vote(1, "v2", VoteOption::Yes, 1000, 10, 100)
+            .unwrap();
         s.cast_vote(1, "v3", VoteOption::Yes, 500, 10, 100).unwrap();
         s.cast_vote(1, "v4", VoteOption::No, 500, 10, 100).unwrap();
 
@@ -284,7 +298,8 @@ mod tests {
     fn tally_no_quorum() {
         let s = store();
         // Only 1 of 3 validators votes (power 1000 of 3000 = 33%).
-        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100).unwrap();
+        s.cast_vote(1, "v1", VoteOption::Yes, 1000, 10, 100)
+            .unwrap();
 
         // Quorum requires 34%.
         let result = s.tally(1, 3000, 34, 67);
@@ -296,7 +311,8 @@ mod tests {
     fn tally_abstain_counts_for_quorum_not_threshold() {
         let s = store();
         s.cast_vote(1, "v1", VoteOption::Yes, 500, 10, 100).unwrap();
-        s.cast_vote(1, "v2", VoteOption::Abstain, 2000, 10, 100).unwrap();
+        s.cast_vote(1, "v2", VoteOption::Abstain, 2000, 10, 100)
+            .unwrap();
 
         // total_voted = 2500/3000 = 83% → quorum met (33%)
         // yes/(yes+no) = 500/500 = 100% → passes threshold (67%)
@@ -357,8 +373,8 @@ mod tests {
 
     #[test]
     fn full_governance_flow() {
-        use super::super::params::{keys, ParamValue, ParamRegistry};
-        use super::super::proposals::{ProposalAction, ProposalStore, ProposalStatus};
+        use super::super::params::{keys, ParamRegistry, ParamValue};
+        use super::super::proposals::{ProposalAction, ProposalStatus, ProposalStore};
 
         let params = ParamRegistry::with_defaults();
         let proposals = ProposalStore::new();
@@ -387,9 +403,15 @@ mod tests {
             .unwrap();
 
         // 2. Validators vote (total stake = 10000).
-        votes.cast_vote(pid, "v1", VoteOption::Yes, 3000, 1001, 1000 + voting_period).unwrap();
-        votes.cast_vote(pid, "v2", VoteOption::Yes, 4000, 1002, 1000 + voting_period).unwrap();
-        votes.cast_vote(pid, "v3", VoteOption::No, 2000, 1003, 1000 + voting_period).unwrap();
+        votes
+            .cast_vote(pid, "v1", VoteOption::Yes, 3000, 1001, 1000 + voting_period)
+            .unwrap();
+        votes
+            .cast_vote(pid, "v2", VoteOption::Yes, 4000, 1002, 1000 + voting_period)
+            .unwrap();
+        votes
+            .cast_vote(pid, "v3", VoteOption::No, 2000, 1003, 1000 + voting_period)
+            .unwrap();
         // v4 abstains (doesn't vote)
 
         // 3. Tally after voting period.
@@ -398,7 +420,9 @@ mod tests {
         assert!(tally.passed); // 7000/9000 = 77% > 67%
 
         // 4. Mark passed + timelock.
-        proposals.mark_passed(pid, 1000 + voting_period, timelock).unwrap();
+        proposals
+            .mark_passed(pid, 1000 + voting_period, timelock)
+            .unwrap();
         let p = proposals.get(pid).unwrap();
         assert_eq!(p.status, ProposalStatus::Passed);
 

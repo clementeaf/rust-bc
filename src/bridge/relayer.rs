@@ -159,10 +159,7 @@ impl Relayer {
             }
             Err(e) => {
                 if job.attempts >= job.max_attempts {
-                    self.failed
-                        .lock()
-                        .unwrap()
-                        .push((msg_id, e.to_string()));
+                    self.failed.lock().unwrap().push((msg_id, e.to_string()));
                     *self.status.lock().unwrap() = RelayerStatus::Error;
                     Err(RelayerError::MaxRetries(msg_id))
                 } else {
@@ -176,11 +173,7 @@ impl Relayer {
     }
 
     /// Process all pending jobs until the queue is empty.
-    pub fn process_all(
-        &self,
-        engine: &BridgeEngine,
-        current_height: u64,
-    ) -> (usize, usize) {
+    pub fn process_all(&self, engine: &BridgeEngine, current_height: u64) -> (usize, usize) {
         let mut success = 0usize;
         let mut failures = 0usize;
 
@@ -282,7 +275,8 @@ mod tests {
 
         // Tokens minted.
         assert_eq!(
-            e.escrow.wrapped_balance("recv_1", &ChainId("ethereum".into()), "wETH"),
+            e.escrow
+                .wrapped_balance("recv_1", &ChainId("ethereum".into()), "wETH"),
             1000
         );
     }
@@ -293,7 +287,14 @@ mod tests {
         let r = Relayer::new(3);
 
         let msg = e
-            .initiate_transfer("alice", "0xBob", 500, "NOTA", &ChainId("ethereum".into()), 1)
+            .initiate_transfer(
+                "alice",
+                "0xBob",
+                500,
+                "NOTA",
+                &ChainId("ethereum".into()),
+                1,
+            )
             .unwrap();
         r.queue_outbound(msg);
 

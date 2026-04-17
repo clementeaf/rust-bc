@@ -35,7 +35,9 @@ pub struct UpgradeProposal {
 impl UpgradeProposal {
     /// Whether enough orgs have approved.
     pub fn is_ready(&self) -> bool {
-        self.required_orgs.iter().all(|org| self.approvals.contains(org))
+        self.required_orgs
+            .iter()
+            .all(|org| self.approvals.contains(org))
     }
 
     /// Number of approvals still needed.
@@ -159,10 +161,7 @@ impl UpgradeManager {
     }
 
     /// Commit the upgrade if all required orgs have approved.
-    pub fn commit(
-        &self,
-        chaincode_id: &str,
-    ) -> Result<UpgradeProposal, UpgradeError> {
+    pub fn commit(&self, chaincode_id: &str) -> Result<UpgradeProposal, UpgradeError> {
         let mut pending = self.pending.lock().unwrap();
         let proposal = pending
             .get_mut(chaincode_id)
@@ -238,7 +237,8 @@ mod tests {
     #[test]
     fn propose_upgrade() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100)
+            .unwrap();
         let p = mgr.get_pending("mycc").unwrap();
         assert_eq!(p.new_version, "2.0");
         assert!(!p.committed);
@@ -248,8 +248,11 @@ mod tests {
     #[test]
     fn propose_duplicate_fails() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100).unwrap();
-        let err = mgr.propose("mycc", "1.0", "3.0", hash(2), orgs(2), 101).unwrap_err();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100)
+            .unwrap();
+        let err = mgr
+            .propose("mycc", "1.0", "3.0", hash(2), orgs(2), 101)
+            .unwrap_err();
         assert!(matches!(err, UpgradeError::AlreadyPending(_, _)));
     }
 
@@ -258,7 +261,8 @@ mod tests {
     #[test]
     fn approve_by_required_org() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100)
+            .unwrap();
         let p = mgr.approve("mycc", "org0").unwrap();
         assert!(p.approvals.contains("org0"));
     }
@@ -266,7 +270,8 @@ mod tests {
     #[test]
     fn approve_by_unauthorized_org_fails() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100)
+            .unwrap();
         let err = mgr.approve("mycc", "intruder").unwrap_err();
         assert!(matches!(err, UpgradeError::UnauthorizedOrg(_)));
     }
@@ -274,7 +279,8 @@ mod tests {
     #[test]
     fn approve_duplicate_fails() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
         let err = mgr.approve("mycc", "org0").unwrap_err();
         assert!(matches!(err, UpgradeError::AlreadyApproved(_)));
@@ -285,7 +291,8 @@ mod tests {
     #[test]
     fn commit_with_all_approvals() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(2), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
         mgr.approve("mycc", "org1").unwrap();
 
@@ -297,17 +304,22 @@ mod tests {
     #[test]
     fn commit_insufficient_approvals_fails() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
 
         let err = mgr.commit("mycc").unwrap_err();
-        assert!(matches!(err, UpgradeError::InsufficientApprovals { have: 1, need: 3 }));
+        assert!(matches!(
+            err,
+            UpgradeError::InsufficientApprovals { have: 1, need: 3 }
+        ));
     }
 
     #[test]
     fn commit_already_committed_fails() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
         mgr.commit("mycc").unwrap();
 
@@ -320,7 +332,8 @@ mod tests {
     #[test]
     fn progress_tracks_approvals() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(4), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(4), 100)
+            .unwrap();
 
         let p = mgr.get_pending("mycc").unwrap();
         assert!((p.progress() - 0.0).abs() < f64::EPSILON);
@@ -334,7 +347,8 @@ mod tests {
     #[test]
     fn pending_approvals_lists_remaining() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
 
         let p = mgr.get_pending("mycc").unwrap();
@@ -348,7 +362,8 @@ mod tests {
     #[test]
     fn history_records_committed_upgrades() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
         mgr.commit("mycc").unwrap();
 
@@ -360,7 +375,8 @@ mod tests {
     #[test]
     fn no_pending_after_commit() {
         let mgr = UpgradeManager::new();
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(1), 100)
+            .unwrap();
         mgr.approve("mycc", "org0").unwrap();
         mgr.commit("mycc").unwrap();
 
@@ -374,7 +390,8 @@ mod tests {
         let mgr = UpgradeManager::new();
 
         // v1 → v2: 3 orgs must approve.
-        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100).unwrap();
+        mgr.propose("mycc", "1.0", "2.0", hash(1), orgs(3), 100)
+            .unwrap();
         assert_eq!(mgr.get_pending("mycc").unwrap().progress(), 0.0);
 
         mgr.approve("mycc", "org0").unwrap();
@@ -389,7 +406,8 @@ mod tests {
         assert_eq!(committed.new_version, "2.0");
 
         // Can propose next upgrade now.
-        mgr.propose("mycc", "2.0", "3.0", hash(2), orgs(3), 200).unwrap();
+        mgr.propose("mycc", "2.0", "3.0", hash(2), orgs(3), 200)
+            .unwrap();
         assert_eq!(mgr.get_pending("mycc").unwrap().new_version, "3.0");
         assert_eq!(mgr.get_history("mycc").len(), 1);
     }

@@ -116,10 +116,7 @@ impl ProposalStore {
     ///
     /// Returns the proposal ID. Caller must verify the proposer has sufficient
     /// balance and deduct the deposit externally.
-    pub fn submit(
-        &self,
-        params: SubmitParams<'_>,
-    ) -> Result<ProposalId, ProposalError> {
+    pub fn submit(&self, params: SubmitParams<'_>) -> Result<ProposalId, ProposalError> {
         let SubmitParams {
             proposer,
             action,
@@ -176,9 +173,7 @@ impl ProposalStore {
         timelock_blocks: u64,
     ) -> Result<(), ProposalError> {
         let mut proposals = self.proposals.lock().unwrap();
-        let p = proposals
-            .get_mut(&id)
-            .ok_or(ProposalError::NotFound(id))?;
+        let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Voting {
             return Err(ProposalError::InvalidState {
@@ -197,15 +192,9 @@ impl ProposalStore {
     }
 
     /// Mark a proposal as rejected.
-    pub fn mark_rejected(
-        &self,
-        id: ProposalId,
-        current_height: u64,
-    ) -> Result<(), ProposalError> {
+    pub fn mark_rejected(&self, id: ProposalId, current_height: u64) -> Result<(), ProposalError> {
         let mut proposals = self.proposals.lock().unwrap();
-        let p = proposals
-            .get_mut(&id)
-            .ok_or(ProposalError::NotFound(id))?;
+        let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Voting {
             return Err(ProposalError::InvalidState {
@@ -226,9 +215,7 @@ impl ProposalStore {
         current_height: u64,
     ) -> Result<Proposal, ProposalError> {
         let mut proposals = self.proposals.lock().unwrap();
-        let p = proposals
-            .get_mut(&id)
-            .ok_or(ProposalError::NotFound(id))?;
+        let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Passed {
             return Err(ProposalError::InvalidState {
@@ -256,9 +243,7 @@ impl ProposalStore {
         current_height: u64,
     ) -> Result<Proposal, ProposalError> {
         let mut proposals = self.proposals.lock().unwrap();
-        let p = proposals
-            .get_mut(&id)
-            .ok_or(ProposalError::NotFound(id))?;
+        let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.proposer != caller {
             return Err(ProposalError::NotProposer);
@@ -339,7 +324,15 @@ mod tests {
     fn submit_proposal() {
         let s = store();
         let id = s
-            .submit(sp("alice", param_change("min_tx_fee", 5), "raise fee", 10_000, 10_000, 100, 1000))
+            .submit(sp(
+                "alice",
+                param_change("min_tx_fee", 5),
+                "raise fee",
+                10_000,
+                10_000,
+                100,
+                1000,
+            ))
             .unwrap();
         assert_eq!(id, 1);
 
@@ -354,7 +347,15 @@ mod tests {
     fn submit_insufficient_deposit() {
         let s = store();
         let err = s
-            .submit(sp("alice", param_change("min_tx_fee", 5), "", 100, 10_000, 0, 1000))
+            .submit(sp(
+                "alice",
+                param_change("min_tx_fee", 5),
+                "",
+                100,
+                10_000,
+                0,
+                1000,
+            ))
             .unwrap_err();
         assert!(matches!(err, ProposalError::InsufficientDeposit { .. }));
     }
@@ -363,7 +364,9 @@ mod tests {
     fn submit_empty_changes_rejected() {
         let s = store();
         let action = ProposalAction::ParamChange { changes: vec![] };
-        let err = s.submit(sp("alice", action, "", 10_000, 10_000, 0, 1000)).unwrap_err();
+        let err = s
+            .submit(sp("alice", action, "", 10_000, 10_000, 0, 1000))
+            .unwrap_err();
         assert!(matches!(err, ProposalError::EmptyChanges));
     }
 
@@ -374,15 +377,21 @@ mod tests {
             title: "Upgrade plan".into(),
             description: "Details...".into(),
         };
-        let id = s.submit(sp("alice", action, "signal", 10_000, 10_000, 0, 1000)).unwrap();
+        let id = s
+            .submit(sp("alice", action, "signal", 10_000, 10_000, 0, 1000))
+            .unwrap();
         assert_eq!(s.get(id).unwrap().status, ProposalStatus::Voting);
     }
 
     #[test]
     fn ids_increment() {
         let s = store();
-        let id1 = s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 10)).unwrap();
-        let id2 = s.submit(sp("b", param_change("k", 2), "", 100, 100, 0, 10)).unwrap();
+        let id1 = s
+            .submit(sp("a", param_change("k", 1), "", 100, 100, 0, 10))
+            .unwrap();
+        let id2 = s
+            .submit(sp("b", param_change("k", 2), "", 100, 100, 0, 10))
+            .unwrap();
         assert_eq!(id1, 1);
         assert_eq!(id2, 2);
     }
@@ -392,7 +401,9 @@ mod tests {
     #[test]
     fn pass_and_execute_lifecycle() {
         let s = store();
-        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
 
         // Can't pass before voting ends.
         let err = s.mark_passed(id, 50, 50).unwrap_err();
@@ -418,7 +429,9 @@ mod tests {
     #[test]
     fn reject_proposal() {
         let s = store();
-        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
         s.mark_rejected(id, 100).unwrap();
         assert_eq!(s.get(id).unwrap().status, ProposalStatus::Rejected);
     }
@@ -426,7 +439,9 @@ mod tests {
     #[test]
     fn reject_already_passed_fails() {
         let s = store();
-        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
         s.mark_passed(id, 100, 50).unwrap();
         let err = s.mark_rejected(id, 110).unwrap_err();
         assert!(matches!(err, ProposalError::InvalidState { .. }));
@@ -437,7 +452,9 @@ mod tests {
     #[test]
     fn cancel_by_proposer() {
         let s = store();
-        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
         let p = s.cancel(id, "alice", 50).unwrap();
         assert_eq!(p.status, ProposalStatus::Cancelled);
     }
@@ -445,7 +462,9 @@ mod tests {
     #[test]
     fn cancel_by_non_proposer_fails() {
         let s = store();
-        let id = s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
         let err = s.cancel(id, "bob", 50).unwrap_err();
         assert!(matches!(err, ProposalError::NotProposer));
     }
@@ -455,9 +474,13 @@ mod tests {
     #[test]
     fn list_by_status() {
         let s = store();
-        s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 100)).unwrap();
-        s.submit(sp("b", param_change("k", 2), "", 100, 100, 0, 100)).unwrap();
-        let id3 = s.submit(sp("c", param_change("k", 3), "", 100, 100, 0, 100)).unwrap();
+        s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        s.submit(sp("b", param_change("k", 2), "", 100, 100, 0, 100))
+            .unwrap();
+        let id3 = s
+            .submit(sp("c", param_change("k", 3), "", 100, 100, 0, 100))
+            .unwrap();
         s.mark_rejected(id3, 100).unwrap();
 
         assert_eq!(s.list_by_status(ProposalStatus::Voting).len(), 2);

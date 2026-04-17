@@ -220,7 +220,12 @@ mod tests {
         let mut c = collector_4(BftPhase::Prepare, 1, 0);
         c.add_vote(make_vote(BftPhase::Prepare, 1, 0, "v0"));
         let result = c.add_vote(make_vote(BftPhase::Prepare, 1, 0, "v0"));
-        assert!(matches!(result, VoteResult::Rejected { reason: QcError::DuplicateVoter(_) }));
+        assert!(matches!(
+            result,
+            VoteResult::Rejected {
+                reason: QcError::DuplicateVoter(_)
+            }
+        ));
         assert_eq!(c.vote_count(), 1);
     }
 
@@ -230,7 +235,9 @@ mod tests {
         let result = c.add_vote(make_vote(BftPhase::Commit, 1, 0, "v0"));
         assert!(matches!(
             result,
-            VoteResult::Rejected { reason: QcError::MismatchedPhase { .. } }
+            VoteResult::Rejected {
+                reason: QcError::MismatchedPhase { .. }
+            }
         ));
     }
 
@@ -240,7 +247,9 @@ mod tests {
         let result = c.add_vote(make_vote(BftPhase::Prepare, 1, 99, "v0"));
         assert!(matches!(
             result,
-            VoteResult::Rejected { reason: QcError::MismatchedRound { .. } }
+            VoteResult::Rejected {
+                reason: QcError::MismatchedRound { .. }
+            }
         ));
     }
 
@@ -250,7 +259,9 @@ mod tests {
         let result = c.add_vote(make_vote(BftPhase::Prepare, 99, 0, "v0"));
         assert!(matches!(
             result,
-            VoteResult::Rejected { reason: QcError::MismatchedBlockHash { .. } }
+            VoteResult::Rejected {
+                reason: QcError::MismatchedBlockHash { .. }
+            }
         ));
     }
 
@@ -260,7 +271,9 @@ mod tests {
         let result = c.add_vote(make_vote(BftPhase::Prepare, 1, 0, "intruder"));
         assert!(matches!(
             result,
-            VoteResult::Rejected { reason: QcError::UnknownVoter(_) }
+            VoteResult::Rejected {
+                reason: QcError::UnknownVoter(_)
+            }
         ));
     }
 

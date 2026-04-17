@@ -135,15 +135,9 @@ impl QuorumCertificate {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum QcError {
     #[error("vote phase mismatch: expected {expected:?}, got {got:?}")]
-    MismatchedPhase {
-        expected: BftPhase,
-        got: BftPhase,
-    },
+    MismatchedPhase { expected: BftPhase, got: BftPhase },
     #[error("vote block_hash mismatch: expected {expected:?}, got {got:?}")]
-    MismatchedBlockHash {
-        expected: [u8; 32],
-        got: [u8; 32],
-    },
+    MismatchedBlockHash { expected: [u8; 32], got: [u8; 32] },
     #[error("vote round mismatch: expected {expected}, got {got}")]
     MismatchedRound { expected: u64, got: u64 },
     #[error("insufficient votes: need {needed}, have {have}")]
@@ -226,11 +220,7 @@ mod tests {
 
     #[test]
     fn qc_new_accepts_consistent_votes() {
-        let votes = vec![
-            vote(1, 0, "alice"),
-            vote(1, 0, "bob"),
-            vote(1, 0, "carol"),
-        ];
+        let votes = vec![vote(1, 0, "alice"), vote(1, 0, "bob"), vote(1, 0, "carol")];
         let qc = QuorumCertificate::new(BftPhase::Prepare, block_hash(1), 0, votes).unwrap();
         assert_eq!(qc.voter_count(), 3);
         assert_eq!(qc.phase, BftPhase::Prepare);

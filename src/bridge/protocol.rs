@@ -171,9 +171,7 @@ impl BridgeEngine {
             .ok_or_else(|| BridgeError::UnknownChain(message.source_chain.0.clone()))?;
 
         if !config.active {
-            return Err(BridgeError::ChainNotActive(
-                message.source_chain.0.clone(),
-            ));
+            return Err(BridgeError::ChainNotActive(message.source_chain.0.clone()));
         }
 
         // Check confirmations.

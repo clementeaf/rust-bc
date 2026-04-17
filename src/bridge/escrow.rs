@@ -212,12 +212,13 @@ impl EscrowVault {
                 available: 0,
             })?;
 
-        let acct = balance.balances.get_mut(account).ok_or(
-            EscrowError::InsufficientBalance {
+        let acct = balance
+            .balances
+            .get_mut(account)
+            .ok_or(EscrowError::InsufficientBalance {
                 required: amount,
                 available: 0,
-            },
-        )?;
+            })?;
 
         if *acct < amount {
             return Err(EscrowError::InsufficientBalance {
@@ -245,12 +246,7 @@ impl EscrowVault {
     }
 
     /// Get wrapped token balance for an account.
-    pub fn wrapped_balance(
-        &self,
-        account: &str,
-        source_chain: &ChainId,
-        denom: &str,
-    ) -> u64 {
+    pub fn wrapped_balance(&self, account: &str, source_chain: &ChainId, denom: &str) -> u64 {
         let key = (source_chain.0.clone(), denom.to_string());
         self.wrapped
             .lock()
@@ -298,7 +294,9 @@ mod tests {
     #[test]
     fn lock_tokens() {
         let vault = EscrowVault::new();
-        vault.lock(msg_id(1), "alice", 1000, "NOTA", &eth(), 10).unwrap();
+        vault
+            .lock(msg_id(1), "alice", 1000, "NOTA", &eth(), 10)
+            .unwrap();
 
         assert_eq!(vault.total_locked(), 1000);
         let entry = vault.get_escrow(&msg_id(1)).unwrap();
@@ -310,15 +308,21 @@ mod tests {
     #[test]
     fn lock_zero_amount_fails() {
         let vault = EscrowVault::new();
-        let err = vault.lock(msg_id(1), "alice", 0, "NOTA", &eth(), 10).unwrap_err();
+        let err = vault
+            .lock(msg_id(1), "alice", 0, "NOTA", &eth(), 10)
+            .unwrap_err();
         assert!(matches!(err, EscrowError::ZeroAmount));
     }
 
     #[test]
     fn lock_duplicate_message_id_fails() {
         let vault = EscrowVault::new();
-        vault.lock(msg_id(1), "alice", 100, "NOTA", &eth(), 10).unwrap();
-        let err = vault.lock(msg_id(1), "bob", 200, "NOTA", &eth(), 11).unwrap_err();
+        vault
+            .lock(msg_id(1), "alice", 100, "NOTA", &eth(), 10)
+            .unwrap();
+        let err = vault
+            .lock(msg_id(1), "bob", 200, "NOTA", &eth(), 11)
+            .unwrap_err();
         assert!(matches!(err, EscrowError::AlreadyExists(_)));
     }
 
@@ -327,7 +331,9 @@ mod tests {
     #[test]
     fn release_returns_entry() {
         let vault = EscrowVault::new();
-        vault.lock(msg_id(1), "alice", 500, "NOTA", &eth(), 10).unwrap();
+        vault
+            .lock(msg_id(1), "alice", 500, "NOTA", &eth(), 10)
+            .unwrap();
 
         let entry = vault.release(&msg_id(1), 20).unwrap();
         assert_eq!(entry.status, TransferStatus::Completed);
@@ -345,7 +351,9 @@ mod tests {
     #[test]
     fn release_already_completed_fails() {
         let vault = EscrowVault::new();
-        vault.lock(msg_id(1), "alice", 500, "NOTA", &eth(), 10).unwrap();
+        vault
+            .lock(msg_id(1), "alice", 500, "NOTA", &eth(), 10)
+            .unwrap();
         vault.release(&msg_id(1), 20).unwrap();
 
         let err = vault.release(&msg_id(1), 30).unwrap_err();
@@ -357,7 +365,9 @@ mod tests {
     #[test]
     fn refund_returns_tokens() {
         let vault = EscrowVault::new();
-        vault.lock(msg_id(1), "alice", 300, "NOTA", &eth(), 10).unwrap();
+        vault
+            .lock(msg_id(1), "alice", 300, "NOTA", &eth(), 10)
+            .unwrap();
 
         let entry = vault.refund(&msg_id(1), 25).unwrap();
         assert_eq!(entry.status, TransferStatus::Refunded);
@@ -430,7 +440,9 @@ mod tests {
         let vault = EscrowVault::new();
 
         // Lock on rust-bc (outbound to Ethereum).
-        vault.lock(msg_id(1), "alice", 1000, "NOTA", &eth(), 100).unwrap();
+        vault
+            .lock(msg_id(1), "alice", 1000, "NOTA", &eth(), 100)
+            .unwrap();
         assert_eq!(vault.total_locked(), 1000);
 
         // External chain mints wNOTA... (off-chain)

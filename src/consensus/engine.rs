@@ -61,8 +61,7 @@ pub struct ConsensusEngine {
     org_registry: Option<Box<dyn OrgRegistry>>,
     /// When set, blocks must carry a valid CommitQC to be accepted.
     /// Uses a boxed trait-object verifier so the engine is not generic over V.
-    bft_quorum_validator:
-        Option<crate::consensus::bft::quorum::QuorumValidator<BoxedVerifier>>,
+    bft_quorum_validator: Option<crate::consensus::bft::quorum::QuorumValidator<BoxedVerifier>>,
 }
 
 /// Type-erased signature verifier so `ConsensusEngine` stays non-generic.

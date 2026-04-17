@@ -52,11 +52,7 @@ impl ChannelStore {
     }
 
     /// Get the world state for a channel (read a key).
-    pub fn get_state(
-        &self,
-        channel_id: &str,
-        key: &str,
-    ) -> StorageResult<Option<VersionedValue>> {
+    pub fn get_state(&self, channel_id: &str, key: &str) -> StorageResult<Option<VersionedValue>> {
         let ws = self.world_states.lock().unwrap();
         let state = ws
             .get(channel_id)
@@ -65,12 +61,7 @@ impl ChannelStore {
     }
 
     /// Write to a channel's world state.
-    pub fn put_state(
-        &self,
-        channel_id: &str,
-        key: &str,
-        value: &[u8],
-    ) -> StorageResult<u64> {
+    pub fn put_state(&self, channel_id: &str, key: &str, value: &[u8]) -> StorageResult<u64> {
         let ws = self.world_states.lock().unwrap();
         let state = ws
             .get(channel_id)
@@ -209,8 +200,14 @@ mod tests {
         store.put_state("ch1", "balance", b"100").unwrap();
         store.put_state("ch2", "balance", b"999").unwrap();
 
-        assert_eq!(store.get_state("ch1", "balance").unwrap().unwrap().data, b"100");
-        assert_eq!(store.get_state("ch2", "balance").unwrap().unwrap().data, b"999");
+        assert_eq!(
+            store.get_state("ch1", "balance").unwrap().unwrap().data,
+            b"100"
+        );
+        assert_eq!(
+            store.get_state("ch2", "balance").unwrap().unwrap().data,
+            b"999"
+        );
     }
 
     #[test]
@@ -284,7 +281,11 @@ mod tests {
             store.create_channel(&ch_id).unwrap();
             for k in 0..100 {
                 store
-                    .put_state(&ch_id, &format!("key_{k}"), format!("val_{ch}_{k}").as_bytes())
+                    .put_state(
+                        &ch_id,
+                        &format!("key_{k}"),
+                        format!("val_{ch}_{k}").as_bytes(),
+                    )
                     .unwrap();
             }
         }

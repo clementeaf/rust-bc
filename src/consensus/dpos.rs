@@ -108,7 +108,11 @@ pub fn select_committee(
         .collect();
 
     // Sort by stake desc, then by address asc (deterministic).
-    eligible.sort_by(|a, b| b.stake.cmp(&a.stake).then_with(|| a.address.cmp(&b.address)));
+    eligible.sort_by(|a, b| {
+        b.stake
+            .cmp(&a.stake)
+            .then_with(|| a.address.cmp(&b.address))
+    });
 
     // Take top N.
     eligible.truncate(config.max_validators);
@@ -125,7 +129,10 @@ pub fn select_committee(
 /// Calculate the expected leader frequency for each validator over `rounds` rounds.
 ///
 /// Useful for verifying that stake-proportional selection works correctly.
-pub fn expected_leader_distribution(committee: &ValidatorCommittee, rounds: u64) -> HashMap<String, u64> {
+pub fn expected_leader_distribution(
+    committee: &ValidatorCommittee,
+    rounds: u64,
+) -> HashMap<String, u64> {
     let mut counts: HashMap<String, u64> = HashMap::new();
     for round in 0..rounds {
         if let Some(leader) = committee.leader_for_round(round) {
@@ -262,10 +269,7 @@ mod tests {
 
     #[test]
     fn leader_equal_stakes_equal_distribution() {
-        let candidates = vec![
-            candidate("v1", 5000),
-            candidate("v2", 5000),
-        ];
+        let candidates = vec![candidate("v1", 5000), candidate("v2", 5000)];
         let committee = select_committee(&candidates, &DposConfig::default(), 0);
 
         let dist = expected_leader_distribution(&committee, 10_000);
@@ -334,7 +338,11 @@ mod tests {
         let dist = expected_leader_distribution(&committee, committee.total_stake);
         for member in &committee.members {
             let count = dist.get(&member.address).copied().unwrap_or(0);
-            assert_eq!(count, member.stake, "leader slots mismatch for {}", member.address);
+            assert_eq!(
+                count, member.stake,
+                "leader slots mismatch for {}",
+                member.address
+            );
         }
     }
 }

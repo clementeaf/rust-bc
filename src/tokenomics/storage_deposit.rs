@@ -298,11 +298,15 @@ mod tests {
         let ledger = DepositLedger::new();
 
         // Create.
-        ledger.lock("alice", "asset:1", b"initial_value", 1, 10_000).unwrap();
+        ledger
+            .lock("alice", "asset:1", b"initial_value", 1, 10_000)
+            .unwrap();
         assert_eq!(ledger.deposit_count(), 1);
 
         // Update (larger value).
-        ledger.lock("alice", "asset:1", &[0u8; 500], 2, 10_000).unwrap();
+        ledger
+            .lock("alice", "asset:1", &[0u8; 500], 2, 10_000)
+            .unwrap();
         assert_eq!(ledger.deposit_count(), 1); // Same key
 
         // Delete → full refund.
@@ -312,7 +316,9 @@ mod tests {
         assert_eq!(ledger.total_locked(), 0);
 
         // Re-create by different user.
-        ledger.lock("bob", "asset:1", b"new_owner", 3, 10_000).unwrap();
+        ledger
+            .lock("bob", "asset:1", b"new_owner", 3, 10_000)
+            .unwrap();
         assert_eq!(ledger.get("asset:1").unwrap().depositor, "bob");
     }
 
@@ -323,7 +329,9 @@ mod tests {
         let ledger = DepositLedger::new();
         for i in 0..1000 {
             let key = format!("key_{i}");
-            ledger.lock("alice", &key, &[0u8; 32], i, 1_000_000).unwrap();
+            ledger
+                .lock("alice", &key, &[0u8; 32], i, 1_000_000)
+                .unwrap();
         }
         assert_eq!(ledger.deposit_count(), 1000);
         assert!(ledger.total_locked() > 0);

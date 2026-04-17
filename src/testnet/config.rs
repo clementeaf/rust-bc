@@ -70,10 +70,26 @@ impl GenesisConfig {
                 },
             ],
             validators: vec![
-                ValidatorStake { address: "testnet-v0".into(), stake: 10_000, active: true },
-                ValidatorStake { address: "testnet-v1".into(), stake: 10_000, active: true },
-                ValidatorStake { address: "testnet-v2".into(), stake: 10_000, active: true },
-                ValidatorStake { address: "testnet-v3".into(), stake: 10_000, active: true },
+                ValidatorStake {
+                    address: "testnet-v0".into(),
+                    stake: 10_000,
+                    active: true,
+                },
+                ValidatorStake {
+                    address: "testnet-v1".into(),
+                    stake: 10_000,
+                    active: true,
+                },
+                ValidatorStake {
+                    address: "testnet-v2".into(),
+                    stake: 10_000,
+                    active: true,
+                },
+                ValidatorStake {
+                    address: "testnet-v3".into(),
+                    stake: 10_000,
+                    active: true,
+                },
             ],
             dpos: DposConfig {
                 max_validators: 21, // Smaller committee for testnet
@@ -214,10 +230,26 @@ mod tests {
         let mut config = GenesisConfig::mainnet();
         // Mainnet needs validators for BFT.
         config.validators = vec![
-            ValidatorStake { address: "v0".into(), stake: 100_000, active: true },
-            ValidatorStake { address: "v1".into(), stake: 100_000, active: true },
-            ValidatorStake { address: "v2".into(), stake: 100_000, active: true },
-            ValidatorStake { address: "v3".into(), stake: 100_000, active: true },
+            ValidatorStake {
+                address: "v0".into(),
+                stake: 100_000,
+                active: true,
+            },
+            ValidatorStake {
+                address: "v1".into(),
+                stake: 100_000,
+                active: true,
+            },
+            ValidatorStake {
+                address: "v2".into(),
+                stake: 100_000,
+                active: true,
+            },
+            ValidatorStake {
+                address: "v3".into(),
+                stake: 100_000,
+                active: true,
+            },
         ];
         assert!(config.validate().is_ok());
         assert!(!config.faucet_enabled);
@@ -261,6 +293,9 @@ mod tests {
     fn empty_network_id_invalid() {
         let mut config = GenesisConfig::testnet();
         config.network_id = String::new();
-        assert!(matches!(config.validate(), Err(GenesisError::EmptyNetworkId)));
+        assert!(matches!(
+            config.validate(),
+            Err(GenesisError::EmptyNetworkId)
+        ));
     }
 }

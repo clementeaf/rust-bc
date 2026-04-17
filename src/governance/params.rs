@@ -77,10 +77,7 @@ impl ParamRegistry {
 
     /// Set a parameter (used by governance execution).
     pub fn set(&self, key: &str, value: ParamValue) {
-        self.params
-            .lock()
-            .unwrap()
-            .insert(key.to_string(), value);
+        self.params.lock().unwrap().insert(key.to_string(), value);
     }
 
     /// List all parameters.

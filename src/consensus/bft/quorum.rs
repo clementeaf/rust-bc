@@ -86,7 +86,10 @@ impl<V: SignatureVerifier> QuorumValidator<V> {
         }
 
         let payload = vote.payload();
-        if !self.verifier.verify(&vote.voter_id, &payload, &vote.signature) {
+        if !self
+            .verifier
+            .verify(&vote.voter_id, &payload, &vote.signature)
+        {
             return Err(QcError::InvalidSignature(vote.voter_id.clone()));
         }
 
@@ -277,9 +280,7 @@ mod tests {
     fn validate_vote_invalid_signature_rejects() {
         let mut reject_set = HashSet::new();
         reject_set.insert("v0".to_string());
-        let verifier = RejectVoterVerifier {
-            reject: reject_set,
-        };
+        let verifier = RejectVoterVerifier { reject: reject_set };
         let qv = QuorumValidator::new(validators(4), verifier);
         let v = vote(1, 0, "v0");
         assert!(matches!(
@@ -329,25 +330,16 @@ mod tests {
     #[test]
     fn validate_qc_unknown_voter_in_set_rejects() {
         let qv = QuorumValidator::new(validators(4), AcceptAllVerifier);
-        let votes = vec![
-            vote(1, 0, "v0"),
-            vote(1, 0, "v1"),
-            vote(1, 0, "intruder"),
-        ];
+        let votes = vec![vote(1, 0, "v0"), vote(1, 0, "v1"), vote(1, 0, "intruder")];
         let qc = QuorumCertificate::new(BftPhase::Prepare, block_hash(1), 0, votes).unwrap();
-        assert!(matches!(
-            qv.validate_qc(&qc),
-            Err(QcError::UnknownVoter(_))
-        ));
+        assert!(matches!(qv.validate_qc(&qc), Err(QcError::UnknownVoter(_))));
     }
 
     #[test]
     fn validate_qc_invalid_signature_in_set_rejects() {
         let mut reject_set = HashSet::new();
         reject_set.insert("v2".to_string());
-        let verifier = RejectVoterVerifier {
-            reject: reject_set,
-        };
+        let verifier = RejectVoterVerifier { reject: reject_set };
         let qv = QuorumValidator::new(validators(4), verifier);
         let votes = vec![vote(1, 0, "v0"), vote(1, 0, "v1"), vote(1, 0, "v2")];
         let qc = QuorumCertificate::new(BftPhase::Prepare, block_hash(1), 0, votes).unwrap();
@@ -375,9 +367,7 @@ mod tests {
         // n=4, f=1. Skip v3 (byzantine) — 3 honest votes suffice.
         let mut reject_set = HashSet::new();
         reject_set.insert("v3".to_string());
-        let verifier = RejectVoterVerifier {
-            reject: reject_set,
-        };
+        let verifier = RejectVoterVerifier { reject: reject_set };
         let qv = QuorumValidator::new(validators(4), verifier);
 
         let votes = vec![vote(1, 0, "v0"), vote(1, 0, "v1"), vote(1, 0, "v2")];

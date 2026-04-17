@@ -108,7 +108,11 @@ pub fn schedule_batch(txs: &[TxWithRwSet]) -> BatchSchedule {
         if deps[i].is_empty() {
             wave_assignment[i] = 0;
         } else {
-            let max_dep_wave = deps[i].iter().map(|&d| wave_assignment[d]).max().unwrap_or(0);
+            let max_dep_wave = deps[i]
+                .iter()
+                .map(|&d| wave_assignment[d])
+                .max()
+                .unwrap_or(0);
             wave_assignment[i] = max_dep_wave + 1;
         }
     }
@@ -207,22 +211,22 @@ mod tests {
 
     #[test]
     fn conflict_raw() {
-        let a = rw(&[], &["k1"]);      // a writes k1
-        let b = rw(&["k1"], &[]);       // b reads k1
+        let a = rw(&[], &["k1"]); // a writes k1
+        let b = rw(&["k1"], &[]); // b reads k1
         assert!(conflicts(&a, &b));
     }
 
     #[test]
     fn conflict_war() {
-        let a = rw(&["k1"], &[]);        // a reads k1
-        let b = rw(&[], &["k1"]);        // b writes k1
+        let a = rw(&["k1"], &[]); // a reads k1
+        let b = rw(&[], &["k1"]); // b writes k1
         assert!(conflicts(&a, &b));
     }
 
     #[test]
     fn conflict_waw() {
-        let a = rw(&[], &["k1"]);        // a writes k1
-        let b = rw(&[], &["k1"]);        // b writes k1
+        let a = rw(&[], &["k1"]); // a writes k1
+        let b = rw(&[], &["k1"]); // b writes k1
         assert!(conflicts(&a, &b));
     }
 
@@ -316,10 +320,7 @@ mod tests {
     #[test]
     fn waw_creates_dependency() {
         // Both write to "k" → sequential.
-        let batch = vec![
-            tx(0, &[], &["k"]),
-            tx(1, &[], &["k"]),
-        ];
+        let batch = vec![tx(0, &[], &["k"]), tx(1, &[], &["k"])];
         let s = schedule_batch(&batch);
         assert_eq!(s.wave_count, 2);
     }
@@ -444,8 +445,16 @@ mod tests {
         // But query also depends on transfer3 (bal_a)? No — query only reads bal_a,
         // transfer3 writes bal_a. So query depends on both transfer1 and transfer3.
         // transfer3 is wave 1, so query is wave 2.
-        assert!(s.wave_count >= 2, "should have at least 2 waves, got {}", s.wave_count);
-        assert!(s.wave_count <= 3, "should have at most 3 waves, got {}", s.wave_count);
+        assert!(
+            s.wave_count >= 2,
+            "should have at least 2 waves, got {}",
+            s.wave_count
+        );
+        assert!(
+            s.wave_count <= 3,
+            "should have at most 3 waves, got {}",
+            s.wave_count
+        );
 
         // Parallelism: 6 txs in 2-3 waves → ratio 2.0-3.0
         assert!(

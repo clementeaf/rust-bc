@@ -146,7 +146,6 @@ pub enum Message {
     },
 
     // ── BFT consensus messages ──────────────────────────────────────────────
-
     /// Leader broadcasts a block proposal for a BFT round.
     BftProposal {
         round: u64,
@@ -1722,7 +1721,9 @@ impl Node {
             | Message::BftVote(_)
             | Message::BftQuorumCertificate(_)
             | Message::BftViewChange { .. } => {
-                log::debug!("BFT message received in generic handler — ignored (handled by BFT subsystem)");
+                log::debug!(
+                    "BFT message received in generic handler — ignored (handled by BFT subsystem)"
+                );
                 Ok(None)
             }
         }

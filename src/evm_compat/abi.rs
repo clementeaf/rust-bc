@@ -44,7 +44,10 @@ impl AbiValue {
     pub fn address_from_hex(hex: &str) -> Result<Self, AbiError> {
         let hex = hex.strip_prefix("0x").unwrap_or(hex);
         if hex.len() != 40 {
-            return Err(AbiError::InvalidAddress(format!("expected 40 hex chars, got {}", hex.len())));
+            return Err(AbiError::InvalidAddress(format!(
+                "expected 40 hex chars, got {}",
+                hex.len()
+            )));
         }
         let bytes = hex::decode(hex).map_err(|e| AbiError::InvalidAddress(e.to_string()))?;
         let mut addr = [0u8; 20];
@@ -190,7 +193,8 @@ mod tests {
 
     #[test]
     fn address_from_hex_valid() {
-        let addr = AbiValue::address_from_hex("0x0000000000000000000000000000000000000001").unwrap();
+        let addr =
+            AbiValue::address_from_hex("0x0000000000000000000000000000000000000001").unwrap();
         match addr {
             AbiValue::Address(bytes) => assert_eq!(bytes[19], 1),
             _ => panic!("expected Address"),

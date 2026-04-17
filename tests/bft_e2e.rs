@@ -87,12 +87,8 @@ impl BftTestNetwork {
         let mut nodes = HashMap::new();
         for (i, &behavior) in behaviors.iter().enumerate() {
             let id = format!("v{i}");
-            let manager = RoundManager::new(
-                id.clone(),
-                validators.clone(),
-                TestVerifier,
-                config.clone(),
-            );
+            let manager =
+                RoundManager::new(id.clone(), validators.clone(), TestVerifier, config.clone());
             nodes.insert(
                 id.clone(),
                 SimNode {
@@ -220,8 +216,8 @@ impl BftTestNetwork {
                     let mut bad_hash = bh;
                     bad_hash[31] ^= 0xFF;
                     votes.push(make_vote(phase, bh, round, id)); // also votes correctly
-                    // The equivocator sends conflicting votes — but the vote collector
-                    // will deduplicate by voter_id, so only the first one counts.
+                                                                 // The equivocator sends conflicting votes — but the vote collector
+                                                                 // will deduplicate by voter_id, so only the first one counts.
                 }
                 _ => {
                     votes.push(make_vote(phase, bh, round, id));
@@ -237,8 +233,7 @@ impl BftTestNetwork {
                 if node.behavior == NodeBehavior::Silent {
                     continue;
                 }
-                node.manager
-                    .process_event(RoundEvent::Vote(vote.clone()));
+                node.manager.process_event(RoundEvent::Vote(vote.clone()));
                 self.messages_delivered += 1;
             }
         }
@@ -311,7 +306,10 @@ fn e2e_1_byzantine_equivocator_safety_holds() {
 
     let decided = net.run_round(0);
     // At least 3 honest nodes should decide (equivocator may or may not).
-    assert!(decided >= 3, "at least 3 honest nodes should decide, got {decided}");
+    assert!(
+        decided >= 3,
+        "at least 3 honest nodes should decide, got {decided}"
+    );
     net.assert_safety();
 }
 
@@ -329,7 +327,10 @@ fn e2e_1_silent_node_liveness_with_3_honest() {
     net.start_all();
 
     let decided = net.run_round(0);
-    assert!(decided >= 3, "3 honest nodes should decide despite 1 silent, got {decided}");
+    assert!(
+        decided >= 3,
+        "3 honest nodes should decide despite 1 silent, got {decided}"
+    );
     net.assert_safety();
 }
 
@@ -354,8 +355,8 @@ fn e2e_silent_leader_triggers_timeout_and_view_change() {
     // Round 0 leader is v0. Make v0 silent → no proposal → timeout.
     // Round 1 leader is v1 (honest) → should succeed.
     let behaviors = [
-        NodeBehavior::Silent,   // v0 — round 0 leader, silent
-        NodeBehavior::Honest,   // v1 — round 1 leader
+        NodeBehavior::Silent, // v0 — round 0 leader, silent
+        NodeBehavior::Honest, // v1 — round 1 leader
         NodeBehavior::Honest,
         NodeBehavior::Honest,
     ];
@@ -372,7 +373,10 @@ fn e2e_silent_leader_triggers_timeout_and_view_change() {
     // Round 1: v1 is leader, honest. But v0 is still silent.
     // 3 honest nodes (v1, v2, v3) should decide.
     let decided_r1 = net.run_round(1);
-    assert!(decided_r1 >= 3, "round 1 should succeed with v1 as leader, got {decided_r1}");
+    assert!(
+        decided_r1 >= 3,
+        "round 1 should succeed with v1 as leader, got {decided_r1}"
+    );
     net.assert_safety();
 }
 
@@ -391,7 +395,10 @@ fn e2e_network_partition_minority_stalls() {
     let decided = net.run_round(0);
     // v0, v1, v2 form the majority (3 votes). v3 is partitioned — doesn't vote.
     // threshold=3, so 3 honest votes should be enough.
-    assert!(decided >= 3, "majority partition should decide, got {decided}");
+    assert!(
+        decided >= 3,
+        "majority partition should decide, got {decided}"
+    );
     net.assert_safety();
 }
 
@@ -404,12 +411,14 @@ fn e2e_network_partition_no_quorum() {
         NodeBehavior::Honest,
         NodeBehavior::Honest,
     ];
-    let mut net =
-        BftTestNetwork::new(4, &behaviors).with_partition(vec!["v2".into(), "v3".into()]);
+    let mut net = BftTestNetwork::new(4, &behaviors).with_partition(vec!["v2".into(), "v3".into()]);
     net.start_all();
 
     let decided = net.run_round(0);
-    assert_eq!(decided, 0, "should NOT decide with only 2/4 nodes reachable");
+    assert_eq!(
+        decided, 0,
+        "should NOT decide with only 2/4 nodes reachable"
+    );
 }
 
 #[test]
@@ -509,10 +518,10 @@ fn e2e_mixed_faults_across_rounds() {
     // Round 3: v3 leads (silent) — timeout, no decision.
     // Round 4: v0 leads (honest) — recovery after timeout.
     let behaviors = [
-        NodeBehavior::Honest,       // v0
-        NodeBehavior::Equivocator,  // v1
-        NodeBehavior::Honest,       // v2
-        NodeBehavior::Silent,       // v3
+        NodeBehavior::Honest,      // v0
+        NodeBehavior::Equivocator, // v1
+        NodeBehavior::Honest,      // v2
+        NodeBehavior::Silent,      // v3
     ];
     let mut net = BftTestNetwork::new(4, &behaviors);
     net.start_all();
@@ -525,7 +534,10 @@ fn e2e_mixed_faults_across_rounds() {
     // receive proposal and vote. Equivocator's own vote counts (valid signature).
     // v3 is silent but v0, v1, v2 = 3 votes ≥ threshold.
     let d1 = net.run_round(1);
-    assert!(d1 >= 2, "round 1 should succeed with equivocator leader, got {d1}");
+    assert!(
+        d1 >= 2,
+        "round 1 should succeed with equivocator leader, got {d1}"
+    );
 
     // Round 2: v2 leads (honest).
     let d2 = net.run_round(2);
@@ -558,14 +570,20 @@ fn e2e_partition_heals_and_resumes() {
     let mut net = BftTestNetwork::new(4, &behaviors).with_partition(vec!["v3".into()]);
     net.start_all();
     let d0 = net.run_round(0);
-    assert!(d0 >= 3, "round 0: majority decides despite partition, got {d0}");
+    assert!(
+        d0 >= 3,
+        "round 0: majority decides despite partition, got {d0}"
+    );
 
     // Heal partition.
     net.drop_from.clear();
 
     // Round 1: all 4 nodes participate.
     let d1 = net.run_round(1);
-    assert_eq!(d1, 4, "round 1: all nodes should decide after partition heals");
+    assert_eq!(
+        d1, 4,
+        "round 1: all nodes should decide after partition heals"
+    );
 
     net.assert_safety();
 }
@@ -599,23 +617,26 @@ fn e2e_safety_under_equivocation_across_100_rounds() {
 fn e2e_10_nodes_3_byzantine_stress() {
     // n=10, f=3, threshold=7. Three equivocators, seven honest.
     let behaviors = [
-        NodeBehavior::Honest,       // v0
-        NodeBehavior::Honest,       // v1
-        NodeBehavior::Honest,       // v2
-        NodeBehavior::Honest,       // v3
-        NodeBehavior::Honest,       // v4
-        NodeBehavior::Honest,       // v5
-        NodeBehavior::Honest,       // v6
-        NodeBehavior::Equivocator,  // v7
-        NodeBehavior::Equivocator,  // v8
-        NodeBehavior::Equivocator,  // v9
+        NodeBehavior::Honest,      // v0
+        NodeBehavior::Honest,      // v1
+        NodeBehavior::Honest,      // v2
+        NodeBehavior::Honest,      // v3
+        NodeBehavior::Honest,      // v4
+        NodeBehavior::Honest,      // v5
+        NodeBehavior::Honest,      // v6
+        NodeBehavior::Equivocator, // v7
+        NodeBehavior::Equivocator, // v8
+        NodeBehavior::Equivocator, // v9
     ];
     let mut net = BftTestNetwork::new(10, &behaviors);
     net.start_all();
 
     for round in 0..20 {
         let decided = net.run_round(round);
-        assert!(decided >= 7, "round {round}: at least 7 should decide, got {decided}");
+        assert!(
+            decided >= 7,
+            "round {round}: at least 7 should decide, got {decided}"
+        );
     }
 
     net.assert_safety();

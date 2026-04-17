@@ -10,14 +10,14 @@ use rust_bc::consensus::bft::quorum::{QuorumValidator, SignatureVerifier};
 use rust_bc::consensus::bft::round::{BftRound, RoundEvent, RoundState};
 use rust_bc::consensus::bft::types::{BftPhase, VoteMessage};
 use rust_bc::consensus::dpos::{select_committee, DposConfig, ValidatorStake};
+use rust_bc::endorsement::types::Endorsement;
+use rust_bc::storage::traits::Transaction;
 use rust_bc::storage::MemoryWorldState;
 use rust_bc::storage::WorldState;
 use rust_bc::transaction::endorsed::EndorsedTransaction;
 use rust_bc::transaction::executor::{execute_block_concurrent, execute_block_parallel};
 use rust_bc::transaction::proposal::TransactionProposal;
 use rust_bc::transaction::rwset::{KVRead, KVWrite, ReadWriteSet};
-use rust_bc::endorsement::types::Endorsement;
-use rust_bc::storage::traits::Transaction;
 
 #[derive(Clone)]
 struct BenchVerifier;
@@ -29,8 +29,14 @@ impl SignatureVerifier for BenchVerifier {
 
 fn make_endorsed(id: &str, key: &str, version: u64) -> EndorsedTransaction {
     let rw = ReadWriteSet {
-        reads: vec![KVRead { key: key.into(), version }],
-        writes: vec![KVWrite { key: key.into(), value: vec![1u8; 32] }],
+        reads: vec![KVRead {
+            key: key.into(),
+            version,
+        }],
+        writes: vec![KVWrite {
+            key: key.into(),
+            value: vec![1u8; 32],
+        }],
     };
     EndorsedTransaction {
         proposal: TransactionProposal {
@@ -257,5 +263,8 @@ fn bench_full_pipeline_10_blocks() {
         duration.as_secs_f64() * 1000.0
     );
 
-    assert!(tps > 1000.0, "expected >1K TPS in full pipeline, got {tps:.0}");
+    assert!(
+        tps > 1000.0,
+        "expected >1K TPS in full pipeline, got {tps:.0}"
+    );
 }
