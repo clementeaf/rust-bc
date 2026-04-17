@@ -18,12 +18,12 @@ export default function ServerStatus() {
   if (online === true) return null
   if (online === null)
     return (
-      <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-2 rounded-lg text-sm mb-6">
+      <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2.5 rounded-2xl text-sm mb-6">
         Checking connection to blockchain node...
       </div>
     )
   return (
-    <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-2 rounded-lg text-sm mb-6">
+    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-2xl text-sm mb-6">
       Cannot reach the API (is the node up on port 8080?)
     </div>
   )

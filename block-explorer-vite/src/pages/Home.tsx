@@ -34,79 +34,80 @@ export default function Home() {
   return (
     <>
       <ServerStatus />
-      <PageIntro title="Inicio">
-        Vista general del nodo al que apunta el proxy: altura de cadena, transacciones en mempool y
-        conexiones P2P. Abajo, los últimos bloques confirmados. Usa la búsqueda para ir directo a un
-        bloque, cartera o contrato.
+      <PageIntro title="Dashboard">
+        Chain overview — block height, mempool, peer connections.
+        Search by hash to jump directly to a block, wallet, or contract.
       </PageIntro>
       <SearchBar />
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
           {[
-            {
-              label: 'Bloques',
-              hint: 'Cantidad de bloques en la cadena local del nodo',
-              value: stats.blockchain.block_count,
-            },
-            {
-              label: 'Tx en cadena',
-              hint: 'Transacciones incluidas en bloques ya minados',
-              value: stats.blockchain.total_transactions,
-            },
-            {
-              label: 'Pendientes',
-              hint: 'Transacciones en el mempool (aún no incluidas en un bloque)',
-              value: stats.mempool.pending_transactions,
-            },
-            {
-              label: 'Peers',
-              hint: 'Otros nodos conectados por P2P',
-              value: stats.network.connected_peers,
-            },
+            { label: 'Blocks', value: stats.blockchain.block_count, icon: '⬡' },
+            { label: 'Transactions', value: stats.blockchain.total_transactions, icon: '⇄' },
+            { label: 'Pending', value: stats.mempool.pending_transactions, icon: '◷' },
+            { label: 'Peers', value: stats.network.connected_peers, icon: '◉' },
           ].map((s) => (
             <div
               key={s.label}
-              title={s.hint}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4 cursor-help"
+              className="bg-white border border-neutral-200 rounded-2xl p-5
+                         shadow-sm hover:shadow-md transition-all duration-200"
             >
-              <p className="text-gray-400 text-xs uppercase tracking-wide">{s.label}</p>
-              <p className="text-2xl font-bold text-white mt-1">{s.value}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-neutral-400 text-xs font-semibold uppercase tracking-wider">
+                  {s.label}
+                </p>
+                <span className="text-neutral-300 text-lg">{s.icon}</span>
+              </div>
+              <p className="text-3xl font-bold text-neutral-900 mt-2">{s.value}</p>
             </div>
           ))}
         </div>
       )}
 
-      <h2 className="text-lg font-semibold text-white mb-1">Últimos bloques</h2>
-      <p className="text-xs text-gray-500 mb-4">Haz clic en el hash para ver el detalle y las transacciones.</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-gray-400 text-xs uppercase border-b border-gray-800">
-              <th className="text-left py-3 px-2">#</th>
-              <th className="text-left py-3 px-2">Hash</th>
-              <th className="text-right py-3 px-2">Txns</th>
-              <th className="text-right py-3 px-2">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {blocks.map((b) => (
-              <tr key={b.hash} className="border-b border-gray-800/50 hover:bg-gray-900/50">
-                <td className="py-3 px-2 text-white font-medium">{b.index}</td>
-                <td className="py-3 px-2">
-                  <Link to={`/block/${b.hash}`} className="text-cyan-400 hover:text-cyan-300 font-mono text-xs">
-                    {shortHash(b.hash)}
-                  </Link>
-                </td>
-                <td className="py-3 px-2 text-right">{b.transactions.length}</td>
-                <td className="py-3 px-2 text-right text-gray-400">{timeAgo(b.timestamp)}</td>
+      <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-neutral-100">
+          <h2 className="text-lg font-semibold text-neutral-900">Latest Blocks</h2>
+          <p className="text-xs text-neutral-400 mt-0.5">Click on a hash to view details and transactions.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-neutral-400 text-xs uppercase border-b border-neutral-100 bg-surface-alt">
+                <th className="text-left py-3 px-5 font-semibold">#</th>
+                <th className="text-left py-3 px-5 font-semibold">Hash</th>
+                <th className="text-right py-3 px-5 font-semibold">Txns</th>
+                <th className="text-right py-3 px-5 font-semibold">Time</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {blocks.length === 0 && (
-          <p className="text-gray-500 text-center py-8">Aún no hay bloques. Minar uno con la API para poblar la cadena.</p>
-        )}
+            </thead>
+            <tbody>
+              {blocks.map((b) => (
+                <tr
+                  key={b.hash}
+                  className="border-b border-neutral-50 hover:bg-main-50/50 transition-colors duration-150"
+                >
+                  <td className="py-3.5 px-5 text-neutral-900 font-semibold">{b.index}</td>
+                  <td className="py-3.5 px-5">
+                    <Link
+                      to={`/block/${b.hash}`}
+                      className="text-main-500 hover:text-main-600 font-mono text-xs
+                                 hover:underline transition-colors"
+                    >
+                      {shortHash(b.hash)}
+                    </Link>
+                  </td>
+                  <td className="py-3.5 px-5 text-right text-neutral-600">{b.transactions.length}</td>
+                  <td className="py-3.5 px-5 text-right text-neutral-400">{timeAgo(b.timestamp)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {blocks.length === 0 && (
+            <p className="text-neutral-400 text-center py-12">
+              No blocks yet. Mine one via the API to populate the chain.
+            </p>
+          )}
+        </div>
       </div>
     </>
   )

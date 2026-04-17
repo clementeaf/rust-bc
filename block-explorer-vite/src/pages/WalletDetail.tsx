@@ -18,43 +18,43 @@ export default function WalletDetail() {
     getWalletTransactions(address).then(setTxs).catch(() => {})
   }, [address])
 
-  if (error) return <p className="text-red-400">{error}</p>
-  if (!wallet) return <p className="text-gray-400">Loading...</p>
+  if (error) return <p className="text-red-500">{error}</p>
+  if (!wallet) return <p className="text-neutral-500">Loading...</p>
 
   return (
     <>
       <div className="flex flex-col gap-2 mb-6">
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-gray-400 hover:text-white text-sm">&larr; Inicio</Link>
-          <h1 className="text-xl font-bold text-white">Cartera</h1>
+          <Link to="/" className="text-neutral-500 hover:text-neutral-900 text-sm">&larr; Inicio</Link>
+          <h1 className="text-xl font-bold text-neutral-900">Cartera</h1>
         </div>
-        <p className="text-sm text-gray-400 max-w-3xl">
+        <p className="text-sm text-neutral-500 max-w-3xl">
           Saldo y movimientos de una dirección en la cadena. El “balance” es el calculado por el nodo
           a partir de los bloques.
         </p>
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6 text-left">
+      <div className="bg-white border border-neutral-200 rounded-2xl p-6 mb-6 text-left">
         <div className="grid gap-4 text-sm">
           <div>
-            <span className="text-gray-400">Address</span>
-            <p className="text-white font-mono text-xs break-all mt-1">{wallet.address}</p>
+            <span className="text-neutral-500">Address</span>
+            <p className="text-neutral-900 font-mono text-xs break-all mt-1">{wallet.address}</p>
           </div>
           <div>
-            <span className="text-gray-400">Balance</span>
-            <p className="text-3xl font-bold text-white mt-1">{wallet.balance} <span className="text-lg text-gray-400">coins</span></p>
+            <span className="text-neutral-500">Balance</span>
+            <p className="text-3xl font-bold text-neutral-900 mt-1">{wallet.balance} <span className="text-lg text-neutral-500">coins</span></p>
           </div>
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold text-white mb-4">Transactions</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 mb-4">Transactions</h2>
       {txs.length === 0 ? (
-        <p className="text-gray-500 text-center py-8">No transactions found.</p>
+        <p className="text-neutral-400 text-center py-8">No transactions found.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-gray-400 text-xs uppercase border-b border-gray-800">
+              <tr className="text-neutral-500 text-xs uppercase border-b border-neutral-200">
                 <th className="text-left py-3 px-2">ID</th>
                 <th className="text-left py-3 px-2">From</th>
                 <th className="text-left py-3 px-2">To</th>
@@ -64,20 +64,20 @@ export default function WalletDetail() {
             </thead>
             <tbody>
               {txs.map((tx) => (
-                <tr key={tx.id} className="border-b border-gray-800/50">
-                  <td className="py-3 px-2 font-mono text-xs text-gray-300">{shortAddr(tx.id)}</td>
+                <tr key={tx.id} className="border-b border-neutral-100">
+                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortAddr(tx.id)}</td>
                   <td className="py-3 px-2">
-                    <Link to={`/wallet/${tx.from}`} className="text-cyan-400 hover:text-cyan-300 font-mono text-xs">
+                    <Link to={`/wallet/${tx.from}`} className="text-main-500 hover:text-main-600 font-mono text-xs">
                       {tx.from === address ? 'You' : shortAddr(tx.from)}
                     </Link>
                   </td>
                   <td className="py-3 px-2">
-                    <Link to={`/wallet/${tx.to}`} className="text-cyan-400 hover:text-cyan-300 font-mono text-xs">
+                    <Link to={`/wallet/${tx.to}`} className="text-main-500 hover:text-main-600 font-mono text-xs">
                       {tx.to === address ? 'You' : shortAddr(tx.to)}
                     </Link>
                   </td>
-                  <td className="py-3 px-2 text-right text-white">{tx.amount}</td>
-                  <td className="py-3 px-2 text-right text-gray-400">{tx.fee}</td>
+                  <td className="py-3 px-2 text-right text-neutral-900">{tx.amount}</td>
+                  <td className="py-3 px-2 text-right text-neutral-500">{tx.fee}</td>
                 </tr>
               ))}
             </tbody>

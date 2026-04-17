@@ -26,12 +26,6 @@ export default function SearchBar() {
 
   return (
     <div className="mb-8">
-      <label htmlFor="chain-search" className="block text-sm font-medium text-gray-300 mb-2">
-        Buscar en la cadena
-      </label>
-      <p className="text-xs text-gray-500 mb-3">
-        Acepta un hash de bloque, una dirección de cartera o la dirección de un contrato; te lleva a la ficha correspondiente.
-      </p>
       <div className="flex gap-2">
         <input
           id="chain-search"
@@ -39,20 +33,23 @@ export default function SearchBar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && search()}
-          placeholder="Hash de bloque, wallet o contrato…"
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm
-                     placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors"
+          placeholder="Search by block hash, wallet, or contract address..."
+          className="flex-1 bg-white border border-neutral-200 rounded-full px-5 py-2.5 text-sm
+                     text-neutral-900 placeholder-neutral-400
+                     focus:outline-none focus:ring-2 focus:ring-main-500/20 focus:border-main-500
+                     transition-all duration-200 shadow-sm"
         />
         <button
           onClick={search}
           disabled={loading}
-          className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-5 py-2.5
-                     rounded-lg text-sm font-medium transition-colors"
+          className="bg-main-500 hover:bg-main-600 disabled:opacity-50 text-white px-6 py-2.5
+                     rounded-full text-sm font-semibold transition-all duration-200 shadow-sm
+                     hover:shadow-md"
         >
           {loading ? '...' : 'Search'}
         </button>
       </div>
-      {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+      {error && <p className="text-red-500 text-sm mt-2 pl-5">{error}</p>}
     </div>
   )
 }
