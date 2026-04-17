@@ -3,8 +3,13 @@ import { NavLink, Outlet } from 'react-router-dom'
 
 const links: { to: string; label: string; hint: string }[] = [
   { to: '/', label: 'Dashboard', hint: 'Chain overview, latest blocks, and search' },
-  { to: '/validators', label: 'Validators', hint: 'Staking validators and consensus status' },
+  { to: '/wallets', label: 'Wallets', hint: 'Create and browse wallets' },
+  { to: '/transactions', label: 'Transactions', hint: 'Send transactions and view mempool' },
+  { to: '/mining', label: 'Mining', hint: 'Mine new blocks' },
   { to: '/contracts', label: 'Contracts', hint: 'Deployed smart contracts' },
+  { to: '/staking', label: 'Staking', hint: 'Stake tokens and manage validators' },
+  { to: '/channels', label: 'Channels', hint: 'Isolated network channels (Fabric-style)' },
+  { to: '/governance', label: 'Governance', hint: 'On-chain governance proposals and voting' },
   { to: '/airdrop', label: 'Airdrop', hint: 'Reward distribution and eligible nodes' },
   { to: '/identity', label: 'Identity', hint: 'DID management and lookup' },
   { to: '/credentials', label: 'Credentials', hint: 'Verifiable credentials lifecycle' },

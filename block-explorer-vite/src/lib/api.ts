@@ -271,3 +271,53 @@ export const getCredentialsBySubject = (subjectDid: string) =>
   client
     .get(`/store/credentials/by-subject/${encodeURIComponent(subjectDid)}`)
     .then((r) => unwrap<Credential[]>(r.data));
+
+// ── Wallets ──────────────────────────────────────────────────────────────────
+
+export const getWallets = () =>
+  client.get('/wallets').then((r) => {
+    try {
+      return unwrap<Wallet[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+// ── Staking ──────────────────────────────────────────────────────────────────
+
+export const stakeTokens = (address: string, amount: number) =>
+  client.post('/staking/stake', { address, amount }).then((r) => r.data);
+
+export const requestUnstake = (address: string) =>
+  client.post('/staking/unstake', { address }).then((r) => r.data);
+
+// ── Channels ─────────────────────────────────────────────────────────────────
+
+export interface Channel {
+  channel_id: string;
+}
+
+export interface ChannelConfig {
+  channel_id: string;
+  member_orgs: string[];
+  anchor_peers: string[];
+  max_block_size: number;
+  batch_timeout_ms: number;
+}
+
+export const listChannels = () =>
+  client.get('/channels/list').then((r) => {
+    try {
+      return unwrap<Channel[]>(r.data);
+    } catch {
+      return [];
+    }
+  });
+
+export const createChannel = (channelId: string) =>
+  client.post('/channels/create', { channel_id: channelId }).then((r) => r.data);
+
+export const getChannelConfig = (channelId: string) =>
+  client
+    .get(`/channels/${encodeURIComponent(channelId)}/config`)
+    .then((r) => unwrap<ChannelConfig>(r.data));

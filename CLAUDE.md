@@ -104,14 +104,13 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
 
-### Block explorers (optional UIs)
+### Block explorer (optional UI)
 
 | Path | Stack | Notes |
 |---|---|---|
 | `block-explorer-vite/` | Vite + React | `npm install` / `npm run dev`; proxies `/api` to the node (HTTPS target and env in `vite.config.ts`). |
-| `block-explorer/` | Next.js | Older explorer; same API contract. |
 
-Neither is required to run the node.
+Not required to run the node.
 
 ## Environment variables
 

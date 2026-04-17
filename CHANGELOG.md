@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-17
+
+**Block Explorer — New pages and cleanup**
+- Removed legacy Next.js block explorer (`block-explorer/`)
+- Added 6 new pages to Vite explorer: Wallets, Transactions, Mining, Staking, Channels, Governance
+- New API client functions: `getWallets`, `stakeTokens`, `requestUnstake`, `listChannels`, `createChannel`, `getChannelConfig`
+- Updated nav layout with 11 sections (was 6)
+- Wallets: list + create wallet
+- Transactions: send transactions + live mempool view
+- Mining: mine blocks with existing or new wallet
+- Staking: stake/unstake tokens + validator table with actions
+- Channels: create Fabric-style channels + view config
+- Governance: informational page (API endpoints pending backend exposure)
+
+**Documentation**
+- `docs/HR-DOCUMENT-VERIFICATION-IMPACT.md` — Impact analysis: blockchain-based document verification for HR hiring processes (DIDs, verifiable credentials, channel privacy, PQC signatures)
+- Moved root-level docs to `docs/`: `PUBLIC-ROADMAP.md`, `BENCHMARKS-RESULTS.md`, `HOKTUS-BLOCKCHAIN-IMPACT.md`, `ONE-PAGER-CAMARA.md`
+- Cleaned up stale root-level files: `FABRIC-GAP-ANALYSIS.md`, `MULTI-PEER-ENDORSEMENT.md`, `ROADMAP.md`
+- Removed tracked Python `__pycache__` files from `sdk-python/`
+
 ### 2026-04-16
 
 **Consensus — BFT (Phases 1–3)**
