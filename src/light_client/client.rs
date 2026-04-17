@@ -49,6 +49,12 @@ pub struct LightClient<V: SignatureVerifier + Clone> {
     quorum_validator: Option<QuorumValidator<V>>,
 }
 
+impl<V: SignatureVerifier + Clone> Default for LightClient<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<V: SignatureVerifier + Clone> LightClient<V> {
     /// Create a new light client.
     pub fn new() -> Self {

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::storage::errors::{StorageError, StorageResult};
-use crate::storage::traits::{Block, BlockStore};
+use crate::storage::traits::Block;
 use crate::storage::world_state::{MemoryWorldState, VersionedValue, WorldState};
 
 /// Channel-scoped store providing isolated block and world state per channel.
@@ -35,8 +35,7 @@ impl ChannelStore {
         let mut ws = self.world_states.lock().unwrap();
         if ws.contains_key(channel_id) {
             return Err(StorageError::KeyNotFound(format!(
-                "channel '{}' already exists",
-                channel_id
+                "channel '{channel_id}' already exists"
             )));
         }
         ws.insert(channel_id.to_string(), MemoryWorldState::new());

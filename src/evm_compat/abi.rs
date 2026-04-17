@@ -116,7 +116,7 @@ pub fn encode_call(signature: &str, args: &[AbiValue]) -> Vec<u8> {
                 // Data padded to 32-byte boundary.
                 tail.extend_from_slice(&raw);
                 let padding = (32 - (raw.len() % 32)) % 32;
-                tail.extend(std::iter::repeat(0u8).take(padding));
+                tail.extend(std::iter::repeat_n(0u8, padding));
             }
         }
     }
