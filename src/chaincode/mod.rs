@@ -4,6 +4,7 @@ pub mod external;
 pub mod invoker;
 pub mod resolver;
 pub mod simulation;
+pub mod upgrade;
 
 use std::collections::HashMap;
 use std::sync::Mutex;

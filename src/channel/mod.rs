@@ -3,6 +3,7 @@
 pub mod config;
 pub mod genesis;
 pub mod registry;
+pub mod store;
 
 use crate::endorsement::policy::EndorsementPolicy;
 

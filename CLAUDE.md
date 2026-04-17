@@ -101,6 +101,8 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/transaction/executor.rs` — `execute_block_concurrent()` async tokio executor for true intra-wave parallelism
 - `src/testnet/` — `GenesisConfig` (testnet/devnet/mainnet presets with validation), `Faucet` (rate-limited token drip with cooldown and depletion)
 - `src/evm_compat/` — Solidity ABI encoding/decoding (`abi.rs`), precompile interface with gas metering (`precompile.rs`), DID-to-address derivation
+- `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
+- `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
 
 ### Block explorers (optional UIs)
 

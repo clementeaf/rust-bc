@@ -74,6 +74,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `evm_compat::precompile` — precompile interface (SHA-256, identity, ecrecover/ripemd160/modexp stubs), gas metering, rust-bc SHA-256 extension at 0x20
 - 27 tests (15 ABI + 12 precompile)
 
+**Channel Isolation & Chaincode Upgrade Lifecycle**
+- `channel::store` — `ChannelStore` with per-channel world state and block ledger isolation, version independence, key prefixing (Fabric-compatible)
+- `chaincode::upgrade` — `UpgradeManager` with multi-org approval lifecycle: propose→approve→commit, progress tracking, unauthorized/duplicate rejection, history
+- 24 tests (11 channel store + 13 upgrade lifecycle)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
