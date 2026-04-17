@@ -79,6 +79,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `chaincode::upgrade` — `UpgradeManager` with multi-org approval lifecycle: propose→approve→commit, progress tracking, unauthorized/duplicate rejection, history
 - 24 tests (11 channel store + 13 upgrade lifecycle)
 
+**TPS Benchmark, Bridge Relayer, and Ecosystem Docs**
+- `tests/full_benchmark.rs` — release-mode benchmarks: 56K TPS (500 independent), 39K TPS (1000 mixed), 100 BFT rounds/sec, full pipeline (BFT + exec + state)
+- `bridge::relayer` — `Relayer` with job queue, batch processing, retry logic, replay protection, status tracking; 7 tests including 100-relay stress
+- `docs/book/` — mdBook documentation site: introduction, quickstart, configuration, first dApp guide (Wasm + Python SDK + JS SDK), architecture/API/operations stubs
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 

@@ -9,5 +9,6 @@
 
 pub mod escrow;
 pub mod protocol;
+pub mod relayer;
 pub mod types;
 pub mod verifier;
