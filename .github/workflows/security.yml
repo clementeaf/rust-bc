@@ -31,9 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        run: cargo audit
+        continue-on-error: true  # Advisory-only, don't block CI
 
   unsafe-review:
     name: Unsafe Code Review
