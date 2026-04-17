@@ -17,7 +17,7 @@ pub struct ValidatorStake {
 }
 
 /// Configuration for DPoS selection.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DposConfig {
     /// Maximum number of active validators in the committee.
     pub max_validators: usize,

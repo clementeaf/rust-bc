@@ -99,6 +99,8 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/governance/` — on-chain governance: typed `ParamRegistry` with protocol defaults, `ProposalStore` (submit→vote→pass→timelock→execute lifecycle), stake-weighted `VoteStore` (Yes/No/Abstain, quorum + threshold checks)
 - `src/light_client/` — compact `BlockHeader` chain with BFT QC verification, `LightClient` for state proof verification via Merkle proofs against synced headers. Enables IoT/mobile participation without full node.
 - `src/transaction/executor.rs` — `execute_block_concurrent()` async tokio executor for true intra-wave parallelism
+- `src/testnet/` — `GenesisConfig` (testnet/devnet/mainnet presets with validation), `Faucet` (rate-limited token drip with cooldown and depletion)
+- `src/evm_compat/` — Solidity ABI encoding/decoding (`abi.rs`), precompile interface with gas metering (`precompile.rs`), DID-to-address derivation
 
 ### Block explorers (optional UIs)
 

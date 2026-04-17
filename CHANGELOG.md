@@ -64,6 +64,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `tests/bridge_e2e.rs` — 11 full-lifecycle tests: outbound lock/release, outbound refund, inbound verify/mint, inbound burn/return, multi-chain flows, replay attack, insufficient confirmations, invalid proof, 100-transfer stress (outbound + inbound)
 - `tests/tps_benchmark.rs` — 6 throughput benchmarks: independent/contended/mixed workloads, sync vs concurrent parity, measured ~4.5K TPS (debug) for 500 independent txs in 1 wave
 
+**Testnet Infrastructure**
+- `testnet::config` — `GenesisConfig` with testnet/devnet/mainnet presets, initial allocations, validator set, DPoS params, validation rules
+- `testnet::faucet` — rate-limited token faucet with cooldown, depletion tracking, unlimited mode for devnet
+- 18 tests (8 genesis config + 10 faucet)
+
+**EVM Compatibility Layer**
+- `evm_compat::abi` — Solidity ABI encoding/decoding (uint256, address, bool, bytes, string), function selectors, DID-to-address derivation
+- `evm_compat::precompile` — precompile interface (SHA-256, identity, ecrecover/ripemd160/modexp stubs), gas metering, rust-bc SHA-256 extension at 0x20
+- 27 tests (15 ABI + 12 precompile)
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 
