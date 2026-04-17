@@ -1,7 +1,8 @@
 import type { ReactElement } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 
-const links: { to: string; label: string; hint: string }[] = [
+const links: { to: string; label: string; hint: string; highlight?: boolean }[] = [
+  { to: '/demo', label: 'Demo RRHH', hint: 'Flujo guiado: emision y verificacion de credenciales', highlight: true },
   { to: '/', label: 'Dashboard', hint: 'Chain overview, latest blocks, and search' },
   { to: '/wallets', label: 'Wallets', hint: 'Create and browse wallets' },
   { to: '/transactions', label: 'Transactions', hint: 'Send transactions and view mempool' },
@@ -48,7 +49,9 @@ export default function Layout(): ReactElement {
                   `text-sm font-medium px-3 py-1.5 rounded-full transition-all duration-200 ${
                     isActive
                       ? 'bg-main-500 text-white shadow-sm'
-                      : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
+                      : l.highlight
+                        ? 'text-main-600 bg-main-50 hover:bg-main-100 border border-main-200'
+                        : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
                   }`
                 }
               >

@@ -19,6 +19,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Staking: stake/unstake tokens + validator table with actions
 - Channels: create Fabric-style channels + view config
 - Governance: informational page (API endpoints pending backend exposure)
+- Demo RRHH: guided 5-step credential verification flow (register issuer → register candidate → issue credential → verify → full profile), highlighted nav button, verification time display
+- Wallets page: removed dependency on non-existent `GET /wallets` endpoint; now uses session-based wallet list with lookup by address
+- Fixed Vite proxy: `.env` default changed to `http://127.0.0.1:8080` for local development
 
 **Documentation**
 - `docs/HR-DOCUMENT-VERIFICATION-IMPACT.md` — Impact analysis: blockchain-based document verification for HR hiring processes (DIDs, verifiable credentials, channel privacy, PQC signatures)

@@ -18,6 +18,7 @@ import Governance from './pages/Governance'
 import Airdrop from './pages/Airdrop'
 import Identity from './pages/Identity'
 import Credentials from './pages/Credentials'
+import Demo from './pages/Demo'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/demo" element={<Demo />} />
           <Route path="/block/:hash" element={<BlockDetail />} />
           <Route path="/wallets" element={<Wallets />} />
           <Route path="/wallet/:address" element={<WalletDetail />} />

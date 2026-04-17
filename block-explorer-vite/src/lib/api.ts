@@ -272,17 +272,6 @@ export const getCredentialsBySubject = (subjectDid: string) =>
     .get(`/store/credentials/by-subject/${encodeURIComponent(subjectDid)}`)
     .then((r) => unwrap<Credential[]>(r.data));
 
-// ── Wallets ──────────────────────────────────────────────────────────────────
-
-export const getWallets = () =>
-  client.get('/wallets').then((r) => {
-    try {
-      return unwrap<Wallet[]>(r.data);
-    } catch {
-      return [];
-    }
-  });
-
 // ── Staking ──────────────────────────────────────────────────────────────────
 
 export const stakeTokens = (address: string, amount: number) =>
