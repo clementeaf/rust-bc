@@ -59,6 +59,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `light_client::client` — `LightClient` with BFT header verification (CommitQC validation), state proof verification via Merkle proofs against synced headers, 100-header sync stress test
 - 30 new tests (6 concurrent executor + 13 header + 11 client)
 
+**Remaining Gap Closures: DPoS, Bridge E2E, TPS Benchmark**
+- `consensus::dpos` — stake-weighted validator selection: committee election (filter, sort, top-N), stake-proportional leader rotation, voting power, 1000-candidate stress test
+- `tests/bridge_e2e.rs` — 11 full-lifecycle tests: outbound lock/release, outbound refund, inbound verify/mint, inbound burn/return, multi-chain flows, replay attack, insufficient confirmations, invalid proof, 100-transfer stress (outbound + inbound)
+- `tests/tps_benchmark.rs` — 6 throughput benchmarks: independent/contended/mixed workloads, sync vs concurrent parity, measured ~4.5K TPS (debug) for 500 independent txs in 1 wave
+
 **Documentation**
 - `docs/IOTA-GAP-ANALYSIS.md`: competitive gap analysis vs IOTA Rebased with suggested roadmap
 

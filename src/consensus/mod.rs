@@ -10,6 +10,7 @@
 pub mod backend;
 pub mod bft;
 pub mod dag;
+pub mod dpos;
 pub mod engine;
 pub mod fork_choice;
 pub mod scheduler;
