@@ -22,6 +22,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Demo RRHH: guided 5-step credential verification flow (register issuer → register candidate → issue credential → verify → full profile), highlighted nav button, verification time display
 - Wallets page: removed dependency on non-existent `GET /wallets` endpoint; now uses session-based wallet list with lookup by address
 - Fixed Vite proxy: `.env` default changed to `http://127.0.0.1:8080` for local development
+- Redesigned Layout: flat nav replaced with categorized sidebar (Demos, Red, Tokens, Identidad, Smart Contracts) with descriptions per item, responsive hamburger menu
+- Redesigned Home: hub with grouped cards explaining each capability, replaced flat block list
 
 **Documentation**
 - `docs/HR-DOCUMENT-VERIFICATION-IMPACT.md` — Impact analysis: blockchain-based document verification for HR hiring processes (DIDs, verifiable credentials, channel privacy, PQC signatures)
