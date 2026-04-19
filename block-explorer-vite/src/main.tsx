@@ -20,6 +20,9 @@ import Identity from './pages/Identity'
 import Credentials from './pages/Credentials'
 import Demo from './pages/Demo'
 import Tesseract from './pages/Tesseract'
+import TesseractDemo from './pages/TesseractDemo'
+import TesseractPlayground from './pages/TesseractPlayground'
+import TesseractLive from './pages/TesseractLive'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -43,6 +46,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/identity" element={<Identity />} />
           <Route path="/credentials" element={<Credentials />} />
           <Route path="/tesseract" element={<Tesseract />} />
+          <Route path="/tesseract/demo" element={<TesseractDemo />} />
+          <Route path="/tesseract/playground" element={<TesseractPlayground />} />
+          <Route path="/tesseract/live" element={<TesseractLive />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -42,7 +42,7 @@ pub struct GeometricWeight {
 /// The identity's region is defined by its o-axis coordinate.
 pub fn geometric_weight(field: &Field, region: usize) -> GeometricWeight {
     let mut crystallized_cells = 0_usize;
-    let mut total_be = 0.0_f64;
+    let mut total_crystal_neighbors = 0.0_f64;
     let mut external_event_ids = std::collections::HashSet::new();
 
     for (coord, cell) in field.active_entries() {
@@ -50,26 +50,29 @@ pub fn geometric_weight(field: &Field, region: usize) -> GeometricWeight {
         if !cell.crystallized { continue; }
 
         crystallized_cells += 1;
-        total_be += field.binding_energy(coord);
 
-        // Count influences from OTHER regions
+        // Structural support: how many crystallized neighbors anchor this cell
+        let cn = field.neighbors(coord).iter()
+            .filter(|n| field.get(**n).crystallized)
+            .count() as f64;
+        total_crystal_neighbors += cn / 8.0;
+
+        // Count distinct event sources (diversity of interactions)
         for inf in &cell.influences {
-            // An influence is "external" if it was seeded by an event
-            // whose name doesn't match this region's own events
             external_event_ids.insert(inf.event_id.clone());
         }
     }
 
     let avg_binding_energy = if crystallized_cells > 0 {
-        total_be / crystallized_cells as f64
+        total_crystal_neighbors / crystallized_cells as f64
     } else {
         0.0
     };
 
     let external_influences = external_event_ids.len();
 
-    // Composite weight: all three factors must be non-zero.
-    // A Sybil with no interactions has 0 × 0 × 0 = 0.
+    // Composite weight: crystallized density × structural support × source diversity.
+    // A Sybil with no real interactions has 0 external influences → weight = 0.
     let weight = crystallized_cells as f64
         * avg_binding_energy
         * external_influences as f64;
@@ -109,14 +112,17 @@ mod tests {
 
     #[test]
     fn active_identity_has_weight() {
-        let mut field = Field::new(8);
-        // Simulate real activity: multiple events in region 3
-        field.seed_named(Coord { t: 2, c: 3, o: 3, v: 3 }, "alice-tx1");
-        field.seed_named(Coord { t: 3, c: 3, o: 3, v: 3 }, "bob-pays-alice");
-        field.seed_named(Coord { t: 4, c: 3, o: 3, v: 3 }, "carol-pays-alice");
+        let mut field = Field::new(16);
+        // Simulate real activity: events from NEARBY but DISTINCT sources.
+        // Seeds must overlap (within SEED_RADIUS) for emergent crystallization,
+        // but come from different event IDs for source diversity.
+        field.seed_named(Coord { t: 5, c: 5, o: 5, v: 5 }, "alice-tx1");
+        field.seed_named(Coord { t: 7, c: 5, o: 5, v: 5 }, "bob-pays-alice");
+        field.seed_named(Coord { t: 5, c: 7, o: 5, v: 5 }, "carol-pays-alice");
+        field.seed_named(Coord { t: 5, c: 5, o: 7, v: 5 }, "dave-pays-alice");
         evolve_to_equilibrium(&mut field, 10);
 
-        let w = geometric_weight(&field, 3);
+        let w = geometric_weight(&field, 5);
         assert!(w.crystallized_cells > 0, "Active identity should have crystallizations");
         assert!(w.external_influences > 0, "Should have external influences");
         assert!(w.weight > 0.0, "Composite weight should be positive");

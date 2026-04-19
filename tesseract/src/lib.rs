@@ -30,6 +30,9 @@ pub const INFLUENCE_EPSILON: f64 = 0.05;
 /// Maximum Euclidean radius for orbital seeding. Cells beyond this get no probability.
 /// At SEED_RADIUS=4: p(d=4) = 0.20, still meaningful. Beyond → negligible.
 pub const SEED_RADIUS: usize = 4;
+/// Probability boost pushed to neighbors when a cell crystallizes.
+/// Creates dynamic correlation beyond the seed radius (crystallization cascade).
+pub const CASCADE_STRENGTH: f64 = 0.08;
 
 // --- Helpers ---
 
@@ -229,6 +232,39 @@ impl Field {
                 }
             }
         }
+
+        // Crystallization cascade: newly crystallized cells push a small
+        // probability boost to their neighbors. This creates dynamic
+        // correlation beyond the seed radius and enables genuine
+        // phase-transition behavior.
+        self.apply_cascade(event_id);
+    }
+
+    /// Push cascade boosts from all crystallized cells that have pending
+    /// cascade energy. Called after seeding and after evolution crystallizations.
+    fn apply_cascade(&mut self, source_event: &str) {
+        let crystallized: Vec<Coord> = self.cells.iter()
+            .filter(|(_, cell)| cell.crystallized)
+            .map(|(coord, _)| *coord)
+            .collect();
+
+        for coord in crystallized {
+            for n in self.neighbors(coord) {
+                let cell = self.get_mut(n);
+                let old_p = cell.probability;
+                let new_p = (old_p + CASCADE_STRENGTH).min(1.0);
+                if new_p > old_p && new_p >= EPSILON {
+                    cell.probability = new_p;
+                    // Cascade inherits parent's source if cell has none
+                    if cell.influences.is_empty() && !source_event.is_empty() {
+                        cell.influences.push(Influence {
+                            event_id: source_event.to_string(),
+                            weight: CASCADE_STRENGTH,
+                        });
+                    }
+                }
+            }
+        }
     }
 
     pub fn destroy(&mut self, coord: Coord) {
@@ -252,14 +288,51 @@ impl Field {
         ]
     }
 
+    /// Source-aware orthogonal support.
+    ///
+    /// Counts axes where at least one neighbor has influences from
+    /// DIFFERENT events than this cell. Measures diversity of independent
+    /// evidence, not just presence of probability.
+    ///
+    /// - Single seed → σ=0 everywhere (all probability from same source)
+    /// - Two seeds on different axes → σ=1-2 at overlap
+    /// - Four orthogonal seeds → σ=4 at center
+    ///
+    /// This makes dimensions genuinely matter: 4D enables σ=4 (max resonance)
+    /// while 2D caps at σ=2.
     pub fn orthogonal_support(&self, coord: Coord) -> usize {
         let s = self.size;
-        let check = |c: Coord| self.get(c).probability > 0.5;
+        let my_sources: std::collections::HashSet<&str> = self.get(coord)
+            .influences.iter().map(|i| i.event_id.as_str()).collect();
+
+        // Fallback: if this cell has no sources, use basic probability check
+        if my_sources.is_empty() {
+            let check = |c: Coord| self.get(c).probability > 0.5;
+            let mut axes = 0;
+            if check(Coord { t: (coord.t + 1) % s, ..coord }) || check(Coord { t: (coord.t + s - 1) % s, ..coord }) { axes += 1; }
+            if check(Coord { c: (coord.c + 1) % s, ..coord }) || check(Coord { c: (coord.c + s - 1) % s, ..coord }) { axes += 1; }
+            if check(Coord { o: (coord.o + 1) % s, ..coord }) || check(Coord { o: (coord.o + s - 1) % s, ..coord }) { axes += 1; }
+            if check(Coord { v: (coord.v + 1) % s, ..coord }) || check(Coord { v: (coord.v + s - 1) % s, ..coord }) { axes += 1; }
+            return axes;
+        }
+
         let mut axes = 0;
-        if check(Coord { t: (coord.t + 1) % s, ..coord }) || check(Coord { t: (coord.t + s - 1) % s, ..coord }) { axes += 1; }
-        if check(Coord { c: (coord.c + 1) % s, ..coord }) || check(Coord { c: (coord.c + s - 1) % s, ..coord }) { axes += 1; }
-        if check(Coord { o: (coord.o + 1) % s, ..coord }) || check(Coord { o: (coord.o + s - 1) % s, ..coord }) { axes += 1; }
-        if check(Coord { v: (coord.v + 1) % s, ..coord }) || check(Coord { v: (coord.v + s - 1) % s, ..coord }) { axes += 1; }
+        let axis_neighbors: [(Coord, Coord); 4] = [
+            (Coord { t: (coord.t + 1) % s, ..coord }, Coord { t: (coord.t + s - 1) % s, ..coord }),
+            (Coord { c: (coord.c + 1) % s, ..coord }, Coord { c: (coord.c + s - 1) % s, ..coord }),
+            (Coord { o: (coord.o + 1) % s, ..coord }, Coord { o: (coord.o + s - 1) % s, ..coord }),
+            (Coord { v: (coord.v + 1) % s, ..coord }, Coord { v: (coord.v + s - 1) % s, ..coord }),
+        ];
+
+        for (n_pos, n_neg) in &axis_neighbors {
+            let has_diverse = [n_pos, n_neg].iter().any(|n| {
+                self.get(**n).influences.iter()
+                    .any(|inf| !my_sources.contains(inf.event_id.as_str()))
+            });
+            if has_diverse {
+                axes += 1;
+            }
+        }
         axes
     }
 
@@ -324,6 +397,11 @@ impl Field {
                 cell.probability = 1.0;
                 new_crystallizations += 1;
             }
+        }
+
+        // Crystallization cascade for newly crystallized cells
+        if new_crystallizations > 0 {
+            self.apply_cascade("");
         }
 
         // --- Curvature pressure (progressive decay) ---

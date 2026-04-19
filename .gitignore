@@ -58,3 +58,4 @@ blockchain_blocks/
 blockchain_checkpoints/
 blockchain_snapshots/
 
+tesseract/agents/__pycache__/

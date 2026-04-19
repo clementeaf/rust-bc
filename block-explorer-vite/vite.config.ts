@@ -30,6 +30,16 @@ export default defineConfig(({ mode }) => {
           secure: false,
           agent: isHttpsTarget ? httpsAgent : undefined,
         },
+        '/tess1': {
+          target: 'http://127.0.0.1:7710',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/tess1/, ''),
+        },
+        '/tess2': {
+          target: 'http://127.0.0.1:7711',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/tess2/, ''),
+        },
       },
     },
   }

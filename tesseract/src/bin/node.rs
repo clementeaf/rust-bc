@@ -156,6 +156,23 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<AppState>>) -> 
             }
         }
 
+        ("POST", "/destroy") => {
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(body);
+            match parsed {
+                Ok(v) => {
+                    let t = v["t"].as_u64().unwrap_or(0) as usize;
+                    let c = v["c"].as_u64().unwrap_or(0) as usize;
+                    let o = v["o"].as_u64().unwrap_or(0) as usize;
+                    let vv = v["v"].as_u64().unwrap_or(0) as usize;
+                    let mut st = state.lock().unwrap();
+                    let coord = Coord { t, c, o, v: vv };
+                    st.field.destroy(coord);
+                    ("200 OK", r#"{"destroyed":true}"#.into())
+                }
+                Err(e) => ("400 Bad Request", format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+
         ("GET", p) if p.starts_with("/cell/") => {
             let nums: Vec<usize> = p.trim_start_matches("/cell/")
                 .split('/').filter_map(|s| s.parse().ok()).collect();

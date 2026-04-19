@@ -167,22 +167,23 @@ fn capacity_different_regions_independent() {
 #[test]
 fn self_healing_works_under_capacity() {
     // Capacity doesn't prevent self-healing.
-    // Existing crystallizations that fit within capacity still recover.
-    let mut field = Field::new(4);
+    // size=8 so source-aware σ has diverse sources.
+    let mut field = Field::new(8);
 
-    field.set_capacity(1, 100.0); // generous capacity
+    field.set_capacity(1, 1000.0); // generous capacity
 
-    let center = Coord { t: 1, c: 1, o: 1, v: 1 };
+    let center = Coord { t: 3, c: 3, o: 3, v: 3 };
     field.seed_named(center, "core");
-    field.seed_named(Coord { t: 2, c: 1, o: 1, v: 1 }, "support-t");
-    field.seed_named(Coord { t: 1, c: 2, o: 1, v: 1 }, "support-c");
-    evolve_to_equilibrium(&mut field, 10);
+    field.seed_named(Coord { t: 5, c: 3, o: 3, v: 3 }, "support-t");
+    field.seed_named(Coord { t: 3, c: 5, o: 3, v: 3 }, "support-c");
+    field.seed_named(Coord { t: 3, c: 3, o: 5, v: 3 }, "support-o");
+    evolve_to_equilibrium(&mut field, 15);
 
     assert!(field.get(center).crystallized);
 
     // Destroy
     field.destroy(center);
-    evolve_to_equilibrium(&mut field, 10);
+    evolve_to_equilibrium(&mut field, 20);
 
     // Should recover — load is within capacity
     assert!(
