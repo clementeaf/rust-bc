@@ -6,6 +6,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-19
+
+**Tesseract — 4D probability field prototype**
+
+New crate `tesseract/` implementing geometric convergence consensus:
+- Core field engine: crystallization, self-healing, orbital seeding (sparse, up to 32⁴ cells)
+- SHA-256 coordinate mapper for cross-platform determinism (replaces non-stable DefaultHasher)
+- Distributed node network with bidirectional boundary sync and CRDT-like merge
+- Wallet layer with double-spend detection (L2 over field L1)
+- Geometric Sybil resistance via crystallization weight
+- Proof of Contribution with growth pool distribution (wired to node operations)
+- Curvature economy with genesis allocation and conservation invariants
+- File-backed persistence with event replay
+- HTTP node server with peer sync
+- Agent coordination demo (`cargo run --bin demo`) — live multi-node scenario
+- 97 tests across 10 suites
+- Dockerfile + docker-compose for multi-node deployment
+
+Documentation (`docs/TESSERACT-*.md`):
+- Whitepaper, formal axioms, semi-formal proofs, convergence theorem
+- Comparison vs Nakamoto/BFT (classified as AP with eventual consistency)
+- Spacetime reformulation, FAQ, incentives, economics, contribution model
+- Architectural decision: field accepts all events, wallet resolves conflicts (L1/L2)
+
+Block explorer: Tesseract visualization page added
+
 ### 2026-04-17
 
 **Block Explorer — New pages and cleanup**
