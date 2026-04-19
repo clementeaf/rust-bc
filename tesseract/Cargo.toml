@@ -1,0 +1,11 @@
+[package]
+name = "tesseract"
+version = "0.1.0"
+edition = "2021"
+description = "4D probability field — convergence without consensus"
+
+[dependencies]
+rand = "0.8"
+sha2 = "0.10"
+serde = { version = "=1.0.217", features = ["derive"] }
+serde_json = "=1.0.138"
