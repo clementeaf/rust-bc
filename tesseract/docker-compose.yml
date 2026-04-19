@@ -1,0 +1,36 @@
+services:
+  node1:
+    build: .
+    container_name: tesseract-node1
+    environment:
+      NODE_ID: node-1
+      PORT: "7700"
+      REGION_ID: "1"
+      FIELD_SIZE: "8"
+      GENESIS_ALLOC: "50000"
+      PEERS: "http://node2:7700"
+      DATA_DIR: /data
+    ports:
+      - "7701:7700"
+    volumes:
+      - node1-data:/data
+
+  node2:
+    build: .
+    container_name: tesseract-node2
+    environment:
+      NODE_ID: node-2
+      PORT: "7700"
+      REGION_ID: "5"
+      FIELD_SIZE: "8"
+      GENESIS_ALLOC: "50000"
+      PEERS: "http://node1:7700"
+      DATA_DIR: /data
+    ports:
+      - "7702:7700"
+    volumes:
+      - node2-data:/data
+
+volumes:
+  node1-data:
+  node2-data:

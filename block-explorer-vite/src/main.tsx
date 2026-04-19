@@ -19,6 +19,7 @@ import Airdrop from './pages/Airdrop'
 import Identity from './pages/Identity'
 import Credentials from './pages/Credentials'
 import Demo from './pages/Demo'
+import Tesseract from './pages/Tesseract'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -41,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/airdrop" element={<Airdrop />} />
           <Route path="/identity" element={<Identity />} />
           <Route path="/credentials" element={<Credentials />} />
+          <Route path="/tesseract" element={<Tesseract />} />
         </Route>
       </Routes>
     </BrowserRouter>

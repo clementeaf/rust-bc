@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 /**
- * Dev server proxies /api to the rust-bc node. Docker uses HTTPS + self-signed certs on 8080;
+ * Dev server proxies /api to the Cerulean Ledger node. Docker uses HTTPS + self-signed certs on 8080;
  * the proxy must not verify TLS (`secure: false` + https.Agent). Plain HTTP: `http://127.0.0.1:8080`.
  */
 export default defineConfig(({ mode }) => {

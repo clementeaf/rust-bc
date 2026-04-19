@@ -1,5 +1,6 @@
 # Rust
 /target/
+tesseract/target/
 **/*.rs.bk
 *.pdb
 # NOTA: Cargo.lock SÍ debe estar en el repo para aplicaciones/binarios
