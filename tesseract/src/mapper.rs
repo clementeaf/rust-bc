@@ -4,6 +4,7 @@
 //! Related events land near each other → orbitals overlap → emergent links.
 
 use crate::Coord;
+use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey, Signature};
 use sha2::{Digest, Sha256};
 
 /// An event in the real world that needs to be placed in the field.
@@ -23,12 +24,9 @@ pub struct Event {
 
 /// Maps events to 4D coordinates deterministically.
 ///
-/// **Identity binding (production consideration):**
-/// The `org` field in [`Event`] is currently an unverified string.
-/// In production, `org` MUST be derived from a verified public key
-/// (e.g., `SHA-256(pub_key) % size`) to prevent identity spoofing.
-/// The parent project's `src/identity/` module provides Ed25519 and
-/// ML-DSA-65 signing providers suitable for this purpose.
+/// **Identity binding:** Use [`SignedEvent`] for production. It derives
+/// `org` from the signer's Ed25519 public key, preventing identity spoofing.
+/// Raw [`Event`] with manual `org` is kept for tests and backward compatibility.
 pub struct CoordMapper {
     pub size: usize,
     /// Time bucket size in seconds. Events within the same bucket
@@ -92,6 +90,91 @@ impl CoordMapper {
     }
 }
 
+// --- Cryptographic Identity Binding ---
+
+/// Derive a deterministic org identifier from a public key.
+/// org = hex(SHA-256(public_key_bytes)[..8]) — 16 hex chars.
+/// This is the ONLY way to produce a valid org for `SignedEvent`.
+pub fn org_from_public_key(public_key: &VerifyingKey) -> String {
+    let hash = Sha256::digest(public_key.as_bytes());
+    hex::encode(&hash[..8])
+}
+
+/// A cryptographically signed event. The `org` field is derived from
+/// the signer's public key — it cannot be spoofed.
+///
+/// To create: use `SignedEvent::sign(event_data, &signing_key)`.
+/// To verify: call `signed_event.verify()` — returns `Ok(Event)` with
+/// the org field guaranteed to match the signer's identity.
+#[derive(Clone, Debug)]
+pub struct SignedEvent {
+    /// Event id.
+    pub id: String,
+    /// Timestamp (unix seconds).
+    pub timestamp: u64,
+    /// Channel or context.
+    pub channel: String,
+    /// Payload data.
+    pub data: String,
+    /// Ed25519 public key of the signer.
+    pub public_key: VerifyingKey,
+    /// Ed25519 signature over (id || timestamp || channel || data).
+    pub signature: Signature,
+}
+
+impl SignedEvent {
+    /// Sign event data with a private key. The org is derived automatically.
+    pub fn sign(
+        id: impl Into<String>,
+        timestamp: u64,
+        channel: impl Into<String>,
+        data: impl Into<String>,
+        signing_key: &SigningKey,
+    ) -> Self {
+        let id = id.into();
+        let channel = channel.into();
+        let data = data.into();
+
+        let message = Self::signing_message(&id, timestamp, &channel, &data);
+        let signature = signing_key.sign(&message);
+        let public_key = signing_key.verifying_key();
+
+        Self { id, timestamp, channel, data, public_key, signature }
+    }
+
+    /// Verify the signature and produce a trusted `Event` with org derived from the public key.
+    /// If verification fails, the event is rejected — no field impact.
+    pub fn verify(&self) -> Result<Event, &'static str> {
+        let message = Self::signing_message(&self.id, self.timestamp, &self.channel, &self.data);
+        self.public_key
+            .verify(&message, &self.signature)
+            .map_err(|_| "invalid signature")?;
+
+        Ok(Event {
+            id: self.id.clone(),
+            timestamp: self.timestamp,
+            channel: self.channel.clone(),
+            org: org_from_public_key(&self.public_key),
+            data: self.data.clone(),
+        })
+    }
+
+    /// The canonical message bytes that get signed.
+    fn signing_message(id: &str, timestamp: u64, channel: &str, data: &str) -> Vec<u8> {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(id.as_bytes());
+        msg.extend_from_slice(&timestamp.to_le_bytes());
+        msg.extend_from_slice(channel.as_bytes());
+        msg.extend_from_slice(data.as_bytes());
+        msg
+    }
+
+    /// The org identifier derived from this event's signer.
+    pub fn org(&self) -> String {
+        org_from_public_key(&self.public_key)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,6 +229,66 @@ mod tests {
         let c2 = mapper.map(&e2);
         // At least t should differ (different buckets)
         assert_ne!(c1.t, c2.t, "61s apart in 60s bucket → different t");
+    }
+
+    // --- SignedEvent tests ---
+
+    #[test]
+    fn signed_event_verifies() {
+        let key = SigningKey::generate(&mut rand_core::OsRng);
+        let se = SignedEvent::sign("tx-001", 1000, "payments", "10 tokens", &key);
+        let event = se.verify().expect("valid signature should verify");
+        assert_eq!(event.id, "tx-001");
+        assert_eq!(event.org, org_from_public_key(&key.verifying_key()));
+    }
+
+    #[test]
+    fn tampered_event_rejected() {
+        let key = SigningKey::generate(&mut rand_core::OsRng);
+        let mut se = SignedEvent::sign("tx-001", 1000, "payments", "10 tokens", &key);
+        se.data = "999 tokens".into(); // tamper
+        assert!(se.verify().is_err(), "tampered event must be rejected");
+    }
+
+    #[test]
+    fn different_keys_different_org() {
+        let key1 = SigningKey::generate(&mut rand_core::OsRng);
+        let key2 = SigningKey::generate(&mut rand_core::OsRng);
+        let org1 = org_from_public_key(&key1.verifying_key());
+        let org2 = org_from_public_key(&key2.verifying_key());
+        assert_ne!(org1, org2, "different keys must produce different orgs");
+    }
+
+    #[test]
+    fn same_key_same_org() {
+        let key = SigningKey::generate(&mut rand_core::OsRng);
+        let org1 = org_from_public_key(&key.verifying_key());
+        let org2 = org_from_public_key(&key.verifying_key());
+        assert_eq!(org1, org2, "same key must always produce same org");
+    }
+
+    #[test]
+    fn spoofed_key_wrong_org() {
+        let real_key = SigningKey::generate(&mut rand_core::OsRng);
+        let attacker_key = SigningKey::generate(&mut rand_core::OsRng);
+
+        let se = SignedEvent::sign("tx-001", 1000, "payments", "steal", &attacker_key);
+        let event = se.verify().unwrap();
+
+        let real_org = org_from_public_key(&real_key.verifying_key());
+        assert_ne!(event.org, real_org, "attacker cannot claim real identity's org");
+    }
+
+    #[test]
+    fn signed_event_maps_deterministically() {
+        let key = SigningKey::generate(&mut rand_core::OsRng);
+        let mapper = CoordMapper::new(32);
+
+        let se = SignedEvent::sign("tx-001", 1000, "payments", "data", &key);
+        let event = se.verify().unwrap();
+        let c1 = mapper.map(&event);
+        let c2 = mapper.map(&event);
+        assert_eq!(c1, c2, "verified event must map deterministically");
     }
 
     #[test]

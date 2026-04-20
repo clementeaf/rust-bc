@@ -137,6 +137,43 @@ Not required to run the node.
 | `P2P_SYNC_BUFFER_BYTES` | 4194304 | Buffer size for pull-based state sync (4 MB) |
 | `SIGNING_ALGORITHM` | *(ed25519)* | `ed25519` or `ml-dsa-65` — selects the node's signing provider |
 
+## Tesseract prototype (`tesseract/`)
+
+Standalone Rust library — a 4D probability field consensus engine. Not a blockchain.
+
+**What it is:** Events enter a 4D field, accumulate evidence from independent dimensions, and crystallize into permanent facts. Convergence is emergent, not voted on.
+
+### Four rules (all implemented, tested)
+
+| Rule | Module | Crypto backing |
+|------|--------|---------------|
+| Causality | `causality.rs` | SHA-256 ancestry hashes |
+| Conservation | `conservation.rs` + `proof.rs` | Pedersen commitments on Ristretto255 |
+| Entropy | `entropy.rs` + `proof.rs` | SHA-256 hash-chain seals |
+| Gravity | `gravity.rs` | Computed from causal graph (no storage) |
+
+### Key modules
+
+- `proof.rs` — Pedersen commitments (curve25519-dalek), seals, causal proofs
+- `mapper.rs` — Event → 4D coordinate mapping; `SignedEvent` (Ed25519 identity binding)
+- `wallet.rs` — `TesseractLedger` backed by `ConservedField`; `TransferReceipt` with commitments
+- `conservation.rs` — u64 balances, nonces, zero-sum transfers
+- `identity.rs` — Geometric weight (Sybil resistance) + cryptographic binding
+- `node.rs` — Distributed field regions, boundary exchange (in-memory, no network I/O)
+
+### Testing
+
+```bash
+# Unit tests (fast, no RAM issues)
+cargo test --lib -p tesseract
+
+# Specific integration test
+cargo test --test monetary -p tesseract
+
+# WARNING: `cargo test -p tesseract` without filter runs scale tests
+# that consume >1GB RAM each and may not terminate. Always filter.
+```
+
 ## Global Claude configuration (`~/.claude/`)
 
 ### Active rules for this project

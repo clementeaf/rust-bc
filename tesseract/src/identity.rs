@@ -11,12 +11,11 @@
 //! Your weight in the field = how much the space has crystallized
 //! around your coordinate through REAL interactions with others.
 //!
-//! **Limitation:** Geometric weight prevents empty Sybils from gaining
-//! influence, but does NOT prevent identity spoofing at the protocol
-//! level. The `org` string in [`mapper::Event`] is unverified — an
-//! attacker can claim any org name. In production, org identity must
-//! be bound to a cryptographic key pair. See [`mapper::CoordMapper`]
-//! for the recommended approach.
+//! **Cryptographic binding:** Identity spoofing is prevented by
+//! [`mapper::SignedEvent`], which derives `org` from the signer's
+//! Ed25519 public key. An attacker cannot claim another identity's
+//! org without possessing their private key. Combined with geometric
+//! weight, Sybil resistance is both cryptographic AND geometric.
 
 use crate::Field;
 

@@ -7,14 +7,14 @@
 //! ## Pedersen Commitments (Conservation)
 //!
 //! A Pedersen commitment hides a value while preserving additive homomorphism:
-//!   C(v, r) = v·G + r·H  (mod p)
+//!   C(v, r) = v·G + r·H
 //!
 //! Key property: C(a, r1) + C(b, r2) = C(a+b, r1+r2)
 //! This means: if sum(input_commits) == sum(output_commits), then
 //! sum(input_values) == sum(output_values) — WITHOUT revealing the values.
 //!
-//! Breaking this requires solving the discrete logarithm problem.
-//! Not "hard" — mathematically impossible with current knowledge.
+//! Breaking this requires solving the discrete logarithm problem on Curve25519.
+//! 128-bit security level — computationally infeasible with known algorithms.
 //!
 //! ## Hash Chain Seals (Entropy)
 //!
@@ -25,68 +25,65 @@
 
 use sha2::{Digest, Sha256};
 
-// --- Pedersen Commitment Scheme (mod p) ---
+// --- Pedersen Commitment Scheme on Ristretto255 ---
 //
-// Using a safe prime for demonstration. In production, use curve25519.
-// The math is identical — only the group changes.
+// Using curve25519-dalek's RistrettoPoint for production-grade commitments.
+// The Ristretto group provides a prime-order group from Curve25519,
+// eliminating cofactor pitfalls.
 //
-// p = safe prime (p = 2q + 1 where q is also prime)
-// g, h = generators of the subgroup of order q
-// Commitment: C = g^value * h^blinding mod p
+// G = RISTRETTO_BASEPOINT_POINT (standard generator)
+// H = hash-derived generator (nothing-up-my-sleeve, independent of G)
+// Commitment: C = value·G + blinding·H
 //
-// Security: finding `log_g(h)` is the discrete log problem.
-// Without it, you cannot open a commitment to a different value.
+// Security: finding log_G(H) is the elliptic curve discrete log problem.
+// 128-bit security — breaking requires ~2^128 operations.
 
-/// Safe prime for the commitment scheme.
-/// p = 2 * q + 1 where q is prime. Small for prototype — production uses 256-bit.
-const PRIME: u128 = 1_000_000_007_000_000_003; // ~60 bits, safe prime
-const GENERATOR_G: u128 = 5;
-const GENERATOR_H: u128 = 7;
-/// Order of the subgroup (q = (p-1)/2).
-const ORDER: u128 = (PRIME - 1) / 2;
+use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
+use curve25519_dalek::scalar::Scalar;
 
-/// Modular exponentiation: base^exp mod modulus.
-fn mod_pow(mut base: u128, mut exp: u128, modulus: u128) -> u128 {
-    if modulus == 1 { return 0; }
-    let mut result: u128 = 1;
-    base %= modulus;
-    while exp > 0 {
-        if exp % 2 == 1 {
-            result = mod_mul(result, base, modulus);
-        }
-        exp /= 2;
-        base = mod_mul(base, base, modulus);
-    }
-    result
+/// Generator G: the standard Ristretto basepoint.
+const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
+
+/// Generator H: derived from hashing to ensure nobody knows log_G(H).
+/// This is a nothing-up-my-sleeve construction: H = hash_to_point("tesseract_pedersen_H").
+fn generator_h() -> RistrettoPoint {
+    use sha2::Sha512;
+    let hash = Sha512::digest(b"tesseract_pedersen_H");
+    let bytes: [u8; 64] = hash.into();
+    RistrettoPoint::from_uniform_bytes(&bytes)
 }
 
-/// Modular multiplication avoiding overflow.
-fn mod_mul(a: u128, b: u128, m: u128) -> u128 {
-    ((a as u128) * (b as u128)) % m
-}
-
-/// A Pedersen commitment: C = g^value * h^blinding mod p.
+/// A Pedersen commitment: C = value·G + blinding·H.
 /// The commitment hides the value but preserves addition.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Commitment {
-    /// The commitment value (g^v * h^r mod p).
-    point: u128,
+    /// The commitment point on the Ristretto group.
+    point: RistrettoPoint,
 }
+
+impl PartialEq for Commitment {
+    fn eq(&self, other: &Self) -> bool {
+        self.point.compress() == other.point.compress()
+    }
+}
+
+impl Eq for Commitment {}
 
 impl Commitment {
     /// Create a commitment to a value with a blinding factor.
-    /// The blinding factor hides the value — without it, you'd know the value.
+    /// C = value·G + blinding·H
     pub fn commit(value: u64, blinding: u64) -> Self {
-        let gv = mod_pow(GENERATOR_G, value as u128, PRIME);
-        let hr = mod_pow(GENERATOR_H, blinding as u128, PRIME);
-        let point = mod_mul(gv, hr, PRIME);
+        let v = Scalar::from(value);
+        let r = Scalar::from(blinding);
+        let point = v * G + r * generator_h();
         Self { point }
     }
 
     /// Verify a commitment opening: does C == commit(value, blinding)?
     pub fn verify(&self, value: u64, blinding: u64) -> bool {
         let expected = Self::commit(value, blinding);
-        self.point == expected.point
+        *self == expected
     }
 
     /// Homomorphic addition: C(a,r1) + C(b,r2) = C(a+b, r1+r2).
@@ -94,7 +91,7 @@ impl Commitment {
     /// not a runtime check.
     pub fn add(&self, other: &Commitment) -> Commitment {
         Commitment {
-            point: mod_mul(self.point, other.point, PRIME),
+            point: self.point + other.point,
         }
     }
 
@@ -103,9 +100,9 @@ impl Commitment {
         Self::commit(0, 0)
     }
 
-    /// Raw commitment value (for comparison).
-    pub fn raw(&self) -> u128 {
-        self.point
+    /// Compressed point bytes (32 bytes) for serialization/comparison.
+    pub fn compressed(&self) -> CompressedRistretto {
+        self.point.compress()
     }
 }
 
@@ -149,7 +146,7 @@ impl BalanceProof {
 /// sum(input_commitments) == sum(output_commitments)
 ///
 /// This is not a check — it's an algebraic identity.
-/// If the commitments balance, the values MUST balance (or discrete log is broken).
+/// If the commitments balance, the values MUST balance (or ECDLP is broken).
 pub fn verify_conservation(
     inputs: &[Commitment],
     outputs: &[Commitment],
@@ -269,7 +266,7 @@ impl std::fmt::Display for CausalProof {
 mod tests {
     use super::*;
 
-    // --- Pedersen Commitment tests ---
+    // --- Pedersen Commitment tests (now on Ristretto255) ---
 
     #[test]
     fn commitment_hides_value() {
@@ -348,6 +345,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn commitment_zero_is_identity() {
+        let c = Commitment::commit(42, 7);
+        let z = Commitment::zero();
+        let sum = z.add(&c);
+        assert_eq!(sum, c, "zero + C should equal C");
+    }
+
+    #[test]
+    fn balance_proof_roundtrip() {
+        let bp = BalanceProof::new(1000, 555);
+        assert!(bp.is_valid());
+        assert_eq!(bp.value(), 1000);
+        assert_eq!(bp.blinding(), 555);
+    }
+
     // --- Seal tests ---
 
     #[test]
@@ -386,9 +399,6 @@ mod tests {
     fn seal_is_irreversible() {
         let s0 = Seal::genesis(b"origin");
         let s1 = s0.extend(b"evidence");
-        // You cannot derive s0 from s1 — that would require inverting SHA-256.
-        // We can only verify this property exists by demonstrating
-        // that s0 and s1 are structurally independent values.
         assert_ne!(s0.hash, s1.hash);
         assert_eq!(s1.depth, s0.depth + 1);
     }
@@ -400,7 +410,6 @@ mod tests {
         let genesis = CausalProof::genesis(b"node_a", b"first_event");
         let child = CausalProof::new(&[&genesis], b"node_b", b"second_event");
 
-        // Child proof depends on genesis — different genesis → different child
         let alt_genesis = CausalProof::genesis(b"node_a", b"different_event");
         let alt_child = CausalProof::new(&[&alt_genesis], b"node_b", b"second_event");
 
