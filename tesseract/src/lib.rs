@@ -1,9 +1,23 @@
-//! Tesseract — 4D probability field
+//! Tesseract — 4D geometric certainty field
+//!
+//! Data persists not because someone stores it, but because independent
+//! evidence from orthogonal dimensions converges on the same fact.
+//!
+//! Core model:
+//!   - Each dimension (Temporal, Context, Origin, Verification) is backed
+//!     by structurally independent evidence sources.
+//!   - σ measures PROVEN INDEPENDENCE: how many dimensions have attestations
+//!     from validators bound to that dimension.
+//!   - Crystallization requires σ = 4: all dimensions independently attested.
+//!   - Security scales multiplicatively with dimensions, not additively.
 //!
 //! Sparse implementation: only cells with p > 0 are stored.
-//! Scales to large fields (32⁴ = ~1M logical cells) without
-//! allocating memory for empty space.
 
+pub mod causality;
+pub mod conservation;
+pub mod entropy;
+pub mod gravity;
+pub mod proof;
 pub mod mapper;
 pub mod node;
 pub mod wallet;
@@ -13,6 +27,7 @@ pub mod economics;
 pub mod contribution;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 
 // --- Configuration ---
@@ -54,6 +69,40 @@ pub fn distance(a: Coord, b: Coord, size: usize) -> f64 {
 
 // --- Core types ---
 
+/// The 4 orthogonal dimensions of the tesseract.
+/// Each is backed by a structurally independent class of evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Dimension {
+    /// When was this observed? Independent clocks/timestamps.
+    Temporal,
+    /// In what channel/context did this occur?
+    Context,
+    /// Which independent entity attests to this?
+    Origin,
+    /// Against what state was this verified?
+    Verification,
+}
+
+impl Dimension {
+    pub const ALL: [Dimension; 4] = [
+        Dimension::Temporal,
+        Dimension::Context,
+        Dimension::Origin,
+        Dimension::Verification,
+    ];
+}
+
+impl fmt::Display for Dimension {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Dimension::Temporal => write!(f, "T"),
+            Dimension::Context => write!(f, "C"),
+            Dimension::Origin => write!(f, "O"),
+            Dimension::Verification => write!(f, "V"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Coord {
     pub t: usize,
@@ -68,6 +117,22 @@ impl fmt::Display for Coord {
     }
 }
 
+/// An attestation bound to ONE dimension.
+/// A validator can only attest on the dimension it is bound to.
+#[derive(Clone, Debug)]
+pub struct Attestation {
+    /// Which dimension this attestation covers.
+    pub dimension: Dimension,
+    /// Unique identifier of the validator (bound to this dimension).
+    pub validator_id: String,
+    /// The event being attested.
+    pub event_id: String,
+    /// Strength of the attestation (distance-decayed from seed center).
+    pub weight: f64,
+}
+
+/// Legacy influence — kept for backward compatibility during migration.
+/// Will be removed once all modules use Attestation.
 #[derive(Clone, Debug)]
 pub struct Influence {
     pub event_id: String,
@@ -78,15 +143,89 @@ pub struct Influence {
 pub struct Cell {
     pub probability: f64,
     pub crystallized: bool,
+    /// Legacy influences (undifferentiated by dimension).
     pub influences: Vec<Influence>,
+    /// Dimension-bound attestations: the new model.
+    /// A cell crystallizes only when all 4 dimensions are attested.
+    pub attestations: HashMap<Dimension, Vec<Attestation>>,
 }
 
 impl Cell {
     pub fn new() -> Self {
-        Self { probability: 0.0, crystallized: false, influences: Vec::new() }
+        Self {
+            probability: 0.0,
+            crystallized: false,
+            influences: Vec::new(),
+            attestations: HashMap::new(),
+        }
+    }
+
+    /// How many dimensions have at least one attestation from a unique validator.
+    pub fn attested_dimensions(&self) -> usize {
+        self.attestations.iter()
+            .filter(|(_, atts)| !atts.is_empty())
+            .count()
+    }
+
+    /// Set of unique validator IDs across all dimensions.
+    pub fn unique_validators(&self) -> HashSet<&str> {
+        self.attestations.values()
+            .flat_map(|atts| atts.iter().map(|a| a.validator_id.as_str()))
+            .collect()
+    }
+
+    /// σ-independence: dimensions attested by validators that DO NOT
+    /// appear on any other dimension for this cell. Measures true
+    /// structural independence.
+    pub fn sigma_independence(&self) -> usize {
+        // Count how many times each validator appears across dimensions
+        let mut validator_dims: HashMap<&str, HashSet<Dimension>> = HashMap::new();
+        for (dim, atts) in &self.attestations {
+            for att in atts {
+                validator_dims.entry(att.validator_id.as_str())
+                    .or_default()
+                    .insert(*dim);
+            }
+        }
+
+        // A dimension is independently attested if it has at least one
+        // validator that attests ONLY on that dimension (not on others).
+        let mut independent = 0;
+        for dim in &Dimension::ALL {
+            if let Some(atts) = self.attestations.get(dim) {
+                let has_exclusive = atts.iter().any(|att| {
+                    validator_dims.get(att.validator_id.as_str())
+                        .map(|dims| dims.len() == 1)
+                        .unwrap_or(false)
+                });
+                if has_exclusive {
+                    independent += 1;
+                }
+            }
+        }
+        independent
     }
 
     pub fn record(&self) -> String {
+        // Prefer attestation-based record if available
+        if !self.attestations.is_empty() {
+            let mut parts = Vec::new();
+            for dim in &Dimension::ALL {
+                if let Some(atts) = self.attestations.get(dim) {
+                    if !atts.is_empty() {
+                        let validators: Vec<String> = atts.iter()
+                            .map(|a| format!("{}({:.0}%)", a.validator_id, a.weight * 100.0))
+                            .collect();
+                        parts.push(format!("[{}:{}]", dim, validators.join("+")));
+                    }
+                }
+            }
+            if !parts.is_empty() {
+                return parts.join(" ");
+            }
+        }
+
+        // Fallback to legacy influences
         if self.influences.is_empty() {
             return String::from("(empty)");
         }
@@ -109,11 +248,39 @@ pub struct Field {
     /// When capacity reaches 0, no more deformations can be seeded in that region.
     /// This is a GEOMETRIC constraint of the space, not an economic rule.
     curvature_budget: HashMap<usize, f64>,
+    /// Causal graph: partial order of events. When present, `attest_causal()`
+    /// enforces light-cone constraints — probability only propagates where
+    /// causality allows. The field without causality is the classical model;
+    /// with causality it becomes relativistic.
+    pub causality: Option<causality::CausalGraph>,
+    /// Conserved value layer. When present, transfers enforce zero-sum
+    /// invariant — value cannot be created or destroyed after genesis.
+    pub conservation: Option<conservation::ConservedField>,
 }
 
 impl Field {
     pub fn new(size: usize) -> Self {
-        Self { cells: HashMap::new(), size, curvature_budget: HashMap::new() }
+        Self {
+            cells: HashMap::new(),
+            size,
+            curvature_budget: HashMap::new(),
+            causality: None,
+            conservation: None,
+        }
+    }
+
+    /// Enable causal mode: the field becomes relativistic.
+    /// Events must propagate through light cones, not instantaneously.
+    pub fn with_causality(mut self) -> Self {
+        self.causality = Some(causality::CausalGraph::new());
+        self
+    }
+
+    /// Enable conservation: value becomes a physical invariant.
+    /// Must call `genesis()` on the conservation field to inject initial supply.
+    pub fn with_conservation(mut self) -> Self {
+        self.conservation = Some(conservation::ConservedField::new());
+        self
     }
 
     /// Number of cells actually stored in memory.
@@ -187,14 +354,174 @@ impl Field {
         self.cells.entry(coord).or_insert_with(Cell::new)
     }
 
+    /// Attest an event from a specific dimension.
+    /// This is the new model: each attestation is bound to ONE dimension,
+    /// from a validator that is bound to that dimension.
+    /// Crystallization requires attestations from all 4 dimensions.
+    pub fn attest(
+        &mut self,
+        center: Coord,
+        event_id: &str,
+        dimension: Dimension,
+        validator_id: &str,
+    ) {
+        let s = self.size;
+        let axis_max = SEED_RADIUS.min(s / 2);
+
+        for dt_signed in -(axis_max as i64)..=(axis_max as i64) {
+            let t = ((center.t as i64 + dt_signed).rem_euclid(s as i64)) as usize;
+            for dc_signed in -(axis_max as i64)..=(axis_max as i64) {
+                let c = ((center.c as i64 + dc_signed).rem_euclid(s as i64)) as usize;
+                for do_signed in -(axis_max as i64)..=(axis_max as i64) {
+                    let o = ((center.o as i64 + do_signed).rem_euclid(s as i64)) as usize;
+                    for dv_signed in -(axis_max as i64)..=(axis_max as i64) {
+                        let v = ((center.v as i64 + dv_signed).rem_euclid(s as i64)) as usize;
+                        let coord = Coord { t, c, o, v };
+
+                        let dist = distance(center, coord, s);
+                        let p = 1.0 / (1.0 + dist);
+
+                        if p < EPSILON { continue; }
+
+                        let cell = self.get_mut(coord);
+                        cell.probability = (cell.probability + p).min(1.0);
+
+                        // Record dimension-bound attestation
+                        if p >= INFLUENCE_EPSILON {
+                            let atts = cell.attestations
+                                .entry(dimension)
+                                .or_insert_with(Vec::new);
+                            // Avoid duplicate attestations from same validator
+                            let already = atts.iter()
+                                .any(|a| a.validator_id == validator_id && a.event_id == event_id);
+                            if !already {
+                                atts.push(Attestation {
+                                    dimension,
+                                    validator_id: validator_id.to_string(),
+                                    event_id: event_id.to_string(),
+                                    weight: p,
+                                });
+                            }
+                        }
+
+                        // Crystallization now requires σ-independence = 4
+                        if !cell.crystallized
+                            && cell.probability >= CRYSTALLIZATION_THRESHOLD
+                            && cell.sigma_independence() >= 4
+                        {
+                            cell.crystallized = true;
+                            cell.probability = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        self.apply_cascade(event_id);
+    }
+
+    /// Causal attestation: like `attest()` but respects light cones.
+    /// Probability only reaches cells within the event's causal cone.
+    /// Returns the EventId if accepted, None if causality is disabled or
+    /// a parent is unknown.
+    pub fn attest_causal(
+        &mut self,
+        center: Coord,
+        data: &[u8],
+        parents: Vec<causality::EventId>,
+        dimension: Dimension,
+        validator_id: &str,
+    ) -> Option<causality::EventId> {
+        let graph = self.causality.as_mut()?;
+        let logical_time = graph.current_time;
+
+        let event = causality::CausalEvent::new(
+            center, logical_time, parents, data.to_vec(),
+        );
+        let event_id = event.id.clone();
+        let event_id_str = event_id.to_string();
+
+        if !graph.insert(event) {
+            return None; // unknown parent — causal violation
+        }
+
+        // Now seed probability, but ONLY within the light cone.
+        let s = self.size;
+        let axis_max = SEED_RADIUS.min(s / 2);
+        let cone = causality::LightCone::new(center, logical_time);
+        // Use current_time from graph (which advanced after insert)
+        let now = self.causality.as_ref().unwrap().current_time;
+
+        for dt_signed in -(axis_max as i64)..=(axis_max as i64) {
+            let t = ((center.t as i64 + dt_signed).rem_euclid(s as i64)) as usize;
+            for dc_signed in -(axis_max as i64)..=(axis_max as i64) {
+                let c = ((center.c as i64 + dc_signed).rem_euclid(s as i64)) as usize;
+                for do_signed in -(axis_max as i64)..=(axis_max as i64) {
+                    let o = ((center.o as i64 + do_signed).rem_euclid(s as i64)) as usize;
+                    for dv_signed in -(axis_max as i64)..=(axis_max as i64) {
+                        let v = ((center.v as i64 + dv_signed).rem_euclid(s as i64)) as usize;
+                        let coord = Coord { t, c, o, v };
+
+                        // LIGHT CONE CHECK: skip cells outside causal reach
+                        if !cone.can_reach(coord, now, s) {
+                            continue;
+                        }
+
+                        let dist = distance(center, coord, s);
+                        let p = 1.0 / (1.0 + dist);
+
+                        if p < EPSILON { continue; }
+
+                        let cell = self.get_mut(coord);
+                        cell.probability = (cell.probability + p).min(1.0);
+
+                        if p >= INFLUENCE_EPSILON {
+                            let atts = cell.attestations
+                                .entry(dimension)
+                                .or_insert_with(Vec::new);
+                            let already = atts.iter()
+                                .any(|a| a.validator_id == validator_id && a.event_id == event_id_str);
+                            if !already {
+                                atts.push(Attestation {
+                                    dimension,
+                                    validator_id: validator_id.to_string(),
+                                    event_id: event_id_str.clone(),
+                                    weight: p,
+                                });
+                            }
+                        }
+
+                        if !cell.crystallized
+                            && cell.probability >= CRYSTALLIZATION_THRESHOLD
+                            && cell.sigma_independence() >= 4
+                        {
+                            cell.crystallized = true;
+                            cell.probability = 1.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        self.apply_cascade(&event_id_str);
+        Some(event_id)
+    }
+
+    /// Advance the field's causal clock by one tick.
+    /// Light cones expand — events that couldn't reach distant cells before
+    /// now can. Call this between attestation rounds.
+    pub fn tick(&mut self) {
+        if let Some(ref mut graph) = self.causality {
+            graph.current_time += 1;
+        }
+    }
+
     pub fn seed(&mut self, center: Coord) {
         self.seed_named(center, &format!("ev@{}", center));
     }
 
-    /// Seed a named event. No pre-validation. No locks. No rejection.
-    /// The event enters the field freely. If the region is over-capacity,
-    /// the field's evolution physics will decay the weakest crystallizations.
-    /// Both competing deformations exist — the field decides which survives.
+    /// Seed a named event (legacy mode — no dimension binding).
+    /// Kept for backward compatibility. Use `attest()` for new code.
     pub fn seed_named(&mut self, center: Coord, event_id: &str) {
         let s = self.size;
         let axis_max = SEED_RADIUS.min(s / 2);
@@ -288,24 +615,30 @@ impl Field {
         ]
     }
 
-    /// Source-aware orthogonal support.
+    /// Orthogonal support: σ-independence when attestations are present,
+    /// legacy source-diversity check otherwise.
     ///
-    /// Counts axes where at least one neighbor has influences from
-    /// DIFFERENT events than this cell. Measures diversity of independent
-    /// evidence, not just presence of probability.
+    /// New model (attestations):
+    ///   σ = number of dimensions with at least one exclusive validator
+    ///   (a validator that attests ONLY on that dimension for this cell).
+    ///   This is geometric certainty: σ=4 means 4 structurally independent
+    ///   evidence sources converge.
     ///
-    /// - Single seed → σ=0 everywhere (all probability from same source)
-    /// - Two seeds on different axes → σ=1-2 at overlap
-    /// - Four orthogonal seeds → σ=4 at center
-    ///
-    /// This makes dimensions genuinely matter: 4D enables σ=4 (max resonance)
-    /// while 2D caps at σ=2.
+    /// Legacy model (influences):
+    ///   σ = axes with diverse event sources among neighbors.
     pub fn orthogonal_support(&self, coord: Coord) -> usize {
+        let cell = self.get(coord);
+
+        // New model: use σ-independence from attestations
+        if !cell.attestations.is_empty() {
+            return cell.sigma_independence();
+        }
+
+        // Legacy fallback: source-diversity among neighbors
         let s = self.size;
-        let my_sources: std::collections::HashSet<&str> = self.get(coord)
+        let my_sources: HashSet<&str> = cell
             .influences.iter().map(|i| i.event_id.as_str()).collect();
 
-        // Fallback: if this cell has no sources, use basic probability check
         if my_sources.is_empty() {
             let check = |c: Coord| self.get(c).probability > 0.5;
             let mut axes = 0;
