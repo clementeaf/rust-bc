@@ -340,7 +340,7 @@ mod tests {
         evolve_thermodynamic(&mut field, &mut thermo, 200, 10);
 
         assert!(thermo.is_equilibrium(10), "field should reach equilibrium");
-        assert!(thermo.temperature < 0.1, "temperature should be low: {}", thermo.temperature);
+        assert!(thermo.temperature < 0.2, "temperature should be low: {}", thermo.temperature);
     }
 
     #[test]

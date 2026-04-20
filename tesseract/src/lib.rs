@@ -567,28 +567,50 @@ impl Field {
         self.apply_cascade(event_id);
     }
 
-    /// Push cascade boosts from all crystallized cells that have pending
-    /// cascade energy. Called after seeding and after evolution crystallizations.
+    /// Push cascade boosts from all crystallized cells.
+    /// Used after seeding (all crystals cascade to spread the event's influence).
     fn apply_cascade(&mut self, source_event: &str) {
         let crystallized: Vec<Coord> = self.cells.iter()
             .filter(|(_, cell)| cell.crystallized)
             .map(|(coord, _)| *coord)
             .collect();
+        self.cascade_boost(&crystallized, source_event);
+    }
 
-        for coord in crystallized {
-            for n in self.neighbors(coord) {
-                let cell = self.get_mut(n);
-                let old_p = cell.probability;
-                let new_p = (old_p + CASCADE_STRENGTH).min(1.0);
-                if new_p > old_p && new_p >= EPSILON {
-                    cell.probability = new_p;
-                    // Cascade inherits parent's source if cell has none
-                    if cell.influences.is_empty() && !source_event.is_empty() {
-                        cell.influences.push(Influence {
-                            event_id: source_event.to_string(),
-                            weight: CASCADE_STRENGTH,
-                        });
-                    }
+    /// Push cascade boosts from a specific set of cells.
+    /// Used after evolution (only newly crystallized cells cascade).
+    fn apply_cascade_from(&mut self, sources: &[Coord]) {
+        self.cascade_boost(sources, "");
+    }
+
+    /// Shared cascade logic: boost neighbors of the given crystallized cells.
+    /// Only boosts cells that ALREADY EXIST (have prior evidence).
+    /// This prevents unbounded field growth from cascade alone.
+    fn cascade_boost(&mut self, sources: &[Coord], source_event: &str) {
+        // Collect existing neighbor coords first to avoid borrow issues
+        let boosts: Vec<(Coord, bool)> = sources.iter()
+            .flat_map(|coord| {
+                self.neighbors(*coord).into_iter().map(|n| {
+                    let exists = self.cells.contains_key(&n);
+                    (n, exists)
+                })
+            })
+            .collect();
+
+        for (n, existed) in boosts {
+            if !existed {
+                continue; // Don't create new cells from cascade alone
+            }
+            let cell = self.get_mut(n);
+            let old_p = cell.probability;
+            let new_p = (old_p + CASCADE_STRENGTH).min(1.0);
+            if new_p > old_p {
+                cell.probability = new_p;
+                if cell.influences.is_empty() && !source_event.is_empty() {
+                    cell.influences.push(Influence {
+                        event_id: source_event.to_string(),
+                        weight: CASCADE_STRENGTH,
+                    });
                 }
             }
         }
@@ -669,9 +691,10 @@ impl Field {
         axes
     }
 
-    /// One evolution step. Only processes active cells and their neighbors.
+    /// One evolution step. Only processes existing cells and their existing neighbors.
+    /// Does NOT create new cells — field growth happens only via seeding.
     pub fn evolve(&mut self) -> usize {
-        // Collect coords to process: all active cells + their neighbors
+        // Collect coords to process: active cells + neighbors that already exist
         let mut to_process: Vec<Coord> = Vec::new();
         let active_coords: Vec<Coord> = self.cells.keys().copied().collect();
         let mut seen = HashMap::with_capacity(active_coords.len() * 9);
@@ -681,7 +704,7 @@ impl Field {
                 to_process.push(*coord);
             }
             for n in self.neighbors(*coord) {
-                if seen.insert(n, true).is_none() {
+                if self.cells.contains_key(&n) && seen.insert(n, true).is_none() {
                     to_process.push(n);
                 }
             }
@@ -713,6 +736,7 @@ impl Field {
 
         // Apply updates
         let mut new_crystallizations = 0;
+        let mut newly_crystallized: Vec<Coord> = Vec::new();
         for (coord, new_p) in updates {
             if new_p < EPSILON {
                 if let Some(cell) = self.cells.get(&coord) {
@@ -729,12 +753,14 @@ impl Field {
                 cell.crystallized = true;
                 cell.probability = 1.0;
                 new_crystallizations += 1;
+                newly_crystallized.push(coord);
             }
         }
 
-        // Crystallization cascade for newly crystallized cells
+        // Crystallization cascade: only from NEWLY crystallized cells.
+        // Cascading from all crystals every step causes runaway growth.
         if new_crystallizations > 0 {
-            self.apply_cascade("");
+            self.apply_cascade_from(&newly_crystallized);
         }
 
         // --- Curvature pressure (progressive decay) ---

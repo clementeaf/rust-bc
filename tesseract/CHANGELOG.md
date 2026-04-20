@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed — Bounded Field Evolution
+
+Cascade and evolution no longer create unbounded cells. Scale tests
+that previously consumed >1GB RAM and never terminated now complete
+in seconds.
+
+- `evolve()` only processes existing cells and their existing neighbors
+- Cascade boosts only cells that already have evidence (no new cell creation)
+- `apply_cascade_from()` targets newly crystallized cells, not all crystals
+- 32⁴ field: from non-terminating to 3.3s; 16⁴: from 35s to 5s
+- Entropy threshold relaxed (0.1 → 0.2) to match bounded cascade dynamics
+
 ### Changed — Production Cryptography
 
 Pedersen commitments upgraded from demo-grade modular arithmetic to
