@@ -184,8 +184,8 @@ fn bench_self_healing() {
             for n in neighbors { field.destroy(n); }
         });
 
-        // Heal
-        let (steps, heal_time) = evolve_counting(&mut field, 10);
+        // Heal — use full equilibrium (may need many steps for diffusion)
+        let (steps, heal_time) = evolve_counting(&mut field, 20);
         let recovered = field.get(target).crystallized;
 
         println!("║  {:>3}⁴  ║ {:>12.2?} ║ {:>12.2?} ║ {:>6} ({:>2}st) ║",

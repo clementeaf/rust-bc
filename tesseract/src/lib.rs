@@ -623,6 +623,11 @@ impl Field {
         if let Some(cell) = self.cells.get_mut(&coord) {
             cell.probability = 0.0;
             cell.crystallized = false;
+            // Mark destroyed cell + neighbors as dirty so evolve can regenerate
+            self.dirty.insert(coord);
+            for n in self.neighbors(coord) {
+                self.dirty.insert(n);
+            }
         }
     }
 
