@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added — P2P Networking
+
+Real TCP gossip between tesseract nodes. Events propagate over the
+network, not just in memory.
+
+- `p2p.rs`: length-prefixed JSON protocol over TCP (tokio async)
+- Messages: `SeedEvent` (gossip with TTL), `BoundarySync`, `Ping/Pong`
+- `start()` launches listener + connects to peers
+- `gossip_seed()` / `gossip_boundary()` for outbound messaging
+- Core types (Coord, Cell, Influence, etc.) now Serialize/Deserialize
+- 3 E2E tests: event gossip, boundary sync, ping/pong — all over real TCP
+
 ### Performance — Dirty-Set Evolution and Reduced Seed Radius
 
 Throughput improved 4–10x via two changes: dirty-cell tracking in

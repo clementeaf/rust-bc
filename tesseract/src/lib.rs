@@ -25,6 +25,7 @@ pub mod identity;
 pub mod persistence;
 pub mod economics;
 pub mod contribution;
+pub mod p2p;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -72,7 +73,7 @@ pub fn distance(a: Coord, b: Coord, size: usize) -> f64 {
 
 /// The 4 orthogonal dimensions of the tesseract.
 /// Each is backed by a structurally independent class of evidence.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Dimension {
     /// When was this observed? Independent clocks/timestamps.
     Temporal,
@@ -104,7 +105,7 @@ impl fmt::Display for Dimension {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Coord {
     pub t: usize,
     pub c: usize,
@@ -120,7 +121,7 @@ impl fmt::Display for Coord {
 
 /// An attestation bound to ONE dimension.
 /// A validator can only attest on the dimension it is bound to.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Attestation {
     /// Which dimension this attestation covers.
     pub dimension: Dimension,
@@ -134,13 +135,13 @@ pub struct Attestation {
 
 /// Legacy influence — kept for backward compatibility during migration.
 /// Will be removed once all modules use Attestation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Influence {
     pub event_id: String,
     pub weight: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Cell {
     pub probability: f64,
     pub crystallized: bool,
