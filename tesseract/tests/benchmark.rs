@@ -1,145 +1,220 @@
-//! TPS and energy benchmarks.
+//! Convergence and scale benchmarks for Tesseract.
+//!
+//! Measures the metrics that matter for production viability:
+//! - Convergence time vs field size
+//! - Throughput (events/sec) vs field size
+//! - Memory (active cells) vs events
+//! - Self-healing latency
+//! - Crystallization efficiency
 
 use tesseract::*;
 use tesseract::mapper::*;
 use std::time::Instant;
 
-#[test]
-fn benchmark_tps_field_8() {
-    println!("\n=== TPS Benchmark: Field 8⁴ ===");
-    let mapper = CoordMapper::new(8).with_time_bucket(10);
-    let mut field = Field::new(8);
+// --- Helpers ---
 
-    let count = 100;
+fn seed_cluster(field: &mut Field, center: Coord, name: &str) {
+    let s = field.size;
+    field.seed_named(center, &format!("{}-core", name));
+    for offset in [1_i64, -1] {
+        field.seed_named(Coord { t: ((center.t as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-t", name));
+        field.seed_named(Coord { c: ((center.c as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-c", name));
+        field.seed_named(Coord { o: ((center.o as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-o", name));
+        field.seed_named(Coord { v: ((center.v as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-v", name));
+    }
+}
+
+fn timed<F: FnOnce() -> R, R>(f: F) -> (R, std::time::Duration) {
     let start = Instant::now();
-
-    for i in 0..count {
-        let ev = Event {
-            id: format!("tx-{}", i),
-            timestamp: 100 + (i as u64 / 10),
-            channel: "payments".into(),
-            org: format!("org-{}", i % 5),
-            data: format!("transfer-{}", i),
-        };
-        let coord = mapper.map(&ev);
-        field.seed_named(coord, &ev.data);
-    }
-
-    let seed_elapsed = start.elapsed();
-
-    let evolve_start = Instant::now();
-    evolve_to_equilibrium(&mut field, 10);
-    let evolve_elapsed = evolve_start.elapsed();
-
-    let total = seed_elapsed + evolve_elapsed;
-    let tps = count as f64 / total.as_secs_f64();
-
-    println!("  Events: {}", count);
-    println!("  Seed time: {:.2?}", seed_elapsed);
-    println!("  Evolve time: {:.2?}", evolve_elapsed);
-    println!("  Total: {:.2?}", total);
-    println!("  TPS: {:.0}", tps);
-    println!("  Active cells: {}", field.active_cells());
-    println!("  Crystallized: {}", field.crystallized_count());
+    let r = f();
+    (r, start.elapsed())
 }
 
-#[test]
-fn benchmark_tps_field_16() {
-    println!("\n=== TPS Benchmark: Field 16⁴ ===");
-    let mapper = CoordMapper::new(16).with_time_bucket(10);
-    let mut field = Field::new(16);
-
-    let count = 100;
+fn evolve_counting(field: &mut Field, stable_for: usize) -> (usize, std::time::Duration) {
     let start = Instant::now();
+    let mut stable = 0;
+    let mut steps = 0;
+    for _ in 1..=MAX_ITERATIONS {
+        steps += 1;
+        if field.evolve() == 0 { stable += 1; } else { stable = 0; }
+        if stable >= stable_for { break; }
+    }
+    (steps, start.elapsed())
+}
 
-    for i in 0..count {
-        let ev = Event {
-            id: format!("tx-{}", i),
-            timestamp: 100 + (i as u64 / 10),
-            channel: format!("ch-{}", i % 3),
-            org: format!("org-{}", i % 5),
-            data: format!("transfer-{}", i),
-        };
-        let coord = mapper.map(&ev);
-        field.seed_named(coord, &ev.data);
+// === 1. Convergence Time vs Field Size ===
+
+#[test]
+fn bench_convergence_by_size() {
+    println!("\n╔══════════════════════════════════════════════════════════╗");
+    println!("║  CONVERGENCE TIME vs FIELD SIZE (2 clusters per field)  ║");
+    println!("╠════════╦══════════╦════════╦═══════════╦═══════════════╣");
+    println!("║  Size  ║ Logical  ║ Active ║ Converge  ║ Crystal/Active║");
+    println!("╠════════╬══════════╬════════╬═══════════╬═══════════════╣");
+
+    for size in [8, 16, 32, 64] {
+        let mut field = Field::new(size);
+        let q = size / 4;
+        seed_cluster(&mut field, Coord { t: q, c: q, o: q, v: q }, "A");
+        seed_cluster(&mut field, Coord { t: 3*q, c: 3*q, o: 3*q, v: 3*q }, "B");
+
+        let active_before = field.active_cells();
+        let (steps, elapsed) = evolve_counting(&mut field, 10);
+        let crystals = field.crystallized_count();
+
+        println!("║  {:>3}⁴  ║ {:>8} ║ {:>6} ║ {:>5.2?} {:>2}s ║ {:>5}/{:<5} {:>3}%║",
+            size, size.pow(4), active_before,
+            elapsed, steps,
+            crystals, active_before,
+            if active_before > 0 { crystals * 100 / active_before } else { 0 }
+        );
     }
 
-    let seed_elapsed = start.elapsed();
-
-    let evolve_start = Instant::now();
-    evolve_to_equilibrium(&mut field, 10);
-    let evolve_elapsed = evolve_start.elapsed();
-
-    let total = seed_elapsed + evolve_elapsed;
-    let tps = count as f64 / total.as_secs_f64();
-
-    println!("  Events: {}", count);
-    println!("  Seed time: {:.2?}", seed_elapsed);
-    println!("  Evolve time: {:.2?}", evolve_elapsed);
-    println!("  Total: {:.2?}", total);
-    println!("  TPS: {:.0}", tps);
-    println!("  Active cells: {}", field.active_cells());
-    println!("  Crystallized: {}", field.crystallized_count());
+    println!("╚════════╩══════════╩════════╩═══════════╩═══════════════╝");
 }
 
-#[test]
-fn benchmark_energy_per_tx() {
-    println!("\n=== Energy Profile ===");
-    println!("  Operations per seed: ~S⁴ float additions (bounded by SEED_RADIUS)");
-    println!("  Operations per evolve step: ~active_cells × 8 float reads + 1 float write");
-    println!("  Crypto operations: ZERO");
-    println!("  Hash operations: ZERO");
-    println!("  Signature operations: ZERO");
-    println!();
-    println!("  Comparison (per transaction):");
-    println!("    Bitcoin PoW:    ~10^18 SHA-256 hashes (10 min average)");
-    println!("    Ethereum PoS:   ~10^3 signature verifications");
-    println!("    Tesseract:      ~10^3 float additions (SEED_RADIUS=4 → ~6500 cells)");
-    println!();
-    println!("  Energy ratio vs Bitcoin: ~10^15× less (arithmetic vs SHA-256 mining)");
-    println!("  Energy ratio vs Ethereum: ~comparable compute, zero crypto overhead");
-}
+// === 2. Throughput (events/sec) ===
 
 #[test]
-fn benchmark_seed_cost() {
-    println!("\n=== Seed Cost by Field Size ===");
+fn bench_throughput() {
+    println!("\n╔═══════════════════════════════════════════════════════╗");
+    println!("║  THROUGHPUT: events seeded + evolved to equilibrium  ║");
+    println!("╠════════╦════════╦══════════╦══════════╦══════════════╣");
+    println!("║  Size  ║ Events ║ Seed     ║ Evolve   ║ Events/sec   ║");
+    println!("╠════════╬════════╬══════════╬══════════╬══════════════╣");
 
-    for size in [4, 8, 16, 32] {
+    for (size, count) in [(8, 50), (16, 50), (32, 50)] {
+        let mapper = CoordMapper::new(size).with_time_bucket(10);
         let mut field = Field::new(size);
-        let coord = Coord { t: size / 2, c: size / 2, o: size / 2, v: size / 2 };
 
-        let start = Instant::now();
-        field.seed_named(coord, "benchmark");
-        let elapsed = start.elapsed();
+        let (_, seed_time) = timed(|| {
+            for i in 0..count {
+                let ev = Event {
+                    id: format!("tx-{}", i),
+                    timestamp: 100 + (i as u64 / 10),
+                    channel: format!("ch-{}", i % 4),
+                    org: format!("org-{}", i % 8),
+                    data: format!("payload-{}", i),
+                };
+                let coord = mapper.map(&ev);
+                field.seed_named(coord, &ev.data);
+            }
+        });
 
-        println!("  Size {:>2}⁴ ({:>10} logical): seed={:>10.2?}, active={:>6}",
-            size, size.pow(4), elapsed, field.active_cells());
+        let (_, evolve_time) = timed(|| evolve_to_equilibrium(&mut field, 10));
+        let total = seed_time + evolve_time;
+        let eps = count as f64 / total.as_secs_f64();
+
+        println!("║  {:>3}⁴  ║  {:>5} ║ {:>8.2?} ║ {:>8.2?} ║ {:>10.0}/s  ║",
+            size, count, seed_time, evolve_time, eps);
     }
+
+    println!("╚════════╩════════╩══════════╩══════════╩══════════════╝");
 }
 
-#[test]
-fn benchmark_evolve_cost() {
-    println!("\n=== Evolve Step Cost ===");
+// === 3. Memory Footprint ===
 
-    for size in [4, 8, 16] {
-        let mut field = Field::new(size);
-        // Seed 5 events for realistic density
-        for i in 0..5 {
-            field.seed(Coord { t: (i * 2 + 1) % size, c: size / 2, o: size / 2, v: size / 2 });
+#[test]
+fn bench_memory() {
+    println!("\n╔═══════════════════════════════════════════════════╗");
+    println!("║  MEMORY: active cells vs events (field size 32)  ║");
+    println!("╠═════════╦══════════╦═══════════╦════════════════╣");
+    println!("║ Events  ║ Active   ║ Crystal   ║ Sparsity       ║");
+    println!("╠═════════╬══════════╬═══════════╬════════════════╣");
+
+    let mapper = CoordMapper::new(32).with_time_bucket(10);
+    let mut field = Field::new(32);
+    let total_cells = 32_usize.pow(4);
+
+    for batch in [10, 25, 50, 75, 100] {
+        // Seed up to this many total events
+        let current = field.active_cells();
+        let to_add = if batch > 0 { batch } else { 0 };
+        for i in 0..to_add {
+            let ev = Event {
+                id: format!("tx-{}-{}", batch, i),
+                timestamp: 100 + (i as u64),
+                channel: format!("ch-{}", i % 6),
+                org: format!("org-{}", i % 10),
+                data: format!("d-{}", i),
+            };
+            let coord = mapper.map(&ev);
+            field.seed_named(coord, &ev.data);
         }
+        evolve_to_equilibrium(&mut field, 10);
 
         let active = field.active_cells();
-        let start = Instant::now();
-        let mut steps = 0;
-        loop {
-            let new = field.evolve();
-            steps += 1;
-            if new == 0 || steps >= 50 { break; }
-        }
-        let elapsed = start.elapsed();
-        let per_step = elapsed / steps;
+        let crystals = field.crystallized_count();
+        let sparsity = 100.0 - (active as f64 / total_cells as f64 * 100.0);
 
-        println!("  Size {:>2}⁴: active={:>6}, steps={:>3}, total={:>10.2?}, per_step={:>10.2?}",
-            size, active, steps, elapsed, per_step);
+        println!("║  {:>5}  ║  {:>6}  ║   {:>6}  ║  {:>6.2}% empty ║",
+            batch, active, crystals, sparsity);
     }
+
+    println!("╚═════════╩══════════╩═══════════╩════════════════╝");
+}
+
+// === 4. Self-Healing Latency ===
+
+#[test]
+fn bench_self_healing() {
+    println!("\n╔═══════════════════════════════════════════════════════╗");
+    println!("║  SELF-HEALING: destroy center + neighbors, measure   ║");
+    println!("║  time to re-crystallize                              ║");
+    println!("╠════════╦══════════════╦══════════════╦═══════════════╣");
+    println!("║  Size  ║ Destroy time ║ Heal time    ║ Recovered     ║");
+    println!("╠════════╬══════════════╬══════════════╬═══════════════╣");
+
+    for size in [8, 16, 32] {
+        let mut field = Field::new(size);
+        let q = size / 4;
+        let target = Coord { t: q, c: q, o: q, v: q };
+
+        // Build dense neighborhood
+        seed_cluster(&mut field, target, "A");
+        seed_cluster(&mut field, Coord { t: q+2, c: q, o: q, v: q }, "B");
+        seed_cluster(&mut field, Coord { t: q, c: q+2, o: q, v: q }, "C");
+        seed_cluster(&mut field, Coord { t: q, c: q, o: q+2, v: q }, "D");
+        evolve_to_equilibrium(&mut field, 10);
+
+        // Destroy
+        let (_, destroy_time) = timed(|| {
+            let neighbors = field.neighbors(target);
+            field.destroy(target);
+            for n in neighbors { field.destroy(n); }
+        });
+
+        // Heal
+        let (steps, heal_time) = evolve_counting(&mut field, 10);
+        let recovered = field.get(target).crystallized;
+
+        println!("║  {:>3}⁴  ║ {:>12.2?} ║ {:>12.2?} ║ {:>6} ({:>2}st) ║",
+            size, destroy_time, heal_time,
+            if recovered { "YES" } else { "NO" }, steps);
+    }
+
+    println!("╚════════╩══════════════╩══════════════╩═══════════════╝");
+}
+
+// === 5. Seed Cost ===
+
+#[test]
+fn bench_seed_cost() {
+    println!("\n╔════════════════════════════════════════════╗");
+    println!("║  SEED COST: single event by field size     ║");
+    println!("╠════════╦════════════╦═══════════════════════╣");
+    println!("║  Size  ║ Seed time  ║ Cells created         ║");
+    println!("╠════════╬════════════╬═══════════════════════╣");
+
+    for size in [8, 16, 32, 64, 128] {
+        let mut field = Field::new(size);
+        let center = Coord { t: size/2, c: size/2, o: size/2, v: size/2 };
+
+        let (_, elapsed) = timed(|| field.seed_named(center, "bench"));
+
+        println!("║  {:>4}⁴ ║ {:>10.2?} ║ {:>6} cells           ║",
+            size, elapsed, field.active_cells());
+    }
+
+    println!("╚════════╩════════════╩═══════════════════════╝");
 }
