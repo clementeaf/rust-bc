@@ -42,9 +42,10 @@ pub const MAX_ITERATIONS: usize = 500;
 pub const EPSILON: f64 = 0.05;
 /// Minimum influence weight to record. Below this → discard.
 pub const INFLUENCE_EPSILON: f64 = 0.05;
-/// Maximum Euclidean radius for orbital seeding. Cells beyond this get no probability.
-/// At SEED_RADIUS=4: p(d=4) = 0.20, still meaningful. Beyond → negligible.
-pub const SEED_RADIUS: usize = 4;
+/// Maximum axis radius for orbital seeding. Cells beyond this get no probability.
+/// Capped at size/4 to prevent overlapping orbitals in small fields.
+/// At SEED_RADIUS=3: (2×3+1)⁴ = 2401 cells per seed — good balance.
+pub const SEED_RADIUS: usize = 3;
 /// Probability boost pushed to neighbors when a cell crystallizes.
 /// Creates dynamic correlation beyond the seed radius (crystallization cascade).
 pub const CASCADE_STRENGTH: f64 = 0.08;
@@ -244,18 +245,15 @@ pub struct Field {
     cells: HashMap<Coord, Cell>,
     pub size: usize,
     /// Regional curvature capacity: how much deformation each region can sustain.
-    /// Key is the region identifier (typically the o-axis value = org/identity).
-    /// When capacity reaches 0, no more deformations can be seeded in that region.
-    /// This is a GEOMETRIC constraint of the space, not an economic rule.
     curvature_budget: HashMap<usize, f64>,
-    /// Causal graph: partial order of events. When present, `attest_causal()`
-    /// enforces light-cone constraints — probability only propagates where
-    /// causality allows. The field without causality is the classical model;
-    /// with causality it becomes relativistic.
+    /// Causal graph: partial order of events.
     pub causality: Option<causality::CausalGraph>,
-    /// Conserved value layer. When present, transfers enforce zero-sum
-    /// invariant — value cannot be created or destroyed after genesis.
+    /// Conserved value layer.
     pub conservation: Option<conservation::ConservedField>,
+    /// Dirty set: cells that changed in the last step.
+    /// Only these + their neighbors are processed in the next evolve().
+    /// Empty = process all (first step or after seeding).
+    dirty: HashSet<Coord>,
 }
 
 impl Field {
@@ -266,6 +264,7 @@ impl Field {
             curvature_budget: HashMap::new(),
             causality: None,
             conservation: None,
+            dirty: HashSet::new(),
         }
     }
 
@@ -560,6 +559,10 @@ impl Field {
             }
         }
 
+        // Mark all seeded cells as dirty for next evolve()
+        let seeded: Vec<Coord> = self.cells.keys().copied().collect();
+        self.dirty.extend(seeded);
+
         // Crystallization cascade: newly crystallized cells push a small
         // probability boost to their neighbors. This creates dynamic
         // correlation beyond the seed radius and enables genuine
@@ -691,16 +694,21 @@ impl Field {
         axes
     }
 
-    /// One evolution step. Only processes existing cells and their existing neighbors.
+    /// One evolution step. Processes dirty cells + their existing neighbors.
+    /// If no dirty set, processes all (first step after seeding).
     /// Does NOT create new cells — field growth happens only via seeding.
     pub fn evolve(&mut self) -> usize {
-        // Collect coords to process: active cells + neighbors that already exist
+        // Collect coords to process from dirty set (or all if empty/first run)
         let mut to_process: Vec<Coord> = Vec::new();
-        let active_coords: Vec<Coord> = self.cells.keys().copied().collect();
-        let mut seen = HashMap::with_capacity(active_coords.len() * 9);
+        let source_coords: Vec<Coord> = if self.dirty.is_empty() {
+            self.cells.keys().copied().collect()
+        } else {
+            self.dirty.drain().collect()
+        };
+        let mut seen = HashMap::with_capacity(source_coords.len() * 9);
 
-        for coord in &active_coords {
-            if seen.insert(*coord, true).is_none() {
+        for coord in &source_coords {
+            if self.cells.contains_key(coord) && seen.insert(*coord, true).is_none() {
                 to_process.push(*coord);
             }
             for n in self.neighbors(*coord) {
@@ -734,7 +742,7 @@ impl Field {
             })
             .collect();
 
-        // Apply updates
+        // Apply updates — track which cells actually changed
         let mut new_crystallizations = 0;
         let mut newly_crystallized: Vec<Coord> = Vec::new();
         for (coord, new_p) in updates {
@@ -742,18 +750,31 @@ impl Field {
                 if let Some(cell) = self.cells.get(&coord) {
                     if cell.influences.is_empty() {
                         self.cells.remove(&coord);
+                        self.dirty.insert(coord);
                         continue;
                     }
                 }
             }
 
-            let cell = self.get_mut(coord);
+            let cell = self.cells.entry(coord).or_insert_with(|| Cell {
+                probability: 0.0, crystallized: false,
+                influences: Vec::new(), attestations: HashMap::new(),
+            });
+            let old_p = cell.probability;
             cell.probability = new_p;
+
+            let changed = (new_p - old_p).abs() > 1e-6;
+
             if !cell.crystallized && new_p >= CRYSTALLIZATION_THRESHOLD {
                 cell.crystallized = true;
                 cell.probability = 1.0;
                 new_crystallizations += 1;
                 newly_crystallized.push(coord);
+            }
+
+            // Mark dirty if probability changed meaningfully
+            if changed || new_crystallizations > 0 {
+                self.dirty.insert(coord);
             }
         }
 

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Performance — Dirty-Set Evolution and Reduced Seed Radius
+
+Throughput improved 4–10x via two changes: dirty-cell tracking in
+`evolve()` and reduced SEED_RADIUS (4 → 3).
+
+- `evolve()` uses dirty set: only processes cells that changed + their neighbors
+- SEED_RADIUS reduced from 4 to 3 (6561 → 2401 cells/seed)
+- Seed cost: 440µs → 195µs per event
+- 16⁴ throughput: 45 → 210 events/sec
+- 32⁴ throughput: 1 → 10 events/sec
+- 64⁴ convergence: 144ms → 33ms
+- Known trade-off: self-healing not yet restored with bounded cascade
+
 ### Fixed — Bounded Field Evolution
 
 Cascade and evolution no longer create unbounded cells. Scale tests
@@ -11,7 +24,6 @@ in seconds.
 - `evolve()` only processes existing cells and their existing neighbors
 - Cascade boosts only cells that already have evidence (no new cell creation)
 - `apply_cascade_from()` targets newly crystallized cells, not all crystals
-- 32⁴ field: from non-terminating to 3.3s; 16⁴: from 35s to 5s
 - Entropy threshold relaxed (0.1 → 0.2) to match bounded cascade dynamics
 
 ### Changed — Production Cryptography
