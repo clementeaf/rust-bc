@@ -26,7 +26,7 @@ export default function Mining() {
       const res = await mineBlock(wallet.address)
       setResult(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Mining failed')
+      setError(err instanceof Error ? err.message : 'Error al minar')
     } finally {
       setMining(false)
     }
@@ -42,7 +42,7 @@ export default function Mining() {
       const res = await mineBlock(minerAddress)
       setResult(res)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Mining failed')
+      setError(err instanceof Error ? err.message : 'Error al minar')
     } finally {
       setMining(false)
     }
@@ -50,7 +50,7 @@ export default function Mining() {
 
   return (
     <>
-      <PageIntro title="Mining">
+      <PageIntro title="Mineria">
         Minar un nuevo bloque. Necesitas una wallet registrada como dirección del minero.
       </PageIntro>
 
@@ -70,7 +70,7 @@ export default function Mining() {
             className="bg-main-500 text-white px-4 py-2 rounded-xl text-sm font-medium
                        hover:bg-main-600 disabled:opacity-50 transition-colors"
           >
-            {mining ? 'Mining...' : 'Mine Block'}
+            {mining ? 'Minando...' : 'Minar bloque'}
           </button>
           <button
             type="button"
@@ -79,7 +79,7 @@ export default function Mining() {
             className="bg-neutral-800 text-white px-4 py-2 rounded-xl text-sm font-medium
                        hover:bg-neutral-700 disabled:opacity-50 transition-colors"
           >
-            New Wallet + Mine
+            Nueva wallet + Minar
           </button>
         </form>
         {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
@@ -87,17 +87,17 @@ export default function Mining() {
 
       {result && (
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
-          <h2 className="text-lg font-semibold text-green-800 mb-2">Block Mined</h2>
+          <h2 className="text-lg font-semibold text-green-800 mb-2">Bloque minado</h2>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
             {result.block_index != null && (
               <>
-                <dt className="text-neutral-500">Block Index</dt>
+                <dt className="text-neutral-500">Indice del bloque</dt>
                 <dd className="text-neutral-900 font-medium">{result.block_index}</dd>
               </>
             )}
             {result.block_hash && (
               <>
-                <dt className="text-neutral-500">Block Hash</dt>
+                <dt className="text-neutral-500">Hash del bloque</dt>
                 <dd>
                   <Link
                     to={`/block/${result.block_hash}`}
@@ -110,7 +110,7 @@ export default function Mining() {
             )}
             {result.message && (
               <>
-                <dt className="text-neutral-500">Message</dt>
+                <dt className="text-neutral-500">Mensaje</dt>
                 <dd className="text-neutral-900">{result.message}</dd>
               </>
             )}

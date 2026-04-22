@@ -25,7 +25,7 @@ export default function Channels() {
       setNewId('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create channel')
+      setError(err instanceof Error ? err.message : 'Error al crear canal')
     } finally {
       setCreating(false)
     }
@@ -42,7 +42,7 @@ export default function Channels() {
 
   return (
     <>
-      <PageIntro title="Channels">
+      <PageIntro title="Canales">
         Canales aislados de la red (estilo Hyperledger Fabric). Cada canal tiene su propio ledger y
         world state.
       </PageIntro>
@@ -65,19 +65,19 @@ export default function Channels() {
             className="bg-main-500 text-white px-4 py-2 rounded-xl text-sm font-medium
                        hover:bg-main-600 disabled:opacity-50 transition-colors"
           >
-            {creating ? 'Creating...' : 'Create'}
+            {creating ? 'Creando...' : 'Crear'}
           </button>
         </form>
         {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
       </div>
 
-      <h2 className="text-lg font-semibold text-neutral-900 mb-1">Active Channels</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 mb-1">Canales activos</h2>
       <p className="text-xs text-neutral-400 mb-4">Canales registrados en este nodo.</p>
 
       {channels.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
-          <p className="text-neutral-500 mb-2">No channels yet.</p>
-          <p className="text-neutral-400 text-sm">The "default" channel is always available.</p>
+          <p className="text-neutral-500 mb-2">Sin canales aun.</p>
+          <p className="text-neutral-400 text-sm">El canal "default" siempre esta disponible.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -93,7 +93,7 @@ export default function Channels() {
                 onClick={() => handleViewConfig(ch.channel_id)}
                 className="text-main-500 hover:text-main-600 text-xs font-medium"
               >
-                Config
+                Configuracion
               </button>
             </div>
           ))}
@@ -103,31 +103,31 @@ export default function Channels() {
       {selectedConfig && (
         <div className="bg-white border border-neutral-200 rounded-2xl p-5">
           <h2 className="text-lg font-semibold text-neutral-900 mb-3">
-            Channel Config: {selectedConfig.channel_id}
+            Configuracion del canal: {selectedConfig.channel_id}
           </h2>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <dt className="text-neutral-500">Member Orgs</dt>
+            <dt className="text-neutral-500">Organizaciones miembro</dt>
             <dd className="text-neutral-900">
               {selectedConfig.member_orgs.length > 0
                 ? selectedConfig.member_orgs.join(', ')
-                : 'Open (no restrictions)'}
+                : 'Abierto (sin restricciones)'}
             </dd>
-            <dt className="text-neutral-500">Anchor Peers</dt>
+            <dt className="text-neutral-500">Peers ancla</dt>
             <dd className="text-neutral-900">
               {selectedConfig.anchor_peers.length > 0
                 ? selectedConfig.anchor_peers.join(', ')
-                : 'None'}
+                : 'Ninguno'}
             </dd>
-            <dt className="text-neutral-500">Max Block Size</dt>
+            <dt className="text-neutral-500">Tamano max. de bloque</dt>
             <dd className="text-neutral-900">{selectedConfig.max_block_size}</dd>
-            <dt className="text-neutral-500">Batch Timeout</dt>
+            <dt className="text-neutral-500">Timeout de lote</dt>
             <dd className="text-neutral-900">{selectedConfig.batch_timeout_ms}ms</dd>
           </dl>
           <button
             onClick={() => setSelectedConfig(null)}
             className="text-neutral-400 hover:text-neutral-600 text-xs mt-4"
           >
-            Close
+            Cerrar
           </button>
         </div>
       )}

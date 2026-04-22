@@ -9,11 +9,11 @@ export default function ContractDetail() {
 
   useEffect(() => {
     if (!address) return
-    getContract(address).then(setContract).catch(() => setError('Contract not found'))
+    getContract(address).then(setContract).catch(() => setError('Contrato no encontrado'))
   }, [address])
 
   if (error) return <p className="text-red-500">{error}</p>
-  if (!contract) return <p className="text-neutral-500">Loading...</p>
+  if (!contract) return <p className="text-neutral-500">Cargando...</p>
 
   return (
     <>
@@ -23,7 +23,7 @@ export default function ContractDetail() {
           <h1 className="text-xl font-bold text-neutral-900">Contrato</h1>
         </div>
         <p className="text-sm text-neutral-500 max-w-3xl">
-          Estado y código almacenados para este contrato en el nodo. La dirección es la identidad del
+          Estado y codigo almacenados para este contrato en el nodo. La direccion es la identidad del
           contrato en cadena.
         </p>
       </div>
@@ -31,32 +31,32 @@ export default function ContractDetail() {
       <div className="bg-white border border-neutral-200 rounded-2xl p-6 mb-6 text-left">
         <div className="grid gap-4 text-sm">
           <div>
-            <span className="text-neutral-500">Address</span>
+            <span className="text-neutral-500">Direccion</span>
             <p className="text-neutral-900 font-mono text-xs break-all mt-1">{contract.address}</p>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <span className="text-neutral-500">Created</span>
+              <span className="text-neutral-500">Creado</span>
               <p className="text-neutral-900 mt-1">{new Date(contract.created_at * 1000).toLocaleString()}</p>
             </div>
             <div>
-              <span className="text-neutral-500">Last Updated</span>
+              <span className="text-neutral-500">Ultima actualizacion</span>
               <p className="text-neutral-900 mt-1">{new Date(contract.updated_at * 1000).toLocaleString()}</p>
             </div>
             <div>
-              <span className="text-neutral-500">Update Sequence</span>
+              <span className="text-neutral-500">Version</span>
               <p className="text-neutral-900 mt-1">{contract.update_sequence}</p>
             </div>
           </div>
         </div>
       </div>
 
-      <h2 className="text-lg font-semibold text-neutral-900 mb-3">State</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 mb-3">Estado</h2>
       <pre className="bg-white border border-neutral-200 rounded-2xl p-4 text-left text-xs font-mono text-neutral-600 overflow-auto mb-6">
         {JSON.stringify(contract.state, null, 2)}
       </pre>
 
-      <h2 className="text-lg font-semibold text-neutral-900 mb-3">Code</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 mb-3">Codigo</h2>
       <pre className="bg-white border border-neutral-200 rounded-2xl p-4 text-left text-xs font-mono text-neutral-600 overflow-auto whitespace-pre-wrap">
         {contract.code}
       </pre>

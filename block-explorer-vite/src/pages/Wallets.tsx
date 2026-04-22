@@ -2,10 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageIntro from '../components/PageIntro'
 import { createWallet, getWallet, type Wallet } from '../lib/api'
-
-function shortAddr(a: string) {
-  return a.length > 16 ? a.slice(0, 8) + '...' + a.slice(-8) : a
-}
+import { shortHash } from '../lib/format'
 
 export default function Wallets() {
   const [wallets, setWallets] = useState<Wallet[]>([])
@@ -41,7 +38,6 @@ export default function Wallets() {
     }
   }
 
-  // Refresh balances for all known wallets
   const refreshBalances = async () => {
     const updated = await Promise.all(
       wallets.map((w) => getWallet(w.address).catch(() => w))
@@ -100,15 +96,15 @@ export default function Wallets() {
               onClick={refreshBalances}
               className="text-main-500 hover:text-main-600 text-xs font-medium"
             >
-              Refresh balances
+              Actualizar saldos
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-neutral-500 text-xs uppercase border-b border-neutral-200">
-                  <th className="text-left py-3 px-2">Address</th>
-                  <th className="text-right py-3 px-2">Balance</th>
+                  <th className="text-left py-3 px-2">Direccion</th>
+                  <th className="text-right py-3 px-2">Saldo</th>
                 </tr>
               </thead>
               <tbody>
@@ -119,7 +115,7 @@ export default function Wallets() {
                         to={`/wallet/${w.address}`}
                         className="text-main-500 hover:text-main-600 font-mono text-xs"
                       >
-                        {shortAddr(w.address)}
+                        {shortHash(w.address)}
                       </Link>
                     </td>
                     <td className="py-3 px-2 text-right text-neutral-900 font-medium">

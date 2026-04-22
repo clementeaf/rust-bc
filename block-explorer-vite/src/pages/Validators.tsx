@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageIntro from '../components/PageIntro'
 import { getValidators, type Validator } from '../lib/api'
-
-function shortAddr(a: string) {
-  return a.length > 16 ? a.slice(0, 8) + '...' + a.slice(-8) : a
-}
+import { shortHash } from '../lib/format'
 
 export default function Validators() {
   const [validators, setValidators] = useState<Validator[]>([])
@@ -20,25 +17,25 @@ export default function Validators() {
   return (
     <>
       <PageIntro title="Validadores (staking)">
-        Cuentas que han bloqueado moneda para participar en la prueba de participación (PoS). Aquí ves
+        Cuentas que han bloqueado moneda para participar en la prueba de participacion (PoS). Aqui ves
         stake, recompensas y si el validador sigue activo.
       </PageIntro>
 
       {validators.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
-          <p className="text-neutral-500 mb-2">No validators yet.</p>
-          <p className="text-neutral-400 text-sm">Stake at least 1,000 coins to become a validator.</p>
+          <p className="text-neutral-500 mb-2">Sin validadores aun.</p>
+          <p className="text-neutral-400 text-sm">Bloquea al menos 1.000 tokens para ser validador.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-neutral-500 text-xs uppercase border-b border-neutral-200">
-                <th className="text-left py-3 px-2">Address</th>
-                <th className="text-right py-3 px-2">Staked</th>
-                <th className="text-right py-3 px-2">Rewards</th>
-                <th className="text-right py-3 px-2">Validations</th>
-                <th className="text-center py-3 px-2">Status</th>
+                <th className="text-left py-3 px-2">Direccion</th>
+                <th className="text-right py-3 px-2">Bloqueado</th>
+                <th className="text-right py-3 px-2">Recompensas</th>
+                <th className="text-right py-3 px-2">Validaciones</th>
+                <th className="text-center py-3 px-2">Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -46,7 +43,7 @@ export default function Validators() {
                 <tr key={v.address} className="border-b border-neutral-100 hover:bg-white">
                   <td className="py-3 px-2">
                     <Link to={`/wallet/${v.address}`} className="text-main-500 hover:text-main-600 font-mono text-xs">
-                      {shortAddr(v.address)}
+                      {shortHash(v.address)}
                     </Link>
                   </td>
                   <td className="py-3 px-2 text-right text-neutral-900 font-medium">{v.staked_amount}</td>
@@ -54,11 +51,11 @@ export default function Validators() {
                   <td className="py-3 px-2 text-right">{v.validation_count}</td>
                   <td className="py-3 px-2 text-center">
                     {v.unstaking_requested ? (
-                      <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs">Unstaking</span>
+                      <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs">Desbloqueando</span>
                     ) : v.is_active ? (
-                      <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs">Active</span>
+                      <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs">Activo</span>
                     ) : (
-                      <span className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs">Inactive</span>
+                      <span className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs">Inactivo</span>
                     )}
                   </td>
                 </tr>

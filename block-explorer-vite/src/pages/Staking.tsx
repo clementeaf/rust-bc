@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageIntro from '../components/PageIntro'
 import { getValidators, stakeTokens, requestUnstake, type Validator } from '../lib/api'
-
-function shortAddr(a: string) {
-  return a.length > 16 ? a.slice(0, 8) + '...' + a.slice(-8) : a
-}
+import { shortHash } from '../lib/format'
 
 export default function Staking() {
   const [validators, setValidators] = useState<Validator[]>([])
@@ -30,12 +27,12 @@ export default function Staking() {
     setStaking(true)
     try {
       await stakeTokens(address, Number(amount))
-      setSuccess(`Staked ${amount} from ${shortAddr(address)}`)
+      setSuccess(`${amount} tokens bloqueados desde ${shortHash(address)}`)
       setAddress('')
       setAmount('')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Staking failed')
+      setError(err instanceof Error ? err.message : 'Error al bloquear tokens')
     } finally {
       setStaking(false)
     }
@@ -56,14 +53,14 @@ export default function Staking() {
   return (
     <>
       <PageIntro title="Staking">
-        Bloquea tokens para participar como validador. Mínimo 1,000 coins para ser elegible.
+        Bloquea tokens para participar como validador. Minimo 1.000 tokens para ser elegible.
       </PageIntro>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Total Staked', value: totalStaked },
-          { label: 'Validators', value: validators.length },
-          { label: 'Active', value: activeCount },
+          { label: 'Total bloqueado', value: totalStaked },
+          { label: 'Validadores', value: validators.length },
+          { label: 'Activos', value: activeCount },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-neutral-200 rounded-2xl p-4">
             <p className="text-neutral-500 text-xs uppercase tracking-wide">{s.label}</p>
@@ -100,30 +97,30 @@ export default function Staking() {
             className="bg-main-500 text-white px-4 py-2 rounded-xl text-sm font-medium
                        hover:bg-main-600 disabled:opacity-50 transition-colors"
           >
-            {staking ? 'Staking...' : 'Stake'}
+            {staking ? 'Bloqueando...' : 'Bloquear'}
           </button>
         </form>
         {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
         {success && <p className="text-green-600 text-sm mt-3">{success}</p>}
       </div>
 
-      <h2 className="text-lg font-semibold text-neutral-900 mb-1">Validators</h2>
+      <h2 className="text-lg font-semibold text-neutral-900 mb-1">Validadores</h2>
       <p className="text-xs text-neutral-400 mb-4">Nodos que han bloqueado tokens para validar bloques.</p>
 
       {validators.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
-          <p className="text-neutral-500">No validators yet. Stake at least 1,000 coins.</p>
+          <p className="text-neutral-500">Sin validadores aun. Bloquea al menos 1.000 tokens.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-neutral-500 text-xs uppercase border-b border-neutral-200">
-                <th className="text-left py-3 px-2">Address</th>
-                <th className="text-right py-3 px-2">Staked</th>
-                <th className="text-right py-3 px-2">Rewards</th>
-                <th className="text-center py-3 px-2">Status</th>
-                <th className="text-center py-3 px-2">Actions</th>
+                <th className="text-left py-3 px-2">Direccion</th>
+                <th className="text-right py-3 px-2">Bloqueado</th>
+                <th className="text-right py-3 px-2">Recompensas</th>
+                <th className="text-center py-3 px-2">Estado</th>
+                <th className="text-center py-3 px-2">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -134,7 +131,7 @@ export default function Staking() {
                       to={`/wallet/${v.address}`}
                       className="text-main-500 hover:text-main-600 font-mono text-xs"
                     >
-                      {shortAddr(v.address)}
+                      {shortHash(v.address)}
                     </Link>
                   </td>
                   <td className="py-3 px-2 text-right text-neutral-900 font-medium">
@@ -143,11 +140,11 @@ export default function Staking() {
                   <td className="py-3 px-2 text-right text-green-600">{v.total_rewards}</td>
                   <td className="py-3 px-2 text-center">
                     {v.unstaking_requested ? (
-                      <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs">Unstaking</span>
+                      <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-xs">Desbloqueando</span>
                     ) : v.is_active ? (
-                      <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs">Active</span>
+                      <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded text-xs">Activo</span>
                     ) : (
-                      <span className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs">Inactive</span>
+                      <span className="text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded text-xs">Inactivo</span>
                     )}
                   </td>
                   <td className="py-3 px-2 text-center">
@@ -156,7 +153,7 @@ export default function Staking() {
                         onClick={() => handleUnstake(v.address)}
                         className="text-red-500 hover:text-red-600 text-xs font-medium"
                       >
-                        Unstake
+                        Desbloquear
                       </button>
                     )}
                   </td>

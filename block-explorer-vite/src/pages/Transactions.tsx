@@ -32,7 +32,7 @@ export default function Transactions() {
       setFee('1')
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send')
+      setError(err instanceof Error ? err.message : 'Error al enviar')
     } finally {
       setSending(false)
     }
@@ -40,7 +40,7 @@ export default function Transactions() {
 
   return (
     <>
-      <PageIntro title="Transactions">
+      <PageIntro title="Transacciones">
         Enviar transacciones y ver el mempool de transacciones pendientes.
       </PageIntro>
 
@@ -90,7 +90,7 @@ export default function Transactions() {
               className="bg-main-500 text-white px-4 py-2 rounded-xl text-sm font-medium
                          hover:bg-main-600 disabled:opacity-50 transition-colors"
             >
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? 'Enviando...' : 'Enviar'}
             </button>
             {error && <p className="text-red-500 text-sm">{error}</p>}
           </div>
@@ -102,7 +102,7 @@ export default function Transactions() {
 
       {txs.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
-          <p className="text-neutral-500">No pending transactions.</p>
+          <p className="text-neutral-500">Sin transacciones pendientes.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -110,11 +110,11 @@ export default function Transactions() {
             <thead>
               <tr className="text-neutral-500 text-xs uppercase border-b border-neutral-200">
                 <th className="text-left py-3 px-2">ID</th>
-                <th className="text-left py-3 px-2">From</th>
-                <th className="text-left py-3 px-2">To</th>
-                <th className="text-right py-3 px-2">Amount</th>
-                <th className="text-right py-3 px-2">Fee</th>
-                <th className="text-right py-3 px-2">Time</th>
+                <th className="text-left py-3 px-2">De</th>
+                <th className="text-left py-3 px-2">Para</th>
+                <th className="text-right py-3 px-2">Cantidad</th>
+                <th className="text-right py-3 px-2">Comision</th>
+                <th className="text-right py-3 px-2">Tiempo</th>
               </tr>
             </thead>
             <tbody>
