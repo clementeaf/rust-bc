@@ -45,7 +45,11 @@ test_*_checkpoints/
 
 # Node modules (subprojects)
 block-explorer/node_modules/
+block-explorer-vite/node_modules/
 sdk-js/node_modules/
+
+# Tesseract prototype (lives in tesseract-prototype branch)
+tesseract/
 
 # Test database files
 test_*.db
