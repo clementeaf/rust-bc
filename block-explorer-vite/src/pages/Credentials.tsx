@@ -6,50 +6,7 @@ import {
   getCredentialsBySubject,
   type Credential,
 } from '../lib/api'
-
-/**
- * Formatea un instante Unix como tiempo relativo en español (pasado).
- * @param ts - Segundos desde epoch
- * @returns Texto tipo "hace 3 d" o "—"
- */
-function timeAgo(ts: number): string {
-  if (!ts) return '—'
-  const diff = Math.floor(Date.now() / 1000 - ts)
-  if (diff < 0) return 'reciente'
-  if (diff < 60) return `hace ${diff}s`
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`
-  return `hace ${Math.floor(diff / 86400)} d`
-}
-
-/**
- * Describe cuándo caduca un registro (futuro o pasado).
- * @param ts - Segundos desde epoch
- * @returns Texto legible en español
- */
-function formatExpiry(ts: number): string {
-  if (!ts) return '—'
-  const now = Math.floor(Date.now() / 1000)
-  const diff = ts - now
-  if (diff > 0) {
-    if (diff < 3600) return `en ${Math.ceil(diff / 60)} min`
-    if (diff < 86400) return `en ${Math.ceil(diff / 3600)} h`
-    return `en ${Math.ceil(diff / 86400)} d`
-  }
-  const past = -diff
-  if (past < 3600) return `hace ${Math.floor(past / 60)} min`
-  if (past < 86400) return `hace ${Math.floor(past / 3600)} h`
-  return `hace ${Math.floor(past / 86400)} d`
-}
-
-/**
- * Acorta un código largo para tablas.
- * @param d - Código completo
- * @returns Versión truncada
- */
-function shortCode(d: string): string {
-  return d.length > 24 ? d.slice(0, 12) + '...' + d.slice(-12) : d
-}
+import { timeAgo, formatExpiry, shortCode } from '../lib/format'
 
 /**
  * Genera un número interno aleatorio para el registro.
@@ -201,7 +158,7 @@ export default function Credentials(): ReactElement {
               id="issuer-did"
               value={issuerDid}
               onChange={(e) => setIssuerDid(e.target.value)}
-              placeholder="did:bc:…"
+              placeholder="did:cerulean:…"
               className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
             />
           </div>
@@ -214,7 +171,7 @@ export default function Credentials(): ReactElement {
               id="subject-did"
               value={subjectDid}
               onChange={(e) => setSubjectDid(e.target.value)}
-              placeholder="did:bc:…"
+              placeholder="did:cerulean:…"
               className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
             />
           </div>
@@ -318,7 +275,7 @@ export default function Credentials(): ReactElement {
             value={subjectQuery}
             onChange={(e) => setSubjectQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void handleSubjectSearch()}
-            placeholder="Código did:bc:… de esa ficha"
+            placeholder="Código did:cerulean:… de esa ficha"
             className="flex-1 bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
           />
           <button

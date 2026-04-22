@@ -104,11 +104,19 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
 
-### Block explorer (optional UI)
+### Block explorer — Cerulean Ledger UI
 
 | Path | Stack | Notes |
 |---|---|---|
-| `block-explorer-vite/` | Vite + React | `npm install` / `npm run dev`; proxies `/api` to the node (HTTPS target and env in `vite.config.ts`). |
+| `block-explorer-vite/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node. |
+
+Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`.
+
+Key structure:
+- `src/lib/format.ts` — shared formatters (`timeAgo`, `shortHash`, `fmtDate`, etc.)
+- `src/lib/routes.ts` — route config with lazy loading
+- `src/lib/api.ts` — API client and types
+- `src/pages/Demo.tsx` — 5-step credential verification demo (flagship)
 
 Not required to run the node.
 

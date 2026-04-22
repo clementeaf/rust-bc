@@ -1,20 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getBlocks, getStats, type Block, type Stats } from '../lib/api'
+import { timeAgo, shortHash } from '../lib/format'
 import SearchBar from '../components/SearchBar'
 import ServerStatus from '../components/ServerStatus'
-
-function shortHash(h: string) {
-  return h.length > 16 ? h.slice(0, 8) + '...' + h.slice(-8) : h
-}
-
-function timeAgo(ts: number) {
-  const diff = Math.floor(Date.now() / 1000 - ts)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return new Date(ts * 1000).toLocaleDateString()
-}
 
 interface HubCard {
   to: string
@@ -99,12 +88,6 @@ const hubSections: { title: string; cards: HubCard[] }[] = [
         color: 'bg-rose-500',
       },
       {
-        to: '/governance',
-        title: 'Gobernanza',
-        desc: 'Propuestas de cambio de parametros del protocolo con votacion ponderada.',
-        color: 'bg-orange-500',
-      },
-      {
         to: '/airdrop',
         title: 'Airdrop',
         desc: 'Distribucion de recompensas a nodos que participan activamente.',
@@ -133,10 +116,10 @@ export default function Home() {
       <ServerStatus />
 
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">rust-bc Explorer</h1>
+        <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Cerulean Ledger</h1>
         <p className="text-neutral-500 text-sm mt-2 max-w-2xl">
-          Blockchain PQC-ready con identidad descentralizada, credenciales verificables, canales
-          privados y smart contracts. Explora las capacidades de la red.
+          Plataforma DLT con criptografia post-cuantica, identidad descentralizada, credenciales
+          verificables, canales privados y smart contracts. Soberania tecnologica completa.
         </p>
       </div>
 

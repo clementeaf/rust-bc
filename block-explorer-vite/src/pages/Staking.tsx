@@ -73,11 +73,11 @@ export default function Staking() {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-2xl p-5 mb-8">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Stake Tokens</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Bloquear tokens</h2>
         <form onSubmit={handleStake} className="flex flex-col sm:flex-row gap-4">
           <input
             type="text"
-            placeholder="Wallet address"
+            placeholder="Direccion de wallet"
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             required
@@ -86,7 +86,7 @@ export default function Staking() {
           />
           <input
             type="number"
-            placeholder="Amount"
+            placeholder="Cantidad"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required

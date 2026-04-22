@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 import { createIdentity, getIdentity, type IdentityRecord } from '../lib/api'
+import { timeAgo } from '../lib/format'
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'active', label: 'Activa (se puede usar)' },
@@ -9,28 +10,14 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ]
 
 /**
- * Muestra cuánto tiempo pasó desde un instante Unix.
- * @param ts - Segundos desde epoch
- * @returns Texto en español
- */
-function timeAgo(ts: number): string {
-  const diff = Math.floor(Date.now() / 1000 - ts)
-  if (diff < 0) return 'en el futuro'
-  if (diff < 60) return `hace ${diff}s`
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`
-  return `hace ${Math.floor(diff / 86400)} d`
-}
-
-/**
  * Genera un código de ficha con el formato que espera el nodo.
- * @returns Cadena did:bc:…
+ * @returns Cadena did:cerulean:…
  */
 function generateDid(): string {
   const hex = Array.from(crypto.getRandomValues(new Uint8Array(8)))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
-  return `did:bc:${hex}`
+  return `did:cerulean:${hex}`
 }
 
 export default function Identity(): ReactElement {
@@ -107,7 +94,7 @@ export default function Identity(): ReactElement {
         <h2 className="text-lg font-semibold text-neutral-900">Dar de alta un código nuevo</h2>
         <p className="text-sm text-neutral-500 mt-2 mb-6 leading-relaxed">
           Pulsa &quot;Crear código automático&quot; o escribe uno tuyo. El formato técnico empieza por{' '}
-          <code className="text-main-500 text-xs">did:bc:</code> seguido de letras y números.
+          <code className="text-main-500 text-xs">did:cerulean:</code> seguido de letras y números.
         </p>
         <div className="space-y-5">
           <div>
@@ -120,7 +107,7 @@ export default function Identity(): ReactElement {
                 id="did-create"
                 value={didInput}
                 onChange={(e) => setDidInput(e.target.value)}
-                placeholder="did:bc:…"
+                placeholder="did:cerulean:…"
                 className="flex-1 bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
               />
               <button

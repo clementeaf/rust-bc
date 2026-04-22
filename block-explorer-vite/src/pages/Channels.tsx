@@ -48,11 +48,11 @@ export default function Channels() {
       </PageIntro>
 
       <div className="bg-white border border-neutral-200 rounded-2xl p-5 mb-8">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Create Channel</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Crear canal</h2>
         <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-4">
           <input
             type="text"
-            placeholder="Channel ID (e.g. supply-chain)"
+            placeholder="ID del canal (ej. cadena-suministro)"
             value={newId}
             onChange={(e) => setNewId(e.target.value)}
             required

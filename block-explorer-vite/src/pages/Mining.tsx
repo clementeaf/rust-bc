@@ -58,7 +58,7 @@ export default function Mining() {
         <form onSubmit={handleMine} className="flex flex-col sm:flex-row gap-4">
           <input
             type="text"
-            placeholder="Miner address"
+            placeholder="Direccion del minero"
             value={minerAddress}
             onChange={(e) => setMinerAddress(e.target.value)}
             className="flex-1 border border-neutral-200 rounded-xl px-3 py-2 text-sm font-mono

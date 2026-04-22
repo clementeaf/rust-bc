@@ -1,18 +1,7 @@
 import { useEffect, useState } from 'react'
 import PageIntro from '../components/PageIntro'
 import { getMempool, sendTransaction, type Transaction } from '../lib/api'
-
-function shortAddr(a: string) {
-  return a.length > 16 ? a.slice(0, 8) + '...' + a.slice(-8) : a
-}
-
-function timeAgo(ts: number) {
-  const diff = Math.floor(Date.now() / 1000 - ts)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return new Date(ts * 1000).toLocaleDateString()
-}
+import { timeAgo, shortHash } from '../lib/format'
 
 export default function Transactions() {
   const [txs, setTxs] = useState<Transaction[]>([])
@@ -56,11 +45,11 @@ export default function Transactions() {
       </PageIntro>
 
       <div className="bg-white border border-neutral-200 rounded-2xl p-5 mb-8">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Send Transaction</h2>
+        <h2 className="text-lg font-semibold text-neutral-900 mb-4">Enviar transaccion</h2>
         <form onSubmit={handleSend} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
             type="text"
-            placeholder="From address"
+            placeholder="Direccion origen"
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             required
@@ -68,7 +57,7 @@ export default function Transactions() {
           />
           <input
             type="text"
-            placeholder="To address"
+            placeholder="Direccion destino"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             required
@@ -76,7 +65,7 @@ export default function Transactions() {
           />
           <input
             type="number"
-            placeholder="Amount"
+            placeholder="Cantidad"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required
@@ -86,7 +75,7 @@ export default function Transactions() {
           />
           <input
             type="number"
-            placeholder="Fee"
+            placeholder="Comision"
             value={fee}
             onChange={(e) => setFee(e.target.value)}
             required
@@ -131,9 +120,9 @@ export default function Transactions() {
             <tbody>
               {txs.map((tx) => (
                 <tr key={tx.id} className="border-b border-neutral-100">
-                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortAddr(tx.id)}</td>
-                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortAddr(tx.from)}</td>
-                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortAddr(tx.to)}</td>
+                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortHash(tx.id)}</td>
+                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortHash(tx.from)}</td>
+                  <td className="py-3 px-2 font-mono text-xs text-neutral-600">{shortHash(tx.to)}</td>
                   <td className="py-3 px-2 text-right text-neutral-900 font-medium">{tx.amount}</td>
                   <td className="py-3 px-2 text-right text-neutral-500">{tx.fee}</td>
                   <td className="py-3 px-2 text-right text-neutral-400">{timeAgo(tx.timestamp)}</td>

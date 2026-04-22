@@ -2,13 +2,13 @@ import { useState } from 'react'
 import PageIntro from '../components/PageIntro'
 import {
   createIdentity,
-  getIdentity,
   createCredential,
   getCredential,
   getCredentialsBySubject,
   type IdentityRecord,
   type Credential,
 } from '../lib/api'
+import { fmtDate } from '../lib/format'
 
 type Step = 1 | 2 | 3 | 4 | 5
 
@@ -19,15 +19,6 @@ interface StepState {
 }
 
 const INITIAL: StepState = { loading: false, done: false, error: '' }
-
-function fmtDate(ts: number) {
-  if (!ts) return '—'
-  return new Date(ts * 1000).toLocaleDateString('es-CL', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
 
 export default function Demo() {
   const [step, setStep] = useState<Step>(1)
@@ -63,7 +54,7 @@ export default function Demo() {
   const handleRegisterIssuer = async () => {
     setS1({ loading: true, done: false, error: '' })
     try {
-      const did = `did:rustbc:${issuerName.toLowerCase().replace(/\s+/g, '-')}`
+      const did = `did:cerulean:${issuerName.toLowerCase().replace(/\s+/g, '-')}`
       const record = await createIdentity(did, 'active')
       setIssuerDid(did)
       setIssuerRecord(record)
@@ -77,7 +68,7 @@ export default function Demo() {
   const handleRegisterCandidate = async () => {
     setS2({ loading: true, done: false, error: '' })
     try {
-      const did = `did:rustbc:${candidateName.toLowerCase().replace(/\s+/g, '-')}`
+      const did = `did:cerulean:${candidateName.toLowerCase().replace(/\s+/g, '-')}`
       const record = await createIdentity(did, 'active')
       setCandidateDid(did)
       setCandidateRecord(record)

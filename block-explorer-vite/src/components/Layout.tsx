@@ -48,7 +48,6 @@ const groups: NavGroup[] = [
     title: 'Smart Contracts',
     items: [
       { to: '/contracts', label: 'Contratos', desc: 'Contratos desplegados (Wasm)' },
-      { to: '/governance', label: 'Gobernanza', desc: 'Propuestas y votacion on-chain' },
     ],
   },
 ]
@@ -80,9 +79,9 @@ export default function Layout(): ReactElement {
             </button>
             <NavLink to="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-main-500 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">rc</span>
+                <span className="text-white font-bold text-sm">CL</span>
               </div>
-              <span className="text-lg font-bold text-neutral-900 tracking-tight">rust-bc</span>
+              <span className="text-lg font-bold text-neutral-900 tracking-tight">Cerulean Ledger</span>
             </NavLink>
             {currentPage && (
               <span className="hidden sm:inline text-xs text-neutral-400 border-l border-neutral-200 pl-3">
@@ -163,8 +162,8 @@ export default function Layout(): ReactElement {
       {/* Footer */}
       <footer className="border-t border-neutral-200 py-4">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 flex items-center justify-between text-xs text-neutral-400">
-          <span>rust-bc Explorer</span>
-          <span>Blockchain PQC-ready</span>
+          <span>Cerulean Ledger</span>
+          <span>DLT post-cuantica · Soberania digital</span>
         </div>
       </footer>
     </div>

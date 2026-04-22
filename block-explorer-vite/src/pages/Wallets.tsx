@@ -37,7 +37,7 @@ export default function Wallets() {
       })
       setLookupAddr('')
     } catch {
-      setLookupError('Wallet not found')
+      setLookupError('Wallet no encontrada')
     }
   }
 
@@ -62,13 +62,13 @@ export default function Wallets() {
           className="bg-main-500 text-white px-4 py-2 rounded-xl text-sm font-medium
                      hover:bg-main-600 disabled:opacity-50 transition-colors"
         >
-          {creating ? 'Creating...' : 'Create Wallet'}
+          {creating ? 'Creando...' : 'Crear wallet'}
         </button>
 
         <form onSubmit={handleLookup} className="flex gap-2 flex-1">
           <input
             type="text"
-            placeholder="Lookup by address"
+            placeholder="Buscar por direccion"
             value={lookupAddr}
             onChange={(e) => setLookupAddr(e.target.value)}
             className="flex-1 border border-neutral-200 rounded-xl px-3 py-2 text-sm font-mono
@@ -79,7 +79,7 @@ export default function Wallets() {
             className="bg-neutral-800 text-white px-4 py-2 rounded-xl text-sm font-medium
                        hover:bg-neutral-700 transition-colors"
           >
-            Lookup
+            Buscar
           </button>
         </form>
       </div>
@@ -87,8 +87,8 @@ export default function Wallets() {
 
       {wallets.length === 0 ? (
         <div className="bg-white border border-neutral-200 rounded-2xl p-8 text-center">
-          <p className="text-neutral-500 mb-2">No wallets yet.</p>
-          <p className="text-neutral-400 text-sm">Create one or look up an existing address.</p>
+          <p className="text-neutral-500 mb-2">No hay wallets aun.</p>
+          <p className="text-neutral-400 text-sm">Crea una o busca una direccion existente.</p>
         </div>
       ) : (
         <>
