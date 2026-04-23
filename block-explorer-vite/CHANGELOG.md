@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-23
+
+### Landing page
+
+- New full-width landing at `/` — hero, 4 capability pillars, tech specs, dual CTA
+- Dashboard moved to `/dashboard`
+- Landing renders outside Layout (no sidebar)
+
+### Full Spanish localization
+
+- Translated all remaining English strings: table headers, buttons, status badges, empty states, error messages across 12 pages
+- Replaced local `shortAddr` helpers with shared `shortHash` from `lib/format.ts`
+
 ## 2026-04-22
 
 ### Rebrand — Cerulean Ledger

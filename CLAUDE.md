@@ -112,11 +112,17 @@ Services initialized at startup (all use in-memory backends by default):
 
 Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`.
 
+Routes:
+- `/` — Landing page (full-width, no sidebar)
+- `/dashboard` — Network stats, blocks, hub cards
+- `/demo` — 5-step credential verification demo (flagship)
+- All other pages use sidebar Layout
+
 Key structure:
+- `src/pages/Landing.tsx` — hero + pillars + tech specs + CTAs
 - `src/lib/format.ts` — shared formatters (`timeAgo`, `shortHash`, `fmtDate`, etc.)
 - `src/lib/routes.ts` — route config with lazy loading
 - `src/lib/api.ts` — API client and types
-- `src/pages/Demo.tsx` — 5-step credential verification demo (flagship)
 
 Not required to run the node.
 

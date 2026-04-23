@@ -23,7 +23,7 @@ const groups: NavGroup[] = [
   {
     title: 'Red',
     items: [
-      { to: '/', label: 'Dashboard', desc: 'Estado de la cadena, bloques, peers' },
+      { to: '/dashboard', label: 'Dashboard', desc: 'Estado de la cadena, bloques, peers' },
       { to: '/mining', label: 'Mineria', desc: 'Crear nuevos bloques' },
       { to: '/channels', label: 'Canales', desc: 'Redes aisladas (estilo Fabric)' },
     ],
@@ -58,7 +58,7 @@ export default function Layout(): ReactElement {
 
   const currentPage = groups
     .flatMap((g) => g.items)
-    .find((i) => (i.to === '/' ? location.pathname === '/' : location.pathname.startsWith(i.to)))
+    .find((i) => (i.to === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(i.to)))
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -115,7 +115,7 @@ export default function Layout(): ReactElement {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === '/'}
+                  end={item.to === '/dashboard'}
                   onClick={() => setSidebarOpen(false)}
                   className={({ isActive }) =>
                     `group flex flex-col px-3 py-2 rounded-xl mb-0.5 transition-all duration-150 ${

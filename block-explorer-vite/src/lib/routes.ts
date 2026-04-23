@@ -6,7 +6,7 @@ export interface RouteEntry {
 }
 
 export const routes: RouteEntry[] = [
-  { path: '/', component: lazy(() => import('../pages/Home')) },
+  { path: '/dashboard', component: lazy(() => import('../pages/Home')) },
   { path: '/demo', component: lazy(() => import('../pages/Demo')) },
   { path: '/block/:hash', component: lazy(() => import('../pages/BlockDetail')) },
   { path: '/wallets', component: lazy(() => import('../pages/Wallets')) },
