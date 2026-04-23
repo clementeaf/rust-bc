@@ -6,7 +6,8 @@
 
 - Full EVM via `revm` v38 — deploy, call, and static-call Solidity contracts
 - Endpoints: `POST /evm/deploy`, `POST /evm/call`, `POST /evm/static-call`, `GET /evm/contracts`
-- 14 tests including brute-force: rapid deploys, gas exhaustion, oversized bytecode, infinite loops
+- 14 unit tests: rapid deploys, gas exhaustion, oversized bytecode, infinite loops
+- 10 stress + fuzz tests: concurrent threads, proptest randomized bytecode/calldata/addresses
 - Rust nightly upgraded to 2026-04-20 (rustc 1.97)
 
 ### Landing page
