@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
 const tags = [
@@ -70,6 +70,8 @@ export default function Landing() {
   const [selected, setSelected] = useState(0)
   const [selectedRival, setSelectedRival] = useState(0)
   const [rightTab, setRightTab] = useState<RightTab>('conceptos')
+
+  useEffect(() => { document.title = 'Cerulean Ledger' }, [])
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">

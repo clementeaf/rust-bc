@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
+
+const FieldDemo = lazy(() => import('../components/FieldDemo'))
 
 const concepts = [
   {
@@ -108,7 +110,7 @@ const physicsRules = [
   },
 ]
 
-type RightTab = 'conceptos' | 'comparativa' | 'leyes'
+type RightTab = 'conceptos' | 'comparativa' | 'leyes' | 'demo'
 
 export default function Tesseract() {
   const [selected, setSelected] = useState(0)
@@ -116,6 +118,8 @@ export default function Tesseract() {
   const [rightTab, setRightTab] = useState<RightTab>('conceptos')
   const [selectedRule, setSelectedRule] = useState(0)
   const [showSimple, setShowSimple] = useState(false)
+
+  useEffect(() => { document.title = 'Tesseract' }, [])
 
   const rule = physicsRules[selectedRule]
 
@@ -168,7 +172,7 @@ export default function Tesseract() {
 
           <div className="hidden lg:flex flex-col justify-center min-h-[340px] lg:w-1/2">
             <div className="flex gap-1 mb-4 relative z-20">
-              {([['conceptos', 'Conceptos'], ['leyes', 'Leyes fisicas'], ['comparativa', 'Comparativa']] as const).map(([tab, label]) => (
+              {([['conceptos', 'Conceptos'], ['leyes', 'Leyes fisicas'], ['comparativa', 'Comparativa'], ['demo', 'Demo']] as const).map(([tab, label]) => (
                 <button
                   key={tab}
                   onClick={() => setRightTab(tab)}
@@ -244,6 +248,14 @@ export default function Tesseract() {
                       </span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {rightTab === 'demo' && (
+                <div className="flex-1 flex flex-col">
+                  <Suspense fallback={<div className="flex-1 flex items-center justify-center text-neutral-400 text-xs">Cargando...</div>}>
+                    <FieldDemo />
+                  </Suspense>
                 </div>
               )}
 
