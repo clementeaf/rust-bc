@@ -55,19 +55,67 @@ pub enum VotingError {
     ZeroPower,
     #[error("voting period ended for proposal {0}")]
     VotingEnded(ProposalId),
+    #[error("cannot delegate to self")]
+    SelfDelegation,
+    #[error("circular delegation detected")]
+    CircularDelegation,
 }
 
-/// Vote store for all proposals.
+/// Vote store for all proposals with delegation support.
 pub struct VoteStore {
     /// proposal_id → (voter → Vote)
     votes: Mutex<HashMap<ProposalId, HashMap<String, Vote>>>,
+    /// delegator → delegate (who votes on their behalf)
+    delegations: Mutex<HashMap<String, String>>,
 }
 
 impl VoteStore {
     pub fn new() -> Self {
         Self {
             votes: Mutex::new(HashMap::new()),
+            delegations: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Delegate voting power to another address.
+    /// The delegate votes with their own stake + all delegated stake.
+    pub fn delegate(&self, delegator: &str, delegate: &str) -> Result<(), VotingError> {
+        if delegator == delegate {
+            return Err(VotingError::SelfDelegation);
+        }
+        // Prevent circular delegation
+        let dels = self.delegations.lock().unwrap();
+        if dels.get(delegate) == Some(&delegator.to_string()) {
+            return Err(VotingError::CircularDelegation);
+        }
+        drop(dels);
+
+        self.delegations
+            .lock()
+            .unwrap()
+            .insert(delegator.to_string(), delegate.to_string());
+        Ok(())
+    }
+
+    /// Remove delegation.
+    pub fn undelegate(&self, delegator: &str) {
+        self.delegations.lock().unwrap().remove(delegator);
+    }
+
+    /// Get the delegate for an address, if any.
+    pub fn get_delegate(&self, delegator: &str) -> Option<String> {
+        self.delegations.lock().unwrap().get(delegator).cloned()
+    }
+
+    /// Get all delegators who delegated to a given delegate.
+    pub fn get_delegators(&self, delegate: &str) -> Vec<String> {
+        self.delegations
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, d)| d.as_str() == delegate)
+            .map(|(k, _)| k.clone())
+            .collect()
     }
 
     /// Cast a vote. Rejects duplicates and zero-power votes.

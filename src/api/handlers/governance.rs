@@ -36,7 +36,17 @@ pub struct ParamChangeEntry {
 pub struct CastVoteRequest {
     pub voter: String,
     pub option: VoteOption,
-    pub power: u64,
+}
+
+#[derive(Deserialize)]
+pub struct DelegateRequest {
+    pub delegator: String,
+    pub delegate: String,
+}
+
+#[derive(Deserialize)]
+pub struct VetoRequest {
+    pub caller: String,
 }
 
 #[derive(Serialize)]
@@ -66,6 +76,44 @@ fn err_dto(msg: &str) -> ErrorDto {
     }
 }
 
+/// Get current chain height from AppState.
+fn chain_height(state: &AppState) -> u64 {
+    let bc = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    bc.chain.len() as u64
+}
+
+/// Get total staked power from StakingManager.
+fn total_staked_power(state: &AppState) -> u64 {
+    state
+        .staking_manager
+        .get_active_validators()
+        .iter()
+        .map(|v| v.staked_amount)
+        .sum()
+}
+
+/// Get a voter's stake from StakingManager (own + delegated).
+fn voter_power(state: &AppState, voter: &str) -> u64 {
+    let own_stake = state
+        .staking_manager
+        .get_validator(voter)
+        .map(|v| v.staked_amount)
+        .unwrap_or(0);
+
+    // Add delegated power
+    let delegated: u64 = if let Some(vs) = &state.vote_store {
+        vs.get_delegators(voter)
+            .iter()
+            .filter_map(|d| state.staking_manager.get_validator(d))
+            .map(|v| v.staked_amount)
+            .sum()
+    } else {
+        0
+    };
+
+    own_stake + delegated
+}
+
 // ── Handlers ────────────────────────────────────────────────────────────────
 
 /// GET /api/v1/governance/params
@@ -85,11 +133,11 @@ pub async fn list_params(state: web::Data<AppState>) -> ApiResult<HttpResponse> 
             key: k,
         })
         .collect();
-    params.sort_by(|a, b| a.key.cmp(&b.key));
+    params.sort_by_key(|p| p.key.clone());
     Ok(HttpResponse::Ok().json(ApiResponse::success(params, trace)))
 }
 
-/// POST /api/v1/governance/proposals
+/// POST /api/v1/governance/proposals — submit with real chain height and deposit verification
 #[post("/governance/proposals")]
 pub async fn submit_governance_proposal(
     state: web::Data<AppState>,
@@ -110,6 +158,23 @@ pub async fn submit_governance_proposal(
     let registry = state.param_registry.as_ref().unwrap();
     let required_deposit = registry.get_u64("proposal_deposit", 10_000);
     let voting_period = registry.get_u64("voting_period_blocks", 17_280);
+    let current_height = chain_height(&state);
+
+    // Verify proposer has enough stake to cover deposit
+    let proposer_stake = state
+        .staking_manager
+        .get_validator(&body.proposer)
+        .map(|v| v.staked_amount)
+        .unwrap_or(0);
+    if proposer_stake < body.deposit {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(&format!(
+                "insufficient stake: have {proposer_stake}, need {} for deposit",
+                body.deposit
+            )),
+            400,
+        )));
+    }
 
     let action = match &body.action {
         ProposalActionRequest::ParamChange { changes } => ProposalAction::ParamChange {
@@ -132,7 +197,7 @@ pub async fn submit_governance_proposal(
         description: &body.description,
         deposit: body.deposit,
         required_deposit,
-        current_height: 0,
+        current_height,
         voting_period,
     }) {
         Ok(id) => {
@@ -219,7 +284,7 @@ pub async fn get_governance_proposal(
     }
 }
 
-/// POST /api/v1/governance/proposals/{id}/vote
+/// POST /api/v1/governance/proposals/{id}/vote — uses real stake from StakingManager
 #[post("/governance/proposals/{id}/vote")]
 pub async fn cast_governance_vote(
     state: web::Data<AppState>,
@@ -252,12 +317,23 @@ pub async fn cast_governance_vote(
         }
     };
 
+    // Resolve real voting power from StakingManager (own + delegated)
+    let power = voter_power(&state, &body.voter);
+    if power == 0 {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("voter has no staked tokens (zero voting power)"),
+            400,
+        )));
+    }
+
+    let current_height = chain_height(&state);
+
     match vote_store.cast_vote(
         id,
         &body.voter,
         body.option,
-        body.power,
-        0,
+        power,
+        current_height,
         proposal.voting_ends_at,
     ) {
         Ok(()) => {
@@ -287,7 +363,7 @@ pub async fn get_governance_votes(
     Ok(HttpResponse::Ok().json(ApiResponse::success(votes, trace)))
 }
 
-/// GET /api/v1/governance/proposals/{id}/tally
+/// GET /api/v1/governance/proposals/{id}/tally — uses real total staked from StakingManager
 #[get("/governance/proposals/{id}/tally")]
 pub async fn tally_governance_votes(
     state: web::Data<AppState>,
@@ -312,12 +388,8 @@ pub async fn tally_governance_votes(
     let quorum = registry.get_u64("quorum_percent", 33);
     let threshold = registry.get_u64("pass_threshold_percent", 67);
 
-    let votes = vote_store.get_votes(id);
-    let total_staked: u64 = if votes.is_empty() {
-        10_000
-    } else {
-        votes.iter().map(|v| v.power).sum::<u64>() * 100 / 80
-    };
+    // Real total staked from StakingManager
+    let total_staked = total_staked_power(&state).max(1); // avoid div by zero
 
     let tally = vote_store.tally(id, total_staked, quorum, threshold);
 
@@ -334,4 +406,132 @@ pub async fn tally_governance_votes(
         },
         trace,
     )))
+}
+
+/// POST /api/v1/governance/proposals/{id}/execute — applies param changes to ParamRegistry
+#[post("/governance/proposals/{id}/execute")]
+pub async fn execute_governance_proposal(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let id = path.into_inner();
+
+    let proposal_store = match &state.proposal_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
+
+    let current_height = chain_height(&state);
+
+    match proposal_store.mark_executed(id, current_height) {
+        Ok(proposal) => {
+            // Apply parameter changes to the live registry
+            if let ProposalAction::ParamChange { ref changes } = proposal.action {
+                if let Some(registry) = &state.param_registry {
+                    for (key, value) in changes {
+                        registry.set(key, value.clone());
+                    }
+                }
+            }
+            Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
+        }
+        Err(e) => {
+            Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
+    }
+}
+
+/// POST /api/v1/governance/delegate — delegate voting power
+#[post("/governance/delegate")]
+pub async fn delegate_vote(
+    state: web::Data<AppState>,
+    body: web::Json<DelegateRequest>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let vote_store = match &state.vote_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
+
+    match vote_store.delegate(&body.delegator, &body.delegate) {
+        Ok(()) => {
+            #[derive(Serialize)]
+            struct DelegationResult {
+                delegator: String,
+                delegate: String,
+            }
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                DelegationResult {
+                    delegator: body.delegator.clone(),
+                    delegate: body.delegate.clone(),
+                },
+                trace,
+            )))
+        }
+        Err(e) => {
+            Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
+    }
+}
+
+/// POST /api/v1/governance/proposals/{id}/veto — emergency veto by authorized address
+#[post("/governance/proposals/{id}/veto")]
+pub async fn veto_governance_proposal(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+    body: web::Json<VetoRequest>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let id = path.into_inner();
+
+    let proposal_store = match &state.proposal_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
+
+    // Authorized vetoers: the genesis validator set (all org registry members)
+    let authorized: Vec<String> = if let Some(org_reg) = &state.org_registry {
+        org_reg
+            .list_orgs()
+            .unwrap_or_default()
+            .iter()
+            .map(|o| o.msp_id.clone())
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let current_height = chain_height(&state);
+
+    match proposal_store.emergency_veto(id, &body.caller, &authorized, current_height) {
+        Ok(proposal) => Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace))),
+        Err(e) => {
+            Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
+    }
 }

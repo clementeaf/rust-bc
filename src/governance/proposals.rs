@@ -85,6 +85,8 @@ pub enum ProposalError {
     EmptyChanges,
     #[error("not the proposer")]
     NotProposer,
+    #[error("not authorized for emergency veto")]
+    NotAuthorized,
 }
 
 /// Parameters for submitting a new proposal.
@@ -275,6 +277,35 @@ impl ProposalStore {
     /// Total number of proposals.
     pub fn count(&self) -> usize {
         self.proposals.lock().unwrap().len()
+    }
+
+    /// Emergency veto — cancels a proposal in any non-final state.
+    /// Only callable by addresses in the `authorized_vetoers` list.
+    pub fn emergency_veto(
+        &self,
+        id: ProposalId,
+        caller: &str,
+        authorized_vetoers: &[String],
+        current_height: u64,
+    ) -> Result<Proposal, ProposalError> {
+        if !authorized_vetoers.iter().any(|a| a == caller) {
+            return Err(ProposalError::NotAuthorized);
+        }
+
+        let mut proposals = self.proposals.lock().unwrap();
+        let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
+
+        // Can veto anything that isn't already Executed or Cancelled
+        if p.status == ProposalStatus::Executed || p.status == ProposalStatus::Cancelled {
+            return Err(ProposalError::InvalidState {
+                expected: "Voting or Passed",
+                got: p.status,
+            });
+        }
+
+        p.status = ProposalStatus::Cancelled;
+        p.finalized_at = Some(current_height);
+        Ok(p.clone())
     }
 }
 
