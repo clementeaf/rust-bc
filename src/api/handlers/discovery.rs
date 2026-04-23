@@ -241,6 +241,9 @@ mod tests {
             ordering_backend: None,
             world_state: None,
             audit_store: None,
+            proposal_store: None,
+            vote_store: None,
+            param_registry: None,
         })
     }
 
