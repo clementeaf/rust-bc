@@ -108,7 +108,7 @@ mod transaction_tests {
     }
 
     pub fn test_fee_prioritization() {
-        let mut txs = vec![
+        let mut txs = [
             MockTransaction::new("tx1", 1),
             MockTransaction::new("tx3", 3),
             MockTransaction::new("tx2", 2),
@@ -117,7 +117,7 @@ mod transaction_tests {
         ];
 
         // Sort by fee descending (highest first)
-        txs.sort_by(|a, b| b.fee.cmp(&a.fee));
+        txs.sort_by_key(|x| std::cmp::Reverse(x.fee));
 
         assert_eq!(txs[0].fee, 5);
         assert_eq!(txs[1].fee, 4);
@@ -129,7 +129,7 @@ mod transaction_tests {
     }
 
     pub fn test_batch_capping() {
-        let txs = vec![
+        let txs = [
             MockTransaction::new("tx1", 1),
             MockTransaction::new("tx2", 2),
             MockTransaction::new("tx3", 3),

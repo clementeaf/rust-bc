@@ -224,7 +224,7 @@ impl MiningWorker {
     /// Construct block request with fee-prioritized transactions
     fn construct_block(&self, mut transactions: Vec<MempoolTransaction>) -> CreateBlockRequest {
         // Sort by fee descending (highest fees first)
-        transactions.sort_by(|a, b| b.fee.cmp(&a.fee));
+        transactions.sort_by_key(|x| std::cmp::Reverse(x.fee));
 
         // Cap to batch size
         let tx_count = transactions.len().min(self.config.tx_batch_size);

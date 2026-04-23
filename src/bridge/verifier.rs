@@ -20,7 +20,7 @@ pub fn verify_merkle_proof(data: &[u8], proof: &InclusionProof) -> bool {
     let mut index = proof.leaf_index;
 
     for sibling in &proof.merkle_path {
-        hash = if index % 2 == 0 {
+        hash = if index.is_multiple_of(2) {
             hash_pair(&hash, sibling)
         } else {
             hash_pair(sibling, &hash)

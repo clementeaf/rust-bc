@@ -138,11 +138,8 @@ impl VoteStore {
 
         let total_voted = yes + no + abstain;
 
-        let quorum_reached = if total_staked_power > 0 {
-            (total_voted * 100) / total_staked_power >= quorum_percent
-        } else {
-            false
-        };
+        let quorum_reached =
+            total_staked_power > 0 && (total_voted * 100) / total_staked_power >= quorum_percent;
 
         let yes_no_total = yes + no;
         let passed = quorum_reached

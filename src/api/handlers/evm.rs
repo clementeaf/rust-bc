@@ -18,6 +18,12 @@ impl EvmState {
     }
 }
 
+impl Default for EvmState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(serde::Deserialize)]
 pub struct DeployRequest {
     /// Hex-encoded init bytecode (with or without 0x prefix).

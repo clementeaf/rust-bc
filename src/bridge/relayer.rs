@@ -131,13 +131,9 @@ impl Relayer {
                 if job.message.proof.is_none() {
                     let payload_bytes = serde_json::to_vec(&job.message.payload)
                         .map_err(|e| RelayerError::ExternalChain(e.to_string()));
-                    match payload_bytes {
-                        Ok(bytes) => {
-                            let (_, proofs) = verifier::build_merkle_tree(&[&bytes]);
-                            job.message.proof = Some(proofs[0].clone());
-                        }
-                        Err(e) => return Err(e),
-                    }
+                    let bytes = payload_bytes?;
+                    let (_, proofs) = verifier::build_merkle_tree(&[&bytes]);
+                    job.message.proof = Some(proofs[0].clone());
                 }
                 match engine.process_inbound(&job.message, current_height) {
                     Ok(()) => Ok(msg_id),

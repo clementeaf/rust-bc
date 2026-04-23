@@ -47,6 +47,12 @@ pub struct EvmExecutor {
     caller: Address,
 }
 
+impl Default for EvmExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EvmExecutor {
     /// Create a new executor. The caller gets a large ETH balance for gas.
     pub fn new() -> Self {

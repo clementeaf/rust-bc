@@ -59,7 +59,7 @@ fn main() {
         hash_count += 1;
 
         // Mostrar progreso cada 100,000 hashes o cada segundo
-        if hash_count % 100_000 == 0 || last_print.elapsed().as_secs() >= 1 {
+        if hash_count.is_multiple_of(100_000) || last_print.elapsed().as_secs() >= 1 {
             let elapsed = start.elapsed();
             let hashes_per_sec = if elapsed.as_secs() > 0 {
                 hash_count as f64 / elapsed.as_secs_f64()

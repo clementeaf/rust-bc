@@ -90,7 +90,7 @@ impl RocksDbRaftStorage {
         Ok(())
     }
 
-    fn cf_handle(&self) -> Result<std::sync::Arc<rocksdb::BoundColumnFamily>, String> {
+    fn cf_handle(&self) -> Result<std::sync::Arc<rocksdb::BoundColumnFamily<'_>>, String> {
         self.db
             .cf_handle(CF_RAFT)
             .ok_or_else(|| "missing raft CF".to_string())

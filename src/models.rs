@@ -368,7 +368,7 @@ impl Mempool {
      */
     pub fn get_transactions_for_block(&mut self, max: usize) -> Vec<Transaction> {
         // Ordenar por fee descendente (mayor fee primero)
-        self.transactions.sort_by(|a, b| b.fee.cmp(&a.fee));
+        self.transactions.sort_by_key(|x| std::cmp::Reverse(x.fee));
 
         let count = max.min(self.transactions.len());
         self.transactions.drain(..count).collect()

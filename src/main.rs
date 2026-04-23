@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 mod acl;
 mod airdrop;
 mod api;

@@ -524,7 +524,7 @@ impl AirdropManager {
             .cloned()
             .collect();
 
-        records.sort_by(|a, b| b.claim_timestamp.cmp(&a.claim_timestamp));
+        records.sort_by_key(|x| std::cmp::Reverse(x.claim_timestamp));
 
         if let Some(l) = limit {
             records.truncate(l as usize);

@@ -144,79 +144,79 @@ impl RocksDbBlockStore {
 
     // ── Column Family handle helpers ──────────────────────────────────────────
 
-    fn cf_blocks(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_blocks(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_BLOCKS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_BLOCKS.to_string()))
     }
 
-    fn cf_transactions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_transactions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_TRANSACTIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TRANSACTIONS.to_string()))
     }
 
-    fn cf_identities(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_identities(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_IDENTITIES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_IDENTITIES.to_string()))
     }
 
-    fn cf_credentials(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_credentials(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CREDENTIALS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CREDENTIALS.to_string()))
     }
 
-    fn cf_meta(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_meta(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_META)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_META.to_string()))
     }
 
-    fn cf_tx_by_block(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_tx_by_block(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_TX_BY_BLOCK)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_TX_BY_BLOCK.to_string()))
     }
 
-    fn cf_cred_by_subject(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_cred_by_subject(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CRED_BY_SUBJECT)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CRED_BY_SUBJECT.to_string()))
     }
 
-    fn cf_organizations(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_organizations(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_ORGANIZATIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ORGANIZATIONS.to_string()))
     }
 
-    fn cf_crl(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_crl(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CRL)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CRL.to_string()))
     }
 
-    fn cf_world_state(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_world_state(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_WORLD_STATE)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_WORLD_STATE.to_string()))
     }
 
-    fn cf_chaincode_packages(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_chaincode_packages(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CHAINCODE_PACKAGES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHAINCODE_PACKAGES.to_string()))
     }
 
-    fn cf_acls(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_acls(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_ACLS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ACLS.to_string()))
     }
 
-    fn cf_channel_configs(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_channel_configs(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CHANNEL_CONFIGS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHANNEL_CONFIGS.to_string()))
@@ -224,7 +224,7 @@ impl RocksDbBlockStore {
 
     pub(crate) fn cf_key_endorsement_policies(
         &self,
-    ) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    ) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_KEY_ENDORSEMENT_POLICIES)
             .ok_or_else(|| {
@@ -232,7 +232,7 @@ impl RocksDbBlockStore {
             })
     }
 
-    pub(crate) fn cf_key_history(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    pub(crate) fn cf_key_history(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_KEY_HISTORY)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_KEY_HISTORY.to_string()))
@@ -1043,19 +1043,19 @@ impl RocksDbBlockStore {
 // ── CF helpers for new persistent stores ─────────────────────────────────────
 
 impl RocksDbBlockStore {
-    fn cf_endorsement_policies(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_endorsement_policies(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_ENDORSEMENT_POLICIES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_ENDORSEMENT_POLICIES.to_string()))
     }
 
-    fn cf_collections(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_collections(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_COLLECTIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_COLLECTIONS.to_string()))
     }
 
-    fn cf_chaincode_definitions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily>> {
+    fn cf_chaincode_definitions(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
         self.db
             .cf_handle(CF_CHAINCODE_DEFINITIONS)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CHAINCODE_DEFINITIONS.to_string()))
