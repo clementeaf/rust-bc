@@ -67,7 +67,7 @@ const services: ServiceCard[] = [
   {
     title: 'Verificacion RRHH',
     desc: 'Demo guiado: emitir y verificar credenciales laborales en 5 pasos.',
-    to: '/demo',
+    to: '/services/demo',
     icon: icons.credential,
     iconBg: 'bg-main-500 text-white',
     color: 'border-main-200 hover:border-main-400',
@@ -76,7 +76,7 @@ const services: ServiceCard[] = [
   {
     title: 'Identidad Digital (DID)',
     desc: 'Crear y consultar identidades descentralizadas did:cerulean.',
-    to: '/identity',
+    to: '/services/identity',
     icon: icons.identity,
     iconBg: 'bg-violet-500 text-white',
     color: 'border-violet-200 hover:border-violet-400',
@@ -84,7 +84,7 @@ const services: ServiceCard[] = [
   {
     title: 'Credenciales Verificables',
     desc: 'Emitir, buscar y verificar titulos y certificados digitales.',
-    to: '/credentials',
+    to: '/services/credentials',
     icon: icons.badge,
     iconBg: 'bg-emerald-500 text-white',
     color: 'border-emerald-200 hover:border-emerald-400',
@@ -92,7 +92,7 @@ const services: ServiceCard[] = [
   {
     title: 'Gobernanza On-Chain',
     desc: 'Propuestas, votacion ponderada por stake y parametros del protocolo.',
-    to: '/governance',
+    to: '/services/governance',
     icon: icons.governance,
     iconBg: 'bg-blue-500 text-white',
     color: 'border-blue-200 hover:border-blue-400',
@@ -101,7 +101,7 @@ const services: ServiceCard[] = [
   {
     title: 'Dashboard de Red',
     desc: 'Estado de la cadena, bloques recientes, peers conectados.',
-    to: '/dashboard',
+    to: '/services/dashboard',
     icon: icons.dashboard,
     iconBg: 'bg-neutral-700 text-white',
     color: 'border-neutral-200 hover:border-neutral-400',
@@ -109,7 +109,7 @@ const services: ServiceCard[] = [
   {
     title: 'Wallets y Transacciones',
     desc: 'Crear cuentas, enviar tokens, consultar el mempool en vivo.',
-    to: '/wallets',
+    to: '/services/wallets',
     icon: icons.wallet,
     iconBg: 'bg-amber-500 text-white',
     color: 'border-amber-200 hover:border-amber-400',
@@ -117,7 +117,7 @@ const services: ServiceCard[] = [
   {
     title: 'Staking y Validadores',
     desc: 'Bloquear tokens, ver validadores activos y recompensas.',
-    to: '/staking',
+    to: '/services/staking',
     icon: icons.staking,
     iconBg: 'bg-orange-500 text-white',
     color: 'border-orange-200 hover:border-orange-400',
@@ -125,7 +125,7 @@ const services: ServiceCard[] = [
   {
     title: 'Canales Privados',
     desc: 'Redes aisladas entre organizaciones (estilo Fabric).',
-    to: '/channels',
+    to: '/services/channels',
     icon: icons.lock,
     iconBg: 'bg-sky-500 text-white',
     color: 'border-sky-200 hover:border-sky-400',
@@ -133,7 +133,7 @@ const services: ServiceCard[] = [
   {
     title: 'Mineria',
     desc: 'Crear nuevos bloques y ver resultados inmediatos.',
-    to: '/mining',
+    to: '/services/mining',
     icon: icons.cube,
     iconBg: 'bg-stone-500 text-white',
     color: 'border-stone-200 hover:border-stone-400',
@@ -141,7 +141,7 @@ const services: ServiceCard[] = [
   {
     title: 'Smart Contracts',
     desc: 'Contratos Wasm y Solidity desplegados en la red.',
-    to: '/contracts',
+    to: '/services/contracts',
     icon: icons.code,
     iconBg: 'bg-pink-500 text-white',
     color: 'border-pink-200 hover:border-pink-400',
@@ -150,69 +150,27 @@ const services: ServiceCard[] = [
 
 export default function Services() {
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50">
-      {/* Header */}
-      <header className="bg-white border-b border-neutral-200 px-6 py-4">
-        <div className="max-w-screen-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-main-500 flex items-center justify-center">
-                <span className="text-white font-bold text-sm">CL</span>
-              </div>
-              <span className="text-lg font-bold text-neutral-900 tracking-tight">Cerulean Ledger</span>
-            </Link>
-            <span className="text-xs text-neutral-400 border-l border-neutral-200 pl-3">Servicios</span>
-          </div>
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {services.map((s) => (
           <Link
-            to="/"
-            className="text-sm text-neutral-500 hover:text-neutral-700 transition-colors cursor-pointer"
+            key={s.to}
+            to={s.to}
+            className={`relative bg-white border rounded-xl p-3 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${s.color}`}
           >
-            Volver al inicio
+            {s.badge && (
+              <span className="absolute top-2 right-2 text-[8px] font-bold uppercase tracking-wider bg-main-500 text-white px-1.5 py-0.5 rounded-full">
+                {s.badge}
+              </span>
+            )}
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${s.iconBg}`}>
+              {s.icon}
+            </div>
+            <h3 className="text-xs font-bold text-neutral-900 mt-2 leading-tight">{s.title}</h3>
+            <p className="text-[10px] text-neutral-500 mt-0.5 leading-snug line-clamp-2">{s.desc}</p>
           </Link>
-        </div>
-      </header>
-
-      {/* Services grid */}
-      <main className="flex-1 px-6 py-10">
-        <div className="max-w-screen-xl mx-auto">
-          <h1 className="text-2xl font-bold text-neutral-900 mb-2">Servicios de la red</h1>
-          <p className="text-sm text-neutral-500 mb-8">
-            Cada capacidad de Cerulean Ledger accesible directamente. Selecciona un servicio para interactuar en vivo.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {services.map((s) => (
-              <Link
-                key={s.to}
-                to={s.to}
-                className={`relative bg-white border rounded-xl p-5 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${s.color}`}
-              >
-                {s.badge && (
-                  <span className="absolute top-3 right-3 text-[9px] font-bold uppercase tracking-wider bg-main-500 text-white px-2 py-0.5 rounded-full">
-                    {s.badge}
-                  </span>
-                )}
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${s.iconBg}`}>
-                  {s.icon}
-                </div>
-                <h3 className="text-sm font-bold text-neutral-900 mt-3">{s.title}</h3>
-                <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">{s.desc}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-neutral-200 bg-white px-6 py-3">
-        <div className="max-w-screen-xl mx-auto flex items-center justify-between text-[11px] text-neutral-400">
-          <span>Cerulean Ledger</span>
-          <div className="flex items-center gap-4">
-            <span>Rust</span>
-            <span>BFT + DAG</span>
-            <span>Open source</span>
-          </div>
-        </div>
-      </footer>
+        ))}
+      </div>
     </div>
   )
 }

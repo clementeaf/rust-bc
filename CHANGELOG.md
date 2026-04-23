@@ -15,9 +15,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `Governance.tsx` — proposals, stake-weighted voting with visual tally bar, protocol parameters table
 - 10 governable parameters exposed (block size, fees, quorum, thresholds, etc.)
 
-**Block Explorer — Services page + Landing refinement**
-- `Services.tsx` — standalone marketplace page with 10 service cards (SVG icons, color-coded)
-- Landing: "Ver servicios" button navigates to `/services`; removed drawer experiments
+**Block Explorer — Services routing + Landing refinement**
+- `ServicesLayout.tsx` — dedicated layout with compact sidebar listing all services, sticky sidebar (no scroll bleed)
+- All service pages mounted under `/services/*` with consistent header and navigation
+- `Services.tsx` — card grid (10 services, SVG icons, compact 5-column layout)
+- Landing: "Ver servicios" button navigates to `/services`
 - `Layout.tsx` — added "Gobernanza" nav group in sidebar
 - API client: 7 governance functions + 4 types (Proposal, Vote, TallyResult, ProtocolParam)
 
