@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MANDATORY: Pre-commit quality gate
+
+**A commit CANNOT be made unless ALL THREE pass locally. No exceptions. No "fix in next commit". Workflow failure is unacceptable.**
+
+```bash
+# Run ALL THREE before EVERY commit. All must exit 0.
+cargo fmt --check
+cargo clippy -- -D warnings
+cargo test --lib
+```
+
+If any integration test file was modified, also run it explicitly:
+```bash
+cargo test --test <test_name>
+```
+
+If any gate fails, fix the issue FIRST, re-run ALL THREE, and only then commit. This is not optional.
+
 ## Commands
 
 ```bash
