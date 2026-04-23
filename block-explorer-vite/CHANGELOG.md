@@ -9,6 +9,7 @@
 - 14 unit tests: rapid deploys, gas exhaustion, oversized bytecode, infinite loops
 - 10 stress + fuzz tests: concurrent threads, proptest randomized bytecode/calldata/addresses
 - 22 penetration tests: injection (SQL/XSS/command), DoS (oversized/nested/rapid-fire), path traversal, header manipulation, EVM attacks (SELFDESTRUCT/memory expansion/collision), response leak checks
+- 4 lightweight P2P tests: multi-node health, mining, EVM deploy, identity + credentials E2E (no Docker, ~150MB RAM, 2.75s)
 - Rust nightly upgraded to 2026-04-20 (rustc 1.97)
 
 ### Landing page
