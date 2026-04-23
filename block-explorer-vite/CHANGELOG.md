@@ -8,6 +8,7 @@
 - Endpoints: `POST /evm/deploy`, `POST /evm/call`, `POST /evm/static-call`, `GET /evm/contracts`
 - 14 unit tests: rapid deploys, gas exhaustion, oversized bytecode, infinite loops
 - 10 stress + fuzz tests: concurrent threads, proptest randomized bytecode/calldata/addresses
+- 22 penetration tests: injection (SQL/XSS/command), DoS (oversized/nested/rapid-fire), path traversal, header manipulation, EVM attacks (SELFDESTRUCT/memory expansion/collision), response leak checks
 - Rust nightly upgraded to 2026-04-20 (rustc 1.97)
 
 ### Landing page
