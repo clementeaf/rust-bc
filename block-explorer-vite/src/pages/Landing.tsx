@@ -1,133 +1,135 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+
+const tags = [
+  {
+    label: 'DLT',
+    desc: 'Distributed Ledger Technology — un libro de registros compartido entre multiples participantes, donde la informacion se valida de forma colectiva y no depende de una entidad central.',
+  },
+  {
+    label: 'Post-Cuantica',
+    desc: 'Las computadoras cuanticas podran romper la criptografia actual. Cerulean Ledger usa firmas de nueva generacion (FIPS 204) que ya estan preparadas para ese escenario.',
+  },
+  {
+    label: 'Identidad Soberana',
+    desc: 'Personas y organizaciones gestionan su propia identidad digital. Nadie mas la controla, nadie mas la puede revocar. Tu identidad es tuya.',
+  },
+  {
+    label: 'Wasm + EVM',
+    desc: 'Permite ejecutar logica de negocio directamente en la red, usando las mismas herramientas del ecosistema Ethereum y el rendimiento de WebAssembly.',
+  },
+]
 
 const pillars = [
   {
     title: 'Criptografia post-cuantica',
-    desc: 'Firmas ML-DSA-65 (FIPS 204) resistentes a computacion cuantica. Seguridad a largo plazo sin migraciones futuras.',
+    desc: 'Seguridad resistente a computacion cuantica (ML-DSA-65, FIPS 204).',
     color: 'bg-emerald-500',
   },
   {
     title: 'Identidad soberana',
-    desc: 'Identidades descentralizadas (DID) y credenciales verificables. Sin intermediarios, sin dependencia externa.',
+    desc: 'Identidades descentralizadas y credenciales verificables.',
     color: 'bg-violet-500',
   },
   {
     title: 'Canales privados',
-    desc: 'Redes aisladas con su propio ledger y world state. Cada organizacion controla sus datos.',
+    desc: 'Redes aisladas donde cada organizacion controla sus datos.',
     color: 'bg-blue-500',
   },
   {
     title: 'Smart contracts',
-    desc: 'Contratos en WebAssembly y compatibilidad EVM. Ejecucion paralela con deteccion de conflictos.',
+    desc: 'Contratos WebAssembly + EVM con ejecucion paralela.',
     color: 'bg-amber-500',
   },
 ]
 
-const specs = [
-  { label: 'Lenguaje', value: 'Rust' },
-  { label: 'Consenso', value: 'BFT + DAG' },
-  { label: 'Firmas', value: 'ML-DSA-65 + Ed25519' },
-  { label: 'Licencia', value: 'Open source' },
-]
-
 export default function Landing() {
-  return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-neutral-200">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-main-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">CL</span>
-            </div>
-            <span className="text-lg font-bold text-neutral-900 tracking-tight">Cerulean Ledger</span>
-          </div>
-          <Link
-            to="/dashboard"
-            className="text-sm text-main-500 hover:text-main-600 font-medium transition-colors"
-          >
-            Explorar la red
-          </Link>
-        </div>
-      </header>
+  const [selected, setSelected] = useState(0)
 
+  return (
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Hero */}
-      <section className="flex-1 flex flex-col items-center justify-center px-6 py-20 sm:py-28">
-        <div className="max-w-2xl text-center">
-          <div className="inline-flex items-center gap-2 text-xs text-neutral-400 mb-6">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            PQC-ready · ML-DSA-65 + Ed25519
+      <section className="flex-1 flex items-center px-6 max-w-screen-xl mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-48 w-full">
+          {/* Left — value proposition */}
+          <div className="text-left flex flex-col justify-center">
+            <p className="text-3xl sm:text-4xl font-bold text-main-500 tracking-tight mb-2">Cerulean Ledger</p>
+            <p className="text-sm text-neutral-500 mb-4">
+              Seguridad resistente a computacion cuantica
+            </p>
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight leading-tight">
+              Infraestructura DLT con soberania tecnologica
+            </h1>
+            <p className="text-neutral-500 text-base mt-4 leading-relaxed">
+              Registro distribuido con criptografia post-cuantica, identidad descentralizada
+              y canales privados. Codigo abierto, escrito en Rust.
+            </p>
+            <div className="flex flex-row items-center gap-3 mt-8">
+              <Link
+                to="/demo"
+                className="bg-main-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold
+                           hover:bg-main-600 transition-colors shadow-sm hover:shadow-md text-center"
+              >
+                Ver demo en vivo
+              </Link>
+              <Link
+                to="/dashboard"
+                className="bg-white text-neutral-700 border border-neutral-200 px-6 py-2.5 rounded-xl text-sm font-semibold
+                           hover:bg-neutral-50 hover:border-neutral-300 transition-colors text-center"
+              >
+                Explorar la red
+              </Link>
+            </div>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-neutral-900 tracking-tight leading-tight">
-            Infraestructura DLT con soberania tecnologica
-          </h1>
-          <p className="text-neutral-500 text-lg mt-6 leading-relaxed max-w-xl mx-auto">
-            Plataforma de registro distribuido con criptografia post-cuantica, identidad
-            descentralizada y canales privados. Codigo abierto, escrito en Rust.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-10">
-            <Link
-              to="/demo"
-              className="bg-main-500 text-white px-6 py-3 rounded-xl text-sm font-semibold
-                         hover:bg-main-600 transition-colors shadow-sm hover:shadow-md w-full sm:w-auto text-center"
-            >
-              Ver demo en vivo
-            </Link>
-            <Link
-              to="/dashboard"
-              className="bg-white text-neutral-700 border border-neutral-200 px-6 py-3 rounded-xl text-sm font-semibold
-                         hover:bg-neutral-50 hover:border-neutral-300 transition-colors w-full sm:w-auto text-center"
-            >
-              Explorar la red
-            </Link>
+
+          {/* Right — tags row + description */}
+          <div className="hidden lg:flex flex-col justify-center">
+            <div className="flex flex-wrap gap-2">
+              {tags.map((t, i) => (
+                <button
+                  key={t.label}
+                  onClick={() => setSelected(i)}
+                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                    selected === i
+                      ? 'bg-main-500 text-white'
+                      : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4">
+              <p className="text-neutral-700 text-sm leading-relaxed">{tags[selected].desc}</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Pillars */}
-      <section className="border-t border-neutral-200 bg-surface-alt">
-        <div className="max-w-5xl mx-auto px-6 py-16">
-          <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-8 text-center">
-            Capacidades
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {pillars.map((p) => (
-              <div
-                key={p.title}
-                className="bg-white border border-neutral-200 rounded-2xl p-5"
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-2 h-2 rounded-full mt-2 ${p.color} shrink-0`} />
-                  <div>
-                    <h3 className="text-neutral-900 font-semibold text-sm">{p.title}</h3>
-                    <p className="text-neutral-500 text-xs mt-1 leading-relaxed">{p.desc}</p>
-                  </div>
-                </div>
+      <section className="border-t border-neutral-200 bg-surface-alt px-6 py-6">
+        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-5">
+          {pillars.map((p) => (
+            <div key={p.title} className="flex items-start gap-2.5">
+              <div className={`w-2 h-2 rounded-full mt-1.5 ${p.color} shrink-0`} />
+              <div>
+                <p className="text-neutral-900 font-semibold text-sm">{p.title}</p>
+                <p className="text-neutral-500 text-xs leading-relaxed mt-1">{p.desc}</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Tech specs */}
-      <section className="border-t border-neutral-200">
-        <div className="max-w-5xl mx-auto px-6 py-12">
-          <div className="flex flex-wrap items-center justify-center gap-8">
-            {specs.map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-neutral-400 text-[10px] uppercase tracking-widest">{s.label}</p>
-                <p className="text-neutral-900 font-semibold text-sm mt-1">{s.value}</p>
-              </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-neutral-200 py-4">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between text-xs text-neutral-400">
+      <footer className="border-t border-neutral-200 px-6 py-3">
+        <div className="max-w-4xl mx-auto flex items-center justify-between text-[11px] text-neutral-400">
           <span>Cerulean Ledger</span>
-          <span>DLT post-cuantica · Soberania digital</span>
+          <div className="flex items-center gap-4">
+            <span>Rust</span>
+            <span>BFT + DAG</span>
+            <span>Open source</span>
+          </div>
         </div>
       </footer>
     </div>

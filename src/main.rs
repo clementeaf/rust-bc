@@ -17,6 +17,7 @@ mod consensus;
 mod discovery;
 mod endorsement;
 mod events;
+mod evm_compat;
 mod gateway;
 mod identity;
 mod metrics;
@@ -1106,6 +1107,8 @@ async fn async_main_inner() -> std::io::Result<()> {
         .clone()
         .unwrap_or_else(|| Arc::new(crate::audit::MemoryAuditStore::new()));
 
+    let evm_state = web::Data::new(crate::api::handlers::evm::EvmState::new());
+
     let server = HttpServer::new(move || {
         let cors = Cors::default()
             .allow_any_origin()
@@ -1124,6 +1127,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             .wrap(crate::api::middleware::TlsIdentityMiddleware)
             .wrap(crate::api::middleware::InputValidationMiddleware::default())
             .app_data(web::Data::new(app_state.clone()))
+            .app_data(evm_state.clone())
             .app_data(json_config.clone())
             .app_data(web::PayloadConfig::default().limit(10_485_760)) // 10MB max for raw payloads (chaincode)
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {

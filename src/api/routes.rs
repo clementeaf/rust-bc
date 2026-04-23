@@ -1,7 +1,7 @@
 use actix_web::{web, Scope};
 
 use crate::api::handlers::{
-    acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, gateway,
+    acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, evm, gateway,
     identity, msp, organizations, private_data, proposals, snapshots, transactions, utilities,
 };
 
@@ -93,7 +93,11 @@ impl ApiRoutes {
             .service(snapshots::list_snapshots)
             .service(snapshots::download_snapshot)
             .service(audit::list_audit_entries)
-            .service(audit::export_audit_csv);
+            .service(audit::export_audit_csv)
+            .service(evm::evm_deploy)
+            .service(evm::evm_call)
+            .service(evm::evm_static_call)
+            .service(evm::evm_list_contracts);
     }
 
     fn identity_routes() -> Scope {

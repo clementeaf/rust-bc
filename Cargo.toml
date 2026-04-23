@@ -57,6 +57,8 @@ cryptoki = { version = "0.7", optional = true }
 pqcrypto-mldsa = "0.1.2"
 pqcrypto-traits = "0.3"
 zeroize = { version = "1.7", features = ["derive"] }
+revm = "38"
+alloy-primitives = "1"
 
 [features]
 default = []

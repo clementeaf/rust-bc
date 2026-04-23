@@ -9,6 +9,7 @@ pub mod channels;
 pub mod credentials;
 pub mod discovery;
 pub mod events;
+pub mod evm;
 pub mod gateway;
 pub mod identity;
 pub mod msp;

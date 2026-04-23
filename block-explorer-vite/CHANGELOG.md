@@ -2,6 +2,13 @@
 
 ## 2026-04-23
 
+### EVM execution (revm integration)
+
+- Full EVM via `revm` v38 — deploy, call, and static-call Solidity contracts
+- Endpoints: `POST /evm/deploy`, `POST /evm/call`, `POST /evm/static-call`, `GET /evm/contracts`
+- 14 tests including brute-force: rapid deploys, gas exhaustion, oversized bytecode, infinite loops
+- Rust nightly upgraded to 2026-04-20 (rustc 1.97)
+
 ### Landing page
 
 - New full-width landing at `/` — hero, 4 capability pillars, tech specs, dual CTA
