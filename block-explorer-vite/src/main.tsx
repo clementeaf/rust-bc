@@ -7,6 +7,7 @@ import ServicesLayout from './components/ServicesLayout'
 import { routes } from './lib/routes'
 
 const Landing = lazy(() => import('./pages/Landing'))
+const TesseractPage = lazy(() => import('./pages/Tesseract'))
 const Services = lazy(() => import('./pages/Services'))
 
 const Fallback = <div className="py-12 text-center text-neutral-400">Cargando...</div>
@@ -30,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         {/* Landing — standalone, no layout */}
         <Route path="/" element={<Suspense fallback={Fallback}><Landing /></Suspense>} />
+        <Route path="/tesseract" element={<Suspense fallback={Fallback}><TesseractPage /></Suspense>} />
 
         {/* Services — all under ServicesLayout for consistent header */}
         <Route element={<ServicesLayout />}>

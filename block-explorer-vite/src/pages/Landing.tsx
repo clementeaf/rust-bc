@@ -89,13 +89,20 @@ export default function Landing() {
               Registro distribuido con criptografia post-cuantica, identidad descentralizada
               y canales privados. Codigo abierto, escrito en Rust.
             </p>
-            <div className="mt-8">
+            <div className="flex gap-3 mt-8">
               <Link
                 to="/services"
                 className="bg-main-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold
                            hover:bg-main-600 transition-colors shadow-sm hover:shadow-md cursor-pointer inline-block"
               >
                 Ver servicios
+              </Link>
+              <Link
+                to="/tesseract"
+                className="bg-neutral-100 text-neutral-600 px-5 py-2.5 rounded-xl text-sm font-semibold
+                           hover:bg-neutral-200 transition-colors cursor-pointer inline-block"
+              >
+                Tesseract
               </Link>
             </div>
           </div>

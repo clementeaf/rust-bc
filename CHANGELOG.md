@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-23
 
+**Block Explorer — Tesseract page**
+- `Tesseract.tsx` — standalone `/tesseract` route explaining the Tesseract geometric consensus prototype
+- Three interactive tabs: Conceptos (4D field, self-healing, falsehood rejection, emergent crystallization), Leyes fisicas (causality, conservation, entropy, gravity with physics/crypto/unbreakable breakdown), Comparativa (vs Bitcoin, BFT, DAGs)
+- "En simples palabras" drawer: accessible plain-language explanation with analogies
+- Paradigm progression bar: Pre-Bitcoin → Bitcoin → Tesseract
+- Bidirectional navigation: Landing ↔ Tesseract via CTA buttons
+- Route registered in `main.tsx` as standalone (no sidebar layout)
+
 **Governance — HTTP API + Explorer UI**
 - `src/api/handlers/governance.rs` — 7 REST endpoints: protocol params, proposal CRUD, voting, tally
 - `AppState` fields: `proposal_store`, `vote_store`, `param_registry` initialized at startup
