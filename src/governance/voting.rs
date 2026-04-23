@@ -59,6 +59,8 @@ pub enum VotingError {
     SelfDelegation,
     #[error("circular delegation detected")]
     CircularDelegation,
+    #[error("voter has delegated power to another address; undelegate first")]
+    HasDelegated,
 }
 
 /// Vote store for all proposals with delegation support.
@@ -134,6 +136,11 @@ impl VoteStore {
 
         if current_height >= voting_ends_at {
             return Err(VotingError::VotingEnded(proposal_id));
+        }
+
+        // Item 4: prevent voting if power is delegated to someone else
+        if self.delegations.lock().unwrap().contains_key(voter) {
+            return Err(VotingError::HasDelegated);
         }
 
         let mut all = self.votes.lock().unwrap();
@@ -484,5 +491,79 @@ mod tests {
             }
         }
         assert_eq!(params.get_u64(keys::MIN_TX_FEE, 0), 5);
+    }
+
+    // --- delegation tests ---
+
+    #[test]
+    fn delegate_ok() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        assert_eq!(s.get_delegate("alice"), Some("bob".to_string()));
+    }
+
+    #[test]
+    fn delegate_self_rejected() {
+        let s = store();
+        let err = s.delegate("alice", "alice").unwrap_err();
+        assert!(matches!(err, VotingError::SelfDelegation));
+    }
+
+    #[test]
+    fn delegate_circular_rejected() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        let err = s.delegate("bob", "alice").unwrap_err();
+        assert!(matches!(err, VotingError::CircularDelegation));
+    }
+
+    #[test]
+    fn undelegate_removes() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        s.undelegate("alice");
+        assert_eq!(s.get_delegate("alice"), None);
+    }
+
+    #[test]
+    fn get_delegators_returns_all() {
+        let s = store();
+        s.delegate("alice", "carol").unwrap();
+        s.delegate("bob", "carol").unwrap();
+        let mut delegators = s.get_delegators("carol");
+        delegators.sort();
+        assert_eq!(delegators, vec!["alice", "bob"]);
+    }
+
+    #[test]
+    fn delegator_cannot_vote_directly() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        let err = s
+            .cast_vote(1, "alice", VoteOption::Yes, 1000, 50, 100)
+            .unwrap_err();
+        assert!(matches!(err, VotingError::HasDelegated));
+    }
+
+    #[test]
+    fn delegate_can_vote_with_own_power() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        // Bob can vote — he's the delegate, not the delegator
+        s.cast_vote(1, "bob", VoteOption::Yes, 2000, 50, 100)
+            .unwrap();
+        let vote = s.get_vote(1, "bob").unwrap();
+        assert_eq!(vote.power, 2000);
+    }
+
+    #[test]
+    fn undelegate_then_vote_ok() {
+        let s = store();
+        s.delegate("alice", "bob").unwrap();
+        s.undelegate("alice");
+        // Alice can vote again after undelegating
+        s.cast_vote(1, "alice", VoteOption::No, 500, 50, 100)
+            .unwrap();
+        assert_eq!(s.get_vote(1, "alice").unwrap().option, VoteOption::No);
     }
 }

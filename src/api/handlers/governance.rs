@@ -160,16 +160,18 @@ pub async fn submit_governance_proposal(
     let voting_period = registry.get_u64("voting_period_blocks", 17_280);
     let current_height = chain_height(&state);
 
-    // Verify proposer has enough stake to cover deposit
+    // Verify proposer has enough stake to cover deposit (minus already locked)
     let proposer_stake = state
         .staking_manager
         .get_validator(&body.proposer)
         .map(|v| v.staked_amount)
         .unwrap_or(0);
-    if proposer_stake < body.deposit {
+    let already_locked = store.locked_deposit_for(&body.proposer);
+    let available = proposer_stake.saturating_sub(already_locked);
+    if available < body.deposit {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(&format!(
-                "insufficient stake: have {proposer_stake}, need {} for deposit",
+                "insufficient available stake: have {available} (stake {proposer_stake} - locked {already_locked}), need {} for deposit",
                 body.deposit
             )),
             400,
@@ -240,19 +242,7 @@ pub async fn list_governance_proposals(
         };
         store.list_by_status(status)
     } else {
-        let mut all = Vec::new();
-        for status in [
-            ProposalStatus::Voting,
-            ProposalStatus::Passed,
-            ProposalStatus::Rejected,
-            ProposalStatus::Executed,
-            ProposalStatus::Cancelled,
-            ProposalStatus::Expired,
-        ] {
-            all.extend(store.list_by_status(status));
-        }
-        all.sort_by_key(|p| p.id);
-        all
+        store.list_all()
     };
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(proposals, trace)))
@@ -513,12 +503,13 @@ pub async fn veto_governance_proposal(
         }
     };
 
-    // Authorized vetoers: the genesis validator set (all org registry members)
+    // Item 11: Only admin-role orgs can veto (msp_id containing "admin")
     let authorized: Vec<String> = if let Some(org_reg) = &state.org_registry {
         org_reg
             .list_orgs()
             .unwrap_or_default()
             .iter()
+            .filter(|o| o.msp_id.to_lowercase().contains("admin"))
             .map(|o| o.msp_id.clone())
             .collect()
     } else {
@@ -532,6 +523,67 @@ pub async fn veto_governance_proposal(
         Err(e) => {
             Ok(HttpResponse::BadRequest()
                 .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
+    }
+}
+
+/// POST /api/v1/governance/proposals/{id}/close — tally votes, mark passed or rejected
+///
+/// Item 7: This endpoint closes voting after the voting period ends.
+/// It tallies the votes, checks quorum + threshold, and transitions the
+/// proposal to Passed (with timelock) or Rejected (with deposit refund).
+///
+/// Item 9: Vote change is intentionally not supported. Once cast, a vote
+/// is final. This prevents last-minute vote manipulation and simplifies
+/// audit trails. Voters should undelegate and re-evaluate before voting.
+#[post("/governance/proposals/{id}/close")]
+pub async fn close_governance_voting(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let id = path.into_inner();
+
+    let proposal_store = match &state.proposal_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
+
+    let vote_store = state.vote_store.as_ref().unwrap();
+    let registry = state.param_registry.as_ref().unwrap();
+    let current_height = chain_height(&state);
+
+    let quorum = registry.get_u64("quorum_percent", 33);
+    let threshold = registry.get_u64("pass_threshold_percent", 67);
+    let timelock = registry.get_u64("timelock_blocks", 5_760);
+    let total_staked = total_staked_power(&state).max(1);
+
+    let tally = vote_store.tally(id, total_staked, quorum, threshold);
+
+    if tally.passed {
+        match proposal_store.mark_passed(id, current_height, timelock) {
+            Ok(()) => {
+                let proposal = proposal_store.get(id);
+                Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
+            }
+            Err(e) => Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400))),
+        }
+    } else {
+        match proposal_store.mark_rejected(id, current_height) {
+            Ok(()) => {
+                let proposal = proposal_store.get(id);
+                Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
+            }
+            Err(e) => Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400))),
         }
     }
 }

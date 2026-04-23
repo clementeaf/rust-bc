@@ -108,7 +108,8 @@ impl ApiRoutes {
             .service(governance::tally_governance_votes)
             .service(governance::execute_governance_proposal)
             .service(governance::delegate_vote)
-            .service(governance::veto_governance_proposal);
+            .service(governance::veto_governance_proposal)
+            .service(governance::close_governance_voting);
     }
 
     fn identity_routes() -> Scope {

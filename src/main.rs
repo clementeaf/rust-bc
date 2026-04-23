@@ -897,7 +897,20 @@ async fn async_main_inner() -> std::io::Result<()> {
         audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
         proposal_store: Some(Arc::new(governance::proposals::ProposalStore::new())),
         vote_store: Some(Arc::new(governance::voting::VoteStore::new())),
-        param_registry: Some(Arc::new(governance::params::ParamRegistry::with_defaults())),
+        param_registry: Some({
+            let reg = Arc::new(governance::params::ParamRegistry::with_defaults());
+            // Override voting period from env for demo/testnet (default: 17280 blocks ~3 days)
+            if let Ok(vp) = std::env::var("GOVERNANCE_VOTING_PERIOD") {
+                if let Ok(blocks) = vp.parse::<u64>() {
+                    reg.set(
+                        governance::params::keys::VOTING_PERIOD_BLOCKS,
+                        governance::params::ParamValue::U64(blocks),
+                    );
+                    log::info!("Governance voting period set to {blocks} blocks (from env)");
+                }
+            }
+            reg
+        }),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

@@ -87,6 +87,8 @@ pub enum ProposalError {
     NotProposer,
     #[error("not authorized for emergency veto")]
     NotAuthorized,
+    #[error("rate limited: next proposal allowed at block {wait_until}")]
+    RateLimited { wait_until: u64 },
 }
 
 /// Parameters for submitting a new proposal.
@@ -100,24 +102,30 @@ pub struct SubmitParams<'a> {
     pub voting_period: u64,
 }
 
-/// Proposal store.
+/// Proposal store with deposit ledger and rate limiting.
 pub struct ProposalStore {
     proposals: Mutex<HashMap<ProposalId, Proposal>>,
     next_id: Mutex<ProposalId>,
+    /// Locked deposits: proposer → total locked amount across active proposals.
+    locked_deposits: Mutex<HashMap<String, u64>>,
+    /// Rate limit: proposer → last submission height (max 1 proposal per 100 blocks).
+    last_submission: Mutex<HashMap<String, u64>>,
 }
+
+/// Minimum blocks between proposals from the same proposer.
+const PROPOSAL_RATE_LIMIT_BLOCKS: u64 = 100;
 
 impl ProposalStore {
     pub fn new() -> Self {
         Self {
             proposals: Mutex::new(HashMap::new()),
             next_id: Mutex::new(1),
+            locked_deposits: Mutex::new(HashMap::new()),
+            last_submission: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Submit a new proposal.
-    ///
-    /// Returns the proposal ID. Caller must verify the proposer has sufficient
-    /// balance and deduct the deposit externally.
+    /// Submit a new proposal with rate limiting and deposit locking.
     pub fn submit(&self, params: SubmitParams<'_>) -> Result<ProposalId, ProposalError> {
         let SubmitParams {
             proposer,
@@ -141,6 +149,18 @@ impl ProposalStore {
             }
         }
 
+        // Item 12: Rate limiting — max 1 proposal per PROPOSAL_RATE_LIMIT_BLOCKS
+        {
+            let last = self.last_submission.lock().unwrap();
+            if let Some(&last_height) = last.get(proposer) {
+                if current_height < last_height + PROPOSAL_RATE_LIMIT_BLOCKS {
+                    return Err(ProposalError::RateLimited {
+                        wait_until: last_height + PROPOSAL_RATE_LIMIT_BLOCKS,
+                    });
+                }
+            }
+        }
+
         let mut next = self.next_id.lock().unwrap();
         let id = *next;
         *next += 1;
@@ -159,7 +179,43 @@ impl ProposalStore {
         };
 
         self.proposals.lock().unwrap().insert(id, proposal);
+
+        // Item 5: Lock the deposit
+        *self
+            .locked_deposits
+            .lock()
+            .unwrap()
+            .entry(proposer.to_string())
+            .or_insert(0) += deposit;
+
+        // Record submission time for rate limiting
+        self.last_submission
+            .lock()
+            .unwrap()
+            .insert(proposer.to_string(), current_height);
+
         Ok(id)
+    }
+
+    /// Get total locked deposit for a proposer.
+    pub fn locked_deposit_for(&self, proposer: &str) -> u64 {
+        self.locked_deposits
+            .lock()
+            .unwrap()
+            .get(proposer)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Refund deposit — called when proposal is executed, rejected, or cancelled.
+    fn refund_deposit(&self, proposer: &str, amount: u64) {
+        let mut locked = self.locked_deposits.lock().unwrap();
+        if let Some(total) = locked.get_mut(proposer) {
+            *total = total.saturating_sub(amount);
+            if *total == 0 {
+                locked.remove(proposer);
+            }
+        }
     }
 
     /// Get a proposal by ID.
@@ -193,7 +249,7 @@ impl ProposalStore {
         Ok(())
     }
 
-    /// Mark a proposal as rejected.
+    /// Mark a proposal as rejected. Refunds deposit.
     pub fn mark_rejected(&self, id: ProposalId, current_height: u64) -> Result<(), ProposalError> {
         let mut proposals = self.proposals.lock().unwrap();
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
@@ -205,12 +261,16 @@ impl ProposalStore {
             });
         }
 
+        let proposer = p.proposer.clone();
+        let deposit = p.deposit;
         p.status = ProposalStatus::Rejected;
         p.finalized_at = Some(current_height);
+        drop(proposals);
+        self.refund_deposit(&proposer, deposit);
         Ok(())
     }
 
-    /// Mark a proposal as executed.
+    /// Mark a proposal as executed. Refunds deposit.
     pub fn mark_executed(
         &self,
         id: ProposalId,
@@ -234,10 +294,15 @@ impl ProposalStore {
 
         p.status = ProposalStatus::Executed;
         p.finalized_at = Some(current_height);
-        Ok(p.clone())
+        let result = p.clone();
+        let proposer = result.proposer.clone();
+        let deposit = result.deposit;
+        drop(proposals);
+        self.refund_deposit(&proposer, deposit);
+        Ok(result)
     }
 
-    /// Cancel a proposal (only by proposer, only during voting).
+    /// Cancel a proposal (only by proposer, only during voting). Refunds deposit.
     pub fn cancel(
         &self,
         id: ProposalId,
@@ -260,7 +325,12 @@ impl ProposalStore {
 
         p.status = ProposalStatus::Cancelled;
         p.finalized_at = Some(current_height);
-        Ok(p.clone())
+        let result = p.clone();
+        let proposer = result.proposer.clone();
+        let deposit = result.deposit;
+        drop(proposals);
+        self.refund_deposit(&proposer, deposit);
+        Ok(result)
     }
 
     /// List proposals filtered by status.
@@ -272,6 +342,13 @@ impl ProposalStore {
             .filter(|p| p.status == status)
             .cloned()
             .collect()
+    }
+
+    /// List all proposals sorted by ID.
+    pub fn list_all(&self) -> Vec<Proposal> {
+        let mut all: Vec<Proposal> = self.proposals.lock().unwrap().values().cloned().collect();
+        all.sort_by_key(|p| p.id);
+        all
     }
 
     /// Total number of proposals.
@@ -305,7 +382,12 @@ impl ProposalStore {
 
         p.status = ProposalStatus::Cancelled;
         p.finalized_at = Some(current_height);
-        Ok(p.clone())
+        let result = p.clone();
+        let proposer = result.proposer.clone();
+        let deposit = result.deposit;
+        drop(proposals);
+        self.refund_deposit(&proposer, deposit);
+        Ok(result)
     }
 }
 
@@ -517,5 +599,166 @@ mod tests {
         assert_eq!(s.list_by_status(ProposalStatus::Voting).len(), 2);
         assert_eq!(s.list_by_status(ProposalStatus::Rejected).len(), 1);
         assert_eq!(s.count(), 3);
+    }
+
+    #[test]
+    fn list_all_sorted() {
+        let s = store();
+        s.submit(sp("a", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        s.submit(sp("b", param_change("k", 2), "", 100, 100, 200, 100))
+            .unwrap();
+        let all = s.list_all();
+        assert_eq!(all.len(), 2);
+        assert!(all[0].id < all[1].id);
+    }
+
+    // --- emergency veto ---
+
+    #[test]
+    fn emergency_veto_by_authorized() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        let authorized = vec!["admin1".to_string()];
+        let p = s.emergency_veto(id, "admin1", &authorized, 50).unwrap();
+        assert_eq!(p.status, ProposalStatus::Cancelled);
+    }
+
+    #[test]
+    fn emergency_veto_unauthorized_rejected() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        let authorized = vec!["admin1".to_string()];
+        let err = s.emergency_veto(id, "bob", &authorized, 50).unwrap_err();
+        assert!(matches!(err, ProposalError::NotAuthorized));
+    }
+
+    #[test]
+    fn emergency_veto_already_executed_fails() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        s.mark_passed(id, 100, 10).unwrap();
+        s.mark_executed(id, 110).unwrap();
+        let authorized = vec!["admin1".to_string()];
+        let err = s
+            .emergency_veto(id, "admin1", &authorized, 120)
+            .unwrap_err();
+        assert!(matches!(err, ProposalError::InvalidState { .. }));
+    }
+
+    #[test]
+    fn emergency_veto_on_passed_proposal() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        s.mark_passed(id, 100, 50).unwrap();
+        let authorized = vec!["admin1".to_string()];
+        let p = s.emergency_veto(id, "admin1", &authorized, 110).unwrap();
+        assert_eq!(p.status, ProposalStatus::Cancelled);
+    }
+
+    // --- deposit ledger ---
+
+    #[test]
+    fn deposit_locked_on_submit() {
+        let s = store();
+        s.submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 500);
+    }
+
+    #[test]
+    fn deposit_accumulates_across_proposals() {
+        let s = store();
+        s.submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        s.submit(sp("alice", param_change("k", 2), "", 300, 100, 200, 100))
+            .unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 800);
+    }
+
+    #[test]
+    fn deposit_refunded_on_reject() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 500);
+        s.mark_rejected(id, 100).unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 0);
+    }
+
+    #[test]
+    fn deposit_refunded_on_execute() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        s.mark_passed(id, 100, 10).unwrap();
+        s.mark_executed(id, 110).unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 0);
+    }
+
+    #[test]
+    fn deposit_refunded_on_cancel() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        let _ = s.cancel(id, "alice", 50).unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 0);
+    }
+
+    #[test]
+    fn deposit_refunded_on_veto() {
+        let s = store();
+        let id = s
+            .submit(sp("alice", param_change("k", 1), "", 500, 100, 0, 100))
+            .unwrap();
+        let authorized = vec!["admin1".to_string()];
+        let _ = s.emergency_veto(id, "admin1", &authorized, 50).unwrap();
+        assert_eq!(s.locked_deposit_for("alice"), 0);
+    }
+
+    // --- rate limiting ---
+
+    #[test]
+    fn rate_limited_second_proposal() {
+        let s = store();
+        s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        let err = s
+            .submit(sp("alice", param_change("k", 2), "", 100, 100, 50, 100))
+            .unwrap_err();
+        assert!(matches!(err, ProposalError::RateLimited { .. }));
+    }
+
+    #[test]
+    fn rate_limit_expires() {
+        let s = store();
+        s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        // After PROPOSAL_RATE_LIMIT_BLOCKS (100), can submit again
+        s.submit(sp("alice", param_change("k", 2), "", 100, 100, 200, 100))
+            .unwrap();
+        assert_eq!(s.count(), 2);
+    }
+
+    #[test]
+    fn rate_limit_per_proposer() {
+        let s = store();
+        s.submit(sp("alice", param_change("k", 1), "", 100, 100, 0, 100))
+            .unwrap();
+        // Bob is not rate limited by Alice's submission
+        s.submit(sp("bob", param_change("k", 2), "", 100, 100, 0, 100))
+            .unwrap();
+        assert_eq!(s.count(), 2);
     }
 }
