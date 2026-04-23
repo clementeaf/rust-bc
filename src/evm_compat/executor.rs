@@ -8,7 +8,7 @@ use revm::{
     context_interface::result::{ExecutionResult, Output},
     database::CacheDB,
     database_interface::EmptyDB,
-    primitives::{Bytes, TxKind, Address, B256, U256},
+    primitives::{Address, Bytes, TxKind, B256, U256},
     state::AccountInfo,
     MainBuilder, MainContext,
 };
@@ -218,8 +218,8 @@ impl EvmExecutor {
 
     fn resolve_address(&self, addr_hex: &str) -> Result<Address, EvmError> {
         let clean = addr_hex.trim_start_matches("0x");
-        let bytes = hex::decode(clean)
-            .map_err(|e| EvmError::Internal(format!("invalid address: {e}")))?;
+        let bytes =
+            hex::decode(clean).map_err(|e| EvmError::Internal(format!("invalid address: {e}")))?;
         if bytes.len() != 20 {
             return Err(EvmError::Internal(format!(
                 "address must be 20 bytes, got {}",
@@ -251,7 +251,11 @@ mod tests {
         let result = exec.call(&deployed.address, "").unwrap();
         assert!(result.gas_used > 0);
         // 32-byte word: 0x0000...0042
-        assert!(result.output.ends_with("42"), "unexpected output: {}", result.output);
+        assert!(
+            result.output.ends_with("42"),
+            "unexpected output: {}",
+            result.output
+        );
     }
 
     #[test]

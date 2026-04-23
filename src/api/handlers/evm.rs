@@ -48,7 +48,14 @@ async fn evm_deploy(
             Ok(HttpResponse::Ok().json(resp))
         }
         Err(e) => {
-            let resp = ApiResponse::<()>::error(ErrorDto { code: "EVM_ERROR".into(), message: e.to_string(), field: None }, 400);
+            let resp = ApiResponse::<()>::error(
+                ErrorDto {
+                    code: "EVM_ERROR".into(),
+                    message: e.to_string(),
+                    field: None,
+                },
+                400,
+            );
             Ok(HttpResponse::BadRequest().json(resp))
         }
     }
@@ -69,7 +76,14 @@ async fn evm_call(
             Ok(HttpResponse::Ok().json(resp))
         }
         Err(e) => {
-            let resp = ApiResponse::<()>::error(ErrorDto { code: "EVM_ERROR".into(), message: e.to_string(), field: None }, 400);
+            let resp = ApiResponse::<()>::error(
+                ErrorDto {
+                    code: "EVM_ERROR".into(),
+                    message: e.to_string(),
+                    field: None,
+                },
+                400,
+            );
             Ok(HttpResponse::BadRequest().json(resp))
         }
     }
@@ -90,7 +104,14 @@ async fn evm_static_call(
             Ok(HttpResponse::Ok().json(resp))
         }
         Err(e) => {
-            let resp = ApiResponse::<()>::error(ErrorDto { code: "EVM_ERROR".into(), message: e.to_string(), field: None }, 400);
+            let resp = ApiResponse::<()>::error(
+                ErrorDto {
+                    code: "EVM_ERROR".into(),
+                    message: e.to_string(),
+                    field: None,
+                },
+                400,
+            );
             Ok(HttpResponse::BadRequest().json(resp))
         }
     }
