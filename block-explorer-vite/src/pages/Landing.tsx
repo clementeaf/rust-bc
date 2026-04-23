@@ -5,18 +5,62 @@ const tags = [
   {
     label: 'DLT',
     desc: 'Distributed Ledger Technology — un libro de registros compartido entre multiples participantes, donde la informacion se valida de forma colectiva y no depende de una entidad central.',
+    detail: 'Cerulean Ledger usa consenso BFT + DAG: cada nodo valida de forma independiente, y la red converge sin necesitar un coordinador central.',
+    metric: '1,390 tests automatizados verifican la integridad de la red',
   },
   {
     label: 'Post-Cuantica',
     desc: 'Las computadoras cuanticas podran romper la criptografia actual. Cerulean Ledger usa firmas de nueva generacion (FIPS 204) que ya estan preparadas para ese escenario.',
+    detail: 'Cada transaccion se firma con ML-DSA-65 (3,309 bytes) o Ed25519 (64 bytes). Ambos algoritmos coexisten en la misma red.',
+    metric: 'Estandar NIST FIPS 204 — aprobado agosto 2024',
   },
   {
     label: 'Identidad Soberana',
     desc: 'Personas y organizaciones gestionan su propia identidad digital. Nadie mas la controla, nadie mas la puede revocar. Tu identidad es tuya.',
+    detail: 'Formato: did:cerulean:identificador. Las credenciales (titulos, certificados) se emiten entre DIDs y se verifican en milisegundos.',
+    metric: 'Verificacion criptografica en <50ms vs 3-15 dias habiles manual',
   },
   {
     label: 'Wasm + EVM',
     desc: 'Permite ejecutar logica de negocio directamente en la red, usando las mismas herramientas del ecosistema Ethereum y el rendimiento de WebAssembly.',
+    detail: 'Contratos Solidity se ejecutan via revm (la misma EVM de Reth/Foundry). Chaincode Wasm corre en Wasmtime con gas metering.',
+    metric: 'Compatible con MetaMask, Hardhat y todo el ecosistema Ethereum',
+  },
+]
+
+const rivals = [
+  {
+    label: 'Fabric',
+    items: [
+      { feature: 'Criptografia', them: 'ECDSA', us: 'ML-DSA-65 + Ed25519' },
+      { feature: 'Consenso', them: 'Raft (solo crash)', us: 'BFT + DAG (bizantino)' },
+      { feature: 'Identidad (DID)', them: 'Via Indy (externo)', us: 'Nativo' },
+      { feature: 'Credenciales', them: '—', us: 'Emision + verificacion' },
+      { feature: 'Smart contracts', them: 'Go / Java / Node', us: 'Wasm + EVM (revm)' },
+      { feature: 'Nodos', them: 'Solo consorcio', us: 'Cualquier entidad' },
+    ],
+  },
+  {
+    label: 'IOTA',
+    items: [
+      { feature: 'Criptografia', them: 'Ed25519', us: 'ML-DSA-65 + Ed25519' },
+      { feature: 'Consenso', them: 'Tangle (probabilistico)', us: 'BFT + DAG (deterministico)' },
+      { feature: 'Canales privados', them: '—', us: 'Aislamiento completo' },
+      { feature: 'Credenciales', them: '—', us: 'Emision + verificacion' },
+      { feature: 'Smart contracts', them: 'MoveVM', us: 'Wasm + EVM (revm)' },
+      { feature: 'Nodos', them: 'IOTA Foundation', us: 'Cualquier entidad' },
+    ],
+  },
+  {
+    label: 'Hedera',
+    items: [
+      { feature: 'Criptografia', them: 'ECDSA', us: 'ML-DSA-65 + Ed25519' },
+      { feature: 'Consenso', them: 'Hashgraph (aBFT)', us: 'BFT + DAG' },
+      { feature: 'Identidad (DID)', them: '—', us: 'Nativo' },
+      { feature: 'Canales privados', them: 'HashSphere (pago)', us: 'Nativo (sin costo)' },
+      { feature: 'Smart contracts', them: 'EVM (~15 TPS)', us: 'Wasm + EVM (revm)' },
+      { feature: 'Nodos', them: 'Solo Consejo (31 empresas)', us: 'Cualquier entidad' },
+    ],
   },
 ]
 
@@ -43,8 +87,12 @@ const pillars = [
   },
 ]
 
+type RightTab = 'conceptos' | 'comparativa'
+
 export default function Landing() {
   const [selected, setSelected] = useState(0)
+  const [selectedRival, setSelectedRival] = useState(0)
+  const [rightTab, setRightTab] = useState<RightTab>('conceptos')
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -82,26 +130,102 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Right — tags row + description */}
-          <div className="hidden lg:flex flex-col justify-center">
-            <div className="flex flex-wrap gap-2">
-              {tags.map((t, i) => (
-                <button
-                  key={t.label}
-                  onClick={() => setSelected(i)}
-                  className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
-                    selected === i
-                      ? 'bg-main-500 text-white'
-                      : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+          {/* Right — switchable module */}
+          <div className="hidden lg:flex flex-col justify-center min-h-[340px]">
+            {/* Module tabs */}
+            <div className="flex gap-1 mb-4">
+              <button
+                onClick={() => setRightTab('conceptos')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  rightTab === 'conceptos'
+                    ? 'bg-main-500 text-white'
+                    : 'text-neutral-400 hover:text-neutral-600'
+                }`}
+              >
+                Conceptos
+              </button>
+              <button
+                onClick={() => setRightTab('comparativa')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  rightTab === 'comparativa'
+                    ? 'bg-main-500 text-white'
+                    : 'text-neutral-400 hover:text-neutral-600'
+                }`}
+              >
+                Comparativa
+              </button>
             </div>
-            <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4">
-              <p className="text-neutral-700 text-sm leading-relaxed">{tags[selected].desc}</p>
-            </div>
+
+            {/* Conceptos module */}
+            {rightTab === 'conceptos' && (
+              <div className="flex-1 flex flex-col">
+                <div className="flex flex-wrap gap-2">
+                  {tags.map((t, i) => (
+                    <button
+                      key={t.label}
+                      onClick={() => setSelected(i)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                        selected === i
+                          ? 'bg-main-500 text-white'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <p className="text-neutral-700 text-sm leading-relaxed">{tags[selected].desc}</p>
+                    <p className="text-neutral-500 text-xs leading-relaxed mt-3">{tags[selected].detail}</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-neutral-100">
+                    <p className="text-main-600 text-xs font-semibold">{tags[selected].metric}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Comparativa module */}
+            {rightTab === 'comparativa' && (
+              <div className="flex-1 flex flex-col">
+                <div className="flex flex-wrap gap-2">
+                  {rivals.map((r, i) => (
+                    <button
+                      key={r.label}
+                      onClick={() => setSelectedRival(i)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                        selectedRival === i
+                          ? 'bg-main-500 text-white'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                      }`}
+                    >
+                      vs {r.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4 flex-1">
+                  <div className="space-y-2.5">
+                    {rivals[selectedRival].items.map((item) => (
+                      <div key={item.feature} className="flex items-start gap-3">
+                        <p className="text-neutral-700 text-xs font-medium w-28 shrink-0 pt-0.5">{item.feature}</p>
+                        <div className="flex-1 flex gap-3">
+                          <p className="text-main-600 text-xs font-semibold flex-1">{item.us}</p>
+                          <p className="text-neutral-600 text-xs flex-1">{item.them}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-neutral-100 flex justify-between text-[10px] text-neutral-300 uppercase tracking-wider">
+                    <span></span>
+                    <span className="flex gap-6">
+                      <span className="text-main-500">Cerulean</span>
+                      <span>{rivals[selectedRival].label}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

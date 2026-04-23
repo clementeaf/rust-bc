@@ -14,9 +14,11 @@
 
 ### Landing page
 
-- New full-width landing at `/` — hero, 4 capability pillars, tech specs, dual CTA
+- Full-width landing at `/` with two-column layout
+- Left: value proposition, CTAs (demo + explorer)
+- Right: switchable modules — "Conceptos" (DLT, PQC, DID, EVM with detail + metric) and "Comparativa" (vs Fabric, vs IOTA, vs Hedera side-by-side)
 - Dashboard moved to `/dashboard`
-- Landing renders outside Layout (no sidebar)
+- Frontend port changed to 60000
 
 ### Full Spanish localization
 
