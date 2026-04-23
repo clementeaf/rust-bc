@@ -6,7 +6,7 @@ const tags = [
     label: 'DLT',
     desc: 'Distributed Ledger Technology — un libro de registros compartido entre multiples participantes, donde la informacion se valida de forma colectiva y no depende de una entidad central.',
     detail: 'Cerulean Ledger usa consenso BFT + DAG: cada nodo valida de forma independiente, y la red converge sin necesitar un coordinador central.',
-    metric: '1,390 tests automatizados verifican la integridad de la red',
+    metric: '2,741 tests automatizados verifican la integridad de la red',
   },
   {
     label: 'Post-Cuantica',
@@ -64,29 +64,6 @@ const rivals = [
   },
 ]
 
-const pillars = [
-  {
-    title: 'Criptografia post-cuantica',
-    desc: 'Seguridad resistente a computacion cuantica (ML-DSA-65, FIPS 204).',
-    color: 'bg-emerald-500',
-  },
-  {
-    title: 'Identidad soberana',
-    desc: 'Identidades descentralizadas y credenciales verificables.',
-    color: 'bg-violet-500',
-  },
-  {
-    title: 'Canales privados',
-    desc: 'Redes aisladas donde cada organizacion controla sus datos.',
-    color: 'bg-blue-500',
-  },
-  {
-    title: 'Smart contracts',
-    desc: 'Contratos WebAssembly + EVM con ejecucion paralela.',
-    color: 'bg-amber-500',
-  },
-]
-
 type RightTab = 'conceptos' | 'comparativa'
 
 export default function Landing() {
@@ -98,7 +75,7 @@ export default function Landing() {
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Hero */}
       <section className="flex-1 flex items-center px-6 max-w-screen-xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-48 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 w-full">
           {/* Left — value proposition */}
           <div className="text-left flex flex-col justify-center">
             <p className="text-3xl sm:text-4xl font-bold text-main-500 tracking-tight mb-2">Cerulean Ledger</p>
@@ -112,20 +89,13 @@ export default function Landing() {
               Registro distribuido con criptografia post-cuantica, identidad descentralizada
               y canales privados. Codigo abierto, escrito en Rust.
             </p>
-            <div className="flex flex-row items-center gap-3 mt-8">
+            <div className="mt-8">
               <Link
-                to="/demo"
+                to="/services"
                 className="bg-main-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold
-                           hover:bg-main-600 transition-colors shadow-sm hover:shadow-md text-center"
+                           hover:bg-main-600 transition-colors shadow-sm hover:shadow-md cursor-pointer inline-block"
               >
-                Ver demo en vivo
-              </Link>
-              <Link
-                to="/dashboard"
-                className="bg-white text-neutral-700 border border-neutral-200 px-6 py-2.5 rounded-xl text-sm font-semibold
-                           hover:bg-neutral-50 hover:border-neutral-300 transition-colors text-center"
-              >
-                Explorar la red
+                Ver servicios
               </Link>
             </div>
           </div>
@@ -133,28 +103,24 @@ export default function Landing() {
           {/* Right — switchable module */}
           <div className="hidden lg:flex flex-col justify-center min-h-[340px]">
             {/* Module tabs */}
-            <div className="flex gap-1 mb-4">
-              <button
-                onClick={() => setRightTab('conceptos')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  rightTab === 'conceptos'
-                    ? 'bg-main-500 text-white'
-                    : 'text-neutral-400 hover:text-neutral-600'
-                }`}
-              >
-                Conceptos
-              </button>
-              <button
-                onClick={() => setRightTab('comparativa')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  rightTab === 'comparativa'
-                    ? 'bg-main-500 text-white'
-                    : 'text-neutral-400 hover:text-neutral-600'
-                }`}
-              >
-                Comparativa
-              </button>
+            <div className="flex gap-1 mb-4 relative z-20">
+              {(['conceptos', 'comparativa'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setRightTab(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    rightTab === tab
+                      ? 'bg-main-500 text-white'
+                      : 'text-neutral-400 hover:text-neutral-600'
+                  }`}
+                >
+                  {tab === 'conceptos' ? 'Conceptos' : 'Comparativa'}
+                </button>
+              ))}
             </div>
+
+            {/* Content area — relative container for the drawer overlay */}
+            <div className="flex-1 flex flex-col relative">
 
             {/* Conceptos module */}
             {rightTab === 'conceptos' && (
@@ -164,7 +130,7 @@ export default function Landing() {
                     <button
                       key={t.label}
                       onClick={() => setSelected(i)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer ${
                         selected === i
                           ? 'bg-main-500 text-white'
                           : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
@@ -194,7 +160,7 @@ export default function Landing() {
                     <button
                       key={r.label}
                       onClick={() => setSelectedRival(i)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer ${
                         selectedRival === i
                           ? 'bg-main-500 text-white'
                           : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
@@ -226,6 +192,8 @@ export default function Landing() {
                 </div>
               </div>
             )}
+
+            </div>{/* close content area relative */}
           </div>
         </div>
       </section>
@@ -233,7 +201,12 @@ export default function Landing() {
       {/* Pillars */}
       <section className="border-t border-neutral-200 bg-surface-alt px-6 py-6">
         <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-5">
-          {pillars.map((p) => (
+          {[
+            { title: 'Criptografia post-cuantica', desc: 'ML-DSA-65 (FIPS 204) + Ed25519.', color: 'bg-emerald-500' },
+            { title: 'Identidad soberana', desc: 'DIDs + credenciales verificables.', color: 'bg-violet-500' },
+            { title: 'Canales privados', desc: 'Aislamiento por organizacion.', color: 'bg-blue-500' },
+            { title: 'Smart contracts', desc: 'Wasm + EVM con ejecucion paralela.', color: 'bg-amber-500' },
+          ].map((p) => (
             <div key={p.title} className="flex items-start gap-2.5">
               <div className={`w-2 h-2 rounded-full mt-1.5 ${p.color} shrink-0`} />
               <div>

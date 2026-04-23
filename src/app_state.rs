@@ -3,6 +3,9 @@ use std::sync::{Arc, Mutex, RwLock};
 pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 
 use crate::acl::AclProvider;
+use crate::governance::params::ParamRegistry;
+use crate::governance::proposals::ProposalStore;
+use crate::governance::voting::VoteStore;
 use crate::airdrop::AirdropManager;
 use crate::billing::BillingManager;
 use crate::block_storage::BlockStorage;
@@ -78,4 +81,10 @@ pub struct AppState {
     pub world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
     /// Audit trail — immutable log of all API requests.
     pub audit_store: Option<Arc<dyn crate::audit::AuditStore>>,
+    /// Governance — proposal store.
+    pub proposal_store: Option<Arc<ProposalStore>>,
+    /// Governance — vote store.
+    pub vote_store: Option<Arc<VoteStore>>,
+    /// Governance — protocol parameter registry.
+    pub param_registry: Option<Arc<ParamRegistry>>,
 }

@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import { routes } from './lib/routes'
 
 const Landing = lazy(() => import('./pages/Landing'))
+const Services = lazy(() => import('./pages/Services'))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,6 +17,14 @@ createRoot(document.getElementById('root')!).render(
           element={
             <Suspense fallback={<div className="py-12 text-center text-neutral-400">Cargando...</div>}>
               <Landing />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/services"
+          element={
+            <Suspense fallback={<div className="py-12 text-center text-neutral-400">Cargando...</div>}>
+              <Services />
             </Suspense>
           }
         />

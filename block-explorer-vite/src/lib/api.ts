@@ -310,3 +310,64 @@ export const getChannelConfig = (channelId: string) =>
   client
     .get(`/channels/${encodeURIComponent(channelId)}/config`)
     .then((r) => unwrap<ChannelConfig>(r.data));
+
+// ── Governance ──────────────────────────────────────────────────────────────
+
+export interface Proposal {
+  id: number;
+  proposer: string;
+  action: any;
+  status: 'Voting' | 'Passed' | 'Rejected' | 'Executed' | 'Cancelled' | 'Expired';
+  deposit: number;
+  submitted_at: number;
+  voting_ends_at: number;
+  timelock_ends_at: number | null;
+  finalized_at: number | null;
+  description: string;
+}
+
+export interface Vote {
+  voter: string;
+  proposal_id: number;
+  option: 'Yes' | 'No' | 'Abstain';
+  power: number;
+  voted_at: number;
+}
+
+export interface TallyResult {
+  proposal_id: number;
+  yes_power: number;
+  no_power: number;
+  abstain_power: number;
+  total_voted_power: number;
+  total_staked_power: number;
+  quorum_reached: boolean;
+  passed: boolean;
+}
+
+export interface ProtocolParam {
+  key: string;
+  value: string;
+  raw: any;
+}
+
+export const getGovernanceParams = () =>
+  client.get('/governance/params').then((r) => unwrap<ProtocolParam[]>(r.data));
+
+export const getProposals = (status?: string) =>
+  client.get(`/governance/proposals${status ? `?status=${status}` : ''}`).then((r) => unwrap<Proposal[]>(r.data));
+
+export const getProposal = (id: number) =>
+  client.get(`/governance/proposals/${id}`).then((r) => unwrap<Proposal>(r.data));
+
+export const submitProposal = (data: { proposer: string; description: string; deposit: number; action: any }) =>
+  client.post('/governance/proposals', data).then((r) => unwrap<Proposal>(r.data));
+
+export const castVote = (proposalId: number, data: { voter: string; option: string; power: number }) =>
+  client.post(`/governance/proposals/${proposalId}/vote`, data).then((r) => unwrap<Vote[]>(r.data));
+
+export const getVotes = (proposalId: number) =>
+  client.get(`/governance/proposals/${proposalId}/votes`).then((r) => unwrap<Vote[]>(r.data));
+
+export const tallyVotes = (proposalId: number) =>
+  client.get(`/governance/proposals/${proposalId}/tally`).then((r) => unwrap<TallyResult>(r.data));

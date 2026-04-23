@@ -6,6 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-23
+
+**Governance — HTTP API + Explorer UI**
+- `src/api/handlers/governance.rs` — 7 REST endpoints: protocol params, proposal CRUD, voting, tally
+- `AppState` fields: `proposal_store`, `vote_store`, `param_registry` initialized at startup
+- Routes registered under `/api/v1/governance/`
+- `Governance.tsx` — proposals, stake-weighted voting with visual tally bar, protocol parameters table
+- 10 governable parameters exposed (block size, fees, quorum, thresholds, etc.)
+
+**Block Explorer — Services page + Landing refinement**
+- `Services.tsx` — standalone marketplace page with 10 service cards (SVG icons, color-coded)
+- Landing: "Ver servicios" button navigates to `/services`; removed drawer experiments
+- `Layout.tsx` — added "Gobernanza" nav group in sidebar
+- API client: 7 governance functions + 4 types (Proposal, Vote, TallyResult, ProtocolParam)
+
+**Documentation — Presentation materials for Blockchain Chamber Chile**
+- `docs/PRESENTACION.md` — full platform overview tailored for board presentation
+- `docs/FAQ.md` — ~40 questions organized by audience (board, enterprise, technical, regulators)
+- `docs/PITCH.md` — talking points, one-liners per audience, objection handling, demo flow
+- `docs/PQC-TEST-EVIDENCE.md` — concrete PQC test inventory (12 dedicated + 250+ integration)
+
 ### 2026-04-17
 
 **Block Explorer — New pages and cleanup**

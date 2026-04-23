@@ -20,3 +20,4 @@ pub mod snapshots;
 pub mod transactions;
 pub mod utilities;
 pub mod validation;
+pub mod governance;

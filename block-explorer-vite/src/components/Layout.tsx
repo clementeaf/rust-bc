@@ -45,6 +45,12 @@ const groups: NavGroup[] = [
     ],
   },
   {
+    title: 'Gobernanza',
+    items: [
+      { to: '/governance', label: 'Gobernanza', desc: 'Propuestas y votación on-chain' },
+    ],
+  },
+  {
     title: 'Smart Contracts',
     items: [
       { to: '/contracts', label: 'Contratos', desc: 'Contratos desplegados (Wasm)' },

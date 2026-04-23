@@ -19,6 +19,7 @@ mod endorsement;
 mod events;
 mod evm_compat;
 mod gateway;
+mod governance;
 mod identity;
 mod metrics;
 mod middleware;
@@ -893,6 +894,9 @@ async fn async_main_inner() -> std::io::Result<()> {
         ordering_backend,
         world_state: Some(world_state.clone()),
         audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
+        proposal_store: Some(Arc::new(governance::proposals::ProposalStore::new())),
+        vote_store: Some(Arc::new(governance::voting::VoteStore::new())),
+        param_registry: Some(Arc::new(governance::params::ParamRegistry::with_defaults())),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
