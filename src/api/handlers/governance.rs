@@ -99,8 +99,12 @@ pub async fn submit_governance_proposal(
     let store = match &state.proposal_store {
         Some(s) => s,
         None => {
-            return Ok(HttpResponse::ServiceUnavailable()
-                .json(ApiResponse::<()>::error(err_dto("governance not configured"), 503)))
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
         }
     };
     let registry = state.param_registry.as_ref().unwrap();
@@ -135,8 +139,10 @@ pub async fn submit_governance_proposal(
             let proposal = store.get(id);
             Ok(HttpResponse::Created().json(ApiResponse::success(proposal, trace)))
         }
-        Err(e) => Ok(HttpResponse::BadRequest()
-            .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400))),
+        Err(e) => {
+            Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
     }
 }
 
@@ -198,8 +204,10 @@ pub async fn get_governance_proposal(
     let store = match &state.proposal_store {
         Some(s) => s,
         None => {
-            return Ok(HttpResponse::NotFound()
-                .json(ApiResponse::<()>::error(err_dto("governance not configured"), 404)))
+            return Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
+                err_dto("governance not configured"),
+                404,
+            )))
         }
     };
     match store.get(id) {
@@ -224,8 +232,12 @@ pub async fn cast_governance_vote(
     let vote_store = match &state.vote_store {
         Some(s) => s,
         None => {
-            return Ok(HttpResponse::ServiceUnavailable()
-                .json(ApiResponse::<()>::error(err_dto("governance not configured"), 503)))
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
         }
     };
 
@@ -252,8 +264,10 @@ pub async fn cast_governance_vote(
             let votes = vote_store.get_votes(id);
             Ok(HttpResponse::Ok().json(ApiResponse::success(votes, trace)))
         }
-        Err(e) => Ok(HttpResponse::BadRequest()
-            .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400))),
+        Err(e) => {
+            Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
+        }
     }
 }
 
@@ -285,8 +299,12 @@ pub async fn tally_governance_votes(
     let vote_store = match &state.vote_store {
         Some(s) => s,
         None => {
-            return Ok(HttpResponse::ServiceUnavailable()
-                .json(ApiResponse::<()>::error(err_dto("governance not configured"), 503)))
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
         }
     };
 
