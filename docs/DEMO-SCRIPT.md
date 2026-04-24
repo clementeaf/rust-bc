@@ -60,7 +60,7 @@ echo "SIGNING_ALGORITHM=ml-dsa-65"
 ```
 
 **Decir:**
-- "Cerulean Ledger es la primera DLT empresarial con firmas FIPS 204 en produccion."
+- "Cerulean Ledger es la primera DLT empresarial permisionada con firmas ML-DSA-65 (FIPS 204) integradas end-to-end."
 - "Fabric no lo tiene. Corda no lo tiene. IOTA no lo tiene. Nosotros si, y fue desarrollado en Chile."
 - "Cada nodo elige su algoritmo. Redes mixtas clasica/PQC coexisten. Migracion gradual, sin flag day."
 

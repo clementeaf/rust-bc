@@ -304,7 +304,30 @@ Si una sola de estas capas usa criptografia clasica, el sistema tiene un eslabon
 | Comercio exterior | Certificados de origen, fitosanitarios | 5-15 anos | Falsificacion de trazabilidad |
 | Legal | Contratos firmados digitalmente | Segun prescripcion | Disputas sobre autenticidad |
 
-**La pregunta no es si la computacion cuantica llegara, sino si los datos que firmas hoy seguiran siendo confiables cuando llegue.** Cerulean Ledger es la unica DLT empresarial que responde "si" hoy.
+**La pregunta no es si la computacion cuantica llegara, sino si los datos que firmas hoy seguiran siendo confiables cuando llegue.** Cerulean Ledger es la primera DLT empresarial permisionada que integra firmas FIPS 204 end-to-end para responder esa pregunta hoy.
+
+---
+
+## Verificabilidad del claim
+
+Cerulean Ledger afirma ser "la primera DLT empresarial permisionada con firmas ML-DSA-65 (FIPS 204) integradas end-to-end". Este claim es especifico y verificable:
+
+**Lo que afirmamos:**
+- Firmas ML-DSA-65 (FIPS 204, NIST 2024) integradas en bloques, transacciones, endorsements e identidades
+- Seleccionable por nodo via variable de entorno (`SIGNING_ALGORITHM=ml-dsa-65`)
+- Coexistencia de firmas clasicas (Ed25519) y post-cuanticas en la misma red
+
+**Como verificarlo:**
+- El codigo fuente es open source — auditable en `src/identity/` (SigningProvider trait, ML-DSA-65 implementation)
+- 2,700+ tests automatizados incluyen tests especificos de firma/verificacion PQC
+- `docs/PQC-TEST-EVIDENCE.md` documenta el inventario completo de tests PQC
+
+**Lo que NO afirmamos:**
+- No afirmamos ser "la unica blockchain con PQC" — QRL (Quantum Resistant Ledger) usa XMSS desde 2018, pero es una blockchain publica, no una DLT empresarial permisionada
+- No afirmamos tener deployments en produccion — tenemos la capacidad implementada y testeada, no pilotos reales aun
+- No afirmamos que ninguna otra plataforma este trabajando en PQC — NIST publico FIPS 204 en agosto 2024 y es esperable que otros proyectos lo integren progresivamente
+
+**El claim preciso es:** primera DLT empresarial permisionada con FIPS 204 integrado end-to-end. Es verificable, acotado y honesto.
 
 ---
 

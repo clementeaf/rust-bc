@@ -6,7 +6,7 @@
 
 ## Apertura (30 segundos)
 
-> Cerulean Ledger es una plataforma DLT empresarial desarrollada en Chile, con ~95% de paridad funcional con Hyperledger Fabric, y la primera en el mundo con criptografía post-cuántica FIPS 204 integrada en producción. Ninguna otra plataforma — ni Fabric, ni Corda, ni IOTA — ofrece esto hoy. Y fue construida aquí.
+> Cerulean Ledger es una plataforma DLT empresarial desarrollada en Chile, con ~95% de paridad funcional con Hyperledger Fabric, y la primera DLT empresarial permisionada con firmas ML-DSA-65 (FIPS 204) integradas end-to-end. Ninguna plataforma comparable — ni Fabric, ni Corda, ni IOTA — ofrece esta capacidad hoy. Y fue construida aquí.
 
 ---
 

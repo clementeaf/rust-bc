@@ -51,7 +51,7 @@ Eso es lo que hace Cerulean Ledger. El "libro" es digital, las "firmas" son crip
 
 Los computadores cuanticos van a poder romper la criptografia que protege los datos digitales hoy. No es ciencia ficcion — NIST (la agencia de estandares de EE.UU.) ya publico los nuevos algoritmos que resisten esta amenaza.
 
-Cerulean Ledger es la unica plataforma de este tipo en el mundo que ya usa estos nuevos algoritmos. Los datos que se firman hoy seguiran siendo seguros cuando lleguen los computadores cuanticos.
+Cerulean Ledger es la primera DLT empresarial permisionada que integra estos nuevos algoritmos en toda su stack — no como prototipo, sino en el software que se despliega y opera. Los datos que se firman hoy seguiran siendo seguros cuando lleguen los computadores cuanticos.
 
 **Por que importa:** Un titulo de propiedad, un contrato a 20 anos, un historial medico — deben ser validos por decadas. Si se firman con criptografia que se va a romper, hay un problema. Cerulean Ledger lo resuelve hoy, no manana.
 

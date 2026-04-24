@@ -6,7 +6,7 @@
 
 ## Cerulean Ledger en una frase
 
-Una plataforma DLT empresarial permisionada, desarrollada en Chile, construida en Rust, con ~95% de paridad funcional con Hyperledger Fabric y la primera implementación en producción de criptografía post-cuántica (FIPS 204) en una DLT empresarial a nivel mundial.
+Una plataforma DLT empresarial permisionada, desarrollada en Chile, construida en Rust, con ~95% de paridad funcional con Hyperledger Fabric y la primera DLT empresarial permisionada con firmas ML-DSA-65 (FIPS 204) integradas end-to-end — bloques, transacciones, endorsements e identidades.
 
 ---
 

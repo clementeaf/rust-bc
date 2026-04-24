@@ -8,7 +8,7 @@ Preparado para la presentación ante la directiva de la Cámara de Blockchain Ch
 
 ### Qué es Cerulean Ledger?
 
-Una plataforma DLT empresarial permisionada, desarrollada en Chile, con ~95% de paridad funcional con Hyperledger Fabric y la primera implementación en producción de criptografía post-cuántica (FIPS 204) en una DLT empresarial a nivel mundial.
+Una plataforma DLT empresarial permisionada, desarrollada en Chile, con ~95% de paridad funcional con Hyperledger Fabric y la primera DLT empresarial permisionada con firmas ML-DSA-65 (FIPS 204) integradas end-to-end — bloques, transacciones, endorsements e identidades.
 
 ### Es una criptomoneda?
 
@@ -18,7 +18,7 @@ No. Es infraestructura para redes empresariales privadas donde múltiples organi
 
 Tres razones:
 
-1. **Posicionamiento de Chile** — Es la primera DLT empresarial con PQC en producción a nivel mundial. Ningún otro país tiene algo equivalente hoy. Esto posiciona al ecosistema blockchain chileno como referente en una capacidad que ni Fabric (EE.UU.), ni Corda (UK), ni IOTA (Alemania) ofrecen.
+1. **Posicionamiento de Chile** — Es la primera DLT empresarial permisionada con firmas FIPS 204 integradas end-to-end. Ninguna plataforma comparable — ni Fabric, ni Corda, ni IOTA — ofrece esta capacidad hoy. Esto posiciona al ecosistema blockchain chileno como referente.
 
 2. **Casos de uso locales listos** — Tiene casos documentados y demostrables para sectores chilenos: agroexportación (trazabilidad SAG→Aduana→importador), sector público (documentos verificables), salud (historial médico transfronterizo), finanzas (conciliación CMF), RRHH (credenciales laborales con demo funcional).
 
