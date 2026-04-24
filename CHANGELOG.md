@@ -30,6 +30,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `docs/ONE-PAGER-CAMARA.md` — rebranded from "rust-bc" to "Cerulean Ledger", updated year and license
 - `docs/PUBLIC-ROADMAP.md` — rebranded, added concrete dates (Q2-Q4 2026, H1-H2 2027), new deliverables and success metrics
 
+**PDF dossier — all-in-one deliverable**
+- `docs/DOSSIER-CAMARA-BLOCKCHAIN-CHILE.pdf` — 44-page consolidated PDF with cover, table of contents, and navigable bookmarks
+- Individual PDFs generated for all 7 presentation documents (pandoc + weasyprint)
+
 ### 2026-04-23
 
 **Block Explorer — Tesseract page**

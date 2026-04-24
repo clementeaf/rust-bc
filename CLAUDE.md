@@ -183,6 +183,9 @@ Documentation prepared for the Blockchain Chamber of Chile:
 | `PUBLIC-ROADMAP.md` | Public roadmap with concrete dates (Q2 2026 – H2 2027) |
 | `PQC-TEST-EVIDENCE.md` | PQC test inventory evidence |
 | `COTIZACION-VOTO-ELECTRONICO.md` | E-voting quotation (md + html + pdf) |
+| `DOSSIER-CAMARA-BLOCKCHAIN-CHILE.pdf` | All-in-one 44-page PDF with cover, TOC, and bookmarks |
+
+All `.md` presentation docs have a corresponding `.pdf` generated via pandoc + weasyprint.
 
 ## Environment variables
 
