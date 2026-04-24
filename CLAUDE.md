@@ -168,6 +168,22 @@ Key structure:
 
 Not required to run the node.
 
+### Presentation materials (`docs/`)
+
+Documentation prepared for the Blockchain Chamber of Chile:
+
+| Document | Purpose |
+|---|---|
+| `PRESENTACION.md` | Full platform overview for the board |
+| `FAQ.md` | ~40 questions by audience (board, enterprise, technical, regulators) |
+| `PITCH.md` | Talking points, one-liners, objection handling |
+| `ONE-PAGER-CAMARA.md` | One-page executive summary |
+| `DEMO-SCRIPT.md` | 5-minute live demo script with timing and commands |
+| `TESSERACT.md` | Standalone Tesseract explanation (geometric consensus prototype) |
+| `PUBLIC-ROADMAP.md` | Public roadmap with concrete dates (Q2 2026 – H2 2027) |
+| `PQC-TEST-EVIDENCE.md` | PQC test inventory evidence |
+| `COTIZACION-VOTO-ELECTRONICO.md` | E-voting quotation (md + html + pdf) |
+
 ## Environment variables
 
 | Variable | Default | Description |

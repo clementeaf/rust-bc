@@ -24,6 +24,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `docs/COTIZACION-VOTO-ELECTRONICO.html` — styled HTML version for PDF export
 - `docs/COTIZACION-VOTO-ELECTRONICO.pdf` — print-ready PDF
 
+**Documentation — Presentation materials (Blockchain Chamber Chile)**
+- `docs/DEMO-SCRIPT.md` — 5-minute live demo script with timing, commands, checklist, and fallback plan
+- `docs/TESSERACT.md` — standalone doc: 4D probability field, 4 physics laws, comparisons, relevance for the Chamber
+- `docs/ONE-PAGER-CAMARA.md` — rebranded from "rust-bc" to "Cerulean Ledger", updated year and license
+- `docs/PUBLIC-ROADMAP.md` — rebranded, added concrete dates (Q2-Q4 2026, H1-H2 2027), new deliverables and success metrics
+
 ### 2026-04-23
 
 **Block Explorer — Tesseract page**

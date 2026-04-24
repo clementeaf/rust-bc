@@ -1,6 +1,6 @@
-# rust-bc — Blockchain Enterprise con Criptografía Post-Cuántica
+# Cerulean Ledger — Blockchain Enterprise con Criptografia Post-Cuantica
 
-**Alternativa moderna a Hyperledger Fabric, desarrollada en Rust, con soporte nativo FIPS 204 (ML-DSA-65).**
+**Alternativa moderna a Hyperledger Fabric, desarrollada en Chile en Rust, con soporte nativo FIPS 204 (ML-DSA-65).**
 
 ---
 
@@ -10,7 +10,7 @@ Las plataformas blockchain empresariales actuales (Fabric, Corda, Ethereum priva
 
 ## La solución
 
-rust-bc es un nodo blockchain permisionado que implementa el ciclo completo Fabric (endorse → order → commit) con:
+Cerulean Ledger es un nodo blockchain permisionado que implementa el ciclo completo Fabric (endorse → order → commit) con:
 
 - **Firmas post-cuánticas ML-DSA-65 (FIPS 204)** integradas end-to-end — bloques, endorsements, transacciones, gossip
 - **Despliegue en minutos** — Docker Compose, 4 nodos, TLS mutuo, sin dependencias Java/Go
@@ -34,12 +34,12 @@ rust-bc es un nodo blockchain permisionado que implementa el ciclo completo Fabr
 
 ## Ventaja competitiva: Post-Quantum
 
-| Plataforma | PQC en producción (2025) |
+| Plataforma | PQC en produccion (2026) |
 |---|---|
 | Hyperledger Fabric | No — solo investigación, requiere reescribir BCCSP |
 | R3 Corda | No |
 | Ethereum privado | No |
-| **rust-bc** | **Sí — ML-DSA-65 (FIPS 204) across full stack** |
+| **Cerulean Ledger** | **Si — ML-DSA-65 (FIPS 204) across full stack** |
 
 Cada nodo selecciona su algoritmo (`SIGNING_ALGORITHM=ml-dsa-65`). Redes mixtas clásicas/PQC operan simultáneamente. Migración gradual, sin flag day.
 
@@ -79,4 +79,4 @@ Repositorio: `github.com/clementeaf/rust-bc`
 
 ---
 
-*Desarrollado en Rust. Sin dependencias Java, Go o Node.js en el core. Licencia: pendiente de definición.*
+*Cerulean Ledger — desarrollado en Rust. Sin dependencias Java, Go o Node.js en el core. Open source (MIT).*
