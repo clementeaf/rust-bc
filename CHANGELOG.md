@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-24
+
+**Cerulean Voto — Electronic voting frontend MVP**
+- `cerulean-voto/` — standalone Vite + React + Tailwind app for blockchain-backed elections
+- Same stack and patterns as `block-explorer-vite/` (lazy routes, axios unwrap, Tailwind theme, PageIntro)
+- Landing page with hero, 3 pillars (immutable, verifiable, post-quantum), dual CTAs
+- Dashboard: active/closed election stats, tally bars, navigation to vote
+- Elections: create elections via governance API, full history table
+- Vote: voter identity (DID + stake), Yes/No/Abstain buttons, live tally bars
+- Results: public audit view with percentage bars, quorum/pass indicators
+- Voters: register voters via identity API (DID), lookup by DID
+- Proxies `/api` to node on port 5174 (independent from block explorer)
+
+**Documentation — E-voting quotation**
+- `docs/COTIZACION-VOTO-ELECTRONICO.md` — formal quotation for e-voting system over Cerulean Ledger
+- `docs/COTIZACION-VOTO-ELECTRONICO.html` — styled HTML version for PDF export
+- `docs/COTIZACION-VOTO-ELECTRONICO.pdf` — print-ready PDF
+
 ### 2026-04-23
 
 **Block Explorer — Tesseract page**

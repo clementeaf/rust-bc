@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotizacion — Sistema de Voto Electronico | Cerulean Ledger</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 25mm;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 20mm 25mm;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 3px solid #1e3a5f;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .header-left h1 {
+    font-size: 22pt;
+    color: #1e3a5f;
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+  }
+  .header-left .subtitle {
+    font-size: 13pt;
+    color: #4a6d8c;
+    font-weight: 400;
+  }
+  .header-right {
+    text-align: right;
+    font-size: 9pt;
+    color: #555;
+    line-height: 1.7;
+  }
+
+  /* Sections */
+  h2 {
+    font-size: 14pt;
+    color: #1e3a5f;
+    border-bottom: 1.5px solid #d0dce8;
+    padding-bottom: 4px;
+    margin-top: 28px;
+    margin-bottom: 12px;
+  }
+  h3 {
+    font-size: 12pt;
+    color: #2c5282;
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 16px 0;
+    font-size: 10pt;
+  }
+  th {
+    background-color: #1e3a5f;
+    color: white;
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 600;
+  }
+  td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background-color: #f7fafc; }
+  tr.total td {
+    font-weight: 700;
+    background-color: #ebf4ff;
+    border-top: 2px solid #1e3a5f;
+  }
+  tr.discount td {
+    color: #2c5282;
+    font-style: italic;
+  }
+
+  /* Lists */
+  ul { margin: 6px 0 12px 20px; }
+  li { margin-bottom: 4px; }
+
+  /* Highlight box */
+  .highlight {
+    background: #ebf4ff;
+    border-left: 4px solid #1e3a5f;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 10pt;
+  }
+
+  /* Limitation note */
+  .note {
+    background: #fffbeb;
+    border-left: 4px solid #d69e2e;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-size: 9.5pt;
+    color: #744210;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 40px;
+    padding-top: 12px;
+    border-top: 1.5px solid #d0dce8;
+    font-size: 9pt;
+    color: #888;
+    text-align: center;
+  }
+
+  /* Print */
+  @media print {
+    body { padding: 0; }
+    .page-break { page-break-before: always; }
+  }
+
+  p { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Cerulean Ledger</h1>
+    <div class="subtitle">Sistema de Voto Electronico — Cotizacion</div>
+  </div>
+  <div class="header-right">
+    Fecha: 24 de abril de 2026<br>
+    Vigencia: 30 dias corridos<br>
+    Moneda: CLP (valores netos)
+  </div>
+</div>
+
+<!-- 1. Resumen -->
+<h2>1. Resumen ejecutivo</h2>
+<p>
+  Propuesta de desarrollo de un sistema de voto electronico construido sobre la plataforma blockchain
+  <strong>Cerulean Ledger</strong>, una DLT propia con consenso BFT, identidad descentralizada (DIDs),
+  credenciales verificables y firmas post-cuanticas (ML-DSA-65, FIPS 204).
+</p>
+<p>
+  El sistema se entrega en tres fases incrementales, cada una funcional de forma independiente.
+  El cliente puede optar por contratar solo la Fase 1 y evaluar antes de continuar.
+</p>
+
+<!-- 2. Alcance -->
+<h2>2. Alcance por fase</h2>
+
+<h3>Fase 1 — MVP: Voto abierto para asambleas y juntas (Mes 1)</h3>
+<p>Ideal para juntas de accionistas, asambleas gremiales, votaciones de directorio o cualquier escenario donde el voto no requiera ser secreto.</p>
+
+<table>
+  <tr><th>#</th><th>Componente</th><th>Descripcion</th></tr>
+  <tr><td>1</td><td>Padron electoral digital</td><td>Registro de votantes via credenciales verificables (1 DID = 1 voto). Verificacion de elegibilidad automatica.</td></tr>
+  <tr><td>2</td><td>Ciclo de vida de eleccion</td><td>Crear eleccion, definir opciones, abrir/cerrar votacion, escrutinio automatico, publicacion de resultados.</td></tr>
+  <tr><td>3</td><td>API REST completa</td><td>Endpoints para gestion de elecciones, emision de votos, consulta de resultados y auditoria.</td></tr>
+  <tr><td>4</td><td>Interfaz web de votacion</td><td>Aplicacion React para que votantes emitan su voto y vean resultados en tiempo real.</td></tr>
+  <tr><td>5</td><td>Panel de administracion</td><td>Crear elecciones, gestionar padron, monitorear participacion.</td></tr>
+  <tr><td>6</td><td>Registro inmutable</td><td>Cada voto queda registrado en la cadena con consenso BFT (no se puede alterar ni eliminar).</td></tr>
+  <tr><td>7</td><td>Documentacion</td><td>Manual de uso, guia de despliegue, documentacion de API.</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Infraestructura reutilizada (sin costo adicional):</strong>
+  modulo de gobernanza existente, sistema de identidad con DIDs,
+  almacenamiento persistente (RocksDB), consenso BFT, rate limiting y control de acceso.
+</div>
+
+<div class="note">
+  <strong>Limitacion:</strong> El voto es abierto (visible quien voto que) — apropiado para asambleas pero no para elecciones con voto secreto.
+</div>
+
+<h3>Fase 2 — Voto secreto con verificabilidad (Mes 2)</h3>
+<p>Agrega privacidad al voto sin sacrificar la auditabilidad del resultado.</p>
+
+<table>
+  <tr><th>#</th><th>Componente</th><th>Descripcion</th></tr>
+  <tr><td>1</td><td>Esquema commit-reveal</td><td>El votante compromete su voto cifrado; solo se revela al cierre. Nadie puede ver votos antes del escrutinio.</td></tr>
+  <tr><td>2</td><td>Aislamiento por eleccion</td><td>Cada eleccion opera en un canal independiente (privacidad total entre elecciones).</td></tr>
+  <tr><td>3</td><td>Verificacion individual</td><td>Cada votante puede verificar que su voto fue contado correctamente, sin revelar su eleccion a terceros.</td></tr>
+  <tr><td>4</td><td>Auditoria publica</td><td>Cualquier observador puede validar el escrutinio total sin acceder a votos individuales.</td></tr>
+  <tr><td>5</td><td>Pruebas de integridad</td><td>Suite de tests automatizados para escenarios adversariales (doble voto, manipulacion, revelacion anticipada).</td></tr>
+</table>
+
+<h3>Fase 3 — Produccion y acceso movil (Mes 3)</h3>
+<p>Preparacion para despliegue en entorno productivo con acceso desde dispositivos moviles.</p>
+
+<table>
+  <tr><th>#</th><th>Componente</th><th>Descripcion</th></tr>
+  <tr><td>1</td><td>Cliente liviano movil</td><td>Votacion desde celular sin necesidad de nodo completo (via light client).</td></tr>
+  <tr><td>2</td><td>Firma post-cuantica</td><td>Activacion de ML-DSA-65 (FIPS 204) en produccion — proteccion contra amenazas cuanticas.</td></tr>
+  <tr><td>3</td><td>Hardening de seguridad</td><td>Anti-DoS reforzado durante ventana electoral, monitoreo, alertas.</td></tr>
+  <tr><td>4</td><td>Despliegue Docker</td><td>Infraestructura containerizada lista para nube (AWS, GCP, Azure o on-premise).</td></tr>
+  <tr><td>5</td><td>Capacitacion</td><td>Sesion de capacitacion para administradores del sistema.</td></tr>
+  <tr><td>6</td><td>Soporte post-lanzamiento</td><td>2 semanas de soporte incluido despues del despliegue.</td></tr>
+</table>
+
+<!-- 3. Costos -->
+<div class="page-break"></div>
+<h2>3. Cronograma y costos</h2>
+
+<table>
+  <tr><th>Fase</th><th>Duracion</th><th>Costo neto (CLP)</th></tr>
+  <tr><td>Fase 1 — MVP voto abierto</td><td>4 semanas</td><td>$1.500.000</td></tr>
+  <tr><td>Fase 2 — Voto secreto</td><td>4 semanas</td><td>$1.400.000</td></tr>
+  <tr><td>Fase 3 — Produccion y movil</td><td>4 semanas</td><td>$1.200.000</td></tr>
+  <tr class="total"><td>Total proyecto completo</td><td>12 semanas</td><td>$4.100.000</td></tr>
+  <tr class="discount"><td colspan="2">Descuento por pago anticipado del proyecto completo</td><td>$3.800.000</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Condiciones de pago:</strong> Pago mensual al inicio de cada fase.
+  Cada fase es independiente: el cliente puede pausar o no continuar despues de cualquier fase.
+</div>
+
+<!-- 4. Mantencion -->
+<h2>4. Mantencion y soporte (opcional, post-proyecto)</h2>
+
+<table>
+  <tr><th>Plan</th><th>Incluye</th><th>Costo mensual (CLP)</th></tr>
+  <tr><td>Basico</td><td>Correccion de bugs criticos, actualizaciones de seguridad, soporte por email (48h respuesta)</td><td>$250.000</td></tr>
+  <tr><td>Estandar</td><td>Basico + mejoras menores, soporte prioritario (24h), monitoreo de nodos</td><td>$450.000</td></tr>
+</table>
+
+<!-- 5. Diferenciadores -->
+<h2>5. Diferenciadores tecnicos</h2>
+
+<table>
+  <tr><th>Caracteristica</th><th>Cerulean Ledger</th><th>Soluciones convencionales</th></tr>
+  <tr><td>Firmas post-cuanticas (ML-DSA-65)</td><td><strong>Si, FIPS 204</strong></td><td>No</td></tr>
+  <tr><td>Consenso BFT</td><td><strong>Si, HotStuff-inspired</strong></td><td>Generalmente no</td></tr>
+  <tr><td>Identidad descentralizada (DIDs)</td><td><strong>Nativo</strong></td><td>Requiere integracion externa</td></tr>
+  <tr><td>Credenciales verificables</td><td><strong>Nativo</strong></td><td>Requiere integracion externa</td></tr>
+  <tr><td>Verificabilidad publica del escrutinio</td><td><strong>Si</strong></td><td>Parcial o nula</td></tr>
+  <tr><td>Aislamiento por eleccion (canales)</td><td><strong>Si</strong></td><td>No</td></tr>
+  <tr><td>Codigo abierto / auditable</td><td><strong>Si</strong></td><td>Raramente</td></tr>
+  <tr><td>Rendimiento comprobado</td><td><strong>56K TPS</strong></td><td>Variable</td></tr>
+</table>
+
+<!-- 6. Requisitos -->
+<h2>6. Requisitos del cliente</h2>
+<ul>
+  <li>Designar un punto de contacto para validaciones semanales.</li>
+  <li>Proveer el padron de votantes en formato digital (CSV, Excel o API).</li>
+  <li>Definir las reglas de cada eleccion (quorum, opciones, duracion).</li>
+  <li>Infraestructura de hosting (o contratar hosting como servicio adicional).</li>
+</ul>
+
+<!-- 7. Exclusiones -->
+<h2>7. Exclusiones</h2>
+<ul>
+  <li>Desarrollo de apps nativas iOS/Android (la solucion movil es web responsive via light client).</li>
+  <li>Integracion con sistemas de identidad gubernamentales (ClaveUnica, SII) — cotizable como adenda.</li>
+  <li>Hosting e infraestructura cloud (cotizable por separado segun proveedor).</li>
+  <li>Certificaciones formales ante organismos electorales (requiere proceso independiente).</li>
+</ul>
+
+<!-- 8. Garantias -->
+<h2>8. Garantias</h2>
+<ul>
+  <li>Todo el codigo fuente se entrega al cliente.</li>
+  <li>Suite de tests automatizados con cobertura superior al 80%.</li>
+  <li>Documentacion tecnica y de usuario incluida.</li>
+  <li>2 semanas de soporte post-lanzamiento incluidas en Fase 3.</li>
+</ul>
+
+<!-- 9. Contacto -->
+<h2>9. Contacto</h2>
+<p>
+  <strong>Cerulean Ledger</strong><br>
+  Contacto: [nombre]<br>
+  Email: [email]<br>
+  Telefono: [telefono]
+</p>
+
+<div class="footer">
+  Este documento es una cotizacion referencial. Los plazos y costos pueden ajustarse
+  segun los requisitos especificos del cliente una vez definido el alcance detallado.
+</div>
+
+</body>
+</html>

@@ -144,6 +144,30 @@ Key structure:
 
 Not required to run the node.
 
+### Electronic voting — Cerulean Voto
+
+| Path | Stack | Notes |
+|---|---|---|
+| `cerulean-voto/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node on port 5174. |
+
+Standalone voting frontend built on the same patterns as `block-explorer-vite/`. Consumes the existing governance and identity APIs.
+
+Routes:
+- `/` — Landing page (hero + 3 pillars, standalone)
+- `/dashboard` — Active/closed election stats, tally bars
+- `/elections` — Create elections, history table
+- `/vote` — Emit vote (Yes/No/Abstain) with DID identity
+- `/results` — Public audit with percentage bars, quorum indicators
+- `/voters` — Register and lookup voters via DID
+
+Key structure:
+- `src/lib/api.ts` — governance + identity API client
+- `src/lib/routes.ts` — 5 lazy-loaded routes
+- `src/lib/format.ts` — shared formatters (`timeAgo`, `pct`, `fmtDateTime`)
+- `src/components/Layout.tsx` — header + sidebar + footer (same pattern as block explorer)
+
+Not required to run the node.
+
 ## Environment variables
 
 | Variable | Default | Description |
