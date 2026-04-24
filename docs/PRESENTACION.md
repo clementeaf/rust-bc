@@ -46,7 +46,8 @@ Es infraestructura para redes empresariales donde múltiples organizaciones que 
 El mismo modelo arquitectónico de Hyperledger Fabric (la plataforma DLT empresarial más desplegada del mundo):
 
 ```
-    Cliente ──► Gateway ──► Endorsers (simulan) ──► Orderer (Raft) ──► Commit (todos los peers)
+Cliente ──► Gateway ──► Endorsers (simulan)
+        ──► Orderer (Raft) ──► Commit (todos)
 ```
 
 1. Los peers endorsantes simulan la transacción y firman el resultado

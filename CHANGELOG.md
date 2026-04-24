@@ -30,9 +30,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `docs/ONE-PAGER-CAMARA.md` — rebranded from "rust-bc" to "Cerulean Ledger", updated year and license
 - `docs/PUBLIC-ROADMAP.md` — rebranded, added concrete dates (Q2-Q4 2026, H1-H2 2027), new deliverables and success metrics
 
-**PDF dossier — all-in-one deliverable**
-- `docs/DOSSIER-CAMARA-BLOCKCHAIN-CHILE.pdf` — 44-page consolidated PDF with cover, table of contents, and navigable bookmarks
-- Individual PDFs generated for all 7 presentation documents (pandoc + weasyprint)
+**PDF dossier — technical (all-in-one deliverable)**
+- `docs/DOSSIER-CAMARA-BLOCKCHAIN-CHILE.pdf` — 44-page consolidated PDF with cover, TOC, and navigable bookmarks
+- Individual PDFs for all 7 presentation documents (pandoc + weasyprint)
+
+**Documentation — Commercial dossier (non-technical)**
+- `docs/RESUMEN-NO-TECNICO.md` — plain-language overview: what it is, what it solves, for whom
+- `docs/QUE-ES-DLT-EMPRESARIAL.md` — DLT concepts, why Rust, FIPS 204, PQC end-to-end, standards (NIST/CNSS/eIDAS/CMF/SII), Fabric comparison
+- `docs/CASOS-PRACTICOS.md` — 6 business cases with before/after tables (agro, HR, finance, gov, health, supply chain)
+- `docs/POR-QUE-CERULEAN.md` — 5 reasons, value comparison, adoption path, commercial FAQ
+- `docs/DOSSIER-COMERCIAL.pdf` — 30-page consolidated PDF with cover, TOC, and navigable bookmarks
+- `docs/PRESENTACION.md` — fixed code block overflow in EOV diagram
 
 ### 2026-04-23
 
