@@ -1,0 +1,200 @@
+{
+  "version": "0.1.0",
+  "description": "Deterministic test vectors for Tesseract protocol cross-validation",
+  "constants": {
+    "CRYSTALLIZATION_THRESHOLD": 0.85,
+    "INFLUENCE_FACTOR": 0.15,
+    "SEED_RADIUS": 3,
+    "CASCADE_STRENGTH": 0.08,
+    "EPSILON": 0.05,
+    "MIN_CAUSAL_DEPTH": 3,
+    "CORRELATION_THRESHOLD": 0.5,
+    "ZERO_COST_DISCOUNT": 0.25
+  },
+  "tests": [
+    {
+      "id": "sigma_01",
+      "name": "single_validator_all_dims_sigma_0",
+      "description": "One validator attesting on all 4 dimensions is not exclusive on any",
+      "input": {
+        "field_size": 8,
+        "attestations": [
+          {"coord": [4,4,4,4], "event_id": "ev1", "dimension": "Temporal", "validator_id": "sybil"},
+          {"coord": [4,4,4,4], "event_id": "ev1", "dimension": "Context", "validator_id": "sybil"},
+          {"coord": [4,4,4,4], "event_id": "ev1", "dimension": "Origin", "validator_id": "sybil"},
+          {"coord": [4,4,4,4], "event_id": "ev1", "dimension": "Verification", "validator_id": "sybil"}
+        ]
+      },
+      "expected": {
+        "sigma_at_center": 0,
+        "crystallized_at_center": false
+      }
+    },
+    {
+      "id": "sigma_02",
+      "name": "four_exclusive_validators_sigma_4",
+      "description": "Four validators, each exclusive on one dimension",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_t"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "val_c"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "val_o"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Verification", "validator_id": "val_v"}
+        ]
+      },
+      "expected": {
+        "sigma_at_center": 4,
+        "crystallized_at_center": true,
+        "probability_at_center": 1.0
+      }
+    },
+    {
+      "id": "sigma_03",
+      "name": "two_validators_two_dims_each_sigma_0",
+      "description": "Two validators each covering 2 dimensions — neither exclusive",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_a"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "val_a"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "val_b"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Verification", "validator_id": "val_b"}
+        ]
+      },
+      "expected": {
+        "sigma_at_center": 0,
+        "crystallized_at_center": false
+      }
+    },
+    {
+      "id": "sigma_04",
+      "name": "three_dims_sigma_3_no_crystallization",
+      "description": "Only 3 dimensions attested — sigma=3, below threshold",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_t"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "val_c"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "val_o"}
+        ]
+      },
+      "expected": {
+        "sigma_at_center": 3,
+        "crystallized_at_center": false
+      }
+    },
+    {
+      "id": "sigma_05",
+      "name": "mixed_honest_and_sybil_sigma_2",
+      "description": "2 honest exclusive + 1 sybil across 2 dims = sigma 2",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "honest_t"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "honest_c"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "sybil"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Verification", "validator_id": "sybil"}
+        ]
+      },
+      "expected": {
+        "sigma_at_center": 2,
+        "crystallized_at_center": false
+      }
+    },
+    {
+      "id": "crystal_01",
+      "name": "center_crystallizes_immediately",
+      "description": "With 4 exclusive validators at field_size=12, center gets p=1.0 and crystallizes on attest",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_t"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "val_c"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "val_o"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Verification", "validator_id": "val_v"}
+        ]
+      },
+      "expected": {
+        "crystallized_at_center": true,
+        "probability_at_center": 1.0,
+        "active_cells_gt": 100,
+        "crystallized_count_gt": 0
+      }
+    },
+    {
+      "id": "crystal_02",
+      "name": "no_attestation_no_crystallization",
+      "description": "Empty field — nothing crystallizes",
+      "input": {
+        "field_size": 10,
+        "attestations": []
+      },
+      "expected": {
+        "crystallized_count": 0,
+        "active_cells": 0
+      }
+    },
+    {
+      "id": "sigma_eff_01",
+      "name": "sigma_eff_without_graph_discounted",
+      "description": "sigma_eff without causal graph applies ZERO_COST_DISCOUNT",
+      "input": {
+        "field_size": 12,
+        "attestations": [
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_t"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Context", "validator_id": "val_c"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Origin", "validator_id": "val_o"},
+          {"coord": [6,6,6,6], "event_id": "ev1", "dimension": "Verification", "validator_id": "val_v"}
+        ],
+        "causal_graph": null
+      },
+      "expected": {
+        "raw_sigma": 4,
+        "sigma_eff": 1.0,
+        "sigma_eff_tolerance": 0.01
+      }
+    },
+    {
+      "id": "distance_01",
+      "name": "toroidal_distance",
+      "description": "Distance wraps around in toroidal space",
+      "input": {
+        "field_size": 10,
+        "coord_a": [0, 0, 0, 0],
+        "coord_b": [9, 0, 0, 0]
+      },
+      "expected": {
+        "distance": 1.0
+      }
+    },
+    {
+      "id": "distance_02",
+      "name": "diagonal_distance",
+      "description": "Distance across 4 axes",
+      "input": {
+        "field_size": 10,
+        "coord_a": [0, 0, 0, 0],
+        "coord_b": [1, 1, 1, 1]
+      },
+      "expected": {
+        "distance": 2.0
+      }
+    },
+    {
+      "id": "seed_01",
+      "name": "seed_radius_coverage",
+      "description": "A single attestation at center seeds (2*SEED_RADIUS+1)^4 cells max",
+      "input": {
+        "field_size": 20,
+        "attestations": [
+          {"coord": [10,10,10,10], "event_id": "ev1", "dimension": "Temporal", "validator_id": "val_t"}
+        ]
+      },
+      "expected": {
+        "active_cells_lte": 2401,
+        "active_cells_gt": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+[
+  {
+    "id": "sigma_01",
+    "results": {
+      "sigma_at_center": 0,
+      "raw_sigma": 0,
+      "sigma_eff": 0.0,
+      "crystallized_at_center": false,
+      "probability_at_center": 1.0,
+      "active_cells": 2401,
+      "crystallized_count": 0
+    },
+    "pass_": true
+  },
+  {
+    "id": "sigma_02",
+    "results": {
+      "sigma_at_center": 4,
+      "crystallized_at_center": true,
+      "probability_at_center": 1.0,
+      "raw_sigma": 4,
+      "active_cells": 2401,
+      "sigma_eff": 1.0,
+      "crystallized_count": 873
+    },
+    "pass_": true
+  },
+  {
+    "id": "sigma_03",
+    "results": {
+      "raw_sigma": 0,
+      "active_cells": 2401,
+      "sigma_eff": 0.0,
+      "crystallized_count": 0,
+      "sigma_at_center": 0,
+      "probability_at_center": 1.0,
+      "crystallized_at_center": false
+    },
+    "pass_": true
+  },
+  {
+    "id": "sigma_04",
+    "results": {
+      "raw_sigma": 3,
+      "sigma_eff": 0.75,
+      "active_cells": 2401,
+      "crystallized_count": 0,
+      "crystallized_at_center": false,
+      "probability_at_center": 1.0,
+      "sigma_at_center": 3
+    },
+    "pass_": true
+  },
+  {
+    "id": "sigma_05",
+    "results": {
+      "raw_sigma": 2,
+      "crystallized_at_center": false,
+      "sigma_at_center": 2,
+      "crystallized_count": 0,
+      "sigma_eff": 0.5,
+      "active_cells": 2401,
+      "probability_at_center": 1.0
+    },
+    "pass_": true
+  },
+  {
+    "id": "crystal_01",
+    "results": {
+      "raw_sigma": 4,
+      "crystallized_count": 873,
+      "crystallized_at_center": true,
+      "sigma_eff": 1.0,
+      "probability_at_center": 1.0,
+      "sigma_at_center": 4,
+      "active_cells": 2401
+    },
+    "pass_": true
+  },
+  {
+    "id": "crystal_02",
+    "results": {
+      "active_cells": 0,
+      "crystallized_count": 0
+    },
+    "pass_": true
+  },
+  {
+    "id": "sigma_eff_01",
+    "results": {
+      "crystallized_at_center": true,
+      "sigma_eff": 1.0,
+      "active_cells": 2401,
+      "crystallized_count": 873,
+      "sigma_at_center": 4,
+      "raw_sigma": 4,
+      "probability_at_center": 1.0
+    },
+    "pass_": true
+  },
+  {
+    "id": "distance_01",
+    "results": {
+      "crystallized_count": 0,
+      "active_cells": 0,
+      "distance": 1.0
+    },
+    "pass_": true
+  },
+  {
+    "id": "distance_02",
+    "results": {
+      "crystallized_count": 0,
+      "distance": 2.0,
+      "active_cells": 0
+    },
+    "pass_": true
+  },
+  {
+    "id": "seed_01",
+    "results": {
+      "sigma_at_center": 1,
+      "raw_sigma": 1,
+      "crystallized_count": 0,
+      "sigma_eff": 0.25,
+      "crystallized_at_center": false,
+      "active_cells": 2401,
+      "probability_at_center": 1.0
+    },
+    "pass_": true
+  }
+]
