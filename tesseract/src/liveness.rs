@@ -15,11 +15,16 @@
 //!   - Cannot forge attestations or rewrite causal history
 //!   - Cannot control more than (4 - m) dimension-bound validators
 //!
-//! # Liveness theorem
+//! # Liveness property (empirical, parameter-dependent)
 //!
 //! **Claim**: For any valid event with attestations on m ≥ σ_min dimensions,
 //! each backed by causal depth ≥ d_min, the event crystallizes within
-//! T_max = O(1/(α·m)) evolution steps after all attestations are delivered.
+//! LIVENESS_BOUND evolution steps after all attestations are delivered.
+//!
+//! **This is an empirical observation, not a formal theorem.** The bound
+//! depends on the current parameter set (Θ, α, A, SEED_RADIUS, CASCADE_STRENGTH).
+//! A formal derivation would require proving the convergence rate of the
+//! diffusion operator, which remains open.
 //!
 //! **Conditions**:
 //!   - At least m dimensions have exclusive validators (σ_raw ≥ m)
@@ -27,12 +32,12 @@
 //!   - The field is not over-capacity in the target region
 //!   - Network partition duration < T_partition (bounded delay)
 //!
-//! **Proof sketch**:
+//! **Intuition** (not a proof):
 //!   1. Each attestation seeds probability p₀ = 1/(1+dist) at the center
 //!   2. With m ≥ 4 attestations at the same center, p ≥ min(m·p₀, 1.0)
 //!   3. evolve() amplifies cells with σ ≥ 4 by factor A=4.0 with residual R=0.10
-//!   4. After k steps: p(k) ≥ p₀ + k·(R + α·A·(p_avg - p))
-//!   5. p(k) crosses Θ=0.85 within T_max ≈ (Θ - p₀)/(R + α·A·δ) steps
+//!   4. At the center, p = 1.0 after 4 attestations → immediate crystallization
+//!   5. Peripheral cells converge via diffusion within O(SEED_RADIUS/α) steps
 //!
 //! # Blocking attack vectors and defenses
 //!
@@ -47,13 +52,23 @@
 
 use crate::{Coord, Dimension, Field};
 
-/// Maximum evolution steps for a fully-attested event to crystallize
-/// after all attestations are delivered. Derived from:
-/// T_max ≈ (Θ - p_min) / (R_min + α·A_min·δ)
-/// With Θ=0.85, p_min≈0.5 (center of 4 overlapping seeds),
-/// R=0.10, α=0.15, A=4.0: T_max ≈ 0.35/0.70 ≈ 1 step.
-/// In practice, crystallization at the center is near-instant.
-/// Peripheral cells take longer. Conservative bound: 50 steps.
+/// Empirical liveness bound for the current parameter set.
+///
+/// NOT a universal property — this value depends on:
+///   - CRYSTALLIZATION_THRESHOLD (Θ = 0.85)
+///   - INFLUENCE_FACTOR (α = 0.15)
+///   - MAX_AMPLIFICATION (A = 4.0 at σ=4)
+///   - SEED_RADIUS (3)
+///   - CASCADE_STRENGTH (0.08)
+///
+/// If any of these parameters change, this bound must be re-validated
+/// empirically. A formal derivation would require proving convergence
+/// rate of the diffusion operator, which is open.
+///
+/// Empirical observation: with the current parameters, center cells
+/// crystallize on the attest() call itself (p=1.0 from 4 overlapping
+/// seeds). Peripheral cells within SEED_RADIUS crystallize within
+/// ~10-20 evolve steps. 50 is a conservative envelope.
 pub const LIVENESS_BOUND: usize = 50;
 
 /// Minimum σ for liveness guarantee.
