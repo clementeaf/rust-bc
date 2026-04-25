@@ -85,7 +85,10 @@ fn run_partition_test(
     for &n in partition_nodes {
         sim.network.reconnect(n, &all);
     }
+    // Re-gossip + force anti-entropy for SEC
     sim.originate_full_event(0, center, "part_event");
+    sim.force_anti_entropy();
+    sim.force_anti_entropy();
 
     let mut convergence_tick = partition_duration + max_ticks_after;
     for t in 1..=max_ticks_after {
@@ -117,7 +120,7 @@ fn run_partition_test(
 #[test]
 fn ten_nodes_clean() {
     let r = run_convergence_test(10,
-        GossipConfig { fanout: 5, field_size: 6, seed: 1 },
+        GossipConfig { fanout: 5, field_size: 6, seed: 1, ..Default::default() },
         NetworkConfig::default(), "clean", 60);
     assert!(r.convergence_ratio >= 0.9, "10 clean: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -126,7 +129,7 @@ fn ten_nodes_clean() {
 #[test]
 fn ten_nodes_lossy() {
     let r = run_convergence_test(10,
-        GossipConfig { fanout: 5, field_size: 6, seed: 2 },
+        GossipConfig { fanout: 5, field_size: 6, seed: 2, ..Default::default() },
         NetworkConfig::lossy(), "lossy", 80);
     assert!(r.convergence_ratio >= 0.7, "10 lossy: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -135,7 +138,7 @@ fn ten_nodes_lossy() {
 #[test]
 fn ten_nodes_adversarial() {
     let r = run_convergence_test(10,
-        GossipConfig { fanout: 6, field_size: 6, seed: 3 },
+        GossipConfig { fanout: 6, field_size: 6, seed: 3, ..Default::default() },
         NetworkConfig::adversarial(), "adversarial", 100);
     assert!(r.convergence_ratio >= 0.5, "10 adversarial: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -144,7 +147,7 @@ fn ten_nodes_adversarial() {
 #[test]
 fn ten_nodes_partition() {
     let r = run_partition_test(10,
-        GossipConfig { fanout: 5, field_size: 6, seed: 4 },
+        GossipConfig { fanout: 5, field_size: 6, seed: 4, ..Default::default() },
         NetworkConfig::default(), &[7, 8, 9], 15, 60);
     assert!(r.convergence_ratio >= 0.9, "10 partition: {:.0}%", r.convergence_ratio * 100.0);
 }
@@ -154,7 +157,7 @@ fn ten_nodes_partition() {
 #[test]
 fn hundred_nodes_clean() {
     let r = run_convergence_test(100,
-        GossipConfig { fanout: 5, field_size: 6, seed: 10 },
+        GossipConfig { fanout: 5, field_size: 6, seed: 10, ..Default::default() },
         NetworkConfig::default(), "clean", 60);
     assert!(r.convergence_ratio >= 0.9, "100 clean: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -163,7 +166,7 @@ fn hundred_nodes_clean() {
 #[test]
 fn hundred_nodes_lossy() {
     let r = run_convergence_test(100,
-        GossipConfig { fanout: 6, field_size: 6, seed: 11 },
+        GossipConfig { fanout: 6, field_size: 6, seed: 11, ..Default::default() },
         NetworkConfig::lossy(), "lossy", 80);
     assert!(r.convergence_ratio >= 0.7, "100 lossy: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -173,9 +176,9 @@ fn hundred_nodes_lossy() {
 fn hundred_nodes_partition() {
     let partition: Vec<usize> = (80..100).collect(); // 20%
     let r = run_partition_test(100,
-        GossipConfig { fanout: 5, field_size: 6, seed: 12 },
+        GossipConfig { fanout: 5, field_size: 6, anti_entropy_interval: 0, seed: 12 },
         NetworkConfig::default(), &partition, 15, 60);
-    assert!(r.convergence_ratio >= 0.7, "100 partition: {:.0}%", r.convergence_ratio * 100.0);
+    assert!(r.convergence_ratio >= 0.9, "100 partition+anti-entropy: {:.0}%", r.convergence_ratio * 100.0);
 }
 
 // --- 1000 nodes ---
@@ -183,7 +186,7 @@ fn hundred_nodes_partition() {
 #[test]
 fn thousand_nodes_clean() {
     let r = run_convergence_test(1000,
-        GossipConfig { fanout: 7, field_size: 6, seed: 100 },
+        GossipConfig { fanout: 7, field_size: 6, seed: 100, ..Default::default() },
         NetworkConfig { base_latency: 1, jitter: 1, ..NetworkConfig::default() },
         "clean", 80);
     assert!(r.convergence_ratio >= 0.9, "1000 clean: {:.0}%", r.convergence_ratio * 100.0);
@@ -194,7 +197,7 @@ fn thousand_nodes_clean() {
 #[test]
 fn thousand_nodes_lossy() {
     let r = run_convergence_test(1000,
-        GossipConfig { fanout: 8, field_size: 6, seed: 101 },
+        GossipConfig { fanout: 8, field_size: 6, seed: 101, ..Default::default() },
         NetworkConfig::lossy(), "lossy", 100);
     assert!(r.convergence_ratio >= 0.7, "1000 lossy: {:.0}%", r.convergence_ratio * 100.0);
     assert_eq!(r.false_crystallization_rate, 0.0);
@@ -204,9 +207,9 @@ fn thousand_nodes_lossy() {
 fn thousand_nodes_partition() {
     let partition: Vec<usize> = (900..1000).collect();
     let r = run_partition_test(1000,
-        GossipConfig { fanout: 7, field_size: 6, seed: 102 },
+        GossipConfig { fanout: 7, field_size: 6, seed: 102, ..Default::default() },
         NetworkConfig::default(), &partition, 15, 80);
-    assert!(r.convergence_ratio >= 0.8, "1000 partition: {:.0}%", r.convergence_ratio * 100.0);
+    assert!(r.convergence_ratio >= 0.9, "1000 partition+anti-entropy: {:.0}%", r.convergence_ratio * 100.0);
 }
 
 // --- Safety invariant across all profiles ---
@@ -220,12 +223,12 @@ fn zero_false_crystallizations_all_profiles() {
         ("lossy", NetworkConfig::lossy()),
     ] {
         results.push(run_convergence_test(10,
-            GossipConfig { fanout: 5, field_size: 6, seed: 200 },
+            GossipConfig { fanout: 5, field_size: 6, seed: 200, ..Default::default() },
             net, name, 60));
     }
 
     results.push(run_convergence_test(50,
-        GossipConfig { fanout: 4, field_size: 6, seed: 201 },
+        GossipConfig { fanout: 4, field_size: 6, seed: 201, ..Default::default() },
         NetworkConfig::default(), "clean_50", 60));
 
     // JSON
