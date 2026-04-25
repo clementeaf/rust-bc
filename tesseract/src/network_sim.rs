@@ -30,12 +30,19 @@ pub struct InFlightMessage {
 /// Message types exchanged between nodes.
 #[derive(Clone, Debug)]
 pub enum NetworkMessage {
-    /// An attestation to propagate.
+    /// A single attestation to propagate.
     Attestation {
         coord: crate::Coord,
         event_id: String,
         dimension: crate::Dimension,
         validator_id: String,
+    },
+    /// Bundled attestations — all dims for one event in a single message.
+    /// Receiver can crystallize immediately if σ=4.
+    AttestationBundle {
+        coord: crate::Coord,
+        event_id: String,
+        attestations: Vec<(crate::Dimension, String)>, // (dimension, validator_id)
     },
     /// Request to sync state (pull-based).
     SyncRequest { from_tick: u64 },

@@ -83,6 +83,21 @@ impl SimNode {
         &self.records
     }
 
+    /// Check if this node has all 4 dimensions for an event (can build bundle).
+    pub fn has_full_event(&self, event_id: &str) -> bool {
+        Dimension::ALL.iter().all(|dim| {
+            self.records.iter().any(|r| r.event_id == event_id && r.dimension == *dim)
+        })
+    }
+
+    /// Build an attestation bundle for an event (all dims this node knows).
+    pub fn build_bundle(&self, event_id: &str) -> Vec<AttestationRecord> {
+        self.records.iter()
+            .filter(|r| r.event_id == event_id)
+            .cloned()
+            .collect()
+    }
+
     pub fn tick(&mut self) {
         self.local_tick += 1;
         if self.evolve_interval > 0 && self.local_tick % self.evolve_interval == 0 {
@@ -243,25 +258,95 @@ impl DistributedSim {
         }
     }
 
+    /// Send a bundle of all known attestations for an event to fanout peers.
+    fn send_bundle(&mut self, from: NodeId, coord: Coord, event_id: &str) {
+        let bundle_atts: Vec<(Dimension, String)> = self.nodes[&from]
+            .build_bundle(event_id)
+            .iter()
+            .map(|r| (r.dimension, r.validator_id.clone()))
+            .collect();
+        if bundle_atts.is_empty() { return; }
+
+        let fanout = self.gossip_config.fanout.min(self.node_ids.len().saturating_sub(1));
+        let mut candidates: Vec<NodeId> = self.node_ids.iter()
+            .copied().filter(|&id| id != from).collect();
+
+        let msg = NetworkMessage::AttestationBundle {
+            coord,
+            event_id: event_id.to_string(),
+            attestations: bundle_atts,
+        };
+
+        for _ in 0..fanout {
+            if candidates.is_empty() { break; }
+            let idx = self.rng.gen_range(0..candidates.len());
+            let target = candidates.swap_remove(idx);
+            self.network.send(from, target, msg.clone());
+        }
+    }
+
     pub fn step(&mut self) {
         let delivered = self.network.advance();
 
+        // Track which (node, event) pairs newly crystallized this step
+        let mut crystallization_waves: Vec<(NodeId, Coord, String)> = Vec::new();
         let mut forwards: Vec<(NodeId, Coord, String, Dimension, String)> = Vec::new();
+
         for msg in delivered {
-            if let NetworkMessage::Attestation { coord, event_id, dimension, validator_id } = msg.payload {
-                if let Some(node) = self.nodes.get_mut(&msg.to) {
-                    if node.apply_attestation(coord, &event_id, dimension, &validator_id) {
-                        self.attestations_applied += 1;
-                        forwards.push((msg.to, coord, event_id, dimension, validator_id));
-                    } else {
-                        self.duplicates_rejected += 1;
+            match msg.payload {
+                NetworkMessage::Attestation { coord, event_id, dimension, validator_id } => {
+                    let to = msg.to;
+                    if let Some(node) = self.nodes.get_mut(&to) {
+                        let was_crystallized = node.field.get(coord).crystallized;
+                        if node.apply_attestation(coord, &event_id, dimension, &validator_id) {
+                            self.attestations_applied += 1;
+                            forwards.push((to, coord, event_id.clone(), dimension, validator_id));
+
+                            // Crystallization wave: if this attestation caused crystallization
+                            if !was_crystallized && node.field.get(coord).crystallized {
+                                crystallization_waves.push((to, coord, event_id));
+                            }
+                        } else {
+                            self.duplicates_rejected += 1;
+                        }
                     }
                 }
+                NetworkMessage::AttestationBundle { coord, event_id, attestations } => {
+                    let to = msg.to;
+                    if let Some(node) = self.nodes.get_mut(&to) {
+                        let was_crystallized = node.field.get(coord).crystallized;
+                        let mut any_new = false;
+                        for (dim, vid) in &attestations {
+                            if node.apply_attestation(coord, &event_id, *dim, vid) {
+                                self.attestations_applied += 1;
+                                any_new = true;
+                            } else {
+                                self.duplicates_rejected += 1;
+                            }
+                        }
+                        // If bundle caused crystallization, propagate wave
+                        if any_new && !was_crystallized && node.field.get(coord).crystallized {
+                            crystallization_waves.push((to, coord, event_id));
+                        }
+                    }
+                }
+                _ => {}
             }
         }
 
+        // Forward individual attestations (backward compat)
         for (from, coord, event_id, dimension, validator_id) in forwards {
-            self.gossip_forward(from, coord, &event_id, dimension, &validator_id);
+            // If this node now has the full event, send bundle instead of single
+            if self.nodes[&from].has_full_event(&event_id) {
+                self.send_bundle(from, coord, &event_id);
+            } else {
+                self.gossip_forward(from, coord, &event_id, dimension, &validator_id);
+            }
+        }
+
+        // Crystallization wave: nodes that just crystallized push bundles eagerly
+        for (node_id, coord, event_id) in crystallization_waves {
+            self.send_bundle(node_id, coord, &event_id);
         }
 
         // Anti-entropy
@@ -295,6 +380,8 @@ impl DistributedSim {
         ] {
             self.originate_attestation(node, coord, event_id, dim, vid);
         }
+        // Send bundle immediately — receivers get all 4 dims in one message
+        self.send_bundle(node, coord, event_id);
     }
 
     pub fn crystallized_at(&self, coord: Coord) -> usize {

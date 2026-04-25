@@ -401,8 +401,14 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
         }
     }
 
-    // Run gossip
-    sim.run(40);
+    // Run gossip, track when full convergence is reached
+    let mut finality: u64 = 0;
+    for t in 1..=40 {
+        sim.step();
+        if finality == 0 && sim.crystallization_ratio(center) >= 1.0 {
+            finality = t;
+        }
+    }
 
     // Partition recovery
     let mut recovery_ticks = 0;
@@ -412,18 +418,21 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
         }
         sim.force_anti_entropy();
         sim.force_anti_entropy();
-        sim.run(20);
-        recovery_ticks = 20;
+        for t in 1..=20 {
+            sim.step();
+            if recovery_ticks == 0 && sim.crystallization_ratio(center) >= 1.0 {
+                recovery_ticks = t;
+            }
+        }
+        if recovery_ticks == 0 { recovery_ticks = 20; }
     }
+    if finality == 0 { finality = 40 + recovery_ticks; }
 
     let elapsed = t0.elapsed().as_secs_f64();
-    let ratio = sim.crystallization_ratio(center);
     let metrics = sim.metrics();
 
     // False acceptance: noise coord should NOT crystallize at any node
     let false_acc = sim.crystallized_at(noise_coord);
-
-    let finality = if ratio >= 1.0 { 40 + recovery_ticks } else { 60 + recovery_ticks };
 
     let cells_per_node = 300; // ~300 active cells at field_size=6
     let bytes_per_cell = 320;
