@@ -9,6 +9,47 @@
 //!   - All correct nodes converge to the same crystallized core
 //!   - After partition heals + anti-entropy round: 100% convergence
 //!   - Zero false crystallizations (safety preserved)
+//!
+//! # Attestation bundles (transport optimization)
+//!
+//! Bundles pack all 4 dimension attestations into a single network message.
+//! This is PURELY a transport optimization — it does NOT change the
+//! independence model:
+//!
+//!   - Independence comes from **origin**: each dimension requires a
+//!     cryptographically distinct validator bound to that dimension
+//!   - Independence comes from **causal history**: validators with
+//!     shared ancestry get penalized by σ_eff (see adversarial.rs)
+//!   - Independence does NOT come from **transport**: whether attestations
+//!     arrive in 1 message or 4, the σ-independence check is identical
+//!
+//! A bundle is equivalent to receiving 4 individual messages simultaneously.
+//! The receiver applies each attestation independently and checks σ=4
+//! exactly as if they arrived separately.
+//!
+//! # Fanout requirement
+//!
+//! Convergence requires fanout ≥ ln(N) (epidemic threshold). This is an
+//! **explicit condition**, not a universal guarantee:
+//!   - Below ln(N): some nodes may never receive attestations (gossip dies)
+//!   - At ln(N): O(log N) rounds to reach all nodes w.h.p.
+//!   - Above ln(N): faster but more messages
+//!
+//! The system does NOT enforce minimum fanout — the caller must configure
+//! it appropriately for the network size.
+//!
+//! # Bundle attack surface
+//!
+//! Bundles introduce these attack vectors (tested below):
+//!   - **Bundle loss**: bundle dropped by network → falls back to individual
+//!     gossip + anti-entropy (no single point of failure)
+//!   - **Bundle replay**: duplicate bundles → dedup rejects (idempotent)
+//!   - **Partial bundle**: attacker sends bundle with <4 dims → receiver
+//!     applies what it gets, waits for remaining dims via gossip
+//!   - **Corrupted bundle**: attestation with wrong validator_id → σ check
+//!     rejects (σ < 4 if validator not exclusive)
+//!   - **Wave amplification**: cascading waves → bounded by dedup
+//!     (each node forwards a bundle at most once per event)
 
 use std::collections::{HashMap, HashSet};
 use rand::rngs::StdRng;
@@ -541,5 +582,129 @@ mod tests {
 
         let m = sim.metrics();
         assert!(m.anti_entropy_rounds > 0, "should have run anti-entropy");
+    }
+
+    // --- Bundle attack surface tests ---
+
+    #[test]
+    fn bundle_loss_falls_back_to_individual_gossip() {
+        // High drop rate → bundles likely lost. Individual gossip + anti-entropy
+        // must still achieve convergence.
+        let mut sim = DistributedSim::new(10,
+            GossipConfig { fanout: 5, field_size: 6, anti_entropy_interval: 5, ..Default::default() },
+            NetworkConfig { drop_rate: 0.4, ..NetworkConfig::default() });
+        let center = coord(3, 3, 3, 3);
+        sim.originate_full_event(0, center, "lost_bundle");
+        sim.run(40);
+        sim.force_anti_entropy();
+        sim.force_anti_entropy();
+
+        assert_eq!(sim.crystallization_ratio(center), 1.0,
+            "should converge despite 40% bundle loss via anti-entropy fallback");
+    }
+
+    #[test]
+    fn bundle_replay_is_idempotent() {
+        // High dup rate → bundles arrive multiple times. Dedup must reject.
+        let mut sim = DistributedSim::new(5,
+            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
+            NetworkConfig { dup_rate: 0.8, ..NetworkConfig::default() });
+        let center = coord(3, 3, 3, 3);
+        sim.originate_full_event(0, center, "replayed_bundle");
+        sim.run(20);
+
+        assert!(sim.duplicates_rejected > 0, "should reject duplicate bundles");
+        // Safety: no false crystallizations from replay
+        assert_eq!(sim.false_crystallizations(coord(1, 1, 1, 1), 0), 0);
+        // Valid event still crystallized
+        assert!(sim.nodes[&0].field.get(center).crystallized);
+    }
+
+    #[test]
+    fn partial_bundle_waits_for_remaining_dims() {
+        // Simulate partial bundle: originate only 2 dims, not full event.
+        // Receiver should NOT crystallize (σ < 4).
+        let mut sim = DistributedSim::new(5,
+            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
+            NetworkConfig::default());
+        let center = coord(3, 3, 3, 3);
+
+        // Only 2 dimensions
+        sim.originate_attestation(0, center, "partial", Dimension::Temporal, "val_t");
+        sim.originate_attestation(0, center, "partial", Dimension::Context, "val_c");
+        sim.run(20);
+
+        // No node should crystallize with only 2 dims
+        assert_eq!(sim.crystallized_at(center), 0,
+            "partial bundle (2 dims) must not crystallize");
+
+        // Now deliver remaining 2 dims → should crystallize
+        sim.originate_attestation(0, center, "partial", Dimension::Origin, "val_o");
+        sim.originate_attestation(0, center, "partial", Dimension::Verification, "val_v");
+        sim.run(20);
+
+        assert!(sim.crystallization_ratio(center) > 0.8,
+            "full attestation after partial should converge");
+    }
+
+    #[test]
+    fn corrupted_bundle_rejected_by_sigma() {
+        // Attacker sends "bundle" where all 4 dims use the same validator_id.
+        // σ=0 → should NOT crystallize.
+        let mut sim = DistributedSim::new(5,
+            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
+            NetworkConfig::default());
+        let center = coord(3, 3, 3, 3);
+
+        // Same validator on all dims → σ=0
+        for dim in Dimension::ALL {
+            sim.originate_attestation(0, center, "fake_bundle", dim, "same_validator");
+        }
+        sim.run(20);
+
+        assert_eq!(sim.crystallized_at(center), 0,
+            "corrupted bundle (same validator) must not crystallize");
+    }
+
+    #[test]
+    fn wave_amplification_bounded_by_dedup() {
+        // Multiple origins sending the same event → waves converge, don't explode.
+        let mut sim = DistributedSim::new(10,
+            GossipConfig { fanout: 5, field_size: 6, ..Default::default() },
+            NetworkConfig::default());
+        let center = coord(3, 3, 3, 3);
+
+        // 3 nodes all originate the same event simultaneously
+        sim.originate_full_event(0, center, "multi_origin");
+        sim.originate_full_event(3, center, "multi_origin");
+        sim.originate_full_event(7, center, "multi_origin");
+        sim.run(20);
+
+        // Should converge normally
+        assert_eq!(sim.crystallization_ratio(center), 1.0,
+            "multiple origins should converge");
+        // Dedup should have caught the redundant waves
+        assert!(sim.duplicates_rejected > 0,
+            "dedup should reject redundant waves");
+        // Messages should not be dramatically more than single-origin
+        let m = sim.metrics();
+        assert!(m.network.messages_sent < 500,
+            "wave amplification should be bounded: {} messages", m.network.messages_sent);
+    }
+
+    #[test]
+    fn low_fanout_below_ln_n_fails_to_converge() {
+        // Fanout=1 with 20 nodes: below ln(20)≈3. Gossip should die out.
+        let mut sim = DistributedSim::new(20,
+            GossipConfig { fanout: 1, field_size: 6, ..Default::default() },
+            NetworkConfig::default());
+        let center = coord(3, 3, 3, 3);
+        sim.originate_full_event(0, center, "low_fanout");
+        sim.run(30);
+
+        let ratio = sim.crystallization_ratio(center);
+        // With fanout=1, unlikely to reach all 20 nodes
+        assert!(ratio < 1.0,
+            "fanout=1 should not guarantee full convergence: {:.0}%", ratio * 100.0);
     }
 }
