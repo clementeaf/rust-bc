@@ -21,6 +21,7 @@ pub mod crystallization;
 pub mod entropy;
 pub mod liveness;
 pub mod lyapunov;
+pub mod scaling;
 pub mod gravity;
 pub mod proof;
 pub mod mapper;
