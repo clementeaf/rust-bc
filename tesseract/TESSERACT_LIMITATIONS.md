@@ -84,6 +84,20 @@ Wait — this actually helps the adversary bypass cost checks. Corrected: the ad
 
 **Assessment**: Standard cryptographic assumption. If Ed25519 breaks, all signature-based systems fail, not just Tesseract. Quantum computers capable of solving discrete log would break this — the protocol would need to migrate to post-quantum signatures (e.g., ML-DSA-65, already implemented in the parent project).
 
+### A7. Correct σ Implementation
+
+**Required by**: Safety (directly). If σ is computed incorrectly, safety breaks silently.
+
+**What it provides**: The function `sigma_independence()` correctly counts the number of dimensions with at least one **exclusive** validator — a validator that appears on exactly one dimension for that cell. This is the mechanical core of safety: the gate that prevents false crystallization.
+
+**If violated (counting attested dims instead of exclusive)**: Suppose the implementation counts `attested_dimensions()` (any validator present) instead of `sigma_independence()` (exclusive validators only). A single Sybil validator attesting all 4 dimensions would achieve σ = 4 instead of σ = 0. Safety collapses entirely.
+
+**Counterexample**: Implementation bug: `sigma(x) = cell.attested_dimensions()`. Adversary "sybil" attests on T, C, O, V. `attested_dimensions()` = 4. Cell crystallizes. But the correct `sigma_independence()` = 0 (sybil appears on 4 dims, exclusive on none).
+
+**Assessment**: This is the most dangerous class of bug — it breaks safety without any observable failure mode. The cross-validation suite (Python reference vs Rust) exists to detect this: both implementations independently compute σ on identical inputs and must agree. The test vector `sigma_01` (single validator all dims → σ = 0) is specifically designed to catch this bug class.
+
+**Verification strategy**: Any new implementation MUST pass the spec_tests/test_vectors.json suite. The σ test vectors are the safety-critical subset.
+
 ---
 
 ## 2. Derived Limitations from Theorems
@@ -161,12 +175,19 @@ Rewriting all claims in "if-then" form with explicit conditions:
 **Safety** (no false crystallization):
 
 > IF A6 holds (cryptographic integrity)
+> AND A7 holds (correct σ implementation — see below)
 > AND the attestation structure at cell x has σ(x) < 4
 > THEN x does not crystallize.
 
 > Equivalently: x crystallizes ONLY IF σ(x) ≥ 4.
 
-> This holds unconditionally given A6 — no network, timing, or adversary assumptions needed for safety. Safety is a local property.
+> Safety is a local property — no network, timing, or partition assumptions needed. But it depends on THREE things, not just A6:
+>
+> 1. **A6**: validator IDs are unforgeable (crypto intact)
+> 2. **A7 (Correct σ computation)**: `sigma_independence()` correctly counts dimensions with at least one exclusive validator. A bug here (e.g., counting attested dimensions instead of exclusive dimensions) silently breaks safety without violating any cryptographic assumption.
+> 3. **A2 (Deterministic validation)**: `crystallize()` correctly checks σ ≥ 4 before transitioning C(x) → 1.
+>
+> The cross-validation suite (spec_tests/) exists specifically to verify A7 — the Python reference implementation independently computes σ and must match the Rust implementation on all test vectors. If they disagree, at least one implementation has a safety-critical bug.
 
 **Liveness** (valid events crystallize):
 
