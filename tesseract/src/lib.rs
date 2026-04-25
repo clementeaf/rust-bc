@@ -13,6 +13,7 @@
 //!
 //! Sparse implementation: only cells with p > 0 are stored.
 
+pub mod adversarial;
 pub mod causality;
 pub mod conservation;
 pub mod contraction;

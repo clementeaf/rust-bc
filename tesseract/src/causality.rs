@@ -265,6 +265,12 @@ impl CausalGraph {
     pub fn all_event_ids(&self) -> impl Iterator<Item = &EventId> {
         self.events.keys()
     }
+
+    /// Get the ancestor set of an event (transitive closure of parents).
+    /// Used by adversarial module to detect causal correlation between validators.
+    pub fn ancestors_of(&self, id: &EventId) -> Option<&HashSet<EventId>> {
+        self.ancestors.get(id)
+    }
 }
 
 #[cfg(test)]
