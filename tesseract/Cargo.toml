@@ -14,3 +14,6 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 serde = { version = "=1.0.217", features = ["derive"] }
 serde_json = "=1.0.138"
 tokio = { version = "1", features = ["net", "io-util", "rt-multi-thread", "macros", "sync", "time"] }
+
+[dev-dependencies]
+proptest = "1"

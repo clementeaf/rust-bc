@@ -15,7 +15,10 @@
 
 pub mod causality;
 pub mod conservation;
+pub mod contraction;
+pub mod crystallization;
 pub mod entropy;
+pub mod lyapunov;
 pub mod gravity;
 pub mod proof;
 pub mod mapper;
@@ -772,10 +775,20 @@ impl Field {
             let changed = (new_p - old_p).abs() > 1e-6;
 
             if !cell.crystallized && new_p >= CRYSTALLIZATION_THRESHOLD {
-                cell.crystallized = true;
-                cell.probability = 1.0;
-                new_crystallizations += 1;
-                newly_crystallized.push(coord);
+                // Legacy threshold check passed — also check σ-independence
+                // for cells with attestations (unified criterion).
+                let has_attestations = !cell.attestations.is_empty();
+                let sigma_ok = if has_attestations {
+                    cell.sigma_independence() >= 4
+                } else {
+                    true
+                };
+                if sigma_ok {
+                    cell.crystallized = true;
+                    cell.probability = 1.0;
+                    new_crystallizations += 1;
+                    newly_crystallized.push(coord);
+                }
             }
 
             // Mark dirty if probability changed meaningfully
@@ -878,6 +891,39 @@ impl Field {
 
     pub fn is_consistent(&self) -> bool {
         self.crystallized_cells().iter().all(|coord| self.orthogonal_support(*coord) >= 2)
+    }
+
+    /// Evaluate crystallization for all non-crystallized active cells
+    /// using the given criterion. Returns coords that should crystallize.
+    pub fn evaluate_crystallization(
+        &self,
+        criterion: &dyn crystallization::CrystallizationCriterion,
+    ) -> Vec<crystallization::CrystallizationEval> {
+        self.cells.iter()
+            .filter(|(_, cell)| !cell.crystallized && cell.probability >= EPSILON)
+            .map(|(coord, _)| criterion.evaluate(self, *coord))
+            .filter(|eval| eval.should_crystallize())
+            .collect()
+    }
+
+    /// Apply crystallization results: set cells to crystallized state.
+    /// Returns number of new crystallizations.
+    pub fn apply_crystallizations(&mut self, evals: &[crystallization::CrystallizationEval]) -> usize {
+        let mut count = 0;
+        let mut newly_crystallized = Vec::new();
+        for eval in evals {
+            let cell = self.get_mut(eval.coord);
+            if !cell.crystallized {
+                cell.crystallized = true;
+                cell.probability = 1.0;
+                count += 1;
+                newly_crystallized.push(eval.coord);
+            }
+        }
+        if count > 0 {
+            self.apply_cascade_from(&newly_crystallized);
+        }
+        count
     }
 }
 

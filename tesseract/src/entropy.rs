@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use crate::{Coord, Field, CRYSTALLIZATION_THRESHOLD, EPSILON};
+use crate::{Coord, Field, EPSILON};
 
 /// Thermodynamic state of the field.
 pub struct Thermodynamics {
@@ -125,26 +125,14 @@ impl Thermodynamics {
             *self.crystal_age.entry(*coord).or_insert(0) += 1;
         }
 
-        // Check all non-crystallized active cells for spontaneous crystallization
-        let candidates: Vec<(Coord, f64)> = field.active_entries()
-            .filter(|(_, cell)| !cell.crystallized && cell.probability >= EPSILON)
-            .map(|(coord, _)| (coord, self.free_energy(field, coord)))
-            .filter(|(_, f)| *f < 0.0) // energetically favorable
-            .collect();
+        // Use unified crystallization criterion (threshold ∧ energy ∧ σ-independence)
+        let criterion = crate::crystallization::UnifiedCriterion::new(self.temperature);
+        let evals = field.evaluate_crystallization(&criterion);
+        let new_crystals = field.apply_crystallizations(&evals);
 
-        let mut new_crystals = 0;
-        for (coord, _free_e) in candidates {
-            let cell = field.get(coord);
-            // Still require minimum probability — can't crystallize from noise
-            if cell.probability >= CRYSTALLIZATION_THRESHOLD * 0.8 {
-                let cell = field.get_mut(coord);
-                if !cell.crystallized {
-                    cell.crystallized = true;
-                    cell.probability = 1.0;
-                    self.crystal_age.insert(coord, 0);
-                    new_crystals += 1;
-                }
-            }
+        // Track age of newly crystallized cells
+        for eval in &evals {
+            self.crystal_age.insert(eval.coord, 0);
         }
 
         // Log entropy
