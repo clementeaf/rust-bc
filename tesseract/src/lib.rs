@@ -23,6 +23,7 @@ pub mod entropy;
 pub mod liveness;
 pub mod lyapunov;
 pub mod scaling;
+pub mod sigma_audit;
 pub mod network_sim;
 pub mod gossip;
 pub mod gravity;
