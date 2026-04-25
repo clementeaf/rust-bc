@@ -19,6 +19,7 @@ pub mod conservation;
 pub mod contraction;
 pub mod crystallization;
 pub mod entropy;
+pub mod liveness;
 pub mod lyapunov;
 pub mod gravity;
 pub mod proof;
