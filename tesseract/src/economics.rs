@@ -4,8 +4,8 @@
 //! Transfers redistribute curvature — they don't create or destroy it.
 //! This is the economic foundation: scarcity by geometry.
 
-use crate::{Coord, Field};
 use crate::persistence::EventLog;
+use crate::{Coord, Field};
 
 /// Genesis configuration: defines the total curvature of the universe.
 #[derive(Clone, Debug)]
@@ -18,11 +18,19 @@ pub struct Genesis {
 
 impl Genesis {
     pub fn new(total_supply: f64) -> Self {
-        Self { total_supply, allocations: Vec::new() }
+        Self {
+            total_supply,
+            allocations: Vec::new(),
+        }
     }
 
     /// Allocate curvature to a region. Fails if total exceeds supply.
-    pub fn allocate(&mut self, region: usize, amount: f64, label: impl Into<String>) -> Result<(), String> {
+    pub fn allocate(
+        &mut self,
+        region: usize,
+        amount: f64,
+        label: impl Into<String>,
+    ) -> Result<(), String> {
         let allocated: f64 = self.allocations.iter().map(|(_, a, _)| a).sum();
         if allocated + amount > self.total_supply {
             return Err(format!(
@@ -63,7 +71,11 @@ impl Economy {
     pub fn new(field_size: usize, genesis: Genesis) -> Self {
         let mut field = Field::new(field_size);
         genesis.apply(&mut field);
-        Self { field, genesis, log: EventLog::new() }
+        Self {
+            field,
+            genesis,
+            log: EventLog::new(),
+        }
     }
 
     pub fn with_persistence(field_size: usize, genesis: Genesis, path: &str) -> Self {
@@ -71,7 +83,11 @@ impl Economy {
         let mut field = Field::new(field_size);
         genesis.apply(&mut field);
         log.replay(&mut field);
-        Self { field, genesis, log }
+        Self {
+            field,
+            genesis,
+            log,
+        }
     }
 
     /// Total curvature across all regions — should ALWAYS equal genesis supply.
@@ -120,7 +136,10 @@ impl Economy {
         self.field.set_capacity(to_region, to_balance + amount);
 
         // Seed the event as a deformation in the field
-        let label = format!("-{:.2}:r{}→r{}[{}]", amount, from_region, to_region, event_id);
+        let label = format!(
+            "-{:.2}:r{}→r{}[{}]",
+            amount, from_region, to_region, event_id
+        );
         self.field.seed_named(coord, &label);
         self.log.record_seed(coord, &label);
 
@@ -172,11 +191,27 @@ mod tests {
         assert!(eco.verify_conservation());
 
         // Transfer 200 from alice to bob
-        eco.transfer(1, 2, 200.0, "tx-001", Coord { t: 1, c: 1, o: 1, v: 1 }, 0).unwrap();
+        eco.transfer(
+            1,
+            2,
+            200.0,
+            "tx-001",
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            0,
+        )
+        .unwrap();
 
         assert_eq!(eco.balance(1), 400.0);
         assert_eq!(eco.balance(2), 600.0);
-        assert!(eco.verify_conservation(), "Conservation must hold after transfer");
+        assert!(
+            eco.verify_conservation(),
+            "Conservation must hold after transfer"
+        );
     }
 
     #[test]
@@ -187,7 +222,19 @@ mod tests {
 
         let mut eco = Economy::new(8, gen);
 
-        let result = eco.transfer(1, 2, 80.0, "overdraft", Coord { t: 1, c: 1, o: 1, v: 1 }, 0);
+        let result = eco.transfer(
+            1,
+            2,
+            80.0,
+            "overdraft",
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            0,
+        );
         assert!(result.is_err());
         assert_eq!(eco.balance(1), 50.0); // unchanged
         assert!(eco.verify_conservation());
@@ -204,9 +251,48 @@ mod tests {
         let mut eco = Economy::new(8, gen);
 
         // Chain: 1→2→3→4
-        eco.transfer(1, 2, 500.0, "tx-1", Coord { t: 1, c: 1, o: 1, v: 1 }, 0).unwrap();
-        eco.transfer(2, 3, 300.0, "tx-2", Coord { t: 2, c: 1, o: 2, v: 1 }, 0).unwrap();
-        eco.transfer(3, 4, 100.0, "tx-3", Coord { t: 3, c: 1, o: 3, v: 1 }, 0).unwrap();
+        eco.transfer(
+            1,
+            2,
+            500.0,
+            "tx-1",
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            0,
+        )
+        .unwrap();
+        eco.transfer(
+            2,
+            3,
+            300.0,
+            "tx-2",
+            Coord {
+                t: 2,
+                c: 1,
+                o: 2,
+                v: 1,
+            },
+            0,
+        )
+        .unwrap();
+        eco.transfer(
+            3,
+            4,
+            100.0,
+            "tx-3",
+            Coord {
+                t: 3,
+                c: 1,
+                o: 3,
+                v: 1,
+            },
+            0,
+        )
+        .unwrap();
 
         assert_eq!(eco.balance(1), 500.0);
         assert_eq!(eco.balance(2), 200.0);
@@ -214,14 +300,18 @@ mod tests {
         assert_eq!(eco.balance(4), 100.0);
 
         // Total = 500 + 200 + 200 + 100 = 1000 = genesis supply
-        assert!(eco.verify_conservation(), "Chain of transfers must conserve");
+        assert!(
+            eco.verify_conservation(),
+            "Chain of transfers must conserve"
+        );
     }
 
     #[test]
     fn many_transfers_never_break_conservation() {
         let mut gen = Genesis::new(10_000.0);
         for i in 0..10 {
-            gen.allocate(i, 1000.0, &format!("participant-{}", i)).unwrap();
+            gen.allocate(i, 1000.0, &format!("participant-{}", i))
+                .unwrap();
         }
 
         let mut eco = Economy::new(8, gen);
@@ -230,19 +320,32 @@ mod tests {
         for i in 0..50 {
             let from = i % 10;
             let to = (i * 3 + 1) % 10;
-            if from == to { continue; }
+            if from == to {
+                continue;
+            }
             let balance = eco.balance(from);
             if balance >= 10.0 {
                 eco.transfer(
-                    from, to, 10.0,
+                    from,
+                    to,
+                    10.0,
                     &format!("tx-{}", i),
-                    Coord { t: i % 8, c: (i * 2) % 8, o: from, v: to },
+                    Coord {
+                        t: i % 8,
+                        c: (i * 2) % 8,
+                        o: from,
+                        v: to,
+                    },
                     i as u64,
-                ).unwrap();
+                )
+                .unwrap();
             }
         }
 
-        assert!(eco.verify_conservation(), "50 transfers must conserve total supply");
+        assert!(
+            eco.verify_conservation(),
+            "50 transfers must conserve total supply"
+        );
         assert_eq!(eco.total_curvature() + eco.genesis.remaining(), 10_000.0);
     }
 
@@ -256,10 +359,35 @@ mod tests {
         let mut eco = Economy::new(8, gen);
 
         // Alice sends 100 to Bob
-        eco.transfer(1, 2, 100.0, "tx-1", Coord { t: 1, c: 1, o: 1, v: 1 }, 0).unwrap();
+        eco.transfer(
+            1,
+            2,
+            100.0,
+            "tx-1",
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            0,
+        )
+        .unwrap();
 
         // Alice tries to send 100 to Carol — impossible, balance is 0
-        let result = eco.transfer(1, 3, 100.0, "tx-2", Coord { t: 2, c: 2, o: 1, v: 2 }, 0);
+        let result = eco.transfer(
+            1,
+            3,
+            100.0,
+            "tx-2",
+            Coord {
+                t: 2,
+                c: 2,
+                o: 1,
+                v: 2,
+            },
+            0,
+        );
         assert!(result.is_err(), "Double spend must be impossible");
 
         assert_eq!(eco.balance(1), 0.0);

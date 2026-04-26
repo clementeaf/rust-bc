@@ -77,11 +77,7 @@ pub const MIN_SIGMA_FOR_LIVENESS: usize = 4;
 
 /// Check if a fully-attested event crystallizes within the liveness bound.
 /// Returns (crystallized, steps_taken).
-pub fn check_liveness(
-    field: &mut Field,
-    target: Coord,
-    max_steps: usize,
-) -> (bool, usize) {
+pub fn check_liveness(field: &mut Field, target: Coord, max_steps: usize) -> (bool, usize) {
     for step in 1..=max_steps {
         if field.get(target).crystallized {
             return (true, step);
@@ -125,18 +121,17 @@ pub fn check_liveness_with_delay(
     }
 
     let crystallized = field.get(center).crystallized;
-    let step = if crystallized { Some(total_steps + max_steps_after) } else { None };
+    let step = if crystallized {
+        Some(total_steps + max_steps_after)
+    } else {
+        None
+    };
     (crystallized, total_steps + max_steps_after, step)
 }
 
 /// Inject noise events around a target to test if valid events survive.
 /// Returns the number of noise seeds injected.
-pub fn inject_noise(
-    field: &mut Field,
-    center: Coord,
-    noise_count: usize,
-    radius: usize,
-) -> usize {
+pub fn inject_noise(field: &mut Field, center: Coord, noise_count: usize, radius: usize) -> usize {
     let s = field.size;
     let mut injected = 0;
     for i in 0..noise_count {
@@ -226,14 +221,18 @@ mod tests {
             center,
             "delayed_event",
             &full_validators(),
-            5,  // 5 evolve steps between each dimension
+            5, // 5 evolve steps between each dimension
             LIVENESS_BOUND,
         );
 
-        assert!(crystallized, "should crystallize after all attestations arrive");
+        assert!(
+            crystallized,
+            "should crystallize after all attestations arrive"
+        );
         assert!(
             step.unwrap() <= 5 * 3 + LIVENESS_BOUND,
-            "should crystallize within delay + bound: step={}", step.unwrap()
+            "should crystallize within delay + bound: step={}",
+            step.unwrap()
         );
     }
 
@@ -269,7 +268,10 @@ mod tests {
 
         let (crystallized, steps) = check_liveness(&mut field, center, LIVENESS_BOUND);
 
-        assert!(crystallized, "valid event should survive 20 noise injections");
+        assert!(
+            crystallized,
+            "valid event should survive 20 noise injections"
+        );
         assert!(
             steps <= LIVENESS_BOUND,
             "noise should not delay beyond bound: took {steps}"
@@ -442,7 +444,10 @@ mod tests {
         // Neighbor may or may not crystallize depending on overlap
         // but if it does, it should be within bound
         if crystallized {
-            assert!(steps <= LIVENESS_BOUND, "neighbor crystallized in {steps} steps");
+            assert!(
+                steps <= LIVENESS_BOUND,
+                "neighbor crystallized in {steps} steps"
+            );
         }
     }
 

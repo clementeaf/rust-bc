@@ -5,15 +5,20 @@ services:
     environment:
       NODE_ID: node-1
       PORT: "7700"
-      REGION_ID: "1"
+      REGION_ID: "0"
       FIELD_SIZE: "8"
       GENESIS_ALLOC: "50000"
-      PEERS: "http://node2:7700"
+      PEERS: "node2:7700,node3:7700"
       DATA_DIR: /data
     ports:
       - "7701:7700"
     volumes:
       - node1-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 
   node2:
     build: .
@@ -21,16 +26,43 @@ services:
     environment:
       NODE_ID: node-2
       PORT: "7700"
-      REGION_ID: "5"
+      REGION_ID: "1"
       FIELD_SIZE: "8"
       GENESIS_ALLOC: "50000"
-      PEERS: "http://node1:7700"
+      PEERS: "node1:7700,node3:7700"
       DATA_DIR: /data
     ports:
       - "7702:7700"
     volumes:
       - node2-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  node3:
+    build: .
+    container_name: tesseract-node3
+    environment:
+      NODE_ID: node-3
+      PORT: "7700"
+      REGION_ID: "2"
+      FIELD_SIZE: "8"
+      GENESIS_ALLOC: "50000"
+      PEERS: "node1:7700,node2:7700"
+      DATA_DIR: /data
+    ports:
+      - "7703:7700"
+    volumes:
+      - node3-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
 
 volumes:
   node1-data:
   node2-data:
+  node3-data:

@@ -54,9 +54,9 @@
 //! With cost: the exponential penalty makes coordinated attacks
 //! prohibitively expensive even when k/N is not small.
 
-use std::collections::{HashMap, HashSet};
-use crate::{Cell, Coord, Dimension, Field, Attestation};
 use crate::causality::CausalGraph;
+use crate::{Attestation, Cell, Coord, Dimension, Field};
+use std::collections::{HashMap, HashSet};
 
 // --- Attestation cost model ---
 
@@ -107,11 +107,7 @@ pub struct EffectiveSigma {
 /// Requires the causal graph to evaluate validator histories.
 /// If no causal graph is available, falls back to raw σ with
 /// cost discount for validators without causal depth.
-pub fn effective_sigma(
-    field: &Field,
-    coord: Coord,
-    graph: Option<&CausalGraph>,
-) -> EffectiveSigma {
+pub fn effective_sigma(field: &Field, coord: Coord, graph: Option<&CausalGraph>) -> EffectiveSigma {
     let cell = field.get(coord);
     let raw_sigma = cell.sigma_independence();
 
@@ -135,7 +131,11 @@ pub fn effective_sigma(
         };
 
         // Raw independence (from sigma_independence logic)
-        let raw_indep = if has_exclusive_validator(cell, *dim) { 1.0 } else { 0.0 };
+        let raw_indep = if has_exclusive_validator(cell, *dim) {
+            1.0
+        } else {
+            0.0
+        };
 
         // Diversity: causal history overlap between validators on this dim
         let (diversity, correlations) = compute_diversity(atts, graph);
@@ -171,18 +171,23 @@ fn has_exclusive_validator(cell: &Cell, dim: Dimension) -> bool {
     let mut validator_dims: HashMap<&str, HashSet<Dimension>> = HashMap::new();
     for (d, atts) in &cell.attestations {
         for att in atts {
-            validator_dims.entry(att.validator_id.as_str())
+            validator_dims
+                .entry(att.validator_id.as_str())
                 .or_default()
                 .insert(*d);
         }
     }
 
-    cell.attestations.get(&dim)
-        .map(|atts| atts.iter().any(|att| {
-            validator_dims.get(att.validator_id.as_str())
-                .map(|dims| dims.len() == 1)
-                .unwrap_or(false)
-        }))
+    cell.attestations
+        .get(&dim)
+        .map(|atts| {
+            atts.iter().any(|att| {
+                validator_dims
+                    .get(att.validator_id.as_str())
+                    .map(|dims| dims.len() == 1)
+                    .unwrap_or(false)
+            })
+        })
         .unwrap_or(false)
 }
 
@@ -210,11 +215,7 @@ fn compute_diversity(
     for i in 0..atts.len() {
         for j in (i + 1)..atts.len() {
             total_pairs += 1;
-            let overlap = causal_overlap(
-                &atts[i].validator_id,
-                &atts[j].validator_id,
-                graph,
-            );
+            let overlap = causal_overlap(&atts[i].validator_id, &atts[j].validator_id, graph);
             if overlap > CORRELATION_THRESHOLD {
                 correlated_pairs += 1;
                 correlations.push((
@@ -238,11 +239,7 @@ fn compute_diversity(
 /// Compute causal overlap between two validators.
 /// Overlap = |ancestors(A) ∩ ancestors(B)| / |ancestors(A) ∪ ancestors(B)|
 /// (Jaccard similarity of causal histories)
-fn causal_overlap(
-    validator_a: &str,
-    validator_b: &str,
-    graph: &CausalGraph,
-) -> f64 {
+fn causal_overlap(validator_a: &str, validator_b: &str, graph: &CausalGraph) -> f64 {
     let events_a = events_by_origin(validator_a, graph);
     let events_b = events_by_origin(validator_b, graph);
 
@@ -251,11 +248,13 @@ fn causal_overlap(
     }
 
     // Collect all ancestors of A's events and B's events
-    let ancestors_a: HashSet<_> = events_a.iter()
+    let ancestors_a: HashSet<_> = events_a
+        .iter()
         .filter_map(|id| graph.ancestors_of(id))
         .flat_map(|s| s.iter().cloned())
         .collect();
-    let ancestors_b: HashSet<_> = events_b.iter()
+    let ancestors_b: HashSet<_> = events_b
+        .iter()
         .filter_map(|id| graph.ancestors_of(id))
         .flat_map(|s| s.iter().cloned())
         .collect();
@@ -263,15 +262,16 @@ fn causal_overlap(
     let intersection = ancestors_a.intersection(&ancestors_b).count();
     let union = ancestors_a.union(&ancestors_b).count();
 
-    if union == 0 { 0.0 } else { intersection as f64 / union as f64 }
+    if union == 0 {
+        0.0
+    } else {
+        intersection as f64 / union as f64
+    }
 }
 
 /// Find events in the causal graph originating from a validator.
 /// Uses origin coordinate matching (validator_id encodes origin).
-fn events_by_origin(
-    _validator_id: &str,
-    graph: &CausalGraph,
-) -> Vec<crate::causality::EventId> {
+fn events_by_origin(_validator_id: &str, graph: &CausalGraph) -> Vec<crate::causality::EventId> {
     // In the current model, validator_id is a string label.
     // We match events whose origin was used by this validator.
     // This is approximate — a full implementation would use the
@@ -282,10 +282,7 @@ fn events_by_origin(
 /// Compute cost score for attestations.
 /// Cost = average(min(causal_depth / MIN_CAUSAL_DEPTH, 1.0))
 /// Attestations without causal backing get ZERO_COST_DISCOUNT.
-fn compute_cost(
-    atts: &[Attestation],
-    graph: Option<&CausalGraph>,
-) -> f64 {
+fn compute_cost(atts: &[Attestation], graph: Option<&CausalGraph>) -> f64 {
     let graph = match graph {
         Some(g) => g,
         None => return ZERO_COST_DISCOUNT, // no graph → zero-cost
@@ -295,23 +292,23 @@ fn compute_cost(
         return 0.0;
     }
 
-    let total: f64 = atts.iter().map(|att| {
-        let depth = validator_causal_depth(&att.validator_id, graph);
-        if depth == 0 {
-            ZERO_COST_DISCOUNT
-        } else {
-            (depth as f64 / MIN_CAUSAL_DEPTH as f64).min(1.0)
-        }
-    }).sum();
+    let total: f64 = atts
+        .iter()
+        .map(|att| {
+            let depth = validator_causal_depth(&att.validator_id, graph);
+            if depth == 0 {
+                ZERO_COST_DISCOUNT
+            } else {
+                (depth as f64 / MIN_CAUSAL_DEPTH as f64).min(1.0)
+            }
+        })
+        .sum();
 
     total / atts.len() as f64
 }
 
 /// Causal depth of a validator: longest chain of events they've produced.
-fn validator_causal_depth(
-    _validator_id: &str,
-    graph: &CausalGraph,
-) -> u64 {
+fn validator_causal_depth(_validator_id: &str, graph: &CausalGraph) -> u64 {
     // Approximate: count total events in graph as depth proxy.
     // Full implementation would track per-validator event chains.
     let all_events: Vec<_> = graph.all_event_ids().collect();
@@ -405,21 +402,16 @@ mod tests {
 
         // Build a causal graph with some depth
         let mut graph = CausalGraph::new();
-        let e1 = crate::causality::CausalEvent::new(
-            center, 0, vec![], b"genesis".to_vec(),
-        );
+        let e1 = crate::causality::CausalEvent::new(center, 0, vec![], b"genesis".to_vec());
         let e1_id = e1.id.clone();
         graph.insert(e1);
 
-        let e2 = crate::causality::CausalEvent::new(
-            center, 1, vec![e1_id.clone()], b"second".to_vec(),
-        );
+        let e2 =
+            crate::causality::CausalEvent::new(center, 1, vec![e1_id.clone()], b"second".to_vec());
         let e2_id = e2.id.clone();
         graph.insert(e2);
 
-        let e3 = crate::causality::CausalEvent::new(
-            center, 2, vec![e2_id], b"third".to_vec(),
-        );
+        let e3 = crate::causality::CausalEvent::new(center, 2, vec![e2_id], b"third".to_vec());
         graph.insert(e3);
 
         let result = effective_sigma(&field, center, Some(&graph));
@@ -443,7 +435,11 @@ mod tests {
 
         let result = effective_sigma(&field, center, None);
         assert_eq!(result.raw_sigma, 2);
-        assert!(result.sigma_eff < 1.0, "2-dim σ_eff should be < 1.0: {}", result.sigma_eff);
+        assert!(
+            result.sigma_eff < 1.0,
+            "2-dim σ_eff should be < 1.0: {}",
+            result.sigma_eff
+        );
     }
 
     // --- Security bound tests ---
@@ -473,10 +469,7 @@ mod tests {
     #[test]
     fn total_compromise_has_no_security() {
         let p = security_bound(100, 100, 4.0, 0.0);
-        assert!(
-            (p - 1.0).abs() < 0.01,
-            "k=N should give P≈1: {p}"
-        );
+        assert!((p - 1.0).abs() < 0.01, "k=N should give P≈1: {p}");
     }
 
     #[test]
@@ -501,7 +494,12 @@ mod tests {
         field.attest(center, "shaped_event", Dimension::Temporal, "attacker_t");
         field.attest(center, "shaped_event", Dimension::Context, "attacker_c");
         field.attest(center, "shaped_event", Dimension::Origin, "attacker_o");
-        field.attest(center, "shaped_event", Dimension::Verification, "attacker_v");
+        field.attest(
+            center,
+            "shaped_event",
+            Dimension::Verification,
+            "attacker_v",
+        );
 
         // No causal graph → zero-cost attestations
         let result = effective_sigma(&field, center, None);
@@ -519,7 +517,10 @@ mod tests {
         for i in 0..5u64 {
             let parents = last_id.iter().cloned().collect();
             let ev = crate::causality::CausalEvent::new(
-                center, i, parents, format!("honest_{i}").into_bytes(),
+                center,
+                i,
+                parents,
+                format!("honest_{i}").into_bytes(),
             );
             last_id = Some(ev.id.clone());
             graph.insert(ev);
@@ -529,7 +530,8 @@ mod tests {
         assert!(
             honest_result.sigma_eff > result.sigma_eff,
             "honest σ_eff ({}) should exceed attacker σ_eff ({})",
-            honest_result.sigma_eff, result.sigma_eff
+            honest_result.sigma_eff,
+            result.sigma_eff
         );
     }
 }

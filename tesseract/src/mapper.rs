@@ -4,7 +4,7 @@
 //! Related events land near each other → orbitals overlap → emergent links.
 
 use crate::Coord;
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey, Signature};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 /// An event in the real world that needs to be placed in the field.
@@ -139,7 +139,14 @@ impl SignedEvent {
         let signature = signing_key.sign(&message);
         let public_key = signing_key.verifying_key();
 
-        Self { id, timestamp, channel, data, public_key, signature }
+        Self {
+            id,
+            timestamp,
+            channel,
+            data,
+            public_key,
+            signature,
+        }
     }
 
     /// Verify the signature and produce a trusted `Event` with org derived from the public key.
@@ -197,33 +204,93 @@ mod tests {
     #[test]
     fn same_channel_same_c_axis() {
         let mapper = CoordMapper::new(32);
-        let e1 = Event { id: "tx-001".into(), timestamp: 1000, channel: "payments".into(), org: "alice".into(), data: "".into() };
-        let e2 = Event { id: "tx-002".into(), timestamp: 1005, channel: "payments".into(), org: "bob".into(), data: "".into() };
-        assert_eq!(mapper.map(&e1).c, mapper.map(&e2).c, "Same channel → same c-axis");
+        let e1 = Event {
+            id: "tx-001".into(),
+            timestamp: 1000,
+            channel: "payments".into(),
+            org: "alice".into(),
+            data: "".into(),
+        };
+        let e2 = Event {
+            id: "tx-002".into(),
+            timestamp: 1005,
+            channel: "payments".into(),
+            org: "bob".into(),
+            data: "".into(),
+        };
+        assert_eq!(
+            mapper.map(&e1).c,
+            mapper.map(&e2).c,
+            "Same channel → same c-axis"
+        );
     }
 
     #[test]
     fn same_org_same_o_axis() {
         let mapper = CoordMapper::new(32);
-        let e1 = Event { id: "tx-001".into(), timestamp: 1000, channel: "payments".into(), org: "alice".into(), data: "".into() };
-        let e2 = Event { id: "tx-002".into(), timestamp: 2000, channel: "identity".into(), org: "alice".into(), data: "".into() };
-        assert_eq!(mapper.map(&e1).o, mapper.map(&e2).o, "Same org → same o-axis");
+        let e1 = Event {
+            id: "tx-001".into(),
+            timestamp: 1000,
+            channel: "payments".into(),
+            org: "alice".into(),
+            data: "".into(),
+        };
+        let e2 = Event {
+            id: "tx-002".into(),
+            timestamp: 2000,
+            channel: "identity".into(),
+            org: "alice".into(),
+            data: "".into(),
+        };
+        assert_eq!(
+            mapper.map(&e1).o,
+            mapper.map(&e2).o,
+            "Same org → same o-axis"
+        );
     }
 
     #[test]
     fn nearby_timestamps_same_t() {
         let mapper = CoordMapper::new(32).with_time_bucket(60);
-        let e1 = Event { id: "tx-001".into(), timestamp: 1020, channel: "x".into(), org: "y".into(), data: "".into() };
-        let e2 = Event { id: "tx-002".into(), timestamp: 1050, channel: "x".into(), org: "y".into(), data: "".into() };
+        let e1 = Event {
+            id: "tx-001".into(),
+            timestamp: 1020,
+            channel: "x".into(),
+            org: "y".into(),
+            data: "".into(),
+        };
+        let e2 = Event {
+            id: "tx-002".into(),
+            timestamp: 1050,
+            channel: "x".into(),
+            org: "y".into(),
+            data: "".into(),
+        };
         // Both in bucket 17 (1020/60=17, 1050/60=17)
-        assert_eq!(mapper.map(&e1).t, mapper.map(&e2).t, "Same 60s bucket → same t");
+        assert_eq!(
+            mapper.map(&e1).t,
+            mapper.map(&e2).t,
+            "Same 60s bucket → same t"
+        );
     }
 
     #[test]
     fn different_buckets_different_t() {
         let mapper = CoordMapper::new(32).with_time_bucket(60);
-        let e1 = Event { id: "tx-001".into(), timestamp: 1020, channel: "x".into(), org: "y".into(), data: "".into() };
-        let e2 = Event { id: "tx-002".into(), timestamp: 1080, channel: "x".into(), org: "y".into(), data: "".into() };
+        let e1 = Event {
+            id: "tx-001".into(),
+            timestamp: 1020,
+            channel: "x".into(),
+            org: "y".into(),
+            data: "".into(),
+        };
+        let e2 = Event {
+            id: "tx-002".into(),
+            timestamp: 1080,
+            channel: "x".into(),
+            org: "y".into(),
+            data: "".into(),
+        };
         // Could still collide by wrapping, but likely different
         let c1 = mapper.map(&e1);
         let c2 = mapper.map(&e2);
@@ -276,7 +343,10 @@ mod tests {
         let event = se.verify().unwrap();
 
         let real_org = org_from_public_key(&real_key.verifying_key());
-        assert_ne!(event.org, real_org, "attacker cannot claim real identity's org");
+        assert_ne!(
+            event.org, real_org,
+            "attacker cannot claim real identity's org"
+        );
     }
 
     #[test]
@@ -296,8 +366,20 @@ mod tests {
         // Two transactions in the same channel, same org, close in time
         // should land in nearby coordinates (only t and v differ)
         let mapper = CoordMapper::new(32).with_time_bucket(60);
-        let e1 = Event { id: "tx-001".into(), timestamp: 1020, channel: "payments".into(), org: "alice".into(), data: "send 10".into() };
-        let e2 = Event { id: "tx-002".into(), timestamp: 1050, channel: "payments".into(), org: "alice".into(), data: "send 5".into() };
+        let e1 = Event {
+            id: "tx-001".into(),
+            timestamp: 1020,
+            channel: "payments".into(),
+            org: "alice".into(),
+            data: "send 10".into(),
+        };
+        let e2 = Event {
+            id: "tx-002".into(),
+            timestamp: 1050,
+            channel: "payments".into(),
+            org: "alice".into(),
+            data: "send 5".into(),
+        };
 
         let c1 = mapper.map(&e1);
         let c2 = mapper.map(&e2);

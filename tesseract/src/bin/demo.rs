@@ -9,7 +9,7 @@
 //!
 //! Run: cargo run --bin demo
 
-use std::io::{Read, Write, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -64,10 +64,8 @@ fn wait(msg: &str) {
 // ── HTTP helpers ──────────────────────────────────────────────
 
 fn http_post(addr: &str, path: &str, body: &str) -> Option<String> {
-    let mut stream = TcpStream::connect_timeout(
-        &addr.parse().ok()?,
-        Duration::from_secs(2),
-    ).ok()?;
+    let mut stream =
+        TcpStream::connect_timeout(&addr.parse().ok()?, Duration::from_secs(2)).ok()?;
     let req = format!(
         "POST {} HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         path, addr, body.len(), body
@@ -81,10 +79,8 @@ fn http_post(addr: &str, path: &str, body: &str) -> Option<String> {
 }
 
 fn http_get(addr: &str, path: &str) -> Option<String> {
-    let mut stream = TcpStream::connect_timeout(
-        &addr.parse().ok()?,
-        Duration::from_secs(2),
-    ).ok()?;
+    let mut stream =
+        TcpStream::connect_timeout(&addr.parse().ok()?, Duration::from_secs(2)).ok()?;
     let req = format!(
         "GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
         path, addr
@@ -119,10 +115,12 @@ fn cell_is_crystallized(response: &str) -> bool {
 
 fn cell_probability(response: &str) -> f64 {
     // Parse "probability":0.1234 from JSON
-    response.find("\"probability\":")
+    response
+        .find("\"probability\":")
         .and_then(|i| {
             let start = i + 14;
-            let end = response[start..].find(|c: char| c == ',' || c == '}')
+            let end = response[start..]
+                .find(|c: char| c == ',' || c == '}')
                 .map(|j| start + j)
                 .unwrap_or(response.len());
             response[start..end].parse().ok()
@@ -131,10 +129,14 @@ fn cell_probability(response: &str) -> f64 {
 }
 
 fn cell_record(response: &str) -> String {
-    response.find("\"record\":\"")
+    response
+        .find("\"record\":\"")
         .map(|i| {
             let start = i + 10;
-            let end = response[start..].find('"').map(|j| start + j).unwrap_or(response.len());
+            let end = response[start..]
+                .find('"')
+                .map(|j| start + j)
+                .unwrap_or(response.len());
             response[start..end].to_string()
         })
         .unwrap_or_default()
@@ -144,11 +146,13 @@ fn cell_record(response: &str) -> String {
 
 fn start_node(port: u16, node_id: &str, peer_port: Option<u16>) {
     let node_id = node_id.to_string();
-    let peers = peer_port.map(|p| format!("127.0.0.1:{}", p)).unwrap_or_default();
+    let peers = peer_port
+        .map(|p| format!("127.0.0.1:{}", p))
+        .unwrap_or_default();
 
     thread::spawn(move || {
-        use tesseract::*;
         use tesseract::persistence::EventLog;
+        use tesseract::*;
 
         let log = EventLog::new();
         let mut field = Field::new(8);
@@ -159,7 +163,11 @@ fn start_node(port: u16, node_id: &str, peer_port: Option<u16>) {
             field,
             log,
             region_id: 0,
-            peers: if peers.is_empty() { vec![] } else { vec![peers] },
+            peers: if peers.is_empty() {
+                vec![]
+            } else {
+                vec![peers]
+            },
         }));
 
         // Periodic sync
@@ -173,7 +181,9 @@ fn start_node(port: u16, node_id: &str, peer_port: Option<u16>) {
         let evo_st = Arc::clone(&state);
         thread::spawn(move || loop {
             thread::sleep(Duration::from_millis(300));
-            if let Ok(mut st) = evo_st.lock() { st.field.evolve(); }
+            if let Ok(mut st) = evo_st.lock() {
+                st.field.evolve();
+            }
         });
 
         let listener = TcpListener::bind(format!("127.0.0.1:{}", port)).expect("bind failed");
@@ -197,20 +207,31 @@ fn handle_request(mut stream: TcpStream, state: &Arc<Mutex<NodeState>>) {
     let mut reader = BufReader::new(&stream);
 
     let mut request_line = String::new();
-    if reader.read_line(&mut request_line).is_err() { return; }
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
     let parts: Vec<&str> = request_line.trim().split_whitespace().collect();
-    if parts.len() < 2 { return; }
+    if parts.len() < 2 {
+        return;
+    }
     let method = parts[0];
     let path = parts[1].to_string();
 
     let mut content_length = 0usize;
     loop {
         let mut header = String::new();
-        if reader.read_line(&mut header).is_err() { break; }
-        if header.trim().is_empty() { break; }
+        if reader.read_line(&mut header).is_err() {
+            break;
+        }
+        if header.trim().is_empty() {
+            break;
+        }
         if header.to_lowercase().starts_with("content-length:") {
-            content_length = header.split(':').nth(1)
-                .and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+            content_length = header
+                .split(':')
+                .nth(1)
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(0);
         }
     }
 
@@ -230,13 +251,20 @@ fn handle_request(mut stream: TcpStream, state: &Arc<Mutex<NodeState>>) {
     let _ = stream.write_all(response.as_bytes());
 }
 
-fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) -> (&'static str, String) {
+fn route(
+    method: &str,
+    path: &str,
+    body: &str,
+    state: &Arc<Mutex<NodeState>>,
+) -> (&'static str, String) {
     match (method, path) {
         ("GET", "/status") => {
             let st = state.lock().unwrap();
             let json = format!(
                 r#"{{"node_id":"{}","active_cells":{},"crystallized":{}}}"#,
-                st.node_id, st.field.active_cells(), st.field.crystallized_count()
+                st.node_id,
+                st.field.active_cells(),
+                st.field.crystallized_count()
             );
             ("200 OK", json)
         }
@@ -259,7 +287,9 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) ->
                     let cell = st.field.get(coord);
                     let json = format!(
                         r#"{{"coord":"{}","probability":{:.4},"crystallized":{},"record":"{}"}}"#,
-                        coord, cell.probability, cell.crystallized,
+                        coord,
+                        cell.probability,
+                        cell.crystallized,
                         cell.record().replace('"', "'")
                     );
                     ("201 Created", json)
@@ -285,16 +315,27 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) ->
             }
         }
         ("GET", p) if p.starts_with("/cell/") => {
-            let nums: Vec<usize> = p.trim_start_matches("/cell/")
-                .split('/').filter_map(|s| s.parse().ok()).collect();
+            let nums: Vec<usize> = p
+                .trim_start_matches("/cell/")
+                .split('/')
+                .filter_map(|s| s.parse().ok())
+                .collect();
             if nums.len() == 4 {
                 let st = state.lock().unwrap();
-                let coord = tesseract::Coord { t: nums[0], c: nums[1], o: nums[2], v: nums[3] };
+                let coord = tesseract::Coord {
+                    t: nums[0],
+                    c: nums[1],
+                    o: nums[2],
+                    v: nums[3],
+                };
                 let cell = st.field.get(coord);
                 let json = format!(
                     r#"{{"coord":"{}","probability":{:.4},"crystallized":{},"support":{},"record":"{}"}}"#,
-                    coord, cell.probability, cell.crystallized,
-                    st.field.orthogonal_support(coord), cell.record().replace('"', "'")
+                    coord,
+                    cell.probability,
+                    cell.crystallized,
+                    st.field.orthogonal_support(coord),
+                    cell.record().replace('"', "'")
                 );
                 ("200 OK", json)
             } else {
@@ -303,12 +344,16 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) ->
         }
         ("GET", "/boundary") => {
             let st = state.lock().unwrap();
-            let cells: Vec<String> = st.field.active_entries()
+            let cells: Vec<String> = st
+                .field
+                .active_entries()
                 .filter(|(_, cell)| cell.crystallized || cell.probability > 0.1)
-                .map(|(coord, cell)| format!(
-                    r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
-                    coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
-                ))
+                .map(|(coord, cell)| {
+                    format!(
+                        r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
+                        coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
+                    )
+                })
                 .collect();
             ("200 OK", format!("[{}]", cells.join(",")))
         }
@@ -329,7 +374,10 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) ->
                         let k = cd["k"].as_bool().unwrap_or(false);
 
                         let local = st.field.get_mut(coord);
-                        if p > local.probability { local.probability = p; merged += 1; }
+                        if p > local.probability {
+                            local.probability = p;
+                            merged += 1;
+                        }
                         if k && !local.crystallized {
                             local.crystallized = true;
                             local.probability = 1.0;
@@ -348,12 +396,16 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<NodeState>>) ->
 fn sync_with_peers(state: &Arc<Mutex<NodeState>>) {
     let (peers, boundary_json) = {
         let st = state.lock().unwrap();
-        let cells: Vec<String> = st.field.active_entries()
+        let cells: Vec<String> = st
+            .field
+            .active_entries()
             .filter(|(_, cell)| cell.crystallized || cell.probability > 0.1)
-            .map(|(coord, cell)| format!(
-                r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
-                coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
-            ))
+            .map(|(coord, cell)| {
+                format!(
+                    r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
+                    coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
+                )
+            })
             .collect();
         (st.peers.clone(), format!("[{}]", cells.join(",")))
     };
@@ -361,7 +413,9 @@ fn sync_with_peers(state: &Arc<Mutex<NodeState>>) {
     for peer in &peers {
         // Push
         if let Ok(mut stream) = TcpStream::connect_timeout(
-            &peer.parse().unwrap_or_else(|_| "127.0.0.1:7700".parse().unwrap()),
+            &peer
+                .parse()
+                .unwrap_or_else(|_| "127.0.0.1:7700".parse().unwrap()),
             Duration::from_secs(1),
         ) {
             let req = format!(
@@ -385,7 +439,9 @@ fn sync_with_peers(state: &Arc<Mutex<NodeState>>) {
                     let k = cd["k"].as_bool().unwrap_or(false);
 
                     let local = st.field.get_mut(coord);
-                    if p > local.probability { local.probability = p; }
+                    if p > local.probability {
+                        local.probability = p;
+                    }
                     if k && !local.crystallized {
                         local.crystallized = true;
                         local.probability = 1.0;
@@ -430,8 +486,16 @@ fn main() {
     step(1, "Alice proposes a deal");
     // ════════════════════════════════════════════════════════════
 
-    agent("Alice", CYAN, "I want to buy compute service for 100 curvatura");
-    agent("Alice", CYAN, &format!("→ Seeding deal-001 on node 1 at {:?}", deal));
+    agent(
+        "Alice",
+        CYAN,
+        "I want to buy compute service for 100 curvatura",
+    );
+    agent(
+        "Alice",
+        CYAN,
+        &format!("→ Seeding deal-001 on node 1 at {:?}", deal),
+    );
 
     let resp = seed_event(node1, deal.0, deal.1, deal.2, deal.3, "deal-001[alice]");
     if let Some(r) = &resp {
@@ -443,7 +507,11 @@ fn main() {
     let cell = get_cell(node1, deal.0, deal.1, deal.2, deal.3);
     if let Some(ref c) = cell {
         let p = cell_probability(c);
-        agent("Alice", CYAN, &format!("Cell probability: {:.2}%", p * 100.0));
+        agent(
+            "Alice",
+            CYAN,
+            &format!("Cell probability: {:.2}%", p * 100.0),
+        );
         if cell_is_crystallized(c) {
             success("Proposal already crystallized (single-party, small field)");
         } else {
@@ -456,18 +524,64 @@ fn main() {
     // ════════════════════════════════════════════════════════════
 
     agent("Bob", GREEN, "I accept Alice's deal");
-    agent("Bob", GREEN, &format!("→ Seeding deal-001 on node 2 at {:?}", deal));
+    agent(
+        "Bob",
+        GREEN,
+        &format!("→ Seeding deal-001 on node 2 at {:?}", deal),
+    );
 
     seed_event(node2, deal.0, deal.1, deal.2, deal.3, "deal-001[bob]");
 
     // Add supporting context events (both parties)
     agent("Alice", CYAN, "→ Adding deal context (supporting events)");
-    seed_event(node1, context1.0, context1.1, context1.2, context1.3, "deal-context-1[alice]");
-    seed_event(node2, context1.0, context1.1, context1.2, context1.3, "deal-context-1[bob]");
-    seed_event(node1, context2.0, context2.1, context2.2, context2.3, "deal-context-2[alice]");
-    seed_event(node2, context2.0, context2.1, context2.2, context2.3, "deal-context-2[bob]");
-    seed_event(node1, context3.0, context3.1, context3.2, context3.3, "deal-context-3[alice]");
-    seed_event(node2, context3.0, context3.1, context3.2, context3.3, "deal-context-3[bob]");
+    seed_event(
+        node1,
+        context1.0,
+        context1.1,
+        context1.2,
+        context1.3,
+        "deal-context-1[alice]",
+    );
+    seed_event(
+        node2,
+        context1.0,
+        context1.1,
+        context1.2,
+        context1.3,
+        "deal-context-1[bob]",
+    );
+    seed_event(
+        node1,
+        context2.0,
+        context2.1,
+        context2.2,
+        context2.3,
+        "deal-context-2[alice]",
+    );
+    seed_event(
+        node2,
+        context2.0,
+        context2.1,
+        context2.2,
+        context2.3,
+        "deal-context-2[bob]",
+    );
+    seed_event(
+        node1,
+        context3.0,
+        context3.1,
+        context3.2,
+        context3.3,
+        "deal-context-3[alice]",
+    );
+    seed_event(
+        node2,
+        context3.0,
+        context3.1,
+        context3.2,
+        context3.3,
+        "deal-context-3[bob]",
+    );
 
     wait("Waiting for sync + evolution...");
     thread::sleep(Duration::from_secs(3));
@@ -476,13 +590,22 @@ fn main() {
     let cell1 = get_cell(node1, deal.0, deal.1, deal.2, deal.3);
     let cell2 = get_cell(node2, deal.0, deal.1, deal.2, deal.3);
 
-    let cryst1 = cell1.as_ref().map(|c| cell_is_crystallized(c)).unwrap_or(false);
-    let cryst2 = cell2.as_ref().map(|c| cell_is_crystallized(c)).unwrap_or(false);
+    let cryst1 = cell1
+        .as_ref()
+        .map(|c| cell_is_crystallized(c))
+        .unwrap_or(false);
+    let cryst2 = cell2
+        .as_ref()
+        .map(|c| cell_is_crystallized(c))
+        .unwrap_or(false);
 
     if cryst1 && cryst2 {
         success("Agreement CRYSTALLIZED on both nodes!");
     } else {
-        system(&format!("Node 1 crystallized: {}, Node 2 crystallized: {}", cryst1, cryst2));
+        system(&format!(
+            "Node 1 crystallized: {}, Node 2 crystallized: {}",
+            cryst1, cryst2
+        ));
         if cryst1 || cryst2 {
             success("Agreement crystallized on at least one node (sync will propagate)");
         }
@@ -501,10 +624,25 @@ fn main() {
     step(3, "Mallory attempts fraud");
     // ════════════════════════════════════════════════════════════
 
-    agent("Mallory", RED, "I'll claim Alice made a deal with ME instead");
-    agent("Mallory", RED, &format!("→ Seeding fake-deal on node 1 at {:?}", fraud));
+    agent(
+        "Mallory",
+        RED,
+        "I'll claim Alice made a deal with ME instead",
+    );
+    agent(
+        "Mallory",
+        RED,
+        &format!("→ Seeding fake-deal on node 1 at {:?}", fraud),
+    );
 
-    seed_event(node1, fraud.0, fraud.1, fraud.2, fraud.3, "mallory:fake-deal");
+    seed_event(
+        node1,
+        fraud.0,
+        fraud.1,
+        fraud.2,
+        fraud.3,
+        "mallory:fake-deal",
+    );
 
     wait("Waiting for evolution...");
     thread::sleep(Duration::from_secs(2));
@@ -527,9 +665,10 @@ fn main() {
             success("Mallory's fraud does NOT have Alice's endorsement");
         } else {
             // In small fields, orbital background may exist
-            if fraud_record.starts_with("mallory") ||
-               fraud_record.contains("mallory:fake-deal(100%)") ||
-               fraud_record.contains("mallory:fake-deal") {
+            if fraud_record.starts_with("mallory")
+                || fraud_record.contains("mallory:fake-deal(100%)")
+                || fraud_record.contains("mallory:fake-deal")
+            {
                 success("Mallory is PRIMARY influence — Alice's trace is only orbital background");
             }
         }
@@ -543,13 +682,19 @@ fn main() {
 
     agent("Attacker", RED, "Destroying the agreement record...");
 
-    let destroy_body = format!(r#"{{"t":{},"c":{},"o":{},"v":{}}}"#, deal.0, deal.1, deal.2, deal.3);
+    let destroy_body = format!(
+        r#"{{"t":{},"c":{},"o":{},"v":{}}}"#,
+        deal.0, deal.1, deal.2, deal.3
+    );
     http_post(node1, "/destroy", &destroy_body);
 
     let after_destroy = get_cell(node1, deal.0, deal.1, deal.2, deal.3);
     if let Some(ref c) = after_destroy {
         if !cell_is_crystallized(c) {
-            system(&format!("Agreement destroyed. Probability: {:.2}%", cell_probability(c) * 100.0));
+            system(&format!(
+                "Agreement destroyed. Probability: {:.2}%",
+                cell_probability(c) * 100.0
+            ));
         }
     }
 
@@ -566,11 +711,20 @@ fn main() {
         let crystallized = cell_is_crystallized(c);
 
         if crystallized {
-            success(&format!("Agreement SELF-HEALED! Probability: {:.0}%", p * 100.0));
+            success(&format!(
+                "Agreement SELF-HEALED! Probability: {:.0}%",
+                p * 100.0
+            ));
         } else if p > 0.5 {
-            success(&format!("Agreement recovering... Probability: {:.0}% (converging)", p * 100.0));
+            success(&format!(
+                "Agreement recovering... Probability: {:.0}% (converging)",
+                p * 100.0
+            ));
         } else {
-            system(&format!("Probability: {:.0}% — still recovering", p * 100.0));
+            system(&format!(
+                "Probability: {:.0}% — still recovering",
+                p * 100.0
+            ));
         }
 
         let record = cell_record(c);
@@ -592,7 +746,9 @@ fn main() {
         // Parse and display influences
         for part in record.split(" + ") {
             let part = part.trim();
-            if part.is_empty() || part == "(empty)" { continue; }
+            if part.is_empty() || part == "(empty)" {
+                continue;
+            }
 
             let color = if part.contains("alice") {
                 CYAN

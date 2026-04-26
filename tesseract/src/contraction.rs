@@ -159,7 +159,8 @@ mod tests {
         }
 
         // Perturb non-crystallized cells in f2
-        let coords: Vec<Coord> = f2.active_entries()
+        let coords: Vec<Coord> = f2
+            .active_entries()
             .filter(|(_, c)| !c.crystallized)
             .map(|(coord, _)| coord)
             .collect();

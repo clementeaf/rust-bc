@@ -1,11 +1,16 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use tesseract::{Coord, Dimension, Field, evolve_to_equilibrium};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use tesseract::adversarial;
 use tesseract::causality::{CausalEvent, CausalGraph};
 use tesseract::liveness;
+use tesseract::{evolve_to_equilibrium, Coord, Dimension, Field};
 
 fn coord_center(size: usize) -> Coord {
-    Coord { t: size / 2, c: size / 2, o: size / 2, v: size / 2 }
+    Coord {
+        t: size / 2,
+        c: size / 2,
+        o: size / 2,
+        v: size / 2,
+    }
 }
 
 fn attest_full(field: &mut Field, center: Coord, event_id: &str) {
@@ -74,9 +79,7 @@ fn bench_sigma_independence(c: &mut Criterion) {
                 field.attest(center, "event", dims[i].0, dims[i].1);
             }
 
-            b.iter(|| {
-                black_box(field.get(center).sigma_independence())
-            });
+            b.iter(|| black_box(field.get(center).sigma_independence()));
         });
     }
     group.finish();
@@ -91,9 +94,7 @@ fn bench_sigma_eff(c: &mut Criterion) {
         let center = coord_center(12);
         attest_full(&mut field, center, "event");
 
-        b.iter(|| {
-            black_box(adversarial::effective_sigma(&field, center, None))
-        });
+        b.iter(|| black_box(adversarial::effective_sigma(&field, center, None)));
     });
 
     // With graph
@@ -111,9 +112,7 @@ fn bench_sigma_eff(c: &mut Criterion) {
             graph.insert(ev);
         }
 
-        b.iter(|| {
-            black_box(adversarial::effective_sigma(&field, center, Some(&graph)))
-        });
+        b.iter(|| black_box(adversarial::effective_sigma(&field, center, Some(&graph))));
     });
 
     group.finish();
@@ -169,7 +168,9 @@ fn bench_partition_recovery(c: &mut Criterion) {
 
                 field.attest(center, "event", Dimension::Temporal, "val_t");
                 field.attest(center, "event", Dimension::Context, "val_c");
-                for _ in 0..dur { field.evolve(); }
+                for _ in 0..dur {
+                    field.evolve();
+                }
                 field.attest(center, "event", Dimension::Origin, "val_o");
                 field.attest(center, "event", Dimension::Verification, "val_v");
 

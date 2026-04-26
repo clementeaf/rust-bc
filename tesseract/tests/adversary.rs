@@ -1,8 +1,8 @@
 //! Adversary tests — attack vectors against the tesseract field.
 
-use tesseract::*;
-use tesseract::node::*;
 use tesseract::mapper::*;
+use tesseract::node::*;
+use tesseract::*;
 
 // === Sybil Attack ===
 // Can an attacker create many fake events to overwhelm the field?
@@ -12,10 +12,31 @@ fn sybil_fake_flood_does_not_displace_real() {
     let mut field = Field::new(8);
 
     // Real event: dense cluster (simulates legitimate activity)
-    let real = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let real = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     field.seed_named(real, "real-tx");
-    field.seed_named(Coord { t: 4, c: 3, o: 3, v: 3 }, "real-related");
-    field.seed_named(Coord { t: 3, c: 4, o: 3, v: 3 }, "real-related2");
+    field.seed_named(
+        Coord {
+            t: 4,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "real-related",
+    );
+    field.seed_named(
+        Coord {
+            t: 3,
+            c: 4,
+            o: 3,
+            v: 3,
+        },
+        "real-related2",
+    );
     evolve_to_equilibrium(&mut field, 10);
 
     assert!(field.get(real).crystallized);
@@ -37,7 +58,10 @@ fn sybil_fake_flood_does_not_displace_real() {
     evolve_to_equilibrium(&mut field, 20);
 
     // Real event should still be crystallized with its original record
-    assert!(field.get(real).crystallized, "Real event should survive Sybil flood");
+    assert!(
+        field.get(real).crystallized,
+        "Real event should survive Sybil flood"
+    );
     assert!(
         field.get(real).record().contains("real-tx"),
         "Real event record should be preserved: {}",
@@ -52,12 +76,22 @@ fn sybil_fake_cluster_does_not_propagate() {
     let mut field_sybil = Field::new(8);
 
     // Same real events in both fields
-    let real = Coord { t: 2, c: 2, o: 2, v: 2 };
+    let real = Coord {
+        t: 2,
+        c: 2,
+        o: 2,
+        v: 2,
+    };
     field_clean.seed_named(real, "legit");
     field_sybil.seed_named(real, "legit");
 
     // Sybil: force-inject a fake cluster (not seeded, forced crystallization)
-    let fake_center = Coord { t: 6, c: 6, o: 6, v: 6 };
+    let fake_center = Coord {
+        t: 6,
+        c: 6,
+        o: 6,
+        v: 6,
+    };
     for dt in -1i64..=1 {
         for dc in -1i64..=1 {
             let coord = Coord {
@@ -82,7 +116,8 @@ fn sybil_fake_cluster_does_not_propagate() {
     assert!(
         sybil_crystals <= clean_crystals + fake_injected + 5,
         "Sybil cluster should not cascade: clean={}, sybil={}",
-        clean_crystals, sybil_crystals
+        clean_crystals,
+        sybil_crystals
     );
 }
 
@@ -94,10 +129,42 @@ fn eclipse_isolated_node_preserves_local_state() {
     let mut net = Network::new(8, 4);
 
     // Seed events on all 4 nodes
-    net.seed(Coord { t: 1, c: 3, o: 3, v: 3 }, "ev-node0");
-    net.seed(Coord { t: 3, c: 3, o: 3, v: 3 }, "ev-node1");
-    net.seed(Coord { t: 5, c: 3, o: 3, v: 3 }, "ev-node2");
-    net.seed(Coord { t: 7, c: 3, o: 3, v: 3 }, "ev-node3");
+    net.seed(
+        Coord {
+            t: 1,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node0",
+    );
+    net.seed(
+        Coord {
+            t: 3,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node1",
+    );
+    net.seed(
+        Coord {
+            t: 5,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node2",
+    );
+    net.seed(
+        Coord {
+            t: 7,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node3",
+    );
 
     net.run_to_equilibrium(10);
 
@@ -108,7 +175,12 @@ fn eclipse_isolated_node_preserves_local_state() {
     }
 
     // Node 2's local event should still be crystallized
-    let ev2 = Coord { t: 5, c: 3, o: 3, v: 3 };
+    let ev2 = Coord {
+        t: 5,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     assert!(
         net.nodes[2].field.get(ev2).crystallized,
         "Eclipsed node should preserve its local crystallizations"
@@ -120,12 +192,33 @@ fn eclipse_recovery_after_reconnect() {
     let mut net = Network::new(8, 2);
 
     // Both nodes seed events
-    net.seed(Coord { t: 1, c: 3, o: 3, v: 3 }, "ev-node0");
-    net.seed(Coord { t: 5, c: 3, o: 3, v: 3 }, "ev-node1");
+    net.seed(
+        Coord {
+            t: 1,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node0",
+    );
+    net.seed(
+        Coord {
+            t: 5,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node1",
+    );
     net.run_to_equilibrium(10);
 
     // Destroy an event on node 0 while "eclipsed" (no sync)
-    let target = Coord { t: 1, c: 3, o: 3, v: 3 };
+    let target = Coord {
+        t: 1,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     net.nodes[0].field.destroy(target);
     for n in net.nodes[0].field.neighbors(target) {
         net.nodes[0].field.destroy(n);
@@ -141,7 +234,15 @@ fn eclipse_recovery_after_reconnect() {
 
     // Node 1's event should be unaffected
     assert!(
-        net.nodes[1].field.get(Coord { t: 5, c: 3, o: 3, v: 3 }).crystallized,
+        net.nodes[1]
+            .field
+            .get(Coord {
+                t: 5,
+                c: 3,
+                o: 3,
+                v: 3
+            })
+            .crystallized,
         "Non-eclipsed node should be fine"
     );
 }
@@ -155,8 +256,24 @@ fn timing_late_injection_does_not_corrupt_record() {
     let mut field = Field::new(8);
 
     // Legitimate events
-    field.seed_named(Coord { t: 3, c: 3, o: 3, v: 3 }, "legit-A");
-    field.seed_named(Coord { t: 5, c: 3, o: 3, v: 3 }, "legit-B");
+    field.seed_named(
+        Coord {
+            t: 3,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "legit-A",
+    );
+    field.seed_named(
+        Coord {
+            t: 5,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "legit-B",
+    );
 
     // Evolve partially — let probabilities build up but not crystallize yet
     for _ in 0..3 {
@@ -164,7 +281,12 @@ fn timing_late_injection_does_not_corrupt_record() {
     }
 
     // Attacker injects a fake event near the midpoint right before crystallization
-    let midpoint = Coord { t: 4, c: 3, o: 3, v: 3 };
+    let midpoint = Coord {
+        t: 4,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     let mid_p_before = field.get(midpoint).probability;
 
     // Force a fake influence
@@ -184,7 +306,11 @@ fn timing_late_injection_does_not_corrupt_record() {
     // should have higher cumulative weight from the orbital distribution
     let record = field.get(midpoint).record();
     let has_legit = record.contains("legit-A") || record.contains("legit-B");
-    assert!(has_legit, "Record should contain legitimate events: {}", record);
+    assert!(
+        has_legit,
+        "Record should contain legitimate events: {}",
+        record
+    );
 
     // The fake has weight 0.99 from injection, but the real events
     // have weight 0.50 EACH from orbital (total 1.0 from real).
@@ -207,11 +333,32 @@ fn field_works_without_any_cryptography() {
 
     let mut field = Field::new(8);
 
-    field.seed_named(Coord { t: 2, c: 3, o: 3, v: 3 }, "tx-A");
-    field.seed_named(Coord { t: 4, c: 3, o: 3, v: 3 }, "tx-B");
+    field.seed_named(
+        Coord {
+            t: 2,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "tx-A",
+    );
+    field.seed_named(
+        Coord {
+            t: 4,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "tx-B",
+    );
     evolve_to_equilibrium(&mut field, 20);
 
-    let mid = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let mid = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     assert!(field.get(mid).crystallized);
 
     // Destroy and recover — no crypto involved
@@ -220,7 +367,12 @@ fn field_works_without_any_cryptography() {
     assert!(field.get(mid).crystallized);
 
     // Inject fake — rejected by geometry, not by crypto
-    let fake = Coord { t: 7, c: 7, o: 7, v: 7 };
+    let fake = Coord {
+        t: 7,
+        c: 7,
+        o: 7,
+        v: 7,
+    };
     let cell = field.get_mut(fake);
     cell.probability = 1.0;
     cell.crystallized = true;
@@ -228,13 +380,17 @@ fn field_works_without_any_cryptography() {
 
     // Fake has no neighbors that crystallized from it
     let fake_neighbors = field.neighbors(fake);
-    let fake_propagated = fake_neighbors.iter()
+    let fake_propagated = fake_neighbors
+        .iter()
         .filter(|n| {
             let c = field.get(**n);
             c.crystallized && c.influences.iter().any(|i| i.event_id.contains("FAKE"))
         })
         .count();
-    assert_eq!(fake_propagated, 0, "Fake should not propagate — geometry rejects it, not crypto");
+    assert_eq!(
+        fake_propagated, 0,
+        "Fake should not propagate — geometry rejects it, not crypto"
+    );
 }
 
 #[test]
@@ -251,22 +407,26 @@ fn security_is_geometric_not_computational() {
     // Dense neighborhood
     for t in 2..=4 {
         for c in 2..=4 {
-            field.seed_named(
-                Coord { t, c, o: 3, v: 3 },
-                &format!("event-{}-{}", t, c),
-            );
+            field.seed_named(Coord { t, c, o: 3, v: 3 }, &format!("event-{}-{}", t, c));
         }
     }
     evolve_to_equilibrium(&mut field, 20);
 
-    let target = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let target = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     assert!(field.get(target).crystallized);
     let support = field.orthogonal_support(target);
 
     // "Quantum attack": destroy everything and see if geometry wins
     let all_neighbors = field.neighbors(target);
     field.destroy(target);
-    for n in all_neighbors { field.destroy(n); }
+    for n in all_neighbors {
+        field.destroy(n);
+    }
 
     evolve_to_equilibrium(&mut field, 20);
 
@@ -275,7 +435,8 @@ fn security_is_geometric_not_computational() {
         "Geometry should recover what computation cannot prevent"
     );
     assert_eq!(
-        field.orthogonal_support(target), support,
+        field.orthogonal_support(target),
+        support,
         "Full support should be restored"
     );
 }

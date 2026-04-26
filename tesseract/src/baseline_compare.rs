@@ -33,10 +33,10 @@
 //! **Model**: 4D field with σ-independence. Crystallization requires σ=4.
 //! Gossip + anti-entropy for propagation. See other modules for full model.
 
-use std::collections::{HashMap, HashSet};
-use std::time::Instant;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 // --- Common types ---
 
@@ -137,18 +137,30 @@ impl QuorumSim {
         // Round 1: leader sends proposal to all
         let mut vote_count = 0;
         // Leader votes for itself
-        self.votes.get_mut(&self.leader).unwrap().insert(proposal.to_string());
+        self.votes
+            .get_mut(&self.leader)
+            .unwrap()
+            .insert(proposal.to_string());
         vote_count += 1;
 
         for node in 0..self.num_nodes {
-            if node == self.leader { continue; }
-            if self.partitioned.contains(&node) { continue; }
+            if node == self.leader {
+                continue;
+            }
+            if self.partitioned.contains(&node) {
+                continue;
+            }
 
             self.messages += 1; // leader → node
-            if self.rng.gen::<f64>() < self.drop_rate { continue; }
+            if self.rng.gen::<f64>() < self.drop_rate {
+                continue;
+            }
 
             // Node votes
-            self.votes.get_mut(&node).unwrap().insert(proposal.to_string());
+            self.votes
+                .get_mut(&node)
+                .unwrap()
+                .insert(proposal.to_string());
             vote_count += 1;
 
             self.messages += 1; // node → leader (vote)
@@ -162,7 +174,9 @@ impl QuorumSim {
         if vote_count >= self.quorum_size() {
             // Round 2: leader sends commit to all
             for node in 0..self.num_nodes {
-                if node == self.leader || self.partitioned.contains(&node) { continue; }
+                if node == self.leader || self.partitioned.contains(&node) {
+                    continue;
+                }
                 self.messages += 1;
             }
             ticks += 1;
@@ -177,7 +191,10 @@ impl QuorumSim {
     }
 
     fn node_has(&self, node: usize, proposal: &str) -> bool {
-        self.votes.get(&node).map(|v| v.contains(proposal)).unwrap_or(false)
+        self.votes
+            .get(&node)
+            .map(|v| v.contains(proposal))
+            .unwrap_or(false)
     }
 
     fn convergence_ratio(&self, proposal: &str) -> f64 {
@@ -215,18 +232,25 @@ impl DagGossipSim {
             accepted.insert(i, HashSet::new());
         }
         Self {
-            num_nodes, node_events, accepted, threshold,
+            num_nodes,
+            node_events,
+            accepted,
+            threshold,
             messages: 0,
             rng: StdRng::seed_from_u64(seed),
-            drop_rate, fanout,
+            drop_rate,
+            fanout,
             partitioned: HashSet::new(),
         }
     }
 
     fn originate(&mut self, from: usize, event_id: &str) {
         // Node `from` sees event from itself
-        self.node_events.get_mut(&from).unwrap()
-            .entry(event_id.to_string()).or_default()
+        self.node_events
+            .get_mut(&from)
+            .unwrap()
+            .entry(event_id.to_string())
+            .or_default()
             .insert(from);
         self.check_threshold(from, event_id);
     }
@@ -236,16 +260,22 @@ impl DagGossipSim {
             let mut deliveries: Vec<(usize, usize)> = Vec::new();
 
             for node in 0..self.num_nodes {
-                if self.partitioned.contains(&node) { continue; }
+                if self.partitioned.contains(&node) {
+                    continue;
+                }
                 let has_event = self.node_events[&node].contains_key(event_id);
-                if !has_event { continue; }
+                if !has_event {
+                    continue;
+                }
 
                 // Forward to fanout peers
                 let mut candidates: Vec<usize> = (0..self.num_nodes)
                     .filter(|&n| n != node && !self.partitioned.contains(&n))
                     .collect();
                 for _ in 0..self.fanout.min(candidates.len()) {
-                    if candidates.is_empty() { break; }
+                    if candidates.is_empty() {
+                        break;
+                    }
                     let idx = self.rng.gen_range(0..candidates.len());
                     let target = candidates.swap_remove(idx);
                     self.messages += 1;
@@ -256,8 +286,11 @@ impl DagGossipSim {
             }
 
             for (source, target) in deliveries {
-                self.node_events.get_mut(&target).unwrap()
-                    .entry(event_id.to_string()).or_default()
+                self.node_events
+                    .get_mut(&target)
+                    .unwrap()
+                    .entry(event_id.to_string())
+                    .or_default()
                     .insert(source);
                 self.check_threshold(target, event_id);
             }
@@ -266,9 +299,14 @@ impl DagGossipSim {
 
     fn check_threshold(&mut self, node: usize, event_id: &str) {
         let sources = self.node_events[&node]
-            .get(event_id).map(|s| s.len()).unwrap_or(0);
+            .get(event_id)
+            .map(|s| s.len())
+            .unwrap_or(0);
         if sources >= self.threshold {
-            self.accepted.get_mut(&node).unwrap().insert(event_id.to_string());
+            self.accepted
+                .get_mut(&node)
+                .unwrap()
+                .insert(event_id.to_string());
         }
     }
 
@@ -301,7 +339,9 @@ impl CrdtSim {
             sets.insert(i, HashSet::new());
         }
         Self {
-            num_nodes, sets, messages: 0,
+            num_nodes,
+            sets,
+            messages: 0,
             rng: StdRng::seed_from_u64(seed),
             drop_rate,
             partitioned: HashSet::new(),
@@ -309,7 +349,10 @@ impl CrdtSim {
     }
 
     fn insert(&mut self, node: usize, event_id: &str) {
-        self.sets.get_mut(&node).unwrap().insert(event_id.to_string());
+        self.sets
+            .get_mut(&node)
+            .unwrap()
+            .insert(event_id.to_string());
     }
 
     /// Pairwise merge: each node syncs with a random peer.
@@ -318,16 +361,23 @@ impl CrdtSim {
         let mut merges: Vec<(usize, HashSet<String>)> = Vec::new();
 
         for &a in &nodes {
-            if self.partitioned.contains(&a) { continue; }
-            let candidates: Vec<usize> = nodes.iter()
+            if self.partitioned.contains(&a) {
+                continue;
+            }
+            let candidates: Vec<usize> = nodes
+                .iter()
                 .copied()
                 .filter(|&b| b != a && !self.partitioned.contains(&b))
                 .collect();
-            if candidates.is_empty() { continue; }
+            if candidates.is_empty() {
+                continue;
+            }
             let b = candidates[self.rng.gen_range(0..candidates.len())];
 
             self.messages += 2; // bidirectional sync
-            if self.rng.gen::<f64>() < self.drop_rate { continue; }
+            if self.rng.gen::<f64>() < self.drop_rate {
+                continue;
+            }
 
             // Merge B into A
             let b_set = self.sets[&b].clone();
@@ -357,9 +407,9 @@ impl CrdtSim {
 // ============================================================
 
 fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
-    use crate::Coord;
     use crate::gossip::{DistributedSim, GossipConfig};
     use crate::network_sim::NetworkConfig;
+    use crate::Coord;
 
     let net = NetworkConfig {
         drop_rate: cfg.drop_rate,
@@ -373,7 +423,12 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
     };
 
     let mut sim = DistributedSim::new(cfg.num_nodes, gossip, net);
-    let center = Coord { t: 5, c: 5, o: 5, v: 5 };
+    let center = Coord {
+        t: 5,
+        c: 5,
+        o: 5,
+        v: 5,
+    };
     let all: Vec<usize> = (0..cfg.num_nodes).collect();
 
     // Partition
@@ -390,12 +445,19 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
 
     // Noise: same validator on all 4 dims → σ=0, should never crystallize.
     // Uses same validator_id across dims to ensure no exclusive attestations.
-    let noise_coord = Coord { t: 0, c: 0, o: 0, v: 0 };
+    let noise_coord = Coord {
+        t: 0,
+        c: 0,
+        o: 0,
+        v: 0,
+    };
     for i in 0..cfg.noise_events {
         for dim in crate::Dimension::ALL {
             sim.originate_attestation(
-                i % cfg.num_nodes, noise_coord,
-                &format!("noise_{i}"), dim,
+                i % cfg.num_nodes,
+                noise_coord,
+                &format!("noise_{i}"),
+                dim,
                 "sybil_validator", // same ID on all dims → σ=0
             );
         }
@@ -424,9 +486,13 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
                 recovery_ticks = t;
             }
         }
-        if recovery_ticks == 0 { recovery_ticks = 20; }
+        if recovery_ticks == 0 {
+            recovery_ticks = 20;
+        }
     }
-    if finality == 0 { finality = 40 + recovery_ticks; }
+    if finality == 0 {
+        finality = 40 + recovery_ticks;
+    }
 
     let elapsed = t0.elapsed().as_secs_f64();
     let metrics = sim.metrics();
@@ -449,7 +515,8 @@ fn run_tesseract(cfg: &BenchConfig) -> ComparisonResult {
         memory_per_node_bytes: cells_per_node * bytes_per_cell,
         false_acceptances: false_acc,
         total_events: cfg.valid_events + cfg.noise_events,
-        false_acceptance_rate: false_acc as f64 / (cfg.valid_events + cfg.noise_events).max(1) as f64,
+        false_acceptance_rate: false_acc as f64
+            / (cfg.valid_events + cfg.noise_events).max(1) as f64,
     }
 }
 
@@ -566,7 +633,8 @@ fn run_dag_gossip(cfg: &BenchConfig) -> ComparisonResult {
         memory_per_node_bytes: mem_per_node,
         false_acceptances: noise_accepted,
         total_events: cfg.valid_events + cfg.noise_events,
-        false_acceptance_rate: noise_accepted as f64 / (cfg.valid_events + cfg.noise_events).max(1) as f64,
+        false_acceptance_rate: noise_accepted as f64
+            / (cfg.valid_events + cfg.noise_events).max(1) as f64,
     }
 }
 
@@ -694,11 +762,18 @@ pub fn export_csv(results: &[ComparisonResult]) -> String {
     for r in results {
         csv.push_str(&format!(
             "{},{},{},{},{},{:.1},{},{:.0},{},{},{},{:.4}\n",
-            r.system, r.num_nodes, r.network_profile,
-            r.finality_ticks, r.messages_total, r.messages_per_node,
-            r.partition_recovery_ticks, r.throughput_events_per_sec,
-            r.memory_per_node_bytes, r.false_acceptances,
-            r.total_events, r.false_acceptance_rate,
+            r.system,
+            r.num_nodes,
+            r.network_profile,
+            r.finality_ticks,
+            r.messages_total,
+            r.messages_per_node,
+            r.partition_recovery_ticks,
+            r.throughput_events_per_sec,
+            r.memory_per_node_bytes,
+            r.false_acceptances,
+            r.total_events,
+            r.false_acceptance_rate,
         ));
     }
     csv
@@ -711,7 +786,11 @@ mod tests {
     #[test]
     fn quorum_achieves_fast_finality() {
         let r = run_quorum(&BenchConfig::default());
-        assert!(r.finality_ticks <= 2, "quorum should finalize in 1-2 rounds: {}", r.finality_ticks);
+        assert!(
+            r.finality_ticks <= 2,
+            "quorum should finalize in 1-2 rounds: {}",
+            r.finality_ticks
+        );
         assert_eq!(r.false_acceptances, 0);
     }
 
@@ -719,7 +798,11 @@ mod tests {
     fn quorum_requires_more_messages_per_event() {
         let r = run_quorum(&BenchConfig::default());
         // Quorum: 2×N messages per proposal (propose + vote + commit)
-        assert!(r.messages_total >= 20, "quorum needs O(N) messages: {}", r.messages_total);
+        assert!(
+            r.messages_total >= 20,
+            "quorum needs O(N) messages: {}",
+            r.messages_total
+        );
     }
 
     #[test]
@@ -743,7 +826,11 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(r.false_acceptances, 50, "CRDT has no validation");
-        assert!(r.false_acceptance_rate > 0.9, "CRDT false rate: {:.2}", r.false_acceptance_rate);
+        assert!(
+            r.false_acceptance_rate > 0.9,
+            "CRDT false rate: {:.2}",
+            r.false_acceptance_rate
+        );
     }
 
     #[test]
@@ -759,7 +846,11 @@ mod tests {
             seed: 10,
             ..Default::default()
         });
-        assert_eq!(r.false_acceptances, 0, "tesseract should reject noise: got {}", r.false_acceptances);
+        assert_eq!(
+            r.false_acceptances, 0,
+            "tesseract should reject noise: got {}",
+            r.false_acceptances
+        );
     }
 
     #[test]
@@ -793,7 +884,11 @@ mod tests {
     #[test]
     fn full_suite_exports_correctly() {
         let results = full_suite();
-        assert!(results.len() >= 16, "5 scenarios × 4 systems: got {}", results.len());
+        assert!(
+            results.len() >= 16,
+            "5 scenarios × 4 systems: got {}",
+            results.len()
+        );
 
         let json = export_json(&results);
         assert!(json.contains("quorum_bft"));
@@ -813,26 +908,39 @@ mod tests {
         let q = results.iter().find(|r| r.system == "quorum_bft").unwrap();
         let t = results.iter().find(|r| r.system == "tesseract").unwrap();
 
-        assert!(q.finality_ticks <= t.finality_ticks,
+        assert!(
+            q.finality_ticks <= t.finality_ticks,
             "quorum ({}) should finalize faster than tesseract ({})",
-            q.finality_ticks, t.finality_ticks);
+            q.finality_ticks,
+            t.finality_ticks
+        );
     }
 
     #[test]
     fn crdt_lowest_messages_but_no_safety() {
         // Compare CRDT and Tesseract individually to avoid slow full compare()
-        let cfg = BenchConfig { noise_events: 5, ..Default::default() };
+        let cfg = BenchConfig {
+            noise_events: 5,
+            ..Default::default()
+        };
         let c = run_crdt(&cfg);
         let t = run_tesseract(&cfg);
 
-        assert!(c.false_acceptance_rate > t.false_acceptance_rate,
+        assert!(
+            c.false_acceptance_rate > t.false_acceptance_rate,
             "CRDT ({:.2}) should have higher false rate than tesseract ({:.2})",
-            c.false_acceptance_rate, t.false_acceptance_rate);
+            c.false_acceptance_rate,
+            t.false_acceptance_rate
+        );
     }
 
     #[test]
     fn tesseract_best_noise_resistance() {
-        let cfg = BenchConfig { noise_events: 5, seed: 77, ..Default::default() };
+        let cfg = BenchConfig {
+            noise_events: 5,
+            seed: 77,
+            ..Default::default()
+        };
         let t = run_tesseract(&cfg);
         assert_eq!(t.false_acceptances, 0, "tesseract: zero false acceptances");
 

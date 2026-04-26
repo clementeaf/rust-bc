@@ -51,11 +51,11 @@
 //!   - **Wave amplification**: cascading waves → bounded by dedup
 //!     (each node forwards a bundle at most once per event)
 
-use std::collections::{HashMap, HashSet};
+use crate::network_sim::{NetworkMessage, NetworkSim, NodeId};
+use crate::{Coord, Dimension, Field};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use crate::{Coord, Dimension, Field};
-use crate::network_sim::{NetworkSim, NetworkMessage, NodeId};
+use std::collections::{HashMap, HashSet};
 
 /// Attestation record — stored for anti-entropy reconciliation.
 #[derive(Clone, Debug)]
@@ -127,13 +127,16 @@ impl SimNode {
     /// Check if this node has all 4 dimensions for an event (can build bundle).
     pub fn has_full_event(&self, event_id: &str) -> bool {
         Dimension::ALL.iter().all(|dim| {
-            self.records.iter().any(|r| r.event_id == event_id && r.dimension == *dim)
+            self.records
+                .iter()
+                .any(|r| r.event_id == event_id && r.dimension == *dim)
         })
     }
 
     /// Build an attestation bundle for an event (all dims this node knows).
     pub fn build_bundle(&self, event_id: &str) -> Vec<AttestationRecord> {
-        self.records.iter()
+        self.records
+            .iter()
             .filter(|r| r.event_id == event_id)
             .cloned()
             .collect()
@@ -233,9 +236,16 @@ impl DistributedSim {
         dimension: Dimension,
         validator_id: &str,
     ) {
-        let fanout = self.gossip_config.fanout.min(self.node_ids.len().saturating_sub(1));
-        let mut candidates: Vec<NodeId> = self.node_ids.iter()
-            .copied().filter(|&id| id != from).collect();
+        let fanout = self
+            .gossip_config
+            .fanout
+            .min(self.node_ids.len().saturating_sub(1));
+        let mut candidates: Vec<NodeId> = self
+            .node_ids
+            .iter()
+            .copied()
+            .filter(|&id| id != from)
+            .collect();
 
         let msg = NetworkMessage::Attestation {
             coord,
@@ -245,7 +255,9 @@ impl DistributedSim {
         };
 
         for _ in 0..fanout {
-            if candidates.is_empty() { break; }
+            if candidates.is_empty() {
+                break;
+            }
             let idx = self.rng.gen_range(0..candidates.len());
             let target = candidates.swap_remove(idx);
             self.network.send(from, target, msg.clone());
@@ -256,30 +268,41 @@ impl DistributedSim {
     /// This is instantaneous (no network delay) — models the reconciliation
     /// as an atomic exchange. In production this would be a request-response.
     fn anti_entropy_round(&mut self) {
-        if self.node_ids.len() < 2 { return; }
+        if self.node_ids.len() < 2 {
+            return;
+        }
 
         // Each node reconciles with one random reachable peer
-        let pairs: Vec<(NodeId, NodeId)> = self.node_ids.iter().map(|&a| {
-            let mut candidates: Vec<NodeId> = self.node_ids.iter()
-                .copied()
-                .filter(|&b| b != a && self.network.can_reach(a, b))
-                .collect();
-            if candidates.is_empty() {
-                (a, a) // no reachable peer
-            } else {
-                let idx = self.rng.gen_range(0..candidates.len());
-                (a, candidates.swap_remove(idx))
-            }
-        }).collect();
+        let pairs: Vec<(NodeId, NodeId)> = self
+            .node_ids
+            .iter()
+            .map(|&a| {
+                let mut candidates: Vec<NodeId> = self
+                    .node_ids
+                    .iter()
+                    .copied()
+                    .filter(|&b| b != a && self.network.can_reach(a, b))
+                    .collect();
+                if candidates.is_empty() {
+                    (a, a) // no reachable peer
+                } else {
+                    let idx = self.rng.gen_range(0..candidates.len());
+                    (a, candidates.swap_remove(idx))
+                }
+            })
+            .collect();
 
         self.anti_entropy_rounds += 1;
 
         for (a, b) in pairs {
-            if a == b { continue; }
+            if a == b {
+                continue;
+            }
 
             // Find records in B that A doesn't have
             let a_seen = self.nodes[&a].seen_keys().clone();
-            let missing: Vec<AttestationRecord> = self.nodes[&b].records()
+            let missing: Vec<AttestationRecord> = self.nodes[&b]
+                .records()
                 .iter()
                 .filter(|r| {
                     let key = SimNode::dedup_key(&r.event_id, r.dimension, &r.validator_id);
@@ -291,7 +314,8 @@ impl DistributedSim {
             // Apply missing to A
             for r in missing {
                 if let Some(node_a) = self.nodes.get_mut(&a) {
-                    if node_a.apply_attestation(r.coord, &r.event_id, r.dimension, &r.validator_id) {
+                    if node_a.apply_attestation(r.coord, &r.event_id, r.dimension, &r.validator_id)
+                    {
                         self.anti_entropy_repairs += 1;
                     }
                 }
@@ -306,11 +330,20 @@ impl DistributedSim {
             .iter()
             .map(|r| (r.dimension, r.validator_id.clone()))
             .collect();
-        if bundle_atts.is_empty() { return; }
+        if bundle_atts.is_empty() {
+            return;
+        }
 
-        let fanout = self.gossip_config.fanout.min(self.node_ids.len().saturating_sub(1));
-        let mut candidates: Vec<NodeId> = self.node_ids.iter()
-            .copied().filter(|&id| id != from).collect();
+        let fanout = self
+            .gossip_config
+            .fanout
+            .min(self.node_ids.len().saturating_sub(1));
+        let mut candidates: Vec<NodeId> = self
+            .node_ids
+            .iter()
+            .copied()
+            .filter(|&id| id != from)
+            .collect();
 
         let msg = NetworkMessage::AttestationBundle {
             coord,
@@ -319,7 +352,9 @@ impl DistributedSim {
         };
 
         for _ in 0..fanout {
-            if candidates.is_empty() { break; }
+            if candidates.is_empty() {
+                break;
+            }
             let idx = self.rng.gen_range(0..candidates.len());
             let target = candidates.swap_remove(idx);
             self.network.send(from, target, msg.clone());
@@ -335,7 +370,12 @@ impl DistributedSim {
 
         for msg in delivered {
             match msg.payload {
-                NetworkMessage::Attestation { coord, event_id, dimension, validator_id } => {
+                NetworkMessage::Attestation {
+                    coord,
+                    event_id,
+                    dimension,
+                    validator_id,
+                } => {
                     let to = msg.to;
                     if let Some(node) = self.nodes.get_mut(&to) {
                         let was_crystallized = node.field.get(coord).crystallized;
@@ -352,7 +392,11 @@ impl DistributedSim {
                         }
                     }
                 }
-                NetworkMessage::AttestationBundle { coord, event_id, attestations } => {
+                NetworkMessage::AttestationBundle {
+                    coord,
+                    event_id,
+                    attestations,
+                } => {
                     let to = msg.to;
                     if let Some(node) = self.nodes.get_mut(&to) {
                         let was_crystallized = node.field.get(coord).crystallized;
@@ -426,26 +470,44 @@ impl DistributedSim {
     }
 
     pub fn crystallized_at(&self, coord: Coord) -> usize {
-        self.nodes.values().filter(|n| n.field.get(coord).crystallized).count()
+        self.nodes
+            .values()
+            .filter(|n| n.field.get(coord).crystallized)
+            .count()
     }
 
     pub fn consensus_at(&self, coord: Coord) -> bool {
-        let first = self.nodes.values().next().map(|n| n.field.get(coord).crystallized);
-        self.nodes.values().all(|n| Some(n.field.get(coord).crystallized) == first)
+        let first = self
+            .nodes
+            .values()
+            .next()
+            .map(|n| n.field.get(coord).crystallized);
+        self.nodes
+            .values()
+            .all(|n| Some(n.field.get(coord).crystallized) == first)
     }
 
     pub fn crystallization_ratio(&self, coord: Coord) -> f64 {
         let total = self.nodes.len();
-        if total == 0 { return 0.0; }
+        if total == 0 {
+            return 0.0;
+        }
         self.crystallized_at(coord) as f64 / total as f64
     }
 
     pub fn false_crystallizations(&self, coord: Coord, origin_node: NodeId) -> usize {
-        let origin_crystallized = self.nodes.get(&origin_node)
-            .map(|n| n.field.get(coord).crystallized).unwrap_or(false);
-        if origin_crystallized { return 0; }
-        self.nodes.values()
-            .filter(|n| n.id != origin_node && n.field.get(coord).crystallized).count()
+        let origin_crystallized = self
+            .nodes
+            .get(&origin_node)
+            .map(|n| n.field.get(coord).crystallized)
+            .unwrap_or(false);
+        if origin_crystallized {
+            return 0;
+        }
+        self.nodes
+            .values()
+            .filter(|n| n.id != origin_node && n.field.get(coord).crystallized)
+            .count()
     }
 
     pub fn metrics(&self) -> DistributedMetrics {
@@ -485,21 +547,39 @@ mod tests {
 
     #[test]
     fn gossip_propagates_to_all_nodes() {
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 5, field_size: 6, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 5,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "test_event");
         sim.run(30);
-        assert!(sim.crystallization_ratio(center) > 0.8,
-            "gossip: {:.0}%", sim.crystallization_ratio(center) * 100.0);
+        assert!(
+            sim.crystallization_ratio(center) > 0.8,
+            "gossip: {:.0}%",
+            sim.crystallization_ratio(center) * 100.0
+        );
     }
 
     #[test]
     fn dedup_prevents_redundant_processing() {
-        let mut sim = DistributedSim::new(5,
-            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
-            NetworkConfig { dup_rate: 0.5, ..NetworkConfig::default() });
+        let mut sim = DistributedSim::new(
+            5,
+            GossipConfig {
+                fanout: 4,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig {
+                dup_rate: 0.5,
+                ..NetworkConfig::default()
+            },
+        );
         sim.originate_full_event(0, coord(3, 3, 3, 3), "event");
         sim.run(20);
         assert!(sim.duplicates_rejected > 0);
@@ -507,21 +587,37 @@ mod tests {
 
     #[test]
     fn lossy_network_still_converges() {
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
-            NetworkConfig::lossy());
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 4,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::lossy(),
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "lossy_event");
         sim.run(60);
-        assert!(sim.crystallization_ratio(center) > 0.5,
-            "lossy: {:.0}%", sim.crystallization_ratio(center) * 100.0);
+        assert!(
+            sim.crystallization_ratio(center) > 0.5,
+            "lossy: {:.0}%",
+            sim.crystallization_ratio(center) * 100.0
+        );
     }
 
     #[test]
     fn partition_heals_with_anti_entropy() {
-        let mut sim = DistributedSim::new(6,
-            GossipConfig { fanout: 3, field_size: 6, anti_entropy_interval: 5, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            6,
+            GossipConfig {
+                fanout: 3,
+                field_size: 6,
+                anti_entropy_interval: 5,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
 
         let all: Vec<NodeId> = (0..6).collect();
         sim.network.isolate(4, &all);
@@ -530,22 +626,34 @@ mod tests {
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "part_event");
         sim.run(20);
-        assert!(!sim.nodes[&4].field.get(center).crystallized, "isolated during partition");
+        assert!(
+            !sim.nodes[&4].field.get(center).crystallized,
+            "isolated during partition"
+        );
 
         sim.network.reconnect(4, &all);
         sim.network.reconnect(5, &all);
         // Anti-entropy will fire within 5 ticks
         sim.run(10);
 
-        assert_eq!(sim.crystallization_ratio(center), 1.0,
-            "anti-entropy should achieve 100% after heal");
+        assert_eq!(
+            sim.crystallization_ratio(center),
+            1.0,
+            "anti-entropy should achieve 100% after heal"
+        );
     }
 
     #[test]
     fn force_anti_entropy_achieves_full_convergence() {
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 2, field_size: 6, ..Default::default() },
-            NetworkConfig::lossy());
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 2,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::lossy(),
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "event");
         sim.run(30);
@@ -558,15 +666,25 @@ mod tests {
         sim.force_anti_entropy(); // two rounds for full propagation
 
         let after = sim.crystallization_ratio(center);
-        assert!(after >= before, "anti-entropy should not decrease convergence");
+        assert!(
+            after >= before,
+            "anti-entropy should not decrease convergence"
+        );
         assert_eq!(after, 1.0, "forced anti-entropy should reach 100%");
     }
 
     #[test]
     fn no_false_crystallizations() {
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 3, field_size: 6, anti_entropy_interval: 10, ..Default::default() },
-            NetworkConfig::lossy());
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 3,
+                field_size: 6,
+                anti_entropy_interval: 10,
+                ..Default::default()
+            },
+            NetworkConfig::lossy(),
+        );
         sim.originate_full_event(0, coord(3, 3, 3, 3), "safe");
         sim.run(40);
         assert_eq!(sim.false_crystallizations(coord(1, 1, 1, 1), 0), 0);
@@ -574,9 +692,16 @@ mod tests {
 
     #[test]
     fn anti_entropy_metrics_tracked() {
-        let mut sim = DistributedSim::new(5,
-            GossipConfig { fanout: 2, field_size: 6, anti_entropy_interval: 5, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            5,
+            GossipConfig {
+                fanout: 2,
+                field_size: 6,
+                anti_entropy_interval: 5,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         sim.originate_full_event(0, coord(3, 3, 3, 3), "event");
         sim.run(20);
 
@@ -590,30 +715,55 @@ mod tests {
     fn bundle_loss_falls_back_to_individual_gossip() {
         // High drop rate → bundles likely lost. Individual gossip + anti-entropy
         // must still achieve convergence.
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 5, field_size: 6, anti_entropy_interval: 5, ..Default::default() },
-            NetworkConfig { drop_rate: 0.4, ..NetworkConfig::default() });
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 5,
+                field_size: 6,
+                anti_entropy_interval: 5,
+                ..Default::default()
+            },
+            NetworkConfig {
+                drop_rate: 0.4,
+                ..NetworkConfig::default()
+            },
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "lost_bundle");
         sim.run(40);
         sim.force_anti_entropy();
         sim.force_anti_entropy();
 
-        assert_eq!(sim.crystallization_ratio(center), 1.0,
-            "should converge despite 40% bundle loss via anti-entropy fallback");
+        assert_eq!(
+            sim.crystallization_ratio(center),
+            1.0,
+            "should converge despite 40% bundle loss via anti-entropy fallback"
+        );
     }
 
     #[test]
     fn bundle_replay_is_idempotent() {
         // High dup rate → bundles arrive multiple times. Dedup must reject.
-        let mut sim = DistributedSim::new(5,
-            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
-            NetworkConfig { dup_rate: 0.8, ..NetworkConfig::default() });
+        let mut sim = DistributedSim::new(
+            5,
+            GossipConfig {
+                fanout: 4,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig {
+                dup_rate: 0.8,
+                ..NetworkConfig::default()
+            },
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "replayed_bundle");
         sim.run(20);
 
-        assert!(sim.duplicates_rejected > 0, "should reject duplicate bundles");
+        assert!(
+            sim.duplicates_rejected > 0,
+            "should reject duplicate bundles"
+        );
         // Safety: no false crystallizations from replay
         assert_eq!(sim.false_crystallizations(coord(1, 1, 1, 1), 0), 0);
         // Valid event still crystallized
@@ -624,9 +774,15 @@ mod tests {
     fn partial_bundle_waits_for_remaining_dims() {
         // Simulate partial bundle: originate only 2 dims, not full event.
         // Receiver should NOT crystallize (σ < 4).
-        let mut sim = DistributedSim::new(5,
-            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            5,
+            GossipConfig {
+                fanout: 4,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         let center = coord(3, 3, 3, 3);
 
         // Only 2 dimensions
@@ -635,25 +791,36 @@ mod tests {
         sim.run(20);
 
         // No node should crystallize with only 2 dims
-        assert_eq!(sim.crystallized_at(center), 0,
-            "partial bundle (2 dims) must not crystallize");
+        assert_eq!(
+            sim.crystallized_at(center),
+            0,
+            "partial bundle (2 dims) must not crystallize"
+        );
 
         // Now deliver remaining 2 dims → should crystallize
         sim.originate_attestation(0, center, "partial", Dimension::Origin, "val_o");
         sim.originate_attestation(0, center, "partial", Dimension::Verification, "val_v");
         sim.run(20);
 
-        assert!(sim.crystallization_ratio(center) > 0.8,
-            "full attestation after partial should converge");
+        assert!(
+            sim.crystallization_ratio(center) > 0.8,
+            "full attestation after partial should converge"
+        );
     }
 
     #[test]
     fn corrupted_bundle_rejected_by_sigma() {
         // Attacker sends "bundle" where all 4 dims use the same validator_id.
         // σ=0 → should NOT crystallize.
-        let mut sim = DistributedSim::new(5,
-            GossipConfig { fanout: 4, field_size: 6, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            5,
+            GossipConfig {
+                fanout: 4,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         let center = coord(3, 3, 3, 3);
 
         // Same validator on all dims → σ=0
@@ -662,16 +829,25 @@ mod tests {
         }
         sim.run(20);
 
-        assert_eq!(sim.crystallized_at(center), 0,
-            "corrupted bundle (same validator) must not crystallize");
+        assert_eq!(
+            sim.crystallized_at(center),
+            0,
+            "corrupted bundle (same validator) must not crystallize"
+        );
     }
 
     #[test]
     fn wave_amplification_bounded_by_dedup() {
         // Multiple origins sending the same event → waves converge, don't explode.
-        let mut sim = DistributedSim::new(10,
-            GossipConfig { fanout: 5, field_size: 6, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            10,
+            GossipConfig {
+                fanout: 5,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         let center = coord(3, 3, 3, 3);
 
         // 3 nodes all originate the same event simultaneously
@@ -681,30 +857,47 @@ mod tests {
         sim.run(20);
 
         // Should converge normally
-        assert_eq!(sim.crystallization_ratio(center), 1.0,
-            "multiple origins should converge");
+        assert_eq!(
+            sim.crystallization_ratio(center),
+            1.0,
+            "multiple origins should converge"
+        );
         // Dedup should have caught the redundant waves
-        assert!(sim.duplicates_rejected > 0,
-            "dedup should reject redundant waves");
+        assert!(
+            sim.duplicates_rejected > 0,
+            "dedup should reject redundant waves"
+        );
         // Messages should not be dramatically more than single-origin
         let m = sim.metrics();
-        assert!(m.network.messages_sent < 500,
-            "wave amplification should be bounded: {} messages", m.network.messages_sent);
+        assert!(
+            m.network.messages_sent < 500,
+            "wave amplification should be bounded: {} messages",
+            m.network.messages_sent
+        );
     }
 
     #[test]
     fn low_fanout_below_ln_n_fails_to_converge() {
         // Fanout=1 with 20 nodes: below ln(20)≈3. Gossip should die out.
-        let mut sim = DistributedSim::new(20,
-            GossipConfig { fanout: 1, field_size: 6, ..Default::default() },
-            NetworkConfig::default());
+        let mut sim = DistributedSim::new(
+            20,
+            GossipConfig {
+                fanout: 1,
+                field_size: 6,
+                ..Default::default()
+            },
+            NetworkConfig::default(),
+        );
         let center = coord(3, 3, 3, 3);
         sim.originate_full_event(0, center, "low_fanout");
         sim.run(30);
 
         let ratio = sim.crystallization_ratio(center);
         // With fanout=1, unlikely to reach all 20 nodes
-        assert!(ratio < 1.0,
-            "fanout=1 should not guarantee full convergence: {:.0}%", ratio * 100.0);
+        assert!(
+            ratio < 1.0,
+            "fanout=1 should not guarantee full convergence: {:.0}%",
+            ratio * 100.0
+        );
     }
 }

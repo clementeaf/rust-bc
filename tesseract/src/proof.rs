@@ -123,7 +123,11 @@ impl BalanceProof {
     /// Create a new balance proof.
     pub fn new(value: u64, blinding: u64) -> Self {
         let commitment = Commitment::commit(value, blinding);
-        Self { commitment, value, blinding }
+        Self {
+            commitment,
+            value,
+            blinding,
+        }
     }
 
     /// The hidden value (only accessible to the holder).
@@ -147,10 +151,7 @@ impl BalanceProof {
 ///
 /// This is not a check — it's an algebraic identity.
 /// If the commitments balance, the values MUST balance (or ECDLP is broken).
-pub fn verify_conservation(
-    inputs: &[Commitment],
-    outputs: &[Commitment],
-) -> bool {
+pub fn verify_conservation(inputs: &[Commitment], outputs: &[Commitment]) -> bool {
     let sum_in = inputs.iter().fold(Commitment::zero(), |acc, c| acc.add(c));
     let sum_out = outputs.iter().fold(Commitment::zero(), |acc, c| acc.add(c));
     sum_in == sum_out
@@ -224,16 +225,16 @@ impl CausalProof {
     pub fn new(parent_proofs: &[&CausalProof], origin: &[u8], data: &[u8]) -> Self {
         let mut hasher = Sha256::new();
         // Sorted parent hashes ensure deterministic proof regardless of order
-        let mut parent_hashes: Vec<[u8; 32]> = parent_proofs.iter()
-            .map(|p| p.hash)
-            .collect();
+        let mut parent_hashes: Vec<[u8; 32]> = parent_proofs.iter().map(|p| p.hash).collect();
         parent_hashes.sort();
         for h in &parent_hashes {
             hasher.update(h);
         }
         hasher.update(origin);
         hasher.update(data);
-        Self { hash: hasher.finalize().into() }
+        Self {
+            hash: hasher.finalize().into(),
+        }
     }
 
     /// Genesis proof — no parents.
@@ -291,7 +292,10 @@ mod tests {
         let sum_ab = a.add(&b);
 
         let direct = Commitment::commit(500, 30);
-        assert_eq!(sum_ab, direct, "C(300,10) + C(200,20) should equal C(500,30)");
+        assert_eq!(
+            sum_ab, direct,
+            "C(300,10) + C(200,20) should equal C(500,30)"
+        );
     }
 
     #[test]
@@ -413,7 +417,10 @@ mod tests {
         let alt_genesis = CausalProof::genesis(b"node_a", b"different_event");
         let alt_child = CausalProof::new(&[&alt_genesis], b"node_b", b"second_event");
 
-        assert_ne!(child, alt_child, "different ancestry must produce different proof");
+        assert_ne!(
+            child, alt_child,
+            "different ancestry must produce different proof"
+        );
     }
 
     #[test]

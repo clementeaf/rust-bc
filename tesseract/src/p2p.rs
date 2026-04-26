@@ -26,9 +26,7 @@ pub enum Message {
         ttl: u8,
     },
     /// Share boundary cells for field synchronization.
-    BoundarySync {
-        cells: Vec<(Coord, Cell)>,
-    },
+    BoundarySync { cells: Vec<(Coord, Cell)> },
     /// Ping to check liveness.
     Ping { node_id: String },
     /// Pong response.
@@ -116,7 +114,13 @@ pub async fn start(
                 let boundary_tx = local_boundary_tx_clone.clone();
                 let seen = seen_clone.clone();
                 let node_id = node_id_owned.clone();
-                tokio::spawn(handle_connection(stream, node_id, event_tx, boundary_tx, seen));
+                tokio::spawn(handle_connection(
+                    stream,
+                    node_id,
+                    event_tx,
+                    boundary_tx,
+                    seen,
+                ));
             }
         }
     });
@@ -148,7 +152,9 @@ pub async fn start(
         }
     });
 
-    let handle = P2pHandle { event_tx: gossip_tx };
+    let handle = P2pHandle {
+        event_tx: gossip_tx,
+    };
     let state = P2pState {
         node_id: node_id.to_string(),
         event_rx: local_event_rx,
@@ -169,7 +175,11 @@ async fn handle_connection(
 ) {
     while let Some(msg) = decode_message(&mut stream).await {
         match msg {
-            Message::SeedEvent { coord, event_id, ttl } => {
+            Message::SeedEvent {
+                coord,
+                event_id,
+                ttl,
+            } => {
                 let mut seen = seen.lock().await;
                 if seen.contains(&event_id) {
                     continue; // already processed
@@ -184,7 +194,9 @@ async fn handle_connection(
                 let _ = boundary_tx.send(cells).await;
             }
             Message::Ping { .. } => {
-                let pong = Message::Pong { node_id: node_id.clone() };
+                let pong = Message::Pong {
+                    node_id: node_id.clone(),
+                };
                 let _ = send_message(&mut stream, &pong).await;
             }
             Message::Pong { .. } => {}

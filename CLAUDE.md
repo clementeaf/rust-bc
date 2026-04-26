@@ -139,9 +139,9 @@ Not required to run the node.
 
 ## Tesseract prototype (`tesseract/`)
 
-Standalone Rust library — a 4D probability field consensus engine. Not a blockchain.
+Standalone Rust library — a 4D probability field with deterministic convergence. Not a blockchain.
 
-**What it is:** Events enter a 4D field, accumulate evidence from independent dimensions, and crystallize into permanent facts. Convergence is emergent, not voted on.
+**What it is:** Events enter a 4D field, accumulate evidence from independent dimensions, and crystallize into permanent facts. Nodes resolve conflicts deterministically via `resolve()` — no voting, no leader.
 
 ### Four rules (all implemented, tested)
 
@@ -152,14 +152,28 @@ Standalone Rust library — a 4D probability field consensus engine. Not a block
 | Entropy | `entropy.rs` + `proof.rs` | SHA-256 hash-chain seals |
 | Gravity | `gravity.rs` | Computed from causal graph (no storage) |
 
+### Convergence layer
+
+- `Cell.evidence_root` / `evidence_count` — deterministic SHA-256 over sorted evidence
+- `resolve(a, b) -> Cell` — pure merge (idempotent, commutative, associative)
+- `Cell.equivocating_validators()` — detects and excludes contradictory attestations from sigma
+- `ConservedField.spent_nonces` — cross-node double-spend detection via `(coord, nonce) → tx_hash`
+- Boundary protocol carries influences; `resolve()` merges evidence as union, re-verifies crystallization, caps probability to evidence weights
+
 ### Key modules
 
 - `proof.rs` — Pedersen commitments (curve25519-dalek), seals, causal proofs
 - `mapper.rs` — Event → 4D coordinate mapping; `SignedEvent` (Ed25519 identity binding)
 - `wallet.rs` — `TesseractLedger` backed by `ConservedField`; `TransferReceipt` with commitments
-- `conservation.rs` — u64 balances, nonces, zero-sum transfers
+- `conservation.rs` — u64 balances, nonces, zero-sum transfers, double-spend detection
 - `identity.rs` — Geometric weight (Sybil resistance) + cryptographic binding
 - `node.rs` — Distributed field regions, boundary exchange (in-memory, no network I/O)
+
+### Binaries
+
+- `cargo run --bin node` — HTTP node with `/status`, `/seed`, `/cell`, `/boundary`, `/metrics`
+- `cargo run --bin cli` — interactive REPL (init, transfer, balance, seed, query, evolve, verify)
+- `cargo run --bin demo` — multi-node agent coordination demo
 
 ### Testing
 
@@ -169,6 +183,19 @@ cargo test --lib -p tesseract
 
 # Specific integration test
 cargo test --test monetary -p tesseract
+
+# Convergence + adversarial tests
+cargo test --test evidence_sync -p tesseract
+cargo test --test adversarial_convergence -p tesseract
+
+# E2E (real HTTP nodes)
+cargo test --test e2e -p tesseract -- --test-threads=1
+
+# Network stress (5-10 nodes, fault injection — slow)
+cargo test --test network_stress -p tesseract -- --test-threads=1
+
+# Criterion benchmarks
+cargo bench -p tesseract
 
 # WARNING: `cargo test -p tesseract` without filter runs scale tests
 # that consume >1GB RAM each and may not terminate. Always filter.

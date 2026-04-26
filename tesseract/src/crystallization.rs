@@ -186,7 +186,11 @@ impl CrystallizationCriterion for UnifiedCriterion {
             coord,
             threshold_met: p >= self.threshold,
             energy_favorable: f_energy < 0.0,
-            independence_met: if has_attestations { sigma >= self.min_sigma } else { true },
+            independence_met: if has_attestations {
+                sigma >= self.min_sigma
+            } else {
+                true
+            },
             free_energy: f_energy,
             sigma,
             probability: p,
@@ -221,7 +225,11 @@ impl CrystallizationCriterion for ThresholdCriterion {
             coord,
             threshold_met: p >= self.threshold,
             energy_favorable: true, // no energy check
-            independence_met: if has_attestations { sigma >= self.min_sigma } else { true },
+            independence_met: if has_attestations {
+                sigma >= self.min_sigma
+            } else {
+                true
+            },
             free_energy: f64::NAN,
             sigma,
             probability: p,
@@ -258,8 +266,16 @@ mod tests {
         let criterion = UnifiedCriterion::new(0.1); // cold
         let eval = criterion.evaluate(&field, center);
 
-        assert!(eval.threshold_met, "p={} should meet threshold", eval.probability);
-        assert!(eval.energy_favorable, "F={} should be < 0", eval.free_energy);
+        assert!(
+            eval.threshold_met,
+            "p={} should meet threshold",
+            eval.probability
+        );
+        assert!(
+            eval.energy_favorable,
+            "F={} should be < 0",
+            eval.free_energy
+        );
         assert!(eval.independence_met, "sigma={} should be >= 4", eval.sigma);
         assert!(eval.should_crystallize());
     }
@@ -414,7 +430,10 @@ mod tests {
 
         let criterion = UnifiedCriterion::new(0.1);
         let eval = criterion.evaluate(&field, center);
-        assert!(!eval.independence_met, "3/4 dims should block crystallization");
+        assert!(
+            !eval.independence_met,
+            "3/4 dims should block crystallization"
+        );
         assert!(!eval.should_crystallize());
     }
 
@@ -438,11 +457,17 @@ mod tests {
 
         // honest_t exclusive on T ✓, honest_c exclusive on C ✓
         // sybil on O+V → not exclusive on either ✗
-        assert_eq!(sigma, 2, "2 honest + 1 Sybil×2 should give σ=2, got {sigma}");
+        assert_eq!(
+            sigma, 2,
+            "2 honest + 1 Sybil×2 should give σ=2, got {sigma}"
+        );
 
         let criterion = UnifiedCriterion::new(0.1);
         let eval = criterion.evaluate(&field, center);
-        assert!(!eval.should_crystallize(), "σ=2 should block crystallization");
+        assert!(
+            !eval.should_crystallize(),
+            "σ=2 should block crystallization"
+        );
     }
 
     #[test]
@@ -464,8 +489,10 @@ mod tests {
             let cell = field.get(center);
             let sigma = cell.sigma_independence();
             assert_eq!(
-                sigma, i + 1,
-                "after {i} exclusive attestations, σ should be {}", i + 1
+                sigma,
+                i + 1,
+                "after {i} exclusive attestations, σ should be {}",
+                i + 1
             );
         }
 
@@ -483,7 +510,12 @@ mod tests {
 #[cfg(test)]
 macro_rules! coord {
     ($t:expr, $c:expr, $o:expr, $v:expr) => {
-        Coord { t: $t, c: $c, o: $o, v: $v }
+        Coord {
+            t: $t,
+            c: $c,
+            o: $o,
+            v: $v,
+        }
     };
 }
 #[cfg(test)]

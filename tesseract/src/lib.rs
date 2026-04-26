@@ -18,24 +18,24 @@ pub mod baseline_compare;
 pub mod causality;
 pub mod conservation;
 pub mod contraction;
+pub mod contribution;
 pub mod crystallization;
+pub mod economics;
 pub mod entropy;
-pub mod liveness;
-pub mod lyapunov;
-pub mod scaling;
-pub mod sigma_audit;
-pub mod network_sim;
 pub mod gossip;
 pub mod gravity;
-pub mod proof;
-pub mod mapper;
-pub mod node;
-pub mod wallet;
 pub mod identity;
-pub mod persistence;
-pub mod economics;
-pub mod contribution;
+pub mod liveness;
+pub mod lyapunov;
+pub mod mapper;
+pub mod network_sim;
+pub mod node;
 pub mod p2p;
+pub mod persistence;
+pub mod proof;
+pub mod scaling;
+pub mod sigma_audit;
+pub mod wallet;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -160,6 +160,12 @@ pub struct Cell {
     /// Dimension-bound attestations: the new model.
     /// A cell crystallizes only when all 4 dimensions are attested.
     pub attestations: HashMap<Dimension, Vec<Attestation>>,
+    /// Merkle root over all evidence (influences + attestations).
+    /// Deterministic: same evidence set → same root, regardless of insertion order.
+    /// Used by boundary sync to detect divergence without transmitting full records.
+    pub evidence_root: [u8; 32],
+    /// Total evidence items (influences.len() + sum of attestation counts).
+    pub evidence_count: u32,
 }
 
 impl Cell {
@@ -169,44 +175,125 @@ impl Cell {
             crystallized: false,
             influences: Vec::new(),
             attestations: HashMap::new(),
+            evidence_root: [0u8; 32],
+            evidence_count: 0,
         }
+    }
+
+    /// Recompute `evidence_root` and `evidence_count` from current influences
+    /// and attestations. Deterministic: sorted by event_id then dimension,
+    /// so identical evidence sets always produce the same root.
+    pub fn update_evidence(&mut self) {
+        use sha2::{Digest, Sha256};
+
+        // Collect all evidence identifiers in a deterministic order.
+        // Format: "I:{event_id}" for influences, "A:{dim}:{validator}:{event}" for attestations.
+        let mut items: Vec<String> = Vec::new();
+
+        for inf in &self.influences {
+            items.push(format!("I:{}", inf.event_id));
+        }
+        for dim in &Dimension::ALL {
+            if let Some(atts) = self.attestations.get(dim) {
+                for att in atts {
+                    items.push(format!("A:{}:{}:{}", dim, att.validator_id, att.event_id));
+                }
+            }
+        }
+
+        self.evidence_count = items.len() as u32;
+
+        if items.is_empty() {
+            self.evidence_root = [0u8; 32];
+            return;
+        }
+
+        // Sort for determinism — same set in any order → same root.
+        items.sort();
+
+        // Merkle-like hash: chain SHA-256 over sorted items.
+        // Not a full Merkle tree (no proof extraction needed), but deterministic.
+        let mut hasher = Sha256::new();
+        for item in &items {
+            hasher.update(item.as_bytes());
+            hasher.update(b"\x00"); // separator
+        }
+        self.evidence_root = hasher.finalize().into();
     }
 
     /// How many dimensions have at least one attestation from a unique validator.
     pub fn attested_dimensions(&self) -> usize {
-        self.attestations.iter()
+        self.attestations
+            .iter()
             .filter(|(_, atts)| !atts.is_empty())
             .count()
     }
 
     /// Set of unique validator IDs across all dimensions.
     pub fn unique_validators(&self) -> HashSet<&str> {
-        self.attestations.values()
+        self.attestations
+            .values()
             .flat_map(|atts| atts.iter().map(|a| a.validator_id.as_str()))
             .collect()
+    }
+
+    /// Detect equivocating validators: same validator attesting different
+    /// event_ids on the same dimension. Returns set of (validator_id, dimension).
+    pub fn equivocating_validators(&self) -> HashSet<(String, Dimension)> {
+        let mut equivocators = HashSet::new();
+        for (dim, atts) in &self.attestations {
+            // Group by validator_id, check for multiple event_ids
+            let mut validator_events: HashMap<&str, HashSet<&str>> = HashMap::new();
+            for att in atts {
+                validator_events
+                    .entry(att.validator_id.as_str())
+                    .or_default()
+                    .insert(att.event_id.as_str());
+            }
+            for (vid, events) in &validator_events {
+                if events.len() > 1 {
+                    equivocators.insert((vid.to_string(), *dim));
+                }
+            }
+        }
+        equivocators
     }
 
     /// σ-independence: dimensions attested by validators that DO NOT
     /// appear on any other dimension for this cell. Measures true
     /// structural independence.
+    ///
+    /// Equivocating validators (same validator, same dimension, different
+    /// event_ids) are excluded from sigma computation.
     pub fn sigma_independence(&self) -> usize {
-        // Count how many times each validator appears across dimensions
+        let equivocators = self.equivocating_validators();
+
+        // Count how many times each non-equivocating validator appears across dimensions
         let mut validator_dims: HashMap<&str, HashSet<Dimension>> = HashMap::new();
         for (dim, atts) in &self.attestations {
             for att in atts {
-                validator_dims.entry(att.validator_id.as_str())
+                // Skip equivocating validators
+                if equivocators.contains(&(att.validator_id.clone(), *dim)) {
+                    continue;
+                }
+                validator_dims
+                    .entry(att.validator_id.as_str())
                     .or_default()
                     .insert(*dim);
             }
         }
 
         // A dimension is independently attested if it has at least one
-        // validator that attests ONLY on that dimension (not on others).
+        // non-equivocating validator that attests ONLY on that dimension.
         let mut independent = 0;
         for dim in &Dimension::ALL {
             if let Some(atts) = self.attestations.get(dim) {
                 let has_exclusive = atts.iter().any(|att| {
-                    validator_dims.get(att.validator_id.as_str())
+                    if equivocators.contains(&(att.validator_id.clone(), *dim)) {
+                        return false;
+                    }
+                    validator_dims
+                        .get(att.validator_id.as_str())
                         .map(|dims| dims.len() == 1)
                         .unwrap_or(false)
                 });
@@ -225,7 +312,8 @@ impl Cell {
             for dim in &Dimension::ALL {
                 if let Some(atts) = self.attestations.get(dim) {
                     if !atts.is_empty() {
-                        let validators: Vec<String> = atts.iter()
+                        let validators: Vec<String> = atts
+                            .iter()
                             .map(|a| format!("{}({:.0}%)", a.validator_id, a.weight * 100.0))
                             .collect();
                         parts.push(format!("[{}:{}]", dim, validators.join("+")));
@@ -243,11 +331,121 @@ impl Cell {
         }
         let mut sorted = self.influences.clone();
         sorted.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
-        sorted.iter()
+        sorted
+            .iter()
             .map(|inf| format!("{}({:.0}%)", inf.event_id, inf.weight * 100.0))
             .collect::<Vec<_>>()
             .join(" + ")
     }
+}
+
+/// Deterministic resolution: merge two cells into one.
+///
+/// Used during boundary sync and partition reconciliation.
+/// Properties: idempotent, commutative, associative.
+///
+/// Resolution order (lexicographic):
+///   1. `crystallized` (true > false)
+///   2. `probability` (higher wins)
+///   3. `evidence_count` (higher wins)
+///   4. `evidence_root` (byte-order tiebreak — deterministic)
+///
+/// The winner's state (p, k) is kept. Evidence from BOTH sides is merged
+/// (union of influences and attestations), then root is recomputed.
+pub fn resolve(a: &Cell, b: &Cell) -> Cell {
+    // Determine winner by resolution order.
+    let winner_is_a = match (a.crystallized, b.crystallized) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => {
+            // Same crystallized status — compare probability.
+            if (a.probability - b.probability).abs() > 1e-10 {
+                a.probability > b.probability
+            } else if a.evidence_count != b.evidence_count {
+                a.evidence_count > b.evidence_count
+            } else {
+                // Deterministic tiebreak: lower evidence_root wins
+                // (arbitrary but reproducible on all nodes).
+                a.evidence_root <= b.evidence_root
+            }
+        }
+    };
+
+    let (winner, loser) = if winner_is_a { (a, b) } else { (b, a) };
+
+    // Merge evidence: union of both sides.
+    let mut influences = winner.influences.clone();
+    for inf in &loser.influences {
+        let already = influences.iter().any(|i| i.event_id == inf.event_id);
+        if !already {
+            influences.push(inf.clone());
+        }
+    }
+
+    let mut attestations = winner.attestations.clone();
+    for (dim, loser_atts) in &loser.attestations {
+        let merged = attestations.entry(*dim).or_default();
+        for att in loser_atts {
+            let already = merged
+                .iter()
+                .any(|a| a.validator_id == att.validator_id && a.event_id == att.event_id);
+            if !already {
+                merged.push(att.clone());
+            }
+        }
+    }
+
+    let mut result = Cell {
+        probability: winner.probability,
+        crystallized: winner.crystallized,
+        influences,
+        attestations,
+        evidence_root: [0u8; 32],
+        evidence_count: 0,
+    };
+
+    // ── Gap 6 fix: derive probability from evidence, don't trust claimed p ──
+    // Compute max plausible probability from actual evidence weights.
+    // Each influence contributes its weight additively (matching seed_named logic).
+    // This prevents a Byzantine peer from claiming p=1.0 with weak evidence.
+    if !result.influences.is_empty() || !result.attestations.is_empty() {
+        let mut derived_p: f64 = 0.0;
+        for inf in &result.influences {
+            derived_p = (derived_p + inf.weight).min(1.0);
+        }
+        for atts in result.attestations.values() {
+            for att in atts {
+                derived_p = (derived_p + att.weight).min(1.0);
+            }
+        }
+        // Cap at derived value — never trust claimed p above evidence support.
+        result.probability = result.probability.min(derived_p);
+    } else {
+        // No evidence at all → probability must be 0.
+        result.probability = 0.0;
+    }
+
+    // ── Gap 5 fix: re-verify crystallization from evidence ──
+    // Don't trust claimed k=true. Recheck against actual evidence.
+    if result.crystallized {
+        let justified = if !result.attestations.is_empty() {
+            // Attestation model: require σ-independence ≥ 4
+            result.sigma_independence() >= 4
+        } else if !result.influences.is_empty() {
+            // Legacy model: require p ≥ threshold
+            result.probability >= CRYSTALLIZATION_THRESHOLD
+        } else {
+            // No evidence → crystallization impossible
+            false
+        };
+
+        if !justified {
+            result.crystallized = false;
+        }
+    }
+
+    result.update_evidence();
+    result
 }
 
 /// Sparse 4D probability field.
@@ -325,7 +523,8 @@ impl Field {
 
     /// Count of crystallized cells in a region.
     pub fn curvature_load(&self, region: usize) -> f64 {
-        self.cells.iter()
+        self.cells
+            .iter()
             .filter(|(coord, cell)| coord.o == region && cell.crystallized)
             .count() as f64
     }
@@ -347,7 +546,8 @@ impl Field {
     /// remove this atom from the crystal lattice.
     pub fn binding_energy(&self, coord: Coord) -> f64 {
         let neighbors = self.neighbors(coord);
-        let crystal_neighbors = neighbors.iter()
+        let crystal_neighbors = neighbors
+            .iter()
             .filter(|n| self.get(**n).crystallized)
             .count() as f64;
         let neighbor_ratio = crystal_neighbors / 8.0;
@@ -362,6 +562,14 @@ impl Field {
 
     pub fn get_mut(&mut self, coord: Coord) -> &mut Cell {
         self.cells.entry(coord).or_insert_with(Cell::new)
+    }
+
+    /// Recompute evidence roots for all active cells.
+    /// Called after bulk mutations (seed, attest) to batch the cost.
+    pub fn update_all_evidence(&mut self) {
+        for cell in self.cells.values_mut() {
+            cell.update_evidence();
+        }
     }
 
     /// Attest an event from a specific dimension.
@@ -391,18 +599,19 @@ impl Field {
                         let dist = distance(center, coord, s);
                         let p = 1.0 / (1.0 + dist);
 
-                        if p < EPSILON { continue; }
+                        if p < EPSILON {
+                            continue;
+                        }
 
                         let cell = self.get_mut(coord);
                         cell.probability = (cell.probability + p).min(1.0);
 
                         // Record dimension-bound attestation
                         if p >= INFLUENCE_EPSILON {
-                            let atts = cell.attestations
-                                .entry(dimension)
-                                .or_insert_with(Vec::new);
+                            let atts = cell.attestations.entry(dimension).or_insert_with(Vec::new);
                             // Avoid duplicate attestations from same validator
-                            let already = atts.iter()
+                            let already = atts
+                                .iter()
                                 .any(|a| a.validator_id == validator_id && a.event_id == event_id);
                             if !already {
                                 atts.push(Attestation {
@@ -428,6 +637,7 @@ impl Field {
         }
 
         self.apply_cascade(event_id);
+        self.update_all_evidence();
     }
 
     /// Causal attestation: like `attest()` but respects light cones.
@@ -445,9 +655,7 @@ impl Field {
         let graph = self.causality.as_mut()?;
         let logical_time = graph.current_time;
 
-        let event = causality::CausalEvent::new(
-            center, logical_time, parents, data.to_vec(),
-        );
+        let event = causality::CausalEvent::new(center, logical_time, parents, data.to_vec());
         let event_id = event.id.clone();
         let event_id_str = event_id.to_string();
 
@@ -480,17 +688,18 @@ impl Field {
                         let dist = distance(center, coord, s);
                         let p = 1.0 / (1.0 + dist);
 
-                        if p < EPSILON { continue; }
+                        if p < EPSILON {
+                            continue;
+                        }
 
                         let cell = self.get_mut(coord);
                         cell.probability = (cell.probability + p).min(1.0);
 
                         if p >= INFLUENCE_EPSILON {
-                            let atts = cell.attestations
-                                .entry(dimension)
-                                .or_insert_with(Vec::new);
-                            let already = atts.iter()
-                                .any(|a| a.validator_id == validator_id && a.event_id == event_id_str);
+                            let atts = cell.attestations.entry(dimension).or_insert_with(Vec::new);
+                            let already = atts.iter().any(|a| {
+                                a.validator_id == validator_id && a.event_id == event_id_str
+                            });
                             if !already {
                                 atts.push(Attestation {
                                     dimension,
@@ -514,6 +723,7 @@ impl Field {
         }
 
         self.apply_cascade(&event_id_str);
+        self.update_all_evidence();
         Some(event_id)
     }
 
@@ -549,7 +759,9 @@ impl Field {
                         let dist = distance(center, coord, s);
                         let p = 1.0 / (1.0 + dist);
 
-                        if p < EPSILON { continue; }
+                        if p < EPSILON {
+                            continue;
+                        }
 
                         let cell = self.get_mut(coord);
                         cell.probability = (cell.probability + p).min(1.0);
@@ -579,12 +791,17 @@ impl Field {
         // correlation beyond the seed radius and enables genuine
         // phase-transition behavior.
         self.apply_cascade(event_id);
+
+        // Update evidence roots for all mutated cells.
+        self.update_all_evidence();
     }
 
     /// Push cascade boosts from all crystallized cells.
     /// Used after seeding (all crystals cascade to spread the event's influence).
     fn apply_cascade(&mut self, source_event: &str) {
-        let crystallized: Vec<Coord> = self.cells.iter()
+        let crystallized: Vec<Coord> = self
+            .cells
+            .iter()
             .filter(|(_, cell)| cell.crystallized)
             .map(|(coord, _)| *coord)
             .collect();
@@ -602,7 +819,8 @@ impl Field {
     /// This prevents unbounded field growth from cascade alone.
     fn cascade_boost(&mut self, sources: &[Coord], source_event: &str) {
         // Collect existing neighbor coords first to avoid borrow issues
-        let boosts: Vec<(Coord, bool)> = sources.iter()
+        let boosts: Vec<(Coord, bool)> = sources
+            .iter()
             .flat_map(|coord| {
                 self.neighbors(*coord).into_iter().map(|n| {
                     let exists = self.cells.contains_key(&n);
@@ -645,14 +863,38 @@ impl Field {
     pub fn neighbors(&self, coord: Coord) -> [Coord; 8] {
         let s = self.size;
         [
-            Coord { t: (coord.t + 1) % s, ..coord },
-            Coord { t: (coord.t + s - 1) % s, ..coord },
-            Coord { c: (coord.c + 1) % s, ..coord },
-            Coord { c: (coord.c + s - 1) % s, ..coord },
-            Coord { o: (coord.o + 1) % s, ..coord },
-            Coord { o: (coord.o + s - 1) % s, ..coord },
-            Coord { v: (coord.v + 1) % s, ..coord },
-            Coord { v: (coord.v + s - 1) % s, ..coord },
+            Coord {
+                t: (coord.t + 1) % s,
+                ..coord
+            },
+            Coord {
+                t: (coord.t + s - 1) % s,
+                ..coord
+            },
+            Coord {
+                c: (coord.c + 1) % s,
+                ..coord
+            },
+            Coord {
+                c: (coord.c + s - 1) % s,
+                ..coord
+            },
+            Coord {
+                o: (coord.o + 1) % s,
+                ..coord
+            },
+            Coord {
+                o: (coord.o + s - 1) % s,
+                ..coord
+            },
+            Coord {
+                v: (coord.v + 1) % s,
+                ..coord
+            },
+            Coord {
+                v: (coord.v + s - 1) % s,
+                ..coord
+            },
         ]
     }
 
@@ -678,29 +920,102 @@ impl Field {
         // Legacy fallback: source-diversity among neighbors
         let s = self.size;
         let my_sources: HashSet<&str> = cell
-            .influences.iter().map(|i| i.event_id.as_str()).collect();
+            .influences
+            .iter()
+            .map(|i| i.event_id.as_str())
+            .collect();
 
         if my_sources.is_empty() {
             let check = |c: Coord| self.get(c).probability > 0.5;
             let mut axes = 0;
-            if check(Coord { t: (coord.t + 1) % s, ..coord }) || check(Coord { t: (coord.t + s - 1) % s, ..coord }) { axes += 1; }
-            if check(Coord { c: (coord.c + 1) % s, ..coord }) || check(Coord { c: (coord.c + s - 1) % s, ..coord }) { axes += 1; }
-            if check(Coord { o: (coord.o + 1) % s, ..coord }) || check(Coord { o: (coord.o + s - 1) % s, ..coord }) { axes += 1; }
-            if check(Coord { v: (coord.v + 1) % s, ..coord }) || check(Coord { v: (coord.v + s - 1) % s, ..coord }) { axes += 1; }
+            if check(Coord {
+                t: (coord.t + 1) % s,
+                ..coord
+            }) || check(Coord {
+                t: (coord.t + s - 1) % s,
+                ..coord
+            }) {
+                axes += 1;
+            }
+            if check(Coord {
+                c: (coord.c + 1) % s,
+                ..coord
+            }) || check(Coord {
+                c: (coord.c + s - 1) % s,
+                ..coord
+            }) {
+                axes += 1;
+            }
+            if check(Coord {
+                o: (coord.o + 1) % s,
+                ..coord
+            }) || check(Coord {
+                o: (coord.o + s - 1) % s,
+                ..coord
+            }) {
+                axes += 1;
+            }
+            if check(Coord {
+                v: (coord.v + 1) % s,
+                ..coord
+            }) || check(Coord {
+                v: (coord.v + s - 1) % s,
+                ..coord
+            }) {
+                axes += 1;
+            }
             return axes;
         }
 
         let mut axes = 0;
         let axis_neighbors: [(Coord, Coord); 4] = [
-            (Coord { t: (coord.t + 1) % s, ..coord }, Coord { t: (coord.t + s - 1) % s, ..coord }),
-            (Coord { c: (coord.c + 1) % s, ..coord }, Coord { c: (coord.c + s - 1) % s, ..coord }),
-            (Coord { o: (coord.o + 1) % s, ..coord }, Coord { o: (coord.o + s - 1) % s, ..coord }),
-            (Coord { v: (coord.v + 1) % s, ..coord }, Coord { v: (coord.v + s - 1) % s, ..coord }),
+            (
+                Coord {
+                    t: (coord.t + 1) % s,
+                    ..coord
+                },
+                Coord {
+                    t: (coord.t + s - 1) % s,
+                    ..coord
+                },
+            ),
+            (
+                Coord {
+                    c: (coord.c + 1) % s,
+                    ..coord
+                },
+                Coord {
+                    c: (coord.c + s - 1) % s,
+                    ..coord
+                },
+            ),
+            (
+                Coord {
+                    o: (coord.o + 1) % s,
+                    ..coord
+                },
+                Coord {
+                    o: (coord.o + s - 1) % s,
+                    ..coord
+                },
+            ),
+            (
+                Coord {
+                    v: (coord.v + 1) % s,
+                    ..coord
+                },
+                Coord {
+                    v: (coord.v + s - 1) % s,
+                    ..coord
+                },
+            ),
         ];
 
         for (n_pos, n_neg) in &axis_neighbors {
             let has_diverse = [n_pos, n_neg].iter().any(|n| {
-                self.get(**n).influences.iter()
+                self.get(**n)
+                    .influences
+                    .iter()
                     .any(|inf| !my_sources.contains(inf.event_id.as_str()))
             });
             if has_diverse {
@@ -735,14 +1050,17 @@ impl Field {
         }
 
         // Calculate new probabilities
-        let updates: Vec<(Coord, f64)> = to_process.iter()
+        let updates: Vec<(Coord, f64)> = to_process
+            .iter()
             .filter(|coord| !self.get(**coord).crystallized)
             .map(|coord| {
                 let cell_p = self.get(*coord).probability;
                 let neighbors = self.neighbors(*coord);
-                let neighbor_avg: f64 = neighbors.iter()
+                let neighbor_avg: f64 = neighbors
+                    .iter()
                     .map(|n| self.get(*n).probability)
-                    .sum::<f64>() / 8.0;
+                    .sum::<f64>()
+                    / 8.0;
 
                 let delta = (neighbor_avg - cell_p) * INFLUENCE_FACTOR;
                 let support = self.orthogonal_support(*coord);
@@ -773,8 +1091,12 @@ impl Field {
             }
 
             let cell = self.cells.entry(coord).or_insert_with(|| Cell {
-                probability: 0.0, crystallized: false,
-                influences: Vec::new(), attestations: HashMap::new(),
+                probability: 0.0,
+                crystallized: false,
+                influences: Vec::new(),
+                attestations: HashMap::new(),
+                evidence_root: [0u8; 32],
+                evidence_count: 0,
             });
             let old_p = cell.probability;
             cell.probability = new_p;
@@ -843,12 +1165,16 @@ impl Field {
                 let capacity = self.curvature_budget[&region];
                 let load = self.curvature_load(region);
 
-                if load <= capacity { continue; }
+                if load <= capacity {
+                    continue;
+                }
 
                 let excess_ratio = (load - capacity) / load;
 
                 // Collect crystallized cells with their binding energy
-                let region_crystals: Vec<(Coord, f64)> = self.cells.iter()
+                let region_crystals: Vec<(Coord, f64)> = self
+                    .cells
+                    .iter()
                     .filter(|(coord, cell)| coord.o == region && cell.crystallized)
                     .map(|(coord, _)| (*coord, self.binding_energy(*coord)))
                     .collect();
@@ -864,7 +1190,9 @@ impl Field {
                 // (e.g., a competitor also decayed, freeing capacity).
                 let mut current_load = load;
                 for (coord, _be) in &sorted_crystals {
-                    if current_load <= capacity { break; }
+                    if current_load <= capacity {
+                        break;
+                    }
 
                     if let Some(cell) = self.cells.get_mut(coord) {
                         cell.crystallized = false;
@@ -890,14 +1218,17 @@ impl Field {
     }
 
     pub fn crystallized_cells(&self) -> Vec<Coord> {
-        self.cells.iter()
+        self.cells
+            .iter()
             .filter(|(_, c)| c.crystallized)
             .map(|(coord, _)| *coord)
             .collect()
     }
 
     pub fn is_consistent(&self) -> bool {
-        self.crystallized_cells().iter().all(|coord| self.orthogonal_support(*coord) >= 2)
+        self.crystallized_cells()
+            .iter()
+            .all(|coord| self.orthogonal_support(*coord) >= 2)
     }
 
     /// Evaluate crystallization for all non-crystallized active cells
@@ -906,7 +1237,8 @@ impl Field {
         &self,
         criterion: &dyn crystallization::CrystallizationCriterion,
     ) -> Vec<crystallization::CrystallizationEval> {
-        self.cells.iter()
+        self.cells
+            .iter()
             .filter(|(_, cell)| !cell.crystallized && cell.probability >= EPSILON)
             .map(|(coord, _)| criterion.evaluate(self, *coord))
             .filter(|eval| eval.should_crystallize())
@@ -915,7 +1247,10 @@ impl Field {
 
     /// Apply crystallization results: set cells to crystallized state.
     /// Returns number of new crystallizations.
-    pub fn apply_crystallizations(&mut self, evals: &[crystallization::CrystallizationEval]) -> usize {
+    pub fn apply_crystallizations(
+        &mut self,
+        evals: &[crystallization::CrystallizationEval],
+    ) -> usize {
         let mut count = 0;
         let mut newly_crystallized = Vec::new();
         for eval in evals {
@@ -938,7 +1273,13 @@ impl Field {
 pub fn evolve_to_equilibrium(field: &mut Field, stable_for: usize) {
     let mut stable = 0;
     for _ in 1..=MAX_ITERATIONS {
-        if field.evolve() == 0 { stable += 1; } else { stable = 0; }
-        if stable >= stable_for { break; }
+        if field.evolve() == 0 {
+            stable += 1;
+        } else {
+            stable = 0;
+        }
+        if stable >= stable_for {
+            break;
+        }
     }
 }

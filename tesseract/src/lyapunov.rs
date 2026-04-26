@@ -123,7 +123,7 @@
 //! With δp ≤ 0.18: |Δφ| ≤ 0.26 per cell per step.
 //! Safety factor 2× for interaction effects: ε_max = 0.52.
 
-use crate::{Field, Coord, EPSILON};
+use crate::{Coord, Field, EPSILON};
 
 /// Maximum per-cell potential injection per step.
 /// From R(σ)_max=0.10 and cascade=0.08, worst-case Δφ ≤ 0.26.
@@ -156,7 +156,8 @@ pub fn cell_potential(field: &Field, coord: Coord, temperature: f64) -> f64 {
 
 /// Compute the Lyapunov function V(field) = Σ φ(x) over all active cells.
 pub fn lyapunov_value(field: &Field, temperature: f64) -> f64 {
-    field.active_entries()
+    field
+        .active_entries()
         .map(|(coord, _)| cell_potential(field, coord, temperature))
         .sum()
 }
@@ -179,11 +180,14 @@ pub fn track_lyapunov(
     for _ in 0..steps {
         field.evolve();
         temp *= 1.0 - cooling_rate;
-        if temp < 1e-6 { temp = 0.0; }
+        if temp < 1e-6 {
+            temp = 0.0;
+        }
 
         let v = lyapunov_value(field, temp);
         if let Some(&prev) = values.last() {
-            if v > prev + 1e-10 { // tolerance for floating point
+            if v > prev + 1e-10 {
+                // tolerance for floating point
                 violations += 1;
             }
         }
@@ -195,7 +199,8 @@ pub fn track_lyapunov(
 
 /// Count non-crystallized active cells.
 fn active_non_crystallized(field: &Field) -> usize {
-    field.active_entries()
+    field
+        .active_entries()
         .filter(|(_, cell)| !cell.crystallized)
         .count()
 }
@@ -263,7 +268,9 @@ pub fn analyze_convergence(
         let crystals_after = field.crystallized_cells().len();
 
         temp *= 1.0 - cooling_rate;
-        if temp < 1e-6 { temp = 0.0; }
+        if temp < 1e-6 {
+            temp = 0.0;
+        }
 
         let v = lyapunov_value(field, temp);
         let delta = v - v_values.last().unwrap();
@@ -331,11 +338,7 @@ pub struct UniquenessResult {
     pub shared_crystals: usize,
 }
 
-pub fn check_uniqueness(
-    f1: &mut Field,
-    f2: &mut Field,
-    steps: usize,
-) -> UniquenessResult {
+pub fn check_uniqueness(f1: &mut Field, f2: &mut Field, steps: usize) -> UniquenessResult {
     use crate::contraction::sup_norm_distance;
 
     for _ in 0..steps {
@@ -345,7 +348,8 @@ pub fn check_uniqueness(
 
     let d = sup_norm_distance(f1, f2);
 
-    let all_coords: std::collections::HashSet<Coord> = f1.active_entries()
+    let all_coords: std::collections::HashSet<Coord> = f1
+        .active_entries()
         .map(|(c, _)| c)
         .chain(f2.active_entries().map(|(c, _)| c))
         .collect();
@@ -360,7 +364,8 @@ pub fn check_uniqueness(
         };
     }
 
-    let matching = all_coords.iter()
+    let matching = all_coords
+        .iter()
         .filter(|c| f1.get(**c).crystallized == f2.get(**c).crystallized)
         .count();
 
@@ -368,13 +373,12 @@ pub fn check_uniqueness(
     // (the "core" that both fields agree on)
     let f1_crystals: Vec<Coord> = f1.crystallized_cells();
     let f2_crystals: Vec<Coord> = f2.crystallized_cells();
-    let f2_crystal_set: std::collections::HashSet<Coord> =
-        f2_crystals.iter().copied().collect();
-    let f1_crystal_set: std::collections::HashSet<Coord> =
-        f1_crystals.iter().copied().collect();
+    let f2_crystal_set: std::collections::HashSet<Coord> = f2_crystals.iter().copied().collect();
+    let f1_crystal_set: std::collections::HashSet<Coord> = f1_crystals.iter().copied().collect();
 
     // Shared = crystallized in both
-    let shared: usize = f1_crystals.iter()
+    let shared: usize = f1_crystals
+        .iter()
         .filter(|c| f2_crystal_set.contains(c))
         .count();
 
@@ -428,14 +432,20 @@ mod tests {
         // φ(0.85) = -0.7225 - BE*0.85 + T*H(0.85)
         // φ(1.0)  = -1.0    - BE*1.0  + 0
         // Difference: φ(1.0) - φ(0.85) = -0.2775 - BE*0.15 - T*H(0.85) < 0
-        assert!(phi_crystal < -0.5, "crystallized cell should have low potential: {phi_crystal}");
+        assert!(
+            phi_crystal < -0.5,
+            "crystallized cell should have low potential: {phi_crystal}"
+        );
     }
 
     #[test]
     fn empty_cell_has_zero_potential() {
         let field = Field::new(10);
         let phi = cell_potential(&field, coord(0, 0, 0, 0), 0.5);
-        assert!((phi - 0.0).abs() < 1e-10, "empty cell potential should be 0, got {phi}");
+        assert!(
+            (phi - 0.0).abs() < 1e-10,
+            "empty cell potential should be 0, got {phi}"
+        );
     }
 
     #[test]
@@ -562,16 +572,15 @@ mod tests {
         let mut field = fully_attested_field(10);
         let analysis = analyze_convergence(&mut field, 0.1, 0.02, 80);
 
-        let total_increase: f64 = analysis.deltas.iter()
-            .filter(|d| **d > 0.0)
-            .sum();
+        let total_increase: f64 = analysis.deltas.iter().filter(|d| **d > 0.0).sum();
 
         // Total potential gained from crystallization should exceed
         // total potential injected by perturbations
         assert!(
             analysis.crystal_drop > total_increase * 0.5,
             "crystal drops ({:.2}) should dominate increases ({:.2})",
-            analysis.crystal_drop, total_increase
+            analysis.crystal_drop,
+            total_increase
         );
     }
 
@@ -581,10 +590,16 @@ mod tests {
         let analysis = analyze_convergence(&mut field, 0.1, 0.02, 80);
 
         // Active non-crystallized count should trend downward
-        let first_q: f64 = analysis.active_counts[..20].iter()
-            .map(|c| *c as f64).sum::<f64>() / 20.0;
-        let last_q: f64 = analysis.active_counts[60..].iter()
-            .map(|c| *c as f64).sum::<f64>() / 20.0;
+        let first_q: f64 = analysis.active_counts[..20]
+            .iter()
+            .map(|c| *c as f64)
+            .sum::<f64>()
+            / 20.0;
+        let last_q: f64 = analysis.active_counts[60..]
+            .iter()
+            .map(|c| *c as f64)
+            .sum::<f64>()
+            / 20.0;
 
         assert!(
             last_q <= first_q,
@@ -611,7 +626,10 @@ mod tests {
         let v0 = analysis.v_values[0];
         let vn = *analysis.v_values.last().unwrap();
         assert!(vn < v0, "V should decrease: V0={v0}, Vn={vn}");
-        assert!(analysis.crystal_drop > 0.0, "should have crystallization drops");
+        assert!(
+            analysis.crystal_drop > 0.0,
+            "should have crystallization drops"
+        );
     }
 
     // --- Uniqueness tests ---
@@ -640,7 +658,8 @@ mod tests {
         }
 
         // Perturb non-crystallized cells
-        let coords: Vec<Coord> = f2.active_entries()
+        let coords: Vec<Coord> = f2
+            .active_entries()
             .filter(|(_, c)| !c.crystallized)
             .map(|(coord, _)| coord)
             .collect();
@@ -688,7 +707,8 @@ mod tests {
         // Overall match should be reasonable
         assert!(
             result.crystallization_match > 0.80,
-            "overall match should be >80%: {:.2}", result.crystallization_match
+            "overall match should be >80%: {:.2}",
+            result.crystallization_match
         );
     }
 }

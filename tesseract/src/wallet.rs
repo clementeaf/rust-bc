@@ -11,10 +11,10 @@
 //! 3. Seeds the `Field` (crystallization)
 //! 4. Generates `Commitment`s (cryptographic proof of conservation)
 
-use crate::conservation::{ConservedField, TransferInput, TransferOutput, ConservationError};
+use crate::conservation::{ConservationError, ConservedField, TransferInput, TransferOutput};
 use crate::mapper::{CoordMapper, Event};
-use crate::proof::{Commitment, BalanceProof};
-use crate::{Coord, Field, evolve_to_equilibrium};
+use crate::proof::{BalanceProof, Commitment};
+use crate::{evolve_to_equilibrium, Coord, Field};
 use std::collections::HashMap;
 
 /// Cryptographic receipt for a transfer.
@@ -90,7 +90,8 @@ impl TesseractLedger {
             data: format!("allocate:{}", amount),
         };
         let coord = self.mapper.map(&event);
-        self.participant_coords.insert(participant.to_string(), coord);
+        self.participant_coords
+            .insert(participant.to_string(), coord);
 
         // Seed field for crystallization
         let label = format!("+{}→{}[{}]", amount, participant, coord);
@@ -110,7 +111,8 @@ impl TesseractLedger {
                 data: format!("allocate:{}", amount),
             };
             let coord = self.mapper.map(&event);
-            self.participant_coords.insert(participant.to_string(), coord);
+            self.participant_coords
+                .insert(participant.to_string(), coord);
 
             let label = format!("+{}→{}[{}]", amount, participant, coord);
             self.field.seed_named(coord, &label);
@@ -200,11 +202,10 @@ impl TesseractLedger {
 
     /// Get a balance proof (Pedersen commitment) for a participant.
     pub fn balance_proof(&self, participant: &str, blinding: u64) -> Option<BalanceProof> {
-        self.participant_coords.get(participant)
-            .map(|coord| {
-                let amount = self.conserved.balance_at(*coord).amount;
-                BalanceProof::new(amount, blinding)
-            })
+        self.participant_coords.get(participant).map(|coord| {
+            let amount = self.conserved.balance_at(*coord).amount;
+            BalanceProof::new(amount, blinding)
+        })
     }
 
     /// Evolve the field to let transfers crystallize.
@@ -235,13 +236,17 @@ impl TesseractLedger {
             data: "auto-register".into(),
         };
         let coord = self.mapper.map(&event);
-        self.participant_coords.insert(participant.to_string(), coord);
+        self.participant_coords
+            .insert(participant.to_string(), coord);
         coord
     }
 
     /// Next blinding factor for a participant (deterministic counter).
     fn next_blinding(&mut self, participant: &str) -> u64 {
-        let counter = self.blinding_counters.entry(participant.to_string()).or_insert(0);
+        let counter = self
+            .blinding_counters
+            .entry(participant.to_string())
+            .or_insert(0);
         *counter += 1;
         *counter
     }
@@ -266,14 +271,16 @@ mod tests {
         let mut ledger = TesseractLedger::new(16);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
-        let receipt = ledger.transfer(TransferRequest {
-            id: "tx-001".into(),
-            from: "alice".into(),
-            to: "bob".into(),
-            amount: 300,
-            timestamp: 100,
-            channel: "payments".into(),
-        }).unwrap();
+        let receipt = ledger
+            .transfer(TransferRequest {
+                id: "tx-001".into(),
+                from: "alice".into(),
+                to: "bob".into(),
+                amount: 300,
+                timestamp: 100,
+                channel: "payments".into(),
+            })
+            .unwrap();
 
         assert_eq!(ledger.balance("alice"), 700);
         assert_eq!(ledger.balance("bob"), 300);
@@ -306,15 +313,27 @@ mod tests {
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0), ("carol", 0, 0)]);
 
         // alice → bob → carol
-        ledger.transfer(TransferRequest {
-            id: "tx-1".into(), from: "alice".into(), to: "bob".into(),
-            amount: 500, timestamp: 100, channel: "p".into(),
-        }).unwrap();
+        ledger
+            .transfer(TransferRequest {
+                id: "tx-1".into(),
+                from: "alice".into(),
+                to: "bob".into(),
+                amount: 500,
+                timestamp: 100,
+                channel: "p".into(),
+            })
+            .unwrap();
 
-        ledger.transfer(TransferRequest {
-            id: "tx-2".into(), from: "bob".into(), to: "carol".into(),
-            amount: 200, timestamp: 200, channel: "p".into(),
-        }).unwrap();
+        ledger
+            .transfer(TransferRequest {
+                id: "tx-2".into(),
+                from: "bob".into(),
+                to: "carol".into(),
+                amount: 200,
+                timestamp: 200,
+                channel: "p".into(),
+            })
+            .unwrap();
 
         assert_eq!(ledger.balance("alice"), 500);
         assert_eq!(ledger.balance("bob"), 300);
@@ -327,19 +346,37 @@ mod tests {
         let mut ledger = TesseractLedger::new(16);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
-        let r1 = ledger.transfer(TransferRequest {
-            id: "tx-1".into(), from: "alice".into(), to: "bob".into(),
-            amount: 400, timestamp: 100, channel: "p".into(),
-        }).unwrap();
+        let r1 = ledger
+            .transfer(TransferRequest {
+                id: "tx-1".into(),
+                from: "alice".into(),
+                to: "bob".into(),
+                amount: 400,
+                timestamp: 100,
+                channel: "p".into(),
+            })
+            .unwrap();
 
-        let r2 = ledger.transfer(TransferRequest {
-            id: "tx-2".into(), from: "bob".into(), to: "alice".into(),
-            amount: 100, timestamp: 200, channel: "p".into(),
-        }).unwrap();
+        let r2 = ledger
+            .transfer(TransferRequest {
+                id: "tx-2".into(),
+                from: "bob".into(),
+                to: "alice".into(),
+                amount: 100,
+                timestamp: 200,
+                channel: "p".into(),
+            })
+            .unwrap();
 
         // Every receipt independently proves conservation
-        assert!(r1.verify_conservation(), "receipt 1 must prove conservation");
-        assert!(r2.verify_conservation(), "receipt 2 must prove conservation");
+        assert!(
+            r1.verify_conservation(),
+            "receipt 1 must prove conservation"
+        );
+        assert!(
+            r2.verify_conservation(),
+            "receipt 2 must prove conservation"
+        );
     }
 
     #[test]
@@ -357,10 +394,16 @@ mod tests {
         let mut ledger = TesseractLedger::new(16);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
-        let receipt = ledger.transfer(TransferRequest {
-            id: "tx-1".into(), from: "alice".into(), to: "bob".into(),
-            amount: 300, timestamp: 100, channel: "p".into(),
-        }).unwrap();
+        let receipt = ledger
+            .transfer(TransferRequest {
+                id: "tx-1".into(),
+                from: "alice".into(),
+                to: "bob".into(),
+                amount: 300,
+                timestamp: 100,
+                channel: "p".into(),
+            })
+            .unwrap();
 
         ledger.settle();
         // After settling, the deformation should have a chance to crystallize
@@ -373,8 +416,11 @@ mod tests {
     fn many_transfers_never_break_conservation() {
         let mut ledger = TesseractLedger::new(16);
         ledger.genesis(&[
-            ("a", 1000, 0), ("b", 1000, 0), ("c", 1000, 0),
-            ("d", 1000, 0), ("e", 1000, 0),
+            ("a", 1000, 0),
+            ("b", 1000, 0),
+            ("c", 1000, 0),
+            ("d", 1000, 0),
+            ("e", 1000, 0),
         ]);
 
         let participants = ["a", "b", "c", "d", "e"];
@@ -382,21 +428,34 @@ mod tests {
         for i in 0..20u64 {
             let from = participants[(i as usize) % 5];
             let to = participants[((i as usize) * 3 + 1) % 5];
-            if from == to { continue; }
-            if ledger.balance(from) < 50 { continue; }
+            if from == to {
+                continue;
+            }
+            if ledger.balance(from) < 50 {
+                continue;
+            }
 
-            let receipt = ledger.transfer(TransferRequest {
-                id: format!("tx-{}", i),
-                from: from.into(),
-                to: to.into(),
-                amount: 50,
-                timestamp: i * 10,
-                channel: "batch".into(),
-            }).unwrap();
+            let receipt = ledger
+                .transfer(TransferRequest {
+                    id: format!("tx-{}", i),
+                    from: from.into(),
+                    to: to.into(),
+                    amount: 50,
+                    timestamp: i * 10,
+                    channel: "batch".into(),
+                })
+                .unwrap();
 
-            assert!(receipt.verify_conservation(), "tx-{} must prove conservation", i);
+            assert!(
+                receipt.verify_conservation(),
+                "tx-{} must prove conservation",
+                i
+            );
         }
 
-        assert!(ledger.is_conserved(), "global conservation must hold after all transfers");
+        assert!(
+            ledger.is_conserved(),
+            "global conservation must hold after all transfers"
+        );
     }
 }

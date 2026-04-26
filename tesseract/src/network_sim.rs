@@ -10,9 +10,9 @@
 //!
 //! All randomness uses a seeded RNG for reproducibility.
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Unique node identifier.
 pub type NodeId = usize;
@@ -226,7 +226,12 @@ impl NetworkSim {
     }
 
     /// Broadcast a message to all nodes in a list.
-    pub fn broadcast(&mut self, from: NodeId, targets: &[NodeId], payload: NetworkMessage) -> usize {
+    pub fn broadcast(
+        &mut self,
+        from: NodeId,
+        targets: &[NodeId],
+        payload: NetworkMessage,
+    ) -> usize {
         let mut sent = 0;
         for &to in targets {
             if to != from && self.send(from, to, payload.clone()) {
@@ -387,7 +392,8 @@ mod tests {
         // With 50% drop rate, expect roughly 40-60 dropped
         assert!(
             net.messages_dropped > 20 && net.messages_dropped < 80,
-            "~50% should drop: dropped={}", net.messages_dropped
+            "~50% should drop: dropped={}",
+            net.messages_dropped
         );
     }
 
@@ -403,7 +409,7 @@ mod tests {
     #[test]
     fn clock_skew_affects_node_tick() {
         let mut net = NetworkSim::new(NetworkConfig::default());
-        net.set_clock_skew(0, 0.5);  // 50% faster
+        net.set_clock_skew(0, 0.5); // 50% faster
         net.set_clock_skew(1, -0.3); // 30% slower
 
         for _ in 0..10 {

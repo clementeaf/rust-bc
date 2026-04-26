@@ -70,7 +70,13 @@ impl CausalEvent {
         hasher.update(&data);
         let id = EventId(hasher.finalize().into());
 
-        Self { id, origin, logical_time, parents, data }
+        Self {
+            id,
+            origin,
+            logical_time,
+            parents,
+            data,
+        }
     }
 }
 
@@ -204,16 +210,16 @@ impl CausalGraph {
     /// These are events that exist in different "branches" of reality
     /// and don't need to be ordered — like spacelike-separated events in physics.
     pub fn concurrent_with(&self, id: &EventId) -> Vec<&EventId> {
-        self.events.keys()
-            .filter(|other| {
-                *other != id && self.order(id, other) == CausalOrder::Concurrent
-            })
+        self.events
+            .keys()
+            .filter(|other| *other != id && self.order(id, other) == CausalOrder::Concurrent)
             .collect()
     }
 
     /// Can event `source` causally influence coordinate `target` right now?
     pub fn can_influence(&self, source: &EventId, target: Coord, field_size: usize) -> bool {
-        self.cones.get(source)
+        self.cones
+            .get(source)
             .map(|cone| cone.can_reach(target, self.current_time, field_size))
             .unwrap_or(false)
     }
@@ -230,7 +236,9 @@ impl CausalGraph {
             return 0;
         }
 
-        event.parents.iter()
+        event
+            .parents
+            .iter()
             .map(|p| self.depth(p) + 1)
             .max()
             .unwrap_or(0)
@@ -239,11 +247,14 @@ impl CausalGraph {
     /// All events that have no dependents (tips of the DAG).
     /// Analogous to "unconfirmed transactions" — the frontier.
     pub fn tips(&self) -> Vec<&EventId> {
-        let all_parents: HashSet<&EventId> = self.events.values()
+        let all_parents: HashSet<&EventId> = self
+            .events
+            .values()
             .flat_map(|e| e.parents.iter())
             .collect();
 
-        self.events.keys()
+        self.events
+            .keys()
             .filter(|id| !all_parents.contains(id))
             .collect()
     }
@@ -319,8 +330,18 @@ mod tests {
         graph.insert(g);
 
         // Two children of genesis that don't know about each other
-        let a = CausalEvent::new(coord(1, 0, 0, 0), 1, vec![gid.clone()], b"branch_a".to_vec());
-        let b = CausalEvent::new(coord(0, 1, 0, 0), 1, vec![gid.clone()], b"branch_b".to_vec());
+        let a = CausalEvent::new(
+            coord(1, 0, 0, 0),
+            1,
+            vec![gid.clone()],
+            b"branch_a".to_vec(),
+        );
+        let b = CausalEvent::new(
+            coord(0, 1, 0, 0),
+            1,
+            vec![gid.clone()],
+            b"branch_b".to_vec(),
+        );
         let aid = a.id.clone();
         let bid = b.id.clone();
         graph.insert(a);
@@ -348,7 +369,8 @@ mod tests {
 
         // Merge event sees both branches
         let merge = CausalEvent::new(
-            coord(2, 1, 0, 0), 2,
+            coord(2, 1, 0, 0),
+            2,
             vec![aid.clone(), bid.clone()],
             b"merge".to_vec(),
         );
@@ -419,5 +441,95 @@ mod tests {
 
         // Genesis is before b (transitively through a)
         assert_eq!(graph.order(&gid, &bid), CausalOrder::Before);
+    }
+
+    // ── Property-based tests ─────────────────────────────────────────────
+
+    use proptest::prelude::*;
+
+    fn arb_coord(max: usize) -> impl Strategy<Value = Coord> {
+        (0..max, 0..max, 0..max, 0..max).prop_map(|(t, c, o, v)| Coord { t, c, o, v })
+    }
+
+    proptest! {
+        #![proptest_config(proptest::test_runner::Config::with_cases(100))]
+
+        /// EventId is deterministic: same inputs → same id.
+        #[test]
+        fn event_id_deterministic(
+            t in 0..20usize, c in 0..20usize, o in 0..20usize, v in 0..20usize,
+            time in 0..100u64,
+            data in proptest::collection::vec(any::<u8>(), 0..64),
+        ) {
+            let coord = Coord { t, c, o, v };
+            let e1 = CausalEvent::new(coord, time, vec![], data.clone());
+            let e2 = CausalEvent::new(coord, time, vec![], data);
+            prop_assert_eq!(e1.id, e2.id);
+        }
+
+        /// Different data → different EventId (collision resistance).
+        #[test]
+        fn event_id_collision_resistant(
+            t in 0..20usize,
+            d1 in proptest::collection::vec(any::<u8>(), 1..64),
+            d2 in proptest::collection::vec(any::<u8>(), 1..64),
+        ) {
+            prop_assume!(d1 != d2);
+            let coord = Coord { t, c: 0, o: 0, v: 0 };
+            let e1 = CausalEvent::new(coord, 0, vec![], d1);
+            let e2 = CausalEvent::new(coord, 0, vec![], d2);
+            prop_assert_ne!(e1.id, e2.id);
+        }
+
+        /// Causal order is antisymmetric: if A < B then B > A.
+        #[test]
+        fn causal_order_antisymmetric(chain_len in 2..8usize) {
+            let mut graph = CausalGraph::new();
+            let g = CausalEvent::new(coord(0,0,0,0), 0, vec![], b"g".to_vec());
+            let mut last = g.id.clone();
+            graph.insert(g);
+
+            for i in 1..chain_len {
+                let ev = CausalEvent::new(
+                    coord(i, 0, 0, 0), i as u64,
+                    vec![last.clone()], format!("e{i}").into_bytes(),
+                );
+                last = ev.id.clone();
+                graph.insert(ev);
+            }
+
+            let first = graph.all_event_ids().next().unwrap().clone();
+            if first != last {
+                let order_ab = graph.order(&first, &last);
+                let order_ba = graph.order(&last, &first);
+                match order_ab {
+                    CausalOrder::Before => prop_assert_eq!(order_ba, CausalOrder::After),
+                    CausalOrder::After => prop_assert_eq!(order_ba, CausalOrder::Before),
+                    CausalOrder::Concurrent => prop_assert_eq!(order_ba, CausalOrder::Concurrent),
+                }
+            }
+        }
+
+        /// Light cone: origin is always reachable at emission time.
+        #[test]
+        fn light_cone_origin_always_reachable(
+            origin in arb_coord(20), t0 in 0..50u64, size in 5..30usize
+        ) {
+            let cone = LightCone::new(origin, t0);
+            prop_assert!(cone.can_reach(origin, t0, size));
+        }
+
+        /// Light cone monotonicity: if reachable at time T, also reachable at T+1.
+        #[test]
+        fn light_cone_monotonic(
+            origin in arb_coord(15), target in arb_coord(15),
+            t0 in 0..20u64, dt in 1..30u64, size in 8..20usize,
+        ) {
+            let cone = LightCone::new(origin, t0);
+            let now = t0 + dt;
+            if cone.can_reach(target, now, size) {
+                prop_assert!(cone.can_reach(target, now + 1, size));
+            }
+        }
     }
 }

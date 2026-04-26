@@ -222,7 +222,12 @@ mod tests {
         }
 
         for w in temps.windows(2) {
-            assert!(w[1] <= w[0], "temperature must decrease: {} -> {}", w[0], w[1]);
+            assert!(
+                w[1] <= w[0],
+                "temperature must decrease: {} -> {}",
+                w[0],
+                w[1]
+            );
         }
     }
 
@@ -275,7 +280,10 @@ mod tests {
         let f = thermo.free_energy(&field, center);
 
         // High probability cell at low temperature → F should be negative
-        assert!(f < 0.0, "free energy should be negative for high-p cell, got {f}");
+        assert!(
+            f < 0.0,
+            "free energy should be negative for high-p cell, got {f}"
+        );
     }
 
     #[test]
@@ -307,7 +315,10 @@ mod tests {
         }
 
         let cost_old = thermo.reversal_cost(&field, center);
-        assert!(cost_old > cost_young, "older crystals should cost more to reverse: young={cost_young}, old={cost_old}");
+        assert!(
+            cost_old > cost_young,
+            "older crystals should cost more to reverse: young={cost_young}, old={cost_old}"
+        );
     }
 
     #[test]
@@ -328,13 +339,104 @@ mod tests {
         evolve_thermodynamic(&mut field, &mut thermo, 200, 10);
 
         assert!(thermo.is_equilibrium(10), "field should reach equilibrium");
-        assert!(thermo.temperature < 0.2, "temperature should be low: {}", thermo.temperature);
+        assert!(
+            thermo.temperature < 0.2,
+            "temperature should be low: {}",
+            thermo.temperature
+        );
     }
 
     #[test]
     fn empty_field_has_zero_entropy() {
         let field = Field::new(10);
         let h = Thermodynamics::shannon_entropy(&field);
-        assert!((h - 0.0).abs() < 1e-10, "empty field entropy should be 0, got {h}");
+        assert!(
+            (h - 0.0).abs() < 1e-10,
+            "empty field entropy should be 0, got {h}"
+        );
+    }
+
+    // ── Property-based tests ─────────────────────────────────────────────
+
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(proptest::test_runner::Config::with_cases(50))]
+
+        /// Shannon entropy is always non-negative.
+        #[test]
+        fn entropy_non_negative(size in 8..14usize, n_seeds in 0..5usize) {
+            let mut field = Field::new(size);
+            let q = size / 4;
+            for i in 0..n_seeds {
+                let c = Coord { t: q + i, c: q, o: q, v: q };
+                for (dim, vid) in [
+                    (Dimension::Temporal, "vt"),
+                    (Dimension::Context, "vc"),
+                    (Dimension::Origin, "vo"),
+                    (Dimension::Verification, "vv"),
+                ] {
+                    field.attest(c, &format!("ev{i}"), dim, vid);
+                }
+            }
+            let h = Thermodynamics::shannon_entropy(&field);
+            prop_assert!(h >= 0.0, "entropy must be >= 0, got {h}");
+        }
+
+        /// Temperature never increases during cooling (monotonic decrease).
+        #[test]
+        fn temperature_monotonically_decreases(
+            initial_t in 0.1..1.0f64,
+            cooling in 0.01..0.1f64,
+            steps in 5..30usize,
+        ) {
+            let mut field = Field::new(10);
+            let center = coord(5, 5, 5, 5);
+            for (dim, vid) in [
+                (Dimension::Temporal, "vt"),
+                (Dimension::Context, "vc"),
+                (Dimension::Origin, "vo"),
+                (Dimension::Verification, "vv"),
+            ] {
+                field.attest(center, "ev", dim, vid);
+            }
+
+            let mut thermo = Thermodynamics::new(initial_t, cooling);
+            let mut prev_t = thermo.temperature;
+
+            for _ in 0..steps {
+                thermo.step(&mut field);
+                prop_assert!(
+                    thermo.temperature <= prev_t + 1e-10,
+                    "temp increased: {} -> {}", prev_t, thermo.temperature
+                );
+                prev_t = thermo.temperature;
+            }
+        }
+
+        /// Reversal cost is always non-negative.
+        #[test]
+        fn reversal_cost_non_negative(
+            age_steps in 0..20usize,
+        ) {
+            let mut field = Field::new(10);
+            let center = coord(5, 5, 5, 5);
+            for (dim, vid) in [
+                (Dimension::Temporal, "vt"),
+                (Dimension::Context, "vc"),
+                (Dimension::Origin, "vo"),
+                (Dimension::Verification, "vv"),
+            ] {
+                field.attest(center, "ev", dim, vid);
+            }
+
+            let mut thermo = Thermodynamics::new(0.3, 0.05);
+            for _ in 0..age_steps {
+                thermo.step(&mut field);
+            }
+
+            let cost = thermo.reversal_cost(&field, center);
+            prop_assert!(cost >= 0.0, "reversal cost must be >= 0, got {cost}");
+        }
     }
 }

@@ -14,8 +14,8 @@
 //! 4. Property-based tests: random attestation structures, random causal
 //!    graphs, hidden correlation injection, exclusivity edge cases.
 
+use crate::{Attestation, Cell, Coord, Dimension, Field};
 use std::collections::{HashMap, HashSet};
-use crate::{Cell, Coord, Dimension, Field, Attestation};
 
 // ============================================================
 // 1. Externally verifiable sigma
@@ -49,7 +49,9 @@ pub fn verify_sigma(bundle: &VerifiableBundle) -> (usize, SigmaAuditTrace) {
 
     let mut sigma = 0;
     for dim in &Dimension::ALL {
-        let validators_on_dim: Vec<&str> = bundle.attestations.iter()
+        let validators_on_dim: Vec<&str> = bundle
+            .attestations
+            .iter()
             .filter(|(d, _)| d == dim)
             .map(|(_, vid)| vid.as_str())
             .collect();
@@ -66,7 +68,10 @@ pub fn verify_sigma(bundle: &VerifiableBundle) -> (usize, SigmaAuditTrace) {
         }
 
         let exclusive = validators_on_dim.iter().find(|vid| {
-            validator_dims.get(*vid).map(|dims| dims.len() == 1).unwrap_or(false)
+            validator_dims
+                .get(*vid)
+                .map(|dims| dims.len() == 1)
+                .unwrap_or(false)
         });
 
         if let Some(exc) = exclusive {
@@ -79,10 +84,17 @@ pub fn verify_sigma(bundle: &VerifiableBundle) -> (usize, SigmaAuditTrace) {
                 reason: format!("'{}' attests only on {:?}", exc, dim),
             });
         } else {
-            let reasons: Vec<String> = validators_on_dim.iter().map(|vid| {
-                let dims = validator_dims.get(vid).unwrap();
-                format!("'{}' also on {:?}", vid, dims.iter().filter(|d| *d != dim).collect::<Vec<_>>())
-            }).collect();
+            let reasons: Vec<String> = validators_on_dim
+                .iter()
+                .map(|vid| {
+                    let dims = validator_dims.get(vid).unwrap();
+                    format!(
+                        "'{}' also on {:?}",
+                        vid,
+                        dims.iter().filter(|d| *d != dim).collect::<Vec<_>>()
+                    )
+                })
+                .collect();
             trace.dimensions.push(DimensionAudit {
                 dimension: *dim,
                 validators: validators_on_dim.iter().map(|s| s.to_string()).collect(),
@@ -126,13 +138,18 @@ pub fn audit_sigma_method_a(cell: &Cell, coord: Coord) -> SigmaAuditTrace {
     let mut validator_dims: HashMap<&str, HashSet<Dimension>> = HashMap::new();
     for (dim, atts) in &cell.attestations {
         for att in atts {
-            validator_dims.entry(att.validator_id.as_str()).or_default().insert(*dim);
+            validator_dims
+                .entry(att.validator_id.as_str())
+                .or_default()
+                .insert(*dim);
         }
     }
 
     let mut trace = SigmaAuditTrace {
         coord,
-        event_id: cell.attestations.values()
+        event_id: cell
+            .attestations
+            .values()
             .flat_map(|a| a.iter())
             .next()
             .map(|a| a.event_id.clone())
@@ -160,7 +177,10 @@ pub fn audit_sigma_method_a(cell: &Cell, coord: Coord) -> SigmaAuditTrace {
         }
 
         let exclusive = validators.iter().find(|vid| {
-            validator_dims.get(vid.as_str()).map(|d| d.len() == 1).unwrap_or(false)
+            validator_dims
+                .get(vid.as_str())
+                .map(|d| d.len() == 1)
+                .unwrap_or(false)
         });
 
         match exclusive {
@@ -227,7 +247,8 @@ pub fn sigma_method_b(cell: &Cell) -> usize {
     // Step 4: a dimension is "independently attested" if it has ≥ 1 exclusive validator
     let mut sigma = 0;
     for dim in &Dimension::ALL {
-        let has_exclusive = pairs.iter()
+        let has_exclusive = pairs
+            .iter()
             .filter(|(_, d)| d == dim)
             .any(|(vid, _)| dim_count.get(vid).copied().unwrap_or(0) == 1);
         if has_exclusive {
@@ -354,12 +375,20 @@ mod tests {
         assert_eq!(sigma, 2);
 
         // T and C included (honest exclusive)
-        let t = trace.dimensions.iter().find(|d| d.dimension == Dimension::Temporal).unwrap();
+        let t = trace
+            .dimensions
+            .iter()
+            .find(|d| d.dimension == Dimension::Temporal)
+            .unwrap();
         assert!(t.included);
         assert_eq!(t.exclusive_validator.as_deref(), Some("honest_t"));
 
         // O and V excluded (sybil on both)
-        let o = trace.dimensions.iter().find(|d| d.dimension == Dimension::Origin).unwrap();
+        let o = trace
+            .dimensions
+            .iter()
+            .find(|d| d.dimension == Dimension::Origin)
+            .unwrap();
         assert!(!o.included);
         assert!(o.reason.contains("sybil"));
     }

@@ -1,8 +1,8 @@
 //! Ledger integration test — mapper + field working together.
 //! Events mapped to coordinates → seeded → crystallized → queryable.
 
-use tesseract::*;
 use tesseract::mapper::*;
+use tesseract::*;
 
 #[test]
 fn real_world_events_crystallize() {
@@ -10,9 +10,27 @@ fn real_world_events_crystallize() {
     let mut field = Field::new(16);
 
     let events = vec![
-        Event { id: "tx-001".into(), timestamp: 1020, channel: "payments".into(), org: "alice-corp".into(), data: "Alice→Bob:10".into() },
-        Event { id: "tx-002".into(), timestamp: 1040, channel: "payments".into(), org: "alice-corp".into(), data: "Alice→Carol:5".into() },
-        Event { id: "tx-003".into(), timestamp: 1025, channel: "payments".into(), org: "bob-llc".into(), data: "Bob→Dave:3".into() },
+        Event {
+            id: "tx-001".into(),
+            timestamp: 1020,
+            channel: "payments".into(),
+            org: "alice-corp".into(),
+            data: "Alice→Bob:10".into(),
+        },
+        Event {
+            id: "tx-002".into(),
+            timestamp: 1040,
+            channel: "payments".into(),
+            org: "alice-corp".into(),
+            data: "Alice→Carol:5".into(),
+        },
+        Event {
+            id: "tx-003".into(),
+            timestamp: 1025,
+            channel: "payments".into(),
+            org: "bob-llc".into(),
+            data: "Bob→Dave:3".into(),
+        },
     ];
 
     for ev in &events {
@@ -25,7 +43,12 @@ fn real_world_events_crystallize() {
     // All events should crystallize
     for ev in &events {
         let coord = mapper.map(ev);
-        assert!(field.get(coord).crystallized, "Event '{}' at {} should crystallize", ev.data, coord);
+        assert!(
+            field.get(coord).crystallized,
+            "Event '{}' at {} should crystallize",
+            ev.data,
+            coord
+        );
     }
 }
 
@@ -36,8 +59,20 @@ fn same_channel_events_produce_emergent_links() {
 
     // Two events in same channel, same org, same time bucket
     // They share 3 axes (t, c, o) — only v differs
-    let e1 = Event { id: "tx-001".into(), timestamp: 1020, channel: "payments".into(), org: "alice".into(), data: "Alice→Bob:10".into() };
-    let e2 = Event { id: "tx-002".into(), timestamp: 1040, channel: "payments".into(), org: "alice".into(), data: "Alice→Carol:5".into() };
+    let e1 = Event {
+        id: "tx-001".into(),
+        timestamp: 1020,
+        channel: "payments".into(),
+        org: "alice".into(),
+        data: "Alice→Bob:10".into(),
+    };
+    let e2 = Event {
+        id: "tx-002".into(),
+        timestamp: 1040,
+        channel: "payments".into(),
+        org: "alice".into(),
+        data: "Alice→Carol:5".into(),
+    };
 
     let c1 = mapper.map(&e1);
     let c2 = mapper.map(&e2);
@@ -60,9 +95,17 @@ fn same_channel_events_produce_emergent_links() {
     let r2 = field.get(c2).record();
 
     // c1's record should contain its own data at high weight
-    assert!(r1.contains("Alice→Bob"), "Event 1 should know itself: {}", r1);
+    assert!(
+        r1.contains("Alice→Bob"),
+        "Event 1 should know itself: {}",
+        r1
+    );
     // c2's record should contain its own data at high weight
-    assert!(r2.contains("Alice→Carol"), "Event 2 should know itself: {}", r2);
+    assert!(
+        r2.contains("Alice→Carol"),
+        "Event 2 should know itself: {}",
+        r2
+    );
 }
 
 #[test]
@@ -70,8 +113,20 @@ fn different_channels_stay_independent() {
     let mapper = CoordMapper::new(16).with_time_bucket(60);
     let mut field = Field::new(16);
 
-    let e1 = Event { id: "tx-001".into(), timestamp: 1020, channel: "payments".into(), org: "alice".into(), data: "payment".into() };
-    let e2 = Event { id: "tx-002".into(), timestamp: 1020, channel: "identity".into(), org: "bob".into(), data: "did-reg".into() };
+    let e1 = Event {
+        id: "tx-001".into(),
+        timestamp: 1020,
+        channel: "payments".into(),
+        org: "alice".into(),
+        data: "payment".into(),
+    };
+    let e2 = Event {
+        id: "tx-002".into(),
+        timestamp: 1020,
+        channel: "identity".into(),
+        org: "bob".into(),
+        data: "did-reg".into(),
+    };
 
     let c1 = mapper.map(&e1);
     let c2 = mapper.map(&e2);
@@ -86,10 +141,15 @@ fn different_channels_stay_independent() {
 
     // Destroy one — other survives
     field.destroy(c1);
-    for n in field.neighbors(c1) { field.destroy(n); }
+    for n in field.neighbors(c1) {
+        field.destroy(n);
+    }
     evolve_to_equilibrium(&mut field, 20);
 
-    assert!(field.get(c2).crystallized, "Different channel event should survive");
+    assert!(
+        field.get(c2).crystallized,
+        "Different channel event should survive"
+    );
 }
 
 #[test]
@@ -97,7 +157,13 @@ fn query_by_coordinate() {
     let mapper = CoordMapper::new(16).with_time_bucket(60);
     let mut field = Field::new(16);
 
-    let event = Event { id: "tx-999".into(), timestamp: 1020, channel: "supply-chain".into(), org: "factory-a".into(), data: "shipped:container-42".into() };
+    let event = Event {
+        id: "tx-999".into(),
+        timestamp: 1020,
+        channel: "supply-chain".into(),
+        org: "factory-a".into(),
+        data: "shipped:container-42".into(),
+    };
     let coord = mapper.map(&event);
 
     field.seed_named(coord, &event.data);
@@ -109,7 +175,11 @@ fn query_by_coordinate() {
 
     // Read the record
     let record = cell.record();
-    assert!(record.contains("shipped:container-42"), "Record should contain event data: {}", record);
+    assert!(
+        record.contains("shipped:container-42"),
+        "Record should contain event data: {}",
+        record
+    );
 }
 
 #[test]
@@ -133,16 +203,33 @@ fn dense_activity_strengthens_region() {
     evolve_to_equilibrium(&mut field, 20);
 
     let crystals = field.crystallized_count();
-    println!("Dense region: {} crystallized cells from 10 events", crystals);
+    println!(
+        "Dense region: {} crystallized cells from 10 events",
+        crystals
+    );
 
     // With 10 overlapping events, should produce many crystallizations
-    assert!(crystals > 10, "Dense activity should produce emergent crystallizations");
+    assert!(
+        crystals > 10,
+        "Dense activity should produce emergent crystallizations"
+    );
 
     // Pick the first event and destroy it — should recover from the density
-    let first = mapper.map(&Event { id: "tx-000".into(), timestamp: 1020, channel: "payments".into(), org: "alice".into(), data: "".into() });
+    let first = mapper.map(&Event {
+        id: "tx-000".into(),
+        timestamp: 1020,
+        channel: "payments".into(),
+        org: "alice".into(),
+        data: "".into(),
+    });
     field.destroy(first);
-    for n in field.neighbors(first) { field.destroy(n); }
+    for n in field.neighbors(first) {
+        field.destroy(n);
+    }
 
     evolve_to_equilibrium(&mut field, 20);
-    assert!(field.get(first).crystallized, "Dense region should self-heal");
+    assert!(
+        field.get(first).crystallized,
+        "Dense region should self-heal"
+    );
 }

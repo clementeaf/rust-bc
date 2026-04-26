@@ -25,11 +25,11 @@ impl ContributionMetrics {
     /// Each metric contributes differently — healing is worth more
     /// than just being online, because it's harder and more valuable.
     pub fn score(&self) -> f64 {
-        let storage   = self.cells_maintained as f64 * 0.1;
-        let network   = self.boundary_exchanges as f64 * 1.0;
-        let healing   = self.recoveries_assisted as f64 * 5.0;
-        let uptime    = (self.uptime_seconds as f64 / 3600.0) * 0.5; // per hour
-        let activity  = self.events_processed as f64 * 2.0;
+        let storage = self.cells_maintained as f64 * 0.1;
+        let network = self.boundary_exchanges as f64 * 1.0;
+        let healing = self.recoveries_assisted as f64 * 5.0;
+        let uptime = (self.uptime_seconds as f64 / 3600.0) * 0.5; // per hour
+        let activity = self.events_processed as f64 * 2.0;
 
         storage + network + healing + uptime + activity
     }
@@ -70,8 +70,12 @@ impl GrowthPool {
     /// Calculate reward for a contribution. Does NOT distribute yet.
     pub fn calculate_reward(&self, metrics: &ContributionMetrics) -> f64 {
         let score = metrics.score();
-        if score < self.min_score { return 0.0; }
-        if self.remaining <= 0.0 { return 0.0; }
+        if score < self.min_score {
+            return 0.0;
+        }
+        if self.remaining <= 0.0 {
+            return 0.0;
+        }
 
         let raw_reward = score * self.rate;
         // Can't distribute more than what remains
@@ -82,7 +86,9 @@ impl GrowthPool {
     /// Reduces the pool. When pool hits zero, no more distribution ever.
     pub fn distribute(&mut self, metrics: &ContributionMetrics) -> f64 {
         let reward = self.calculate_reward(metrics);
-        if reward <= 0.0 { return 0.0; }
+        if reward <= 0.0 {
+            return 0.0;
+        }
 
         self.remaining -= reward;
         self.distributed += reward;
@@ -100,10 +106,15 @@ impl GrowthPool {
     /// Distribute proportionally to multiple contributors in one epoch.
     /// Each gets a share proportional to their score.
     pub fn distribute_epoch(&mut self, contributors: &[ContributionMetrics]) -> Vec<f64> {
-        let scores: Vec<f64> = contributors.iter()
+        let scores: Vec<f64> = contributors
+            .iter()
             .map(|m| {
                 let s = m.score();
-                if s >= self.min_score { s } else { 0.0 }
+                if s >= self.min_score {
+                    s
+                } else {
+                    0.0
+                }
             })
             .collect();
 
@@ -160,7 +171,10 @@ mod tests {
         };
 
         let score = metrics.score();
-        assert!(score > 10.0, "Real contribution should have score > minimum");
+        assert!(
+            score > 10.0,
+            "Real contribution should have score > minimum"
+        );
 
         let reward = pool.distribute(&metrics);
         assert!(reward > 0.0, "Should earn curvature");
@@ -191,9 +205,12 @@ mod tests {
         // Pool should be nearly depleted
         assert!(pool.remaining() < 2.0, "Pool should deplete");
         // Total earned should be close to original pool
-        assert!((total_earned + pool.remaining() - 1000.0).abs() < 0.01,
+        assert!(
+            (total_earned + pool.remaining() - 1000.0).abs() < 0.01,
             "Conservation: earned ({}) + remaining ({}) should = 1000",
-            total_earned, pool.remaining());
+            total_earned,
+            pool.remaining()
+        );
     }
 
     #[test]
@@ -215,9 +232,12 @@ mod tests {
         let mid_reward = pool.distribute(&metrics);
 
         // Later rewards should be smaller (rate decay)
-        assert!(mid_reward < first_reward,
+        assert!(
+            mid_reward < first_reward,
             "Rewards should decrease as pool depletes: first={:.4}, mid={:.4}",
-            first_reward, mid_reward);
+            first_reward,
+            mid_reward
+        );
     }
 
     #[test]
@@ -243,9 +263,12 @@ mod tests {
         let rewards = pool.distribute_epoch(&[heavy.clone(), light.clone(), zero]);
 
         // Heavy contributor gets more than light
-        assert!(rewards[0] > rewards[1],
+        assert!(
+            rewards[0] > rewards[1],
             "Heavy contributor ({:.4}) should earn more than light ({:.4})",
-            rewards[0], rewards[1]);
+            rewards[0],
+            rewards[1]
+        );
         // Zero contributor gets nothing
         assert_eq!(rewards[2], 0.0);
         // Total distributed from pool
@@ -264,22 +287,25 @@ mod tests {
         };
 
         let reward = pool.distribute(&metrics);
-        assert_eq!(reward, 0.0, "Empty pool should give nothing, no matter the contribution");
+        assert_eq!(
+            reward, 0.0,
+            "Empty pool should give nothing, no matter the contribution"
+        );
     }
 
     #[test]
     fn pool_conservation_with_multiple_participants() {
         let mut pool = GrowthPool::new(50_000.0);
 
-        let participants: Vec<ContributionMetrics> = (0..10).map(|i| {
-            ContributionMetrics {
+        let participants: Vec<ContributionMetrics> = (0..10)
+            .map(|i| ContributionMetrics {
                 cells_maintained: 100 * (i + 1),
                 boundary_exchanges: 50 * (i + 1),
                 recoveries_assisted: i * 2,
                 uptime_seconds: 3600 * (i + 1),
                 events_processed: 10 * (i + 1),
-            }
-        }).collect();
+            })
+            .collect();
 
         let mut total_distributed = 0.0;
 
@@ -293,7 +319,8 @@ mod tests {
         assert!(
             (total_distributed + pool.remaining() - 50_000.0).abs() < 0.01,
             "Conservation: {:.2} + {:.2} should = 50000",
-            total_distributed, pool.remaining()
+            total_distributed,
+            pool.remaining()
         );
     }
 }

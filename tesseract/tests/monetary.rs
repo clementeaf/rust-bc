@@ -54,25 +54,48 @@ fn insufficient_balance_rejected() {
 #[test]
 fn chain_of_transfers() {
     let mut ledger = TesseractLedger::new(8);
-    ledger.genesis(&[("alice", 100, 0), ("bob", 0, 0), ("carol", 0, 0), ("dave", 0, 0)]);
+    ledger.genesis(&[
+        ("alice", 100, 0),
+        ("bob", 0, 0),
+        ("carol", 0, 0),
+        ("dave", 0, 0),
+    ]);
 
     // Alice → Bob: 50
-    ledger.transfer(TransferRequest {
-        id: "tx-001".into(), from: "alice".into(), to: "bob".into(),
-        amount: 50, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-001".into(),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 50,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
     // Bob → Carol: 20
-    ledger.transfer(TransferRequest {
-        id: "tx-002".into(), from: "bob".into(), to: "carol".into(),
-        amount: 20, timestamp: 120, channel: "payments".into(),
-    }).unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-002".into(),
+            from: "bob".into(),
+            to: "carol".into(),
+            amount: 20,
+            timestamp: 120,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
     // Carol → Dave: 10
-    ledger.transfer(TransferRequest {
-        id: "tx-003".into(), from: "carol".into(), to: "dave".into(),
-        amount: 10, timestamp: 180, channel: "payments".into(),
-    }).unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-003".into(),
+            from: "carol".into(),
+            to: "dave".into(),
+            amount: 10,
+            timestamp: 180,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
     ledger.settle();
 
@@ -88,10 +111,16 @@ fn transfer_crystallizes() {
     let mut ledger = TesseractLedger::new(8);
     ledger.genesis(&[("alice", 100, 0), ("bob", 0, 0)]);
 
-    let receipt = ledger.transfer(TransferRequest {
-        id: "tx-crystal".into(), from: "alice".into(), to: "bob".into(),
-        amount: 25, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
+    let receipt = ledger
+        .transfer(TransferRequest {
+            id: "tx-crystal".into(),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 25,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
     ledger.settle();
 
@@ -106,17 +135,27 @@ fn double_spend_rejected() {
     ledger.genesis(&[("alice", 100, 0), ("bob", 0, 0)]);
 
     // First transfer
-    ledger.transfer(TransferRequest {
-        id: "tx-once".into(), from: "alice".into(), to: "bob".into(),
-        amount: 60, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-once".into(),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 60,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
     ledger.settle();
 
     // Try second — insufficient balance (40 < 60)
     let result = ledger.transfer(TransferRequest {
-        id: "tx-once-2".into(), from: "alice".into(), to: "bob".into(),
-        amount: 60, timestamp: 60, channel: "payments".into(),
+        id: "tx-once-2".into(),
+        from: "alice".into(),
+        to: "bob".into(),
+        amount: 60,
+        timestamp: 60,
+        channel: "payments".into(),
     });
 
     assert!(result.is_err(), "Double spend should be rejected");
@@ -134,22 +173,40 @@ fn multiple_genesis_participants() {
     assert_eq!(ledger.balance("carol"), 250);
 
     // Cross transfers
-    ledger.transfer(TransferRequest {
-        id: "tx-ab".into(), from: "alice".into(), to: "bob".into(),
-        amount: 100, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
-    ledger.transfer(TransferRequest {
-        id: "tx-bc".into(), from: "bob".into(), to: "carol".into(),
-        amount: 200, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
-    ledger.transfer(TransferRequest {
-        id: "tx-ca".into(), from: "carol".into(), to: "alice".into(),
-        amount: 50, timestamp: 60, channel: "payments".into(),
-    }).unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-ab".into(),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 100,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-bc".into(),
+            from: "bob".into(),
+            to: "carol".into(),
+            amount: 200,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
+    ledger
+        .transfer(TransferRequest {
+            id: "tx-ca".into(),
+            from: "carol".into(),
+            to: "alice".into(),
+            amount: 50,
+            timestamp: 60,
+            channel: "payments".into(),
+        })
+        .unwrap();
 
-    assert_eq!(ledger.balance("alice"), 950);  // -100 +50
-    assert_eq!(ledger.balance("bob"), 400);    // +100 -200
-    assert_eq!(ledger.balance("carol"), 400);  // +200 -50
+    assert_eq!(ledger.balance("alice"), 950); // -100 +50
+    assert_eq!(ledger.balance("bob"), 400); // +100 -200
+    assert_eq!(ledger.balance("carol"), 400); // +200 -50
     assert!(ledger.is_conserved());
 }
 
@@ -159,16 +216,27 @@ fn simultaneous_conflict_second_rejected() {
     ledger.genesis(&[("alice", 10, 0), ("bob", 0, 0), ("carol", 0, 0)]);
 
     let tx1 = ledger.transfer(TransferRequest {
-        id: "tx-to-bob".into(), from: "alice".into(), to: "bob".into(),
-        amount: 10, timestamp: 60, channel: "payments".into(),
+        id: "tx-to-bob".into(),
+        from: "alice".into(),
+        to: "bob".into(),
+        amount: 10,
+        timestamp: 60,
+        channel: "payments".into(),
     });
     assert!(tx1.is_ok(), "First transfer should succeed");
 
     let tx2 = ledger.transfer(TransferRequest {
-        id: "tx-to-carol".into(), from: "alice".into(), to: "carol".into(),
-        amount: 10, timestamp: 60, channel: "payments".into(),
+        id: "tx-to-carol".into(),
+        from: "alice".into(),
+        to: "carol".into(),
+        amount: 10,
+        timestamp: 60,
+        channel: "payments".into(),
     });
-    assert!(tx2.is_err(), "Second transfer should fail: insufficient balance");
+    assert!(
+        tx2.is_err(),
+        "Second transfer should fail: insufficient balance"
+    );
 
     assert_eq!(ledger.balance("alice"), 0);
     assert_eq!(ledger.balance("bob"), 10);
@@ -180,32 +248,39 @@ fn distributed_simultaneous_conflict() {
     // Field-level conflict test using nodes directly.
     // The field crystallizes both deformations — conflict resolution
     // is the conservation layer's job (wallet rejects overdraft).
-    use tesseract::node::*;
     use tesseract::mapper::*;
+    use tesseract::node::*;
 
     let mapper = CoordMapper::new(8).with_time_bucket(60);
     let mut net = Network::new(8, 2);
 
     // Genesis: Alice gets 10 on node 0
     let genesis_coord = mapper.map(&Event {
-        id: "genesis:alice".into(), timestamp: 0,
-        channel: "genesis".into(), org: "alice".into(), data: "".into(),
+        id: "genesis:alice".into(),
+        timestamp: 0,
+        channel: "genesis".into(),
+        org: "alice".into(),
+        data: "".into(),
     });
     net.seed(genesis_coord, "+10→alice[genesis]");
     net.run_to_equilibrium(5);
 
     // Conflict: Alice→Bob seeded on node 0
     let tx_bob = Event {
-        id: "tx-conflict-bob".into(), timestamp: 60,
-        channel: "payments".into(), org: "alice".into(),
+        id: "tx-conflict-bob".into(),
+        timestamp: 60,
+        channel: "payments".into(),
+        org: "alice".into(),
         data: "-10:alice→bob".into(),
     };
     let coord_bob = mapper.map(&tx_bob);
 
     // Conflict: Alice→Carol seeded on node 1
     let tx_carol = Event {
-        id: "tx-conflict-carol".into(), timestamp: 60,
-        channel: "payments".into(), org: "alice".into(),
+        id: "tx-conflict-carol".into(),
+        timestamp: 60,
+        channel: "payments".into(),
+        org: "alice".into(),
         data: "-10:alice→carol".into(),
     };
     let coord_carol = mapper.map(&tx_carol);
@@ -235,22 +310,32 @@ fn partial_spend_leaves_correct_balance() {
 
     // Spend in parts
     for i in 0..5 {
-        ledger.transfer(TransferRequest {
-            id: format!("tx-{}", i), from: "alice".into(), to: "bob".into(),
-            amount: 15, timestamp: 60 + i as u64, channel: "payments".into(),
-        }).unwrap();
+        ledger
+            .transfer(TransferRequest {
+                id: format!("tx-{}", i),
+                from: "alice".into(),
+                to: "bob".into(),
+                amount: 15,
+                timestamp: 60 + i as u64,
+                channel: "payments".into(),
+            })
+            .unwrap();
     }
 
-    assert_eq!(ledger.balance("alice"), 25);  // 100 - 5×15
-    assert_eq!(ledger.balance("bob"), 75);    // 5×15
+    assert_eq!(ledger.balance("alice"), 25); // 100 - 5×15
+    assert_eq!(ledger.balance("bob"), 75); // 5×15
 
     // 6th transfer should fail (only 25 left, trying 30)
     let result = ledger.transfer(TransferRequest {
-        id: "tx-overdraft".into(), from: "alice".into(), to: "bob".into(),
-        amount: 30, timestamp: 120, channel: "payments".into(),
+        id: "tx-overdraft".into(),
+        from: "alice".into(),
+        to: "bob".into(),
+        amount: 30,
+        timestamp: 120,
+        channel: "payments".into(),
     });
     assert!(result.is_err());
-    assert_eq!(ledger.balance("alice"), 25);  // unchanged
+    assert_eq!(ledger.balance("alice"), 25); // unchanged
     assert!(ledger.is_conserved());
 }
 
@@ -259,15 +344,27 @@ fn receipts_prove_conservation() {
     let mut ledger = TesseractLedger::new(8);
     ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0), ("carol", 0, 0)]);
 
-    let r1 = ledger.transfer(TransferRequest {
-        id: "tx-1".into(), from: "alice".into(), to: "bob".into(),
-        amount: 400, timestamp: 100, channel: "p".into(),
-    }).unwrap();
+    let r1 = ledger
+        .transfer(TransferRequest {
+            id: "tx-1".into(),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 400,
+            timestamp: 100,
+            channel: "p".into(),
+        })
+        .unwrap();
 
-    let r2 = ledger.transfer(TransferRequest {
-        id: "tx-2".into(), from: "bob".into(), to: "carol".into(),
-        amount: 150, timestamp: 200, channel: "p".into(),
-    }).unwrap();
+    let r2 = ledger
+        .transfer(TransferRequest {
+            id: "tx-2".into(),
+            from: "bob".into(),
+            to: "carol".into(),
+            amount: 150,
+            timestamp: 200,
+            channel: "p".into(),
+        })
+        .unwrap();
 
     // Each receipt independently proves conservation via Pedersen commitments
     assert!(r1.verify_conservation(), "receipt 1 must verify");

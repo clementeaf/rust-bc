@@ -2,14 +2,14 @@
 //! Zero HTTP dependencies — stdlib only.
 
 use std::env;
-use std::io::{Read, Write, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use tesseract::*;
 use tesseract::persistence::EventLog;
+use tesseract::*;
 
 struct AppState {
     node_id: String,
@@ -22,12 +22,25 @@ struct AppState {
 fn main() {
     let port = env::var("PORT").unwrap_or_else(|_| "7700".into());
     let node_id = env::var("NODE_ID").unwrap_or_else(|_| "node-0".into());
-    let field_size: usize = env::var("FIELD_SIZE").unwrap_or_else(|_| "8".into()).parse().unwrap_or(8);
-    let peers: Vec<String> = env::var("PEERS").unwrap_or_default()
-        .split(',').filter(|s| !s.is_empty()).map(|s| s.trim().to_string()).collect();
+    let field_size: usize = env::var("FIELD_SIZE")
+        .unwrap_or_else(|_| "8".into())
+        .parse()
+        .unwrap_or(8);
+    let peers: Vec<String> = env::var("PEERS")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim().to_string())
+        .collect();
     let data_dir = env::var("DATA_DIR").unwrap_or_else(|_| "./data".into());
-    let region_id: usize = env::var("REGION_ID").unwrap_or_else(|_| "0".into()).parse().unwrap_or(0);
-    let genesis_alloc: f64 = env::var("GENESIS_ALLOC").unwrap_or_else(|_| "50000".into()).parse().unwrap_or(50000.0);
+    let region_id: usize = env::var("REGION_ID")
+        .unwrap_or_else(|_| "0".into())
+        .parse()
+        .unwrap_or(0);
+    let genesis_alloc: f64 = env::var("GENESIS_ALLOC")
+        .unwrap_or_else(|_| "50000".into())
+        .parse()
+        .unwrap_or(50000.0);
 
     let _ = std::fs::create_dir_all(&data_dir);
     let log_path = format!("{}/{}.log", data_dir, node_id);
@@ -39,7 +52,11 @@ fn main() {
     evolve_to_equilibrium(&mut field, 5);
 
     let state = Arc::new(Mutex::new(AppState {
-        node_id: node_id.clone(), field, log, region_id, peers: peers.clone(),
+        node_id: node_id.clone(),
+        field,
+        log,
+        region_id,
+        peers: peers.clone(),
     }));
 
     eprintln!("╔══════════════════════════════════════╗");
@@ -49,7 +66,14 @@ fn main() {
     eprintln!("  Region: {}", region_id);
     eprintln!("  Field:  {}⁴", field_size);
     eprintln!("  Port:   {}", port);
-    eprintln!("  Peers:  {}", if peers.is_empty() { "none".into() } else { peers.join(", ") });
+    eprintln!(
+        "  Peers:  {}",
+        if peers.is_empty() {
+            "none".into()
+        } else {
+            peers.join(", ")
+        }
+    );
 
     // Periodic sync
     let sync_st = Arc::clone(&state);
@@ -62,7 +86,9 @@ fn main() {
     let evo_st = Arc::clone(&state);
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(2));
-        if let Ok(mut st) = evo_st.lock() { st.field.evolve(); }
+        if let Ok(mut st) = evo_st.lock() {
+            st.field.evolve();
+        }
     });
 
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).expect("bind failed");
@@ -80,9 +106,13 @@ fn handle_request(mut stream: TcpStream, state: &Arc<Mutex<AppState>>) {
 
     // Parse request line
     let mut request_line = String::new();
-    if reader.read_line(&mut request_line).is_err() { return; }
+    if reader.read_line(&mut request_line).is_err() {
+        return;
+    }
     let parts: Vec<&str> = request_line.trim().split_whitespace().collect();
-    if parts.len() < 2 { return; }
+    if parts.len() < 2 {
+        return;
+    }
     let method = parts[0];
     let path = parts[1];
 
@@ -90,11 +120,18 @@ fn handle_request(mut stream: TcpStream, state: &Arc<Mutex<AppState>>) {
     let mut content_length = 0usize;
     loop {
         let mut header = String::new();
-        if reader.read_line(&mut header).is_err() { break; }
-        if header.trim().is_empty() { break; }
+        if reader.read_line(&mut header).is_err() {
+            break;
+        }
+        if header.trim().is_empty() {
+            break;
+        }
         if header.to_lowercase().starts_with("content-length:") {
-            content_length = header.split(':').nth(1)
-                .and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+            content_length = header
+                .split(':')
+                .nth(1)
+                .and_then(|v| v.trim().parse().ok())
+                .unwrap_or(0);
         }
     }
 
@@ -107,25 +144,90 @@ fn handle_request(mut stream: TcpStream, state: &Arc<Mutex<AppState>>) {
         String::new()
     };
 
-    let (status, response_body) = route(method, path, &body, state);
+    let (status, content_type, response_body) = route(method, path, &body, state);
     let response = format!(
-        "HTTP/1.1 {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        status, response_body.len(), response_body
+        "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status,
+        content_type,
+        response_body.len(),
+        response_body
     );
     let _ = stream.write_all(response.as_bytes());
 }
 
-fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<AppState>>) -> (&'static str, String) {
+fn route(
+    method: &str,
+    path: &str,
+    body: &str,
+    state: &Arc<Mutex<AppState>>,
+) -> (&'static str, &'static str, String) {
     match (method, path) {
+        ("GET", "/metrics") => {
+            let st = state.lock().unwrap();
+            let active = st.field.active_cells();
+            let crystallized = st.field.crystallized_count();
+            let total = st.field.total_cells();
+            let sparsity = if total > 0 {
+                1.0 - (active as f64 / total as f64)
+            } else {
+                1.0
+            };
+            let crystal_ratio = if active > 0 {
+                crystallized as f64 / active as f64
+            } else {
+                0.0
+            };
+            let metrics = format!(
+                "# HELP tesseract_field_size Logical size per dimension\n\
+                 # TYPE tesseract_field_size gauge\n\
+                 tesseract_field_size {}\n\
+                 # HELP tesseract_active_cells Number of cells stored in memory\n\
+                 # TYPE tesseract_active_cells gauge\n\
+                 tesseract_active_cells {}\n\
+                 # HELP tesseract_crystallized_cells Number of crystallized cells\n\
+                 # TYPE tesseract_crystallized_cells gauge\n\
+                 tesseract_crystallized_cells {}\n\
+                 # HELP tesseract_sparsity_ratio Fraction of field that is empty\n\
+                 # TYPE tesseract_sparsity_ratio gauge\n\
+                 tesseract_sparsity_ratio {:.6}\n\
+                 # HELP tesseract_crystallization_ratio Crystallized / active cells\n\
+                 # TYPE tesseract_crystallization_ratio gauge\n\
+                 tesseract_crystallization_ratio {:.6}\n\
+                 # HELP tesseract_peers Number of connected peers\n\
+                 # TYPE tesseract_peers gauge\n\
+                 tesseract_peers {}\n\
+                 # HELP tesseract_events_logged Total events in the log\n\
+                 # TYPE tesseract_events_logged counter\n\
+                 tesseract_events_logged {}\n",
+                st.field.size,
+                active,
+                crystallized,
+                sparsity,
+                crystal_ratio,
+                st.peers.len(),
+                st.log.len(),
+            );
+            (
+                "200 OK",
+                "text/plain; version=0.0.4; charset=utf-8",
+                metrics,
+            )
+        }
+
         ("GET", "/status") => {
             let st = state.lock().unwrap();
             let json = format!(
                 r#"{{"node_id":"{}","region":{},"field_size":{},"active_cells":{},"crystallized":{},"curvature":{:.2},"peers":{},"events":{}}}"#,
-                st.node_id, st.region_id, st.field.size, st.field.active_cells(),
-                st.field.crystallized_count(), st.field.capacity(st.region_id).unwrap_or(0.0),
-                st.peers.len(), st.log.len()
+                st.node_id,
+                st.region_id,
+                st.field.size,
+                st.field.active_cells(),
+                st.field.crystallized_count(),
+                st.field.capacity(st.region_id).unwrap_or(0.0),
+                st.peers.len(),
+                st.log.len()
             );
-            ("200 OK", json)
+            ("200 OK", "application/json", json)
         }
 
         ("POST", "/seed") => {
@@ -148,11 +250,18 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<AppState>>) -> 
                     let cell = st.field.get(coord);
                     let json = format!(
                         r#"{{"coord":"{}","probability":{:.4},"crystallized":{},"support":{}}}"#,
-                        coord, cell.probability, cell.crystallized, st.field.orthogonal_support(coord)
+                        coord,
+                        cell.probability,
+                        cell.crystallized,
+                        st.field.orthogonal_support(coord)
                     );
-                    ("201 Created", json)
+                    ("201 Created", "application/json", json)
                 }
-                Err(e) => ("400 Bad Request", format!(r#"{{"error":"{}"}}"#, e)),
+                Err(e) => (
+                    "400 Bad Request",
+                    "application/json",
+                    format!(r#"{{"error":"{}"}}"#, e),
+                ),
             }
         }
 
@@ -167,40 +276,67 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<AppState>>) -> 
                     let mut st = state.lock().unwrap();
                     let coord = Coord { t, c, o, v: vv };
                     st.field.destroy(coord);
-                    ("200 OK", r#"{"destroyed":true}"#.into())
+                    ("200 OK", "application/json", r#"{"destroyed":true}"#.into())
                 }
-                Err(e) => ("400 Bad Request", format!(r#"{{"error":"{}"}}"#, e)),
+                Err(e) => (
+                    "400 Bad Request",
+                    "application/json",
+                    format!(r#"{{"error":"{}"}}"#, e),
+                ),
             }
         }
 
         ("GET", p) if p.starts_with("/cell/") => {
-            let nums: Vec<usize> = p.trim_start_matches("/cell/")
-                .split('/').filter_map(|s| s.parse().ok()).collect();
+            let nums: Vec<usize> = p
+                .trim_start_matches("/cell/")
+                .split('/')
+                .filter_map(|s| s.parse().ok())
+                .collect();
             if nums.len() == 4 {
                 let st = state.lock().unwrap();
-                let coord = Coord { t: nums[0], c: nums[1], o: nums[2], v: nums[3] };
+                let coord = Coord {
+                    t: nums[0],
+                    c: nums[1],
+                    o: nums[2],
+                    v: nums[3],
+                };
                 let cell = st.field.get(coord);
                 let json = format!(
                     r#"{{"coord":"{}","probability":{:.4},"crystallized":{},"support":{},"record":"{}"}}"#,
-                    coord, cell.probability, cell.crystallized,
-                    st.field.orthogonal_support(coord), cell.record().replace('"', "'")
+                    coord,
+                    cell.probability,
+                    cell.crystallized,
+                    st.field.orthogonal_support(coord),
+                    cell.record().replace('"', "'")
                 );
-                ("200 OK", json)
+                ("200 OK", "application/json", json)
             } else {
-                ("400 Bad Request", r#"{"error":"use /cell/t/c/o/v"}"#.into())
+                (
+                    "400 Bad Request",
+                    "application/json",
+                    r#"{"error":"use /cell/t/c/o/v"}"#.into(),
+                )
             }
         }
 
         ("GET", "/boundary") => {
             let st = state.lock().unwrap();
-            let cells: Vec<String> = st.field.active_entries()
+            let cells: Vec<String> = st
+                .field
+                .active_entries()
                 .filter(|(_, cell)| cell.crystallized || cell.probability > 0.1)
-                .map(|(coord, cell)| format!(
-                    r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
-                    coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
-                ))
+                .map(|(coord, cell)| {
+                    format!(
+                        r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
+                        coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
+                    )
+                })
                 .collect();
-            ("200 OK", format!("[{}]", cells.join(",")))
+            (
+                "200 OK",
+                "application/json",
+                format!("[{}]", cells.join(",")),
+            )
         }
 
         ("POST", "/boundary") => {
@@ -220,32 +356,51 @@ fn route(method: &str, path: &str, body: &str, state: &Arc<Mutex<AppState>>) -> 
                         let k = cd["k"].as_bool().unwrap_or(false);
 
                         let local = st.field.get_mut(coord);
-                        if p > local.probability { local.probability = p; merged += 1; }
+                        if p > local.probability {
+                            local.probability = p;
+                            merged += 1;
+                        }
                         if k && !local.crystallized {
                             local.crystallized = true;
                             local.probability = 1.0;
                             merged += 1;
                         }
                     }
-                    ("200 OK", format!(r#"{{"merged":{}}}"#, merged))
+                    (
+                        "200 OK",
+                        "application/json",
+                        format!(r#"{{"merged":{}}}"#, merged),
+                    )
                 }
-                Err(e) => ("400 Bad Request", format!(r#"{{"error":"{}"}}"#, e)),
+                Err(e) => (
+                    "400 Bad Request",
+                    "application/json",
+                    format!(r#"{{"error":"{}"}}"#, e),
+                ),
             }
         }
 
-        _ => ("404 Not Found", r#"{"error":"not found"}"#.into()),
+        _ => (
+            "404 Not Found",
+            "application/json",
+            r#"{"error":"not found"}"#.into(),
+        ),
     }
 }
 
 fn sync_with_peers(state: &Arc<Mutex<AppState>>) {
     let (peers, boundary_json) = {
         let st = state.lock().unwrap();
-        let cells: Vec<String> = st.field.active_entries()
+        let cells: Vec<String> = st
+            .field
+            .active_entries()
             .filter(|(_, cell)| cell.crystallized || cell.probability > 0.1)
-            .map(|(coord, cell)| format!(
-                r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
-                coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
-            ))
+            .map(|(coord, cell)| {
+                format!(
+                    r#"{{"t":{},"c":{},"o":{},"v":{},"p":{:.4},"k":{}}}"#,
+                    coord.t, coord.c, coord.o, coord.v, cell.probability, cell.crystallized
+                )
+            })
             .collect();
         (st.peers.clone(), format!("[{}]", cells.join(",")))
     };
@@ -293,7 +448,9 @@ fn sync_with_peers(state: &Arc<Mutex<AppState>>) {
                             let k = cd["k"].as_bool().unwrap_or(false);
 
                             let local = st.field.get_mut(coord);
-                            if p > local.probability { local.probability = p; }
+                            if p > local.probability {
+                                local.probability = p;
+                            }
                             if k && !local.crystallized {
                                 local.crystallized = true;
                                 local.probability = 1.0;

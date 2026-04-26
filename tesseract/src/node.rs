@@ -4,9 +4,9 @@
 //! boundary cells with neighboring nodes. The field is
 //! distributed — no single node holds the entire space.
 
-use crate::{Cell, Coord, Field, SEED_RADIUS};
 use crate::contribution::ContributionMetrics;
 use crate::persistence::EventLog;
+use crate::{Cell, Coord, Field, SEED_RADIUS};
 
 /// A region of the 4D field owned by a node.
 #[derive(Clone, Debug)]
@@ -48,11 +48,22 @@ impl Node {
 
     /// Create a node with file-backed persistence.
     /// On creation, replays existing events from disk (cache recovery).
-    pub fn with_persistence(id: impl Into<String>, field_size: usize, region: Region, path: &str) -> Self {
+    pub fn with_persistence(
+        id: impl Into<String>,
+        field_size: usize,
+        region: Region,
+        path: &str,
+    ) -> Self {
         let log = EventLog::with_file(path);
         let mut field = Field::new(field_size);
         log.replay(&mut field);
-        Self { id: id.into(), field, region, metrics: ContributionMetrics::default(), log }
+        Self {
+            id: id.into(),
+            field,
+            region,
+            metrics: ContributionMetrics::default(),
+            log,
+        }
     }
 
     /// Seed an event on this node. Persists to local log automatically.
@@ -89,8 +100,8 @@ impl Node {
         for (coord, cell) in self.field.active_entries() {
             let axes = [coord.t, coord.c, coord.o, coord.v];
             let near_edge = (0..4).any(|i| {
-                axes[i] < self.region.start[i] + margin ||
-                axes[i] >= self.region.end[i].saturating_sub(margin)
+                axes[i] < self.region.start[i] + margin
+                    || axes[i] >= self.region.end[i].saturating_sub(margin)
             });
             if near_edge {
                 result.push((coord, cell.clone()));
@@ -149,7 +160,11 @@ impl Network {
         let nodes = (0..num_nodes)
             .map(|i| {
                 let start_t = i * slice;
-                let end_t = if i == num_nodes - 1 { field_size } else { (i + 1) * slice };
+                let end_t = if i == num_nodes - 1 {
+                    field_size
+                } else {
+                    (i + 1) * slice
+                };
                 Node::new(
                     format!("node-{}", i),
                     field_size,
@@ -183,12 +198,7 @@ impl Network {
     /// observing the same phenomenon from different positions.
     ///
     /// `parties` contains (node_index, party_label) pairs.
-    pub fn distributed_seed(
-        &mut self,
-        coord: Coord,
-        event_id: &str,
-        parties: &[(usize, &str)],
-    ) {
+    pub fn distributed_seed(&mut self, coord: Coord, event_id: &str, parties: &[(usize, &str)]) {
         for (node_idx, party) in parties {
             if *node_idx < self.nodes.len() {
                 let label = format!("{}[{}]", event_id, party);
@@ -226,8 +236,14 @@ impl Network {
     pub fn run_to_equilibrium(&mut self, stable_for: usize) {
         let mut stable = 0;
         for _ in 1..=500 {
-            if self.step() == 0 { stable += 1; } else { stable = 0; }
-            if stable >= stable_for { break; }
+            if self.step() == 0 {
+                stable += 1;
+            } else {
+                stable = 0;
+            }
+            if stable >= stable_for {
+                break;
+            }
         }
     }
 
@@ -254,7 +270,9 @@ impl Network {
         // 2. All other nodes send their boundary cells to the recovered node
         let n = self.nodes.len();
         for i in 0..n {
-            if i == node_idx { continue; }
+            if i == node_idx {
+                continue;
+            }
             let boundary = self.nodes[i].boundary_cells();
             self.nodes[node_idx].recover_from_neighbors(&boundary);
             self.nodes[i].metrics.recoveries_assisted += 1;

@@ -48,7 +48,12 @@ struct AttestationInput {
 }
 
 fn coord_from_vec(v: &[usize]) -> Coord {
-    Coord { t: v[0], c: v[1], o: v[2], v: v[3] }
+    Coord {
+        t: v[0],
+        c: v[1],
+        o: v[2],
+        v: v[3],
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -81,18 +86,36 @@ fn run_test(test: &TestCase) -> (HashMap<String, serde_json::Value>, Vec<String>
     if !test.input.attestations.is_empty() {
         let center = coord_from_vec(&test.input.attestations[0].coord);
         let cell = field.get(center);
-        results.insert("sigma_at_center".into(), serde_json::json!(cell.sigma_independence()));
-        results.insert("crystallized_at_center".into(), serde_json::json!(cell.crystallized));
-        results.insert("probability_at_center".into(), serde_json::json!(cell.probability));
-        results.insert("raw_sigma".into(), serde_json::json!(cell.sigma_independence()));
+        results.insert(
+            "sigma_at_center".into(),
+            serde_json::json!(cell.sigma_independence()),
+        );
+        results.insert(
+            "crystallized_at_center".into(),
+            serde_json::json!(cell.crystallized),
+        );
+        results.insert(
+            "probability_at_center".into(),
+            serde_json::json!(cell.probability),
+        );
+        results.insert(
+            "raw_sigma".into(),
+            serde_json::json!(cell.sigma_independence()),
+        );
 
         // sigma_eff
         let sigma_eff = tesseract::adversarial::effective_sigma(&field, center, None);
         results.insert("sigma_eff".into(), serde_json::json!(sigma_eff.sigma_eff));
     }
 
-    results.insert("active_cells".into(), serde_json::json!(field.active_cells()));
-    results.insert("crystallized_count".into(), serde_json::json!(field.crystallized_count()));
+    results.insert(
+        "active_cells".into(),
+        serde_json::json!(field.active_cells()),
+    );
+    results.insert(
+        "crystallized_count".into(),
+        serde_json::json!(field.crystallized_count()),
+    );
 
     // Check expected
     let mut failures = Vec::new();
@@ -123,8 +146,11 @@ fn run_test(test: &TestCase) -> (HashMap<String, serde_json::Value>, Vec<String>
             continue;
         } else if let Some(actual) = results.get(key.as_str()) {
             let tolerance_key = format!("{key}_tolerance");
-            let tolerance = test.expected.get(&tolerance_key)
-                .and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let tolerance = test
+                .expected
+                .get(&tolerance_key)
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
 
             if let (Some(a), Some(e)) = (actual.as_f64(), exp_val.as_f64()) {
                 if (a - e).abs() > tolerance + 1e-10 {
@@ -149,8 +175,9 @@ fn run_test(test: &TestCase) -> (HashMap<String, serde_json::Value>, Vec<String>
 fn spec_vectors_all_pass() {
     let vectors_path = concat!(env!("CARGO_MANIFEST_DIR"), "/spec_tests/test_vectors.json");
     let data: TestVectors = serde_json::from_str(
-        &std::fs::read_to_string(vectors_path).expect("test_vectors.json not found")
-    ).expect("invalid JSON");
+        &std::fs::read_to_string(vectors_path).expect("test_vectors.json not found"),
+    )
+    .expect("invalid JSON");
 
     println!("Tesseract Rust Implementation");
     println!("Test vectors version: {}", data.version);
@@ -182,7 +209,10 @@ fn spec_vectors_all_pass() {
         }
     }
 
-    println!("\n{passed} passed, {failed} failed, {} total", passed + failed);
+    println!(
+        "\n{passed} passed, {failed} failed, {} total",
+        passed + failed
+    );
 
     // Export for cross-validation
     let out_path = concat!(env!("CARGO_MANIFEST_DIR"), "/spec_tests/rust_results.json");

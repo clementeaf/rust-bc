@@ -3,11 +3,11 @@
 //! Functions here return structured results for CSV/JSON export.
 //! Focus on trends, not absolute values.
 
-use std::time::Instant;
-use crate::{Coord, Dimension, Field, evolve_to_equilibrium};
 use crate::adversarial;
 use crate::causality::{CausalEvent, CausalGraph};
 use crate::liveness;
+use crate::{evolve_to_equilibrium, Coord, Dimension, Field};
+use std::time::Instant;
 
 // --- Result types ---
 
@@ -120,7 +120,11 @@ pub fn bench_throughput(event_counts: &[usize], field_size: usize) -> Vec<Throug
         let evolve_ms = t1.elapsed().as_secs_f64() * 1000.0;
 
         let total_s = (attest_ms + evolve_ms) / 1000.0;
-        let eps = if total_s > 0.0 { n as f64 / total_s } else { 0.0 };
+        let eps = if total_s > 0.0 {
+            n as f64 / total_s
+        } else {
+            0.0
+        };
 
         results.push(ThroughputResult {
             events: n,
@@ -213,7 +217,9 @@ pub fn bench_sigma_eff(event_counts: &[usize], field_size: usize) -> Vec<SigmaEf
             let parents = last_id.iter().cloned().collect();
             let ev = CausalEvent::new(
                 coord_at(center, i as usize, field_size),
-                i, parents, format!("g_{i}").into_bytes(),
+                i,
+                parents,
+                format!("g_{i}").into_bytes(),
             );
             last_id = Some(ev.id.clone());
             graph.insert(ev);
@@ -243,7 +249,10 @@ pub fn bench_crystallization_scaling(sizes: &[usize]) -> Vec<CrystallizationScal
     for &size in sizes {
         let mut field = Field::new(size);
         let center = Coord {
-            t: size / 2, c: size / 2, o: size / 2, v: size / 2,
+            t: size / 2,
+            c: size / 2,
+            o: size / 2,
+            v: size / 2,
         };
         attest_full(&mut field, center, "scale_event");
 
@@ -282,8 +291,10 @@ pub fn bench_partition_recovery(
     for &dur in partition_durations {
         let mut field = Field::new(field_size);
         let center = Coord {
-            t: field_size / 2, c: field_size / 2,
-            o: field_size / 2, v: field_size / 2,
+            t: field_size / 2,
+            c: field_size / 2,
+            o: field_size / 2,
+            v: field_size / 2,
         };
 
         // Partial attestation (2 dims — simulates partition)
@@ -324,8 +335,10 @@ pub fn bench_noise_resilience(
     for &noise_n in noise_counts {
         let mut field = Field::new(field_size);
         let center = Coord {
-            t: field_size / 2, c: field_size / 2,
-            o: field_size / 2, v: field_size / 2,
+            t: field_size / 2,
+            c: field_size / 2,
+            o: field_size / 2,
+            v: field_size / 2,
         };
 
         // Inject noise first
@@ -386,12 +399,19 @@ pub fn export_csv(suite: &BenchmarkSuite) -> String {
     let mut csv = String::new();
 
     csv.push_str("# Throughput\n");
-    csv.push_str("events,field_size,attest_ms,evolve_ms,events_per_sec,crystallized,active_cells\n");
+    csv.push_str(
+        "events,field_size,attest_ms,evolve_ms,events_per_sec,crystallized,active_cells\n",
+    );
     for r in &suite.throughput {
         csv.push_str(&format!(
             "{},{},{:.2},{:.2},{:.1},{},{}\n",
-            r.events, r.field_size, r.attest_ms, r.evolve_ms,
-            r.events_per_sec, r.crystallized, r.active_cells
+            r.events,
+            r.field_size,
+            r.attest_ms,
+            r.evolve_ms,
+            r.events_per_sec,
+            r.crystallized,
+            r.active_cells
         ));
     }
 
@@ -400,8 +420,12 @@ pub fn export_csv(suite: &BenchmarkSuite) -> String {
     for r in &suite.memory {
         csv.push_str(&format!(
             "{},{},{},{},{},{}\n",
-            r.field_size, r.events, r.active_cells, r.crystallized,
-            r.bytes_per_cell_estimate, r.total_memory_estimate_kb
+            r.field_size,
+            r.events,
+            r.active_cells,
+            r.crystallized,
+            r.bytes_per_cell_estimate,
+            r.total_memory_estimate_kb
         ));
     }
 
@@ -419,8 +443,7 @@ pub fn export_csv(suite: &BenchmarkSuite) -> String {
     for r in &suite.crystallization_scaling {
         csv.push_str(&format!(
             "{},{},{},{}\n",
-            r.field_size, r.steps_to_crystallize,
-            r.crystallized_count, r.total_active
+            r.field_size, r.steps_to_crystallize, r.crystallized_count, r.total_active
         ));
     }
 
@@ -429,8 +452,7 @@ pub fn export_csv(suite: &BenchmarkSuite) -> String {
     for r in &suite.partition_recovery {
         csv.push_str(&format!(
             "{},{},{},{}\n",
-            r.partition_duration_steps, r.recovery_steps,
-            r.total_steps, r.crystallized
+            r.partition_duration_steps, r.recovery_steps, r.total_steps, r.crystallized
         ));
     }
 
@@ -439,8 +461,11 @@ pub fn export_csv(suite: &BenchmarkSuite) -> String {
     for r in &suite.noise_resilience {
         csv.push_str(&format!(
             "{},{},{},{},{}\n",
-            r.noise_count, r.valid_crystallized, r.steps_to_crystallize,
-            r.noise_crystallized, r.total_crystallized
+            r.noise_count,
+            r.valid_crystallized,
+            r.steps_to_crystallize,
+            r.noise_crystallized,
+            r.total_crystallized
         ));
     }
 
@@ -459,8 +484,14 @@ mod tests {
         let r_small = &results[0];
         let r_large = &results[1];
 
-        assert!(r_small.events_per_sec > 0.0, "should have positive throughput");
-        assert!(r_large.events_per_sec > 0.0, "should have positive throughput");
+        assert!(
+            r_small.events_per_sec > 0.0,
+            "should have positive throughput"
+        );
+        assert!(
+            r_large.events_per_sec > 0.0,
+            "should have positive throughput"
+        );
         let time_small = r_small.attest_ms + r_small.evolve_ms;
         let time_large = r_large.attest_ms + r_large.evolve_ms;
         assert!(
@@ -478,7 +509,8 @@ mod tests {
         assert!(
             m100.active_cells > m10.active_cells,
             "more events → more active cells: {} vs {}",
-            m10.active_cells, m100.active_cells
+            m10.active_cells,
+            m100.active_cells
         );
         assert!(
             m100.total_memory_estimate_kb > m10.total_memory_estimate_kb,
@@ -502,7 +534,8 @@ mod tests {
         assert!(
             with_graph.sigma_eff_per_event_us >= no_graph.sigma_eff_per_event_us * 0.5,
             "graph version should not be dramatically faster: no_graph={:.1}µs, with_graph={:.1}µs",
-            no_graph.sigma_eff_per_event_us, with_graph.sigma_eff_per_event_us
+            no_graph.sigma_eff_per_event_us,
+            with_graph.sigma_eff_per_event_us
         );
     }
 
@@ -514,7 +547,8 @@ mod tests {
             assert!(
                 r.steps_to_crystallize <= 200,
                 "size={}: {} steps exceeds 200",
-                r.field_size, r.steps_to_crystallize
+                r.field_size,
+                r.steps_to_crystallize
             );
             assert!(
                 r.crystallized_count > 0,
@@ -529,7 +563,8 @@ mod tests {
         assert!(
             s16.total_active >= s8.total_active,
             "larger field should have >= active cells: s8={}, s16={}",
-            s8.total_active, s16.total_active
+            s8.total_active,
+            s16.total_active
         );
     }
 
@@ -554,7 +589,9 @@ mod tests {
             assert!(
                 r.recovery_steps <= liveness::LIVENESS_BOUND,
                 "partition_dur={}: recovery {} exceeds bound {}",
-                r.partition_duration_steps, r.recovery_steps, liveness::LIVENESS_BOUND
+                r.partition_duration_steps,
+                r.recovery_steps,
+                liveness::LIVENESS_BOUND
             );
         }
     }
@@ -581,7 +618,8 @@ mod tests {
             assert!(
                 r.steps_to_crystallize <= liveness::LIVENESS_BOUND,
                 "noise={}: {} steps exceeds bound",
-                r.noise_count, r.steps_to_crystallize
+                r.noise_count,
+                r.steps_to_crystallize
             );
         }
 
@@ -591,7 +629,8 @@ mod tests {
         assert!(
             high_noise.steps_to_crystallize >= no_noise.steps_to_crystallize,
             "noise should not DECREASE steps: no_noise={}, high_noise={}",
-            no_noise.steps_to_crystallize, high_noise.steps_to_crystallize
+            no_noise.steps_to_crystallize,
+            high_noise.steps_to_crystallize
         );
     }
 
@@ -633,7 +672,12 @@ mod tests {
     fn stress_large_field_single_event() {
         // Large field, single event — tests sparse storage efficiency
         let mut field = Field::new(30);
-        let center = Coord { t: 15, c: 15, o: 15, v: 15 };
+        let center = Coord {
+            t: 15,
+            c: 15,
+            o: 15,
+            v: 15,
+        };
         attest_full(&mut field, center, "lone_event");
         evolve_to_equilibrium(&mut field, 5);
 
@@ -643,7 +687,8 @@ mod tests {
         assert!(
             field.active_cells() < 10_000,
             "sparse storage: active={} in field of {}",
-            field.active_cells(), field.total_cells()
+            field.active_cells(),
+            field.total_cells()
         );
     }
 
@@ -655,7 +700,12 @@ mod tests {
         // Scatter events across different o-regions
         for i in 0..events {
             let region = i % 20;
-            let c = Coord { t: 10, c: 10, o: region, v: 10 };
+            let c = Coord {
+                t: 10,
+                c: 10,
+                o: region,
+                v: 10,
+            };
             attest_full(&mut field, c, &format!("region_{i}"));
         }
 
@@ -671,7 +721,12 @@ mod tests {
     #[test]
     fn stress_rapid_noise_burst_then_valid() {
         let mut field = Field::new(16);
-        let center = Coord { t: 8, c: 8, o: 8, v: 8 };
+        let center = Coord {
+            t: 8,
+            c: 8,
+            o: 8,
+            v: 8,
+        };
 
         // Noise burst: 100 noise events
         liveness::inject_noise(&mut field, center, 100, 6);
@@ -696,7 +751,10 @@ mod tests {
 
         for round in 0..5 {
             let center = Coord {
-                t: 4 + round, c: 6, o: 6, v: 6,
+                t: 4 + round,
+                c: 6,
+                o: 6,
+                v: 6,
             };
 
             // Noise
@@ -712,7 +770,10 @@ mod tests {
         // All valid events should crystallize
         for round in 0..5 {
             let center = Coord {
-                t: 4 + round, c: 6, o: 6, v: 6,
+                t: 4 + round,
+                c: 6,
+                o: 6,
+                v: 6,
             };
             assert!(
                 field.get(center).crystallized,
@@ -727,7 +788,12 @@ mod tests {
         let mut field = Field::new(20);
 
         for i in 0..10 {
-            let c = Coord { t: 5 + i, c: 10, o: 10, v: 10 };
+            let c = Coord {
+                t: 5 + i,
+                c: 10,
+                o: 10,
+                v: 10,
+            };
             attest_full(&mut field, c, &format!("chain_{i}"));
         }
 
@@ -735,7 +801,12 @@ mod tests {
 
         let mut chain_crystallized = 0;
         for i in 0..10 {
-            let c = Coord { t: 5 + i, c: 10, o: 10, v: 10 };
+            let c = Coord {
+                t: 5 + i,
+                c: 10,
+                o: 10,
+                v: 10,
+            };
             if field.get(c).crystallized {
                 chain_crystallized += 1;
             }
@@ -755,7 +826,12 @@ mod tests {
         // Sparsity only holds for large fields relative to seed radius.
         for size in [16, 20, 25] {
             let mut field = Field::new(size);
-            let c = Coord { t: size / 2, c: size / 2, o: size / 2, v: size / 2 };
+            let c = Coord {
+                t: size / 2,
+                c: size / 2,
+                o: size / 2,
+                v: size / 2,
+            };
             attest_full(&mut field, c, "density_test");
             evolve_to_equilibrium(&mut field, 5);
 

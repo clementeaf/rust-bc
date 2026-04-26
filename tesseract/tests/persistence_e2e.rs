@@ -3,9 +3,9 @@
 //!   1. Local cache: replay events from disk
 //!   2. Network recovery: neighbors rebuild your field
 
-use tesseract::*;
-use tesseract::node::*;
 use std::fs;
+use tesseract::node::*;
+use tesseract::*;
 
 #[test]
 fn local_cache_survives_restart() {
@@ -13,15 +13,39 @@ fn local_cache_survives_restart() {
     let path = tmp.to_str().unwrap().to_string();
     let _ = fs::remove_file(&path);
 
-    let region = Region { start: [0, 0, 0, 0], end: [4, 4, 4, 4] };
-    let coord = Coord { t: 1, c: 1, o: 1, v: 1 };
+    let region = Region {
+        start: [0, 0, 0, 0],
+        end: [4, 4, 4, 4],
+    };
+    let coord = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
 
     // Session 1: seed events, they persist to disk
     {
         let mut node = Node::with_persistence("alice", 4, region.clone(), &path);
         node.seed(coord, "tx-001");
-        node.seed(Coord { t: 2, c: 1, o: 1, v: 1 }, "tx-002");
-        node.seed(Coord { t: 1, c: 2, o: 1, v: 1 }, "tx-003");
+        node.seed(
+            Coord {
+                t: 2,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            "tx-002",
+        );
+        node.seed(
+            Coord {
+                t: 1,
+                c: 2,
+                o: 1,
+                v: 1,
+            },
+            "tx-003",
+        );
         evolve_to_equilibrium(&mut node.field, 10);
 
         assert!(node.field.get(coord).crystallized);
@@ -47,12 +71,38 @@ fn network_recovery_without_local_cache() {
     // 2-node network. Both seed events. Equilibrium reached.
     let mut net = Network::new(8, 2);
 
-    net.seed(Coord { t: 1, c: 3, o: 3, v: 3 }, "ev-node0");
-    net.seed(Coord { t: 5, c: 3, o: 3, v: 3 }, "ev-node1");
+    net.seed(
+        Coord {
+            t: 1,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node0",
+    );
+    net.seed(
+        Coord {
+            t: 5,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-node1",
+    );
     net.run_to_equilibrium(10);
 
-    let ev0 = Coord { t: 1, c: 3, o: 3, v: 3 };
-    let ev1 = Coord { t: 5, c: 3, o: 3, v: 3 };
+    let ev0 = Coord {
+        t: 1,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
+    let ev1 = Coord {
+        t: 5,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     assert!(net.get(ev0).crystallized);
     assert!(net.get(ev1).crystallized);
 
@@ -80,26 +130,86 @@ fn four_nodes_one_dies_recovers() {
     let mut net = Network::new(8, 4);
 
     // Each node seeds an event
-    net.seed(Coord { t: 0, c: 3, o: 3, v: 3 }, "ev-0");
-    net.seed(Coord { t: 2, c: 3, o: 3, v: 3 }, "ev-1");
-    net.seed(Coord { t: 4, c: 3, o: 3, v: 3 }, "ev-2");
-    net.seed(Coord { t: 6, c: 3, o: 3, v: 3 }, "ev-3");
+    net.seed(
+        Coord {
+            t: 0,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-0",
+    );
+    net.seed(
+        Coord {
+            t: 2,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-1",
+    );
+    net.seed(
+        Coord {
+            t: 4,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-2",
+    );
+    net.seed(
+        Coord {
+            t: 6,
+            c: 3,
+            o: 3,
+            v: 3,
+        },
+        "ev-3",
+    );
     net.run_to_equilibrium(10);
 
     // All crystallized
-    assert!(net.get(Coord { t: 0, c: 3, o: 3, v: 3 }).crystallized);
-    assert!(net.get(Coord { t: 6, c: 3, o: 3, v: 3 }).crystallized);
+    assert!(
+        net.get(Coord {
+            t: 0,
+            c: 3,
+            o: 3,
+            v: 3
+        })
+        .crystallized
+    );
+    assert!(
+        net.get(Coord {
+            t: 6,
+            c: 3,
+            o: 3,
+            v: 3
+        })
+        .crystallized
+    );
 
     // Node 2 dies
     net.simulate_node_recovery(2);
 
     // Other nodes' events should survive
     assert!(
-        net.get(Coord { t: 0, c: 3, o: 3, v: 3 }).crystallized,
+        net.get(Coord {
+            t: 0,
+            c: 3,
+            o: 3,
+            v: 3
+        })
+        .crystallized,
         "Node 0's event should survive node 2's death"
     );
     assert!(
-        net.get(Coord { t: 6, c: 3, o: 3, v: 3 }).crystallized,
+        net.get(Coord {
+            t: 6,
+            c: 3,
+            o: 3,
+            v: 3
+        })
+        .crystallized,
         "Node 3's event should survive node 2's death"
     );
 

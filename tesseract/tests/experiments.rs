@@ -7,20 +7,132 @@ use tesseract::*;
 /// diverse evidence from different directions.
 fn seed_dense_cluster(field: &mut Field) {
     let coords_and_names: Vec<(Coord, &str)> = vec![
-        (Coord { t: 1, c: 1, o: 1, v: 1 }, "center"),
-        (Coord { t: 2, c: 1, o: 1, v: 1 }, "axis-t-pos"),
-        (Coord { t: 0, c: 1, o: 1, v: 1 }, "axis-t-neg"),
-        (Coord { t: 1, c: 2, o: 1, v: 1 }, "axis-c-pos"),
-        (Coord { t: 1, c: 0, o: 1, v: 1 }, "axis-c-neg"),
-        (Coord { t: 1, c: 1, o: 2, v: 1 }, "axis-o-pos"),
-        (Coord { t: 1, c: 1, o: 0, v: 1 }, "axis-o-neg"),
-        (Coord { t: 1, c: 1, o: 1, v: 2 }, "axis-v-pos"),
-        (Coord { t: 1, c: 1, o: 1, v: 0 }, "axis-v-neg"),
-        (Coord { t: 2, c: 2, o: 1, v: 1 }, "diag-tc"),
-        (Coord { t: 2, c: 1, o: 2, v: 1 }, "diag-to"),
-        (Coord { t: 2, c: 1, o: 1, v: 2 }, "diag-tv"),
-        (Coord { t: 1, c: 2, o: 2, v: 1 }, "diag-co"),
-        (Coord { t: 1, c: 2, o: 1, v: 2 }, "diag-cv"),
+        (
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            "center",
+        ),
+        (
+            Coord {
+                t: 2,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            "axis-t-pos",
+        ),
+        (
+            Coord {
+                t: 0,
+                c: 1,
+                o: 1,
+                v: 1,
+            },
+            "axis-t-neg",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 2,
+                o: 1,
+                v: 1,
+            },
+            "axis-c-pos",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 0,
+                o: 1,
+                v: 1,
+            },
+            "axis-c-neg",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 1,
+                o: 2,
+                v: 1,
+            },
+            "axis-o-pos",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 1,
+                o: 0,
+                v: 1,
+            },
+            "axis-o-neg",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 2,
+            },
+            "axis-v-pos",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 1,
+                o: 1,
+                v: 0,
+            },
+            "axis-v-neg",
+        ),
+        (
+            Coord {
+                t: 2,
+                c: 2,
+                o: 1,
+                v: 1,
+            },
+            "diag-tc",
+        ),
+        (
+            Coord {
+                t: 2,
+                c: 1,
+                o: 2,
+                v: 1,
+            },
+            "diag-to",
+        ),
+        (
+            Coord {
+                t: 2,
+                c: 1,
+                o: 1,
+                v: 2,
+            },
+            "diag-tv",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 2,
+                o: 2,
+                v: 1,
+            },
+            "diag-co",
+        ),
+        (
+            Coord {
+                t: 1,
+                c: 2,
+                o: 1,
+                v: 2,
+            },
+            "diag-cv",
+        ),
     ];
     for (coord, name) in &coords_and_names {
         field.seed_named(*coord, name);
@@ -29,21 +141,96 @@ fn seed_dense_cluster(field: &mut Field) {
 
 fn dense_cluster() -> Vec<Coord> {
     vec![
-        Coord { t: 1, c: 1, o: 1, v: 1 },
-        Coord { t: 2, c: 1, o: 1, v: 1 },
-        Coord { t: 0, c: 1, o: 1, v: 1 },
-        Coord { t: 1, c: 2, o: 1, v: 1 },
-        Coord { t: 1, c: 0, o: 1, v: 1 },
-        Coord { t: 1, c: 1, o: 2, v: 1 },
-        Coord { t: 1, c: 1, o: 0, v: 1 },
-        Coord { t: 1, c: 1, o: 1, v: 2 },
-        Coord { t: 1, c: 1, o: 1, v: 0 },
-        Coord { t: 2, c: 2, o: 1, v: 1 },
-        Coord { t: 2, c: 1, o: 2, v: 1 },
-        Coord { t: 2, c: 1, o: 1, v: 2 },
-        Coord { t: 1, c: 2, o: 2, v: 1 },
-        Coord { t: 1, c: 2, o: 1, v: 2 },
-        Coord { t: 1, c: 1, o: 2, v: 2 },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 2,
+            c: 1,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 0,
+            c: 1,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 2,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 0,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 2,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 0,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 1,
+            v: 2,
+        },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 1,
+            v: 0,
+        },
+        Coord {
+            t: 2,
+            c: 2,
+            o: 1,
+            v: 1,
+        },
+        Coord {
+            t: 2,
+            c: 1,
+            o: 2,
+            v: 1,
+        },
+        Coord {
+            t: 2,
+            c: 1,
+            o: 1,
+            v: 2,
+        },
+        Coord {
+            t: 1,
+            c: 2,
+            o: 2,
+            v: 1,
+        },
+        Coord {
+            t: 1,
+            c: 2,
+            o: 1,
+            v: 2,
+        },
+        Coord {
+            t: 1,
+            c: 1,
+            o: 2,
+            v: 2,
+        },
     ]
 }
 
@@ -77,11 +264,36 @@ fn exp1_noise_does_not_crystallize() {
 #[test]
 fn exp1_orthogonal_seeds_crystallize() {
     let mut field = Field::new(4);
-    field.seed(Coord { t: 1, c: 1, o: 1, v: 1 });
-    field.seed(Coord { t: 2, c: 1, o: 1, v: 1 });
-    field.seed(Coord { t: 1, c: 2, o: 1, v: 1 });
-    field.seed(Coord { t: 1, c: 1, o: 2, v: 1 });
-    field.seed(Coord { t: 1, c: 1, o: 1, v: 2 });
+    field.seed(Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    });
+    field.seed(Coord {
+        t: 2,
+        c: 1,
+        o: 1,
+        v: 1,
+    });
+    field.seed(Coord {
+        t: 1,
+        c: 2,
+        o: 1,
+        v: 1,
+    });
+    field.seed(Coord {
+        t: 1,
+        c: 1,
+        o: 2,
+        v: 1,
+    });
+    field.seed(Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 2,
+    });
     evolve_to_equilibrium(&mut field, 20);
     assert!(field.crystallized_count() >= 5);
 }
@@ -96,7 +308,12 @@ fn exp2_destroyed_cell_recovers() {
     seed_dense_cluster(&mut field);
     evolve_to_equilibrium(&mut field, 10);
 
-    let target = Coord { t: 1, c: 1, o: 1, v: 1 };
+    let target = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
     assert!(field.get(target).crystallized);
 
     field.destroy(target);
@@ -117,7 +334,12 @@ fn exp3_false_injection_does_not_propagate() {
     seed_dense_cluster(&mut field_fake);
 
     // Inject fake into field_fake only
-    let fake = Coord { t: 6, c: 6, o: 6, v: 6 };
+    let fake = Coord {
+        t: 6,
+        c: 6,
+        o: 6,
+        v: 6,
+    };
     let cell = field_fake.get_mut(fake);
     cell.probability = 1.0;
     cell.crystallized = true;
@@ -131,7 +353,8 @@ fn exp3_false_injection_does_not_propagate() {
     assert!(
         fake_count <= clean_count + 2,
         "Fake should not propagate: clean={}, with_fake={}",
-        clean_count, fake_count
+        clean_count,
+        fake_count
     );
 }
 
@@ -143,7 +366,12 @@ fn exp4_ten_attacks_ten_recoveries() {
     seed_dense_cluster(&mut field);
     evolve_to_equilibrium(&mut field, 10);
 
-    let target = Coord { t: 1, c: 1, o: 1, v: 1 };
+    let target = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
 
     let mut recoveries = 0;
     for _ in 0..10 {
@@ -153,7 +381,11 @@ fn exp4_ten_attacks_ten_recoveries() {
             recoveries += 1;
         }
     }
-    assert!(recoveries >= 8, "Should recover at least 8/10 attacks, got {}/10", recoveries);
+    assert!(
+        recoveries >= 8,
+        "Should recover at least 8/10 attacks, got {}/10",
+        recoveries
+    );
 }
 
 // === Experiment 5: Axis independence ===
@@ -164,20 +396,44 @@ fn exp5_one_axis_destroyed_three_sustain() {
     seed_dense_cluster(&mut field);
     evolve_to_equilibrium(&mut field, 10);
 
-    let target = Coord { t: 1, c: 1, o: 1, v: 1 };
-    assert!(field.get(target).crystallized, "Target should be crystallized before attack");
+    let target = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
+    assert!(
+        field.get(target).crystallized,
+        "Target should be crystallized before attack"
+    );
 
     // Destroy 2 T-axis neighbors — target should survive because
     // crystallization is irreversible and other axes still have support
-    field.destroy(Coord { t: 0, c: 1, o: 1, v: 1 });
-    field.destroy(Coord { t: 2, c: 1, o: 1, v: 1 });
+    field.destroy(Coord {
+        t: 0,
+        c: 1,
+        o: 1,
+        v: 1,
+    });
+    field.destroy(Coord {
+        t: 2,
+        c: 1,
+        o: 1,
+        v: 1,
+    });
 
     // Target is still crystallized (crystallization is permanent under Axiom 3)
-    assert!(field.get(target).crystallized, "Target should survive partial axis attack");
+    assert!(
+        field.get(target).crystallized,
+        "Target should survive partial axis attack"
+    );
 
     // After evolution, destroyed neighbors should recover
     evolve_to_equilibrium(&mut field, 15);
-    assert!(field.get(target).crystallized, "Target remains after healing");
+    assert!(
+        field.get(target).crystallized,
+        "Target remains after healing"
+    );
 }
 
 // === Experiment 6: Total destruction (orbital model) ===
@@ -188,18 +444,28 @@ fn exp6_total_destruction_recovers() {
     seed_dense_cluster(&mut field);
     evolve_to_equilibrium(&mut field, 10);
 
-    let target = Coord { t: 1, c: 1, o: 1, v: 1 };
+    let target = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
     let neighbors = field.neighbors(target);
 
     // Destroy target + all 8 direct neighbors
     field.destroy(target);
-    for n in &neighbors { field.destroy(*n); }
+    for n in &neighbors {
+        field.destroy(*n);
+    }
 
     assert!(!field.get(target).crystallized);
 
     evolve_to_equilibrium(&mut field, 30);
 
-    assert!(field.get(target).crystallized, "Should recover from total destruction via orbital depth");
+    assert!(
+        field.get(target).crystallized,
+        "Should recover from total destruction via orbital depth"
+    );
 }
 
 // === Experiment 7: Coexistence ===
@@ -208,9 +474,24 @@ fn exp6_total_destruction_recovers() {
 fn exp7_independent_events_coexist() {
     let mut field = Field::new(8);
 
-    let a = Coord { t: 1, c: 1, o: 1, v: 1 };
-    let b = Coord { t: 6, c: 6, o: 6, v: 6 };
-    let c = Coord { t: 1, c: 6, o: 3, v: 5 };
+    let a = Coord {
+        t: 1,
+        c: 1,
+        o: 1,
+        v: 1,
+    };
+    let b = Coord {
+        t: 6,
+        c: 6,
+        o: 6,
+        v: 6,
+    };
+    let c = Coord {
+        t: 1,
+        c: 6,
+        o: 3,
+        v: 5,
+    };
 
     field.seed(a);
     field.seed(b);
@@ -224,12 +505,20 @@ fn exp7_independent_events_coexist() {
     // Destroy A — B and C should be unaffected
     let a_neighbors = field.neighbors(a);
     field.destroy(a);
-    for n in &a_neighbors { field.destroy(*n); }
+    for n in &a_neighbors {
+        field.destroy(*n);
+    }
 
     evolve_to_equilibrium(&mut field, 20);
 
-    assert!(field.get(b).crystallized, "Event B should survive destruction of A");
-    assert!(field.get(c).crystallized, "Event C should survive destruction of A");
+    assert!(
+        field.get(b).crystallized,
+        "Event B should survive destruction of A"
+    );
+    assert!(
+        field.get(c).crystallized,
+        "Event C should survive destruction of A"
+    );
 }
 
 // === Experiment 8: Emergent crystallization ===
@@ -238,9 +527,24 @@ fn exp7_independent_events_coexist() {
 fn exp8_orbital_overlap_produces_emergent_crystal() {
     let mut field = Field::new(8);
 
-    let x = Coord { t: 2, c: 3, o: 3, v: 3 };
-    let y = Coord { t: 4, c: 3, o: 3, v: 3 };
-    let midpoint = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let x = Coord {
+        t: 2,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
+    let y = Coord {
+        t: 4,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
+    let midpoint = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
 
     assert_eq!(field.get(midpoint).probability, 0.0);
 
@@ -248,7 +552,10 @@ fn exp8_orbital_overlap_produces_emergent_crystal() {
     field.seed(y);
     evolve_to_equilibrium(&mut field, 20);
 
-    assert!(field.get(midpoint).crystallized, "Midpoint should crystallize from orbital overlap");
+    assert!(
+        field.get(midpoint).crystallized,
+        "Midpoint should crystallize from orbital overlap"
+    );
 }
 
 // === Experiment 9: Emergent self-healing ===
@@ -257,18 +564,36 @@ fn exp8_orbital_overlap_produces_emergent_crystal() {
 fn exp9_emergent_cell_self_heals() {
     let mut field = Field::new(8);
 
-    field.seed(Coord { t: 2, c: 3, o: 3, v: 3 });
-    field.seed(Coord { t: 4, c: 3, o: 3, v: 3 });
+    field.seed(Coord {
+        t: 2,
+        c: 3,
+        o: 3,
+        v: 3,
+    });
+    field.seed(Coord {
+        t: 4,
+        c: 3,
+        o: 3,
+        v: 3,
+    });
     evolve_to_equilibrium(&mut field, 20);
 
-    let midpoint = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let midpoint = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
     assert!(field.get(midpoint).crystallized);
 
     field.destroy(midpoint);
     assert!(!field.get(midpoint).crystallized);
 
     evolve_to_equilibrium(&mut field, 20);
-    assert!(field.get(midpoint).crystallized, "Emergent cell should self-heal from parent orbitals");
+    assert!(
+        field.get(midpoint).crystallized,
+        "Emergent cell should self-heal from parent orbitals"
+    );
 }
 
 // === Experiment 10: Emergent records carry meaning ===
@@ -277,9 +602,24 @@ fn exp9_emergent_cell_self_heals() {
 fn exp10_emergent_cell_knows_its_parents() {
     let mut field = Field::new(8);
 
-    let ev_alice = Coord { t: 2, c: 3, o: 3, v: 3 };
-    let ev_bob = Coord { t: 4, c: 3, o: 3, v: 3 };
-    let midpoint = Coord { t: 3, c: 3, o: 3, v: 3 };
+    let ev_alice = Coord {
+        t: 2,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
+    let ev_bob = Coord {
+        t: 4,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
+    let midpoint = Coord {
+        t: 3,
+        c: 3,
+        o: 3,
+        v: 3,
+    };
 
     field.seed_named(ev_alice, "Alice→Bob:10tok");
     field.seed_named(ev_bob, "Bob→Carol:5tok");
@@ -288,8 +628,14 @@ fn exp10_emergent_cell_knows_its_parents() {
     let mid_cell = field.get(midpoint);
     assert!(mid_cell.crystallized);
 
-    let has_alice = mid_cell.influences.iter().any(|i| i.event_id.contains("Alice"));
-    let has_carol = mid_cell.influences.iter().any(|i| i.event_id.contains("Carol"));
+    let has_alice = mid_cell
+        .influences
+        .iter()
+        .any(|i| i.event_id.contains("Alice"));
+    let has_carol = mid_cell
+        .influences
+        .iter()
+        .any(|i| i.event_id.contains("Carol"));
 
     assert!(has_alice, "Emergent cell should know about Alice event");
     assert!(has_carol, "Emergent cell should know about Carol event");

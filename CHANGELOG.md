@@ -6,6 +6,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-25
+
+**Tesseract — Deterministic convergence and adversarial hardening**
+
+Convergence:
+- `Cell.evidence_root` / `evidence_count` — SHA-256 merkle root over influences + attestations, deterministic regardless of insertion order
+- `resolve(a, b) -> Cell` — pure merge function (idempotent, commutative, associative); used in boundary sync for conflict resolution
+- Evidence-carrying boundary protocol — wire format extended from `{coord, p, k}` to include influences for cross-node evidence merge
+- `ConservedField.spent_nonces` — tracks `(source_coord, nonce) → tx_hash` for cross-node double-spend detection
+- `check_remote_transfer()` / `resolve_double_spend()` — deterministic conflict resolution (lower tx hash wins)
+
+Adversarial hardening:
+- `Cell.equivocating_validators()` — detects validators attesting contradictory events on the same dimension
+- `sigma_independence()` excludes equivocating validators from computation
+- `resolve()` re-verifies crystallization from actual evidence (rejects false `k=true` claims)
+- `resolve()` caps probability to evidence-derived value (rejects inflated `p` claims)
+
+Tooling:
+- `scripts/try-it-tesseract.sh` — interactive 2-node demo (no Docker)
+- `src/bin/cli.rs` — REPL: `init`, `transfer`, `balance`, `seed`, `query`, `destroy`, `evolve`, `status`, `receipts`, `verify`
+- `src/bin/node.rs` — `/metrics` endpoint (Prometheus text format)
+- `docker-compose.yml` — 3-node mesh with healthchecks
+
+Tests (294 total):
+- `tests/evidence_sync.rs` — 24 tests: evidence roots, resolve properties, conservation nonce tracking
+- `tests/adversarial_convergence.rs` — 23 tests: Sybil, replay, equivocation, Byzantine, partition, arrival order, proptest
+- `tests/network_stress.rs` — 8 tests: 5–10 nodes with latency, packet loss, crashes, partitions, concurrent seeds
+- `tests/e2e.rs` — 19 tests: HTTP nodes, sync, attack recovery, conflict resolution, double-spend detection
+- 16 new proptest cases across causality, conservation, entropy, gravity modules
+
+Documentation:
+- `LIMITATIONS.md` — 6 gaps identified, all 6 closed with test references
+
 ### 2026-04-19
 
 **Tesseract — 4D probability field prototype**

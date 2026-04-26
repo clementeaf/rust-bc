@@ -7,9 +7,9 @@
 //! - Self-healing latency
 //! - Crystallization efficiency
 
-use tesseract::*;
-use tesseract::mapper::*;
 use std::time::Instant;
+use tesseract::mapper::*;
+use tesseract::*;
 
 // --- Helpers ---
 
@@ -17,10 +17,34 @@ fn seed_cluster(field: &mut Field, center: Coord, name: &str) {
     let s = field.size;
     field.seed_named(center, &format!("{}-core", name));
     for offset in [1_i64, -1] {
-        field.seed_named(Coord { t: ((center.t as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-t", name));
-        field.seed_named(Coord { c: ((center.c as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-c", name));
-        field.seed_named(Coord { o: ((center.o as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-o", name));
-        field.seed_named(Coord { v: ((center.v as i64 + offset).rem_euclid(s as i64)) as usize, ..center }, &format!("{}-v", name));
+        field.seed_named(
+            Coord {
+                t: ((center.t as i64 + offset).rem_euclid(s as i64)) as usize,
+                ..center
+            },
+            &format!("{}-t", name),
+        );
+        field.seed_named(
+            Coord {
+                c: ((center.c as i64 + offset).rem_euclid(s as i64)) as usize,
+                ..center
+            },
+            &format!("{}-c", name),
+        );
+        field.seed_named(
+            Coord {
+                o: ((center.o as i64 + offset).rem_euclid(s as i64)) as usize,
+                ..center
+            },
+            &format!("{}-o", name),
+        );
+        field.seed_named(
+            Coord {
+                v: ((center.v as i64 + offset).rem_euclid(s as i64)) as usize,
+                ..center
+            },
+            &format!("{}-v", name),
+        );
     }
 }
 
@@ -36,8 +60,14 @@ fn evolve_counting(field: &mut Field, stable_for: usize) -> (usize, std::time::D
     let mut steps = 0;
     for _ in 1..=MAX_ITERATIONS {
         steps += 1;
-        if field.evolve() == 0 { stable += 1; } else { stable = 0; }
-        if stable >= stable_for { break; }
+        if field.evolve() == 0 {
+            stable += 1;
+        } else {
+            stable = 0;
+        }
+        if stable >= stable_for {
+            break;
+        }
     }
     (steps, start.elapsed())
 }
@@ -55,18 +85,45 @@ fn bench_convergence_by_size() {
     for size in [8, 16, 32, 64] {
         let mut field = Field::new(size);
         let q = size / 4;
-        seed_cluster(&mut field, Coord { t: q, c: q, o: q, v: q }, "A");
-        seed_cluster(&mut field, Coord { t: 3*q, c: 3*q, o: 3*q, v: 3*q }, "B");
+        seed_cluster(
+            &mut field,
+            Coord {
+                t: q,
+                c: q,
+                o: q,
+                v: q,
+            },
+            "A",
+        );
+        seed_cluster(
+            &mut field,
+            Coord {
+                t: 3 * q,
+                c: 3 * q,
+                o: 3 * q,
+                v: 3 * q,
+            },
+            "B",
+        );
 
         let active_before = field.active_cells();
         let (steps, elapsed) = evolve_counting(&mut field, 10);
         let crystals = field.crystallized_count();
 
-        println!("║  {:>3}⁴  ║ {:>8} ║ {:>6} ║ {:>5.2?} {:>2}s ║ {:>5}/{:<5} {:>3}%║",
-            size, size.pow(4), active_before,
-            elapsed, steps,
-            crystals, active_before,
-            if active_before > 0 { crystals * 100 / active_before } else { 0 }
+        println!(
+            "║  {:>3}⁴  ║ {:>8} ║ {:>6} ║ {:>5.2?} {:>2}s ║ {:>5}/{:<5} {:>3}%║",
+            size,
+            size.pow(4),
+            active_before,
+            elapsed,
+            steps,
+            crystals,
+            active_before,
+            if active_before > 0 {
+                crystals * 100 / active_before
+            } else {
+                0
+            }
         );
     }
 
@@ -105,8 +162,10 @@ fn bench_throughput() {
         let total = seed_time + evolve_time;
         let eps = count as f64 / total.as_secs_f64();
 
-        println!("║  {:>3}⁴  ║  {:>5} ║ {:>8.2?} ║ {:>8.2?} ║ {:>10.0}/s  ║",
-            size, count, seed_time, evolve_time, eps);
+        println!(
+            "║  {:>3}⁴  ║  {:>5} ║ {:>8.2?} ║ {:>8.2?} ║ {:>10.0}/s  ║",
+            size, count, seed_time, evolve_time, eps
+        );
     }
 
     println!("╚════════╩════════╩══════════╩══════════╩══════════════╝");
@@ -147,8 +206,10 @@ fn bench_memory() {
         let crystals = field.crystallized_count();
         let sparsity = 100.0 - (active as f64 / total_cells as f64 * 100.0);
 
-        println!("║  {:>5}  ║  {:>6}  ║   {:>6}  ║  {:>6.2}% empty ║",
-            batch, active, crystals, sparsity);
+        println!(
+            "║  {:>5}  ║  {:>6}  ║   {:>6}  ║  {:>6.2}% empty ║",
+            batch, active, crystals, sparsity
+        );
     }
 
     println!("╚═════════╩══════════╩═══════════╩════════════════╝");
@@ -168,29 +229,68 @@ fn bench_self_healing() {
     for size in [8, 16, 32] {
         let mut field = Field::new(size);
         let q = size / 4;
-        let target = Coord { t: q, c: q, o: q, v: q };
+        let target = Coord {
+            t: q,
+            c: q,
+            o: q,
+            v: q,
+        };
 
         // Build dense neighborhood
         seed_cluster(&mut field, target, "A");
-        seed_cluster(&mut field, Coord { t: q+2, c: q, o: q, v: q }, "B");
-        seed_cluster(&mut field, Coord { t: q, c: q+2, o: q, v: q }, "C");
-        seed_cluster(&mut field, Coord { t: q, c: q, o: q+2, v: q }, "D");
+        seed_cluster(
+            &mut field,
+            Coord {
+                t: q + 2,
+                c: q,
+                o: q,
+                v: q,
+            },
+            "B",
+        );
+        seed_cluster(
+            &mut field,
+            Coord {
+                t: q,
+                c: q + 2,
+                o: q,
+                v: q,
+            },
+            "C",
+        );
+        seed_cluster(
+            &mut field,
+            Coord {
+                t: q,
+                c: q,
+                o: q + 2,
+                v: q,
+            },
+            "D",
+        );
         evolve_to_equilibrium(&mut field, 10);
 
         // Destroy
         let (_, destroy_time) = timed(|| {
             let neighbors = field.neighbors(target);
             field.destroy(target);
-            for n in neighbors { field.destroy(n); }
+            for n in neighbors {
+                field.destroy(n);
+            }
         });
 
         // Heal — use full equilibrium (may need many steps for diffusion)
         let (steps, heal_time) = evolve_counting(&mut field, 20);
         let recovered = field.get(target).crystallized;
 
-        println!("║  {:>3}⁴  ║ {:>12.2?} ║ {:>12.2?} ║ {:>6} ({:>2}st) ║",
-            size, destroy_time, heal_time,
-            if recovered { "YES" } else { "NO" }, steps);
+        println!(
+            "║  {:>3}⁴  ║ {:>12.2?} ║ {:>12.2?} ║ {:>6} ({:>2}st) ║",
+            size,
+            destroy_time,
+            heal_time,
+            if recovered { "YES" } else { "NO" },
+            steps
+        );
     }
 
     println!("╚════════╩══════════════╩══════════════╩═══════════════╝");
@@ -208,12 +308,21 @@ fn bench_seed_cost() {
 
     for size in [8, 16, 32, 64, 128] {
         let mut field = Field::new(size);
-        let center = Coord { t: size/2, c: size/2, o: size/2, v: size/2 };
+        let center = Coord {
+            t: size / 2,
+            c: size / 2,
+            o: size / 2,
+            v: size / 2,
+        };
 
         let (_, elapsed) = timed(|| field.seed_named(center, "bench"));
 
-        println!("║  {:>4}⁴ ║ {:>10.2?} ║ {:>6} cells           ║",
-            size, elapsed, field.active_cells());
+        println!(
+            "║  {:>4}⁴ ║ {:>10.2?} ║ {:>6} cells           ║",
+            size,
+            elapsed,
+            field.active_cells()
+        );
     }
 
     println!("╚════════╩════════════╩═══════════════════════╝");

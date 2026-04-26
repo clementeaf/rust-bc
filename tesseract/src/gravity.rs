@@ -44,7 +44,8 @@ pub fn compute_masses(graph: &CausalGraph) -> HashMap<Coord, f64> {
 /// Compute mass for a specific origin coordinate.
 /// Pure function over the causal graph.
 pub fn mass_at(graph: &CausalGraph, origin: Coord) -> f64 {
-    graph.all_event_ids()
+    graph
+        .all_event_ids()
         .filter(|id| graph.event(id).map(|e| e.origin == origin).unwrap_or(false))
         .count() as f64
 }
@@ -64,7 +65,8 @@ pub fn influence(source: Coord, source_mass: f64, target: Coord, field_size: usi
 /// Computed fresh from the causal graph — no cached state.
 pub fn total_pull(graph: &CausalGraph, target: Coord, field_size: usize) -> f64 {
     let masses = compute_masses(graph);
-    masses.iter()
+    masses
+        .iter()
         .map(|(source, mass)| influence(*source, *mass, target, field_size))
         .sum()
 }
@@ -92,13 +94,12 @@ pub fn apply_curvature(graph: &CausalGraph, field: &mut Field) -> usize {
     }
 
     let size = field.size;
-    let coords: Vec<Coord> = field.active_entries()
-        .map(|(coord, _)| coord)
-        .collect();
+    let coords: Vec<Coord> = field.active_entries().map(|(coord, _)| coord).collect();
 
     let mut affected = 0;
     for coord in coords {
-        let pull: f64 = masses.iter()
+        let pull: f64 = masses
+            .iter()
             .map(|(source, mass)| influence(*source, *mass, coord, size))
             .sum();
 
@@ -212,17 +213,25 @@ mod tests {
 
     #[test]
     fn superposition_of_masses() {
-        let graph = build_graph_with_events(&[
-            (coord(3, 5, 5, 5), b"a1"),
-            (coord(7, 5, 5, 5), b"b1"),
-        ]);
+        let graph =
+            build_graph_with_events(&[(coord(3, 5, 5, 5), b"a1"), (coord(7, 5, 5, 5), b"b1")]);
 
         let midpoint = coord(5, 5, 5, 5);
         let total = total_pull(&graph, midpoint, 15);
 
         let masses = compute_masses(&graph);
-        let pull_a = influence(coord(3, 5, 5, 5), *masses.get(&coord(3, 5, 5, 5)).unwrap(), midpoint, 15);
-        let pull_b = influence(coord(7, 5, 5, 5), *masses.get(&coord(7, 5, 5, 5)).unwrap(), midpoint, 15);
+        let pull_a = influence(
+            coord(3, 5, 5, 5),
+            *masses.get(&coord(3, 5, 5, 5)).unwrap(),
+            midpoint,
+            15,
+        );
+        let pull_b = influence(
+            coord(7, 5, 5, 5),
+            *masses.get(&coord(7, 5, 5, 5)).unwrap(),
+            midpoint,
+            15,
+        );
 
         assert!(
             (total - (pull_a + pull_b)).abs() < 1e-10,
@@ -256,5 +265,100 @@ mod tests {
 
         let affected = apply_curvature(&graph, &mut field);
         assert!(affected > 0, "should affect cells near high-mass region");
+    }
+
+    // ── Property-based tests ─────────────────────────────────────────────
+
+    use proptest::prelude::*;
+
+    fn arb_coord(max: usize) -> impl Strategy<Value = Coord> {
+        (0..max, 0..max, 0..max, 0..max).prop_map(|(t, c, o, v)| Coord { t, c, o, v })
+    }
+
+    proptest! {
+        #![proptest_config(proptest::test_runner::Config::with_cases(100))]
+
+        /// Mass is always non-negative (count of events).
+        #[test]
+        fn mass_non_negative(origin in arb_coord(20), n_events in 0..10usize) {
+            let mut graph = CausalGraph::new();
+            let mut last_id = None;
+            for i in 0..n_events {
+                let parents = last_id.iter().cloned().collect();
+                let ev = CausalEvent::new(origin, i as u64, parents, format!("e{i}").into_bytes());
+                last_id = Some(ev.id.clone());
+                graph.insert(ev);
+            }
+            let m = mass_at(&graph, origin);
+            prop_assert!(m >= 0.0);
+            prop_assert_eq!(m as usize, n_events);
+        }
+
+        /// Influence is non-negative and bounded.
+        #[test]
+        fn influence_non_negative_bounded(
+            source in arb_coord(20), target in arb_coord(20),
+            mass in 0.0..1000.0f64, size in 5..30usize,
+        ) {
+            let inf = influence(source, mass, target, size);
+            prop_assert!(inf >= 0.0, "influence must be >= 0, got {inf}");
+            // Upper bound: G * mass / 1 (distance=0 case)
+            prop_assert!(inf <= 0.05 * mass + 1e-10);
+        }
+
+        /// Relative weight sums to 1.0 across all participants (or 0 if empty).
+        #[test]
+        fn relative_weights_sum_to_one(n_participants in 1..6usize) {
+            let mut graph = CausalGraph::new();
+            let mut origins = Vec::new();
+            let mut last_id = None;
+
+            for p in 0..n_participants {
+                let origin = Coord { t: p * 3, c: 0, o: 0, v: 0 };
+                origins.push(origin);
+                let parents = last_id.iter().cloned().collect();
+                let ev = CausalEvent::new(origin, p as u64, parents, format!("p{p}").into_bytes());
+                last_id = Some(ev.id.clone());
+                graph.insert(ev);
+            }
+
+            let total_weight: f64 = origins.iter()
+                .map(|o| relative_weight(&graph, *o))
+                .sum();
+
+            prop_assert!(
+                (total_weight - 1.0).abs() < 0.01,
+                "weights should sum to ~1.0, got {total_weight}"
+            );
+        }
+
+        /// Gravity superposition: total pull = sum of individual pulls.
+        #[test]
+        fn gravity_superposition(
+            target in arb_coord(15),
+            n_sources in 1..5usize,
+            size in 8..20usize,
+        ) {
+            let mut graph = CausalGraph::new();
+            let mut last_id = None;
+            for i in 0..n_sources {
+                let origin = Coord { t: i * 3, c: 0, o: 0, v: 0 };
+                let parents = last_id.iter().cloned().collect();
+                let ev = CausalEvent::new(origin, i as u64, parents, format!("s{i}").into_bytes());
+                last_id = Some(ev.id.clone());
+                graph.insert(ev);
+            }
+
+            let total = total_pull(&graph, target, size);
+            let masses = compute_masses(&graph);
+            let manual_sum: f64 = masses.iter()
+                .map(|(src, m)| influence(*src, *m, target, size))
+                .sum();
+
+            prop_assert!(
+                (total - manual_sum).abs() < 1e-10,
+                "superposition violated: {total} vs {manual_sum}"
+            );
+        }
     }
 }
