@@ -83,6 +83,7 @@ Handlers split by domain in `handlers/`:
 - `blocks.rs` — legacy chain blocks + store-backed block endpoints
 - `transactions.rs` — mempool endpoints + store-backed transaction endpoints
 - `identity.rs`, `credentials.rs` — store-backed DID/credential endpoints
+- `pin.rs` — PIN generation and verification endpoints
 
 Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_code, message, data?, error?, timestamp, trace_id }`.
 
@@ -121,6 +122,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/evm_compat/` — Full EVM execution via revm (`executor.rs`), Solidity ABI encoding/decoding (`abi.rs`), precompile interface with gas metering (`precompile.rs`), DID-to-address derivation. HTTP endpoints: `POST /evm/deploy`, `POST /evm/call`, `POST /evm/static-call`, `GET /evm/contracts`
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
+- `src/pin/` — Numeric PIN generation (CSPRNG, 4-6 digits), Argon2id hashing/verification, `PinStore` trait with `MemoryPinStore` for DID-to-PIN association. HTTP: `POST /pin/generate`, `POST /pin/verify`
 
 ### Block explorer — Cerulean Ledger UI
 

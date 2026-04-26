@@ -371,6 +371,7 @@ mod tests {
             proposal_store: None,
             vote_store: None,
             param_registry: None,
+            pin_store: None,
         }
     }
 

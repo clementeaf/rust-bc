@@ -24,6 +24,7 @@ use crate::models::{Mempool, WalletManager};
 use crate::msp::CrlStore;
 use crate::network::Node;
 use crate::ordering::OrderingBackend;
+use crate::pin::store::PinStore;
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
@@ -87,4 +88,6 @@ pub struct AppState {
     pub vote_store: Option<Arc<VoteStore>>,
     /// Governance — protocol parameter registry.
     pub param_registry: Option<Arc<ParamRegistry>>,
+    /// PIN store — DID-to-hashed-PIN mappings.
+    pub pin_store: Option<Arc<dyn PinStore>>,
 }

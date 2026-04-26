@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-25
+
+**PIN Module — Generation, Hashing, and DID Association**
+- `src/pin/generator.rs` — CSPRNG numeric PIN generator (4-6 digits), Argon2id hashing, verification
+- `src/pin/store.rs` — `PinStore` trait with `MemoryPinStore` (DID-to-hashed-PIN mapping)
+- `src/api/handlers/pin.rs` — `POST /pin/generate` (generate + hash + associate to DID), `POST /pin/verify` (verify PIN against stored hash)
+- `AppState.pin_store` initialized with `MemoryPinStore` at startup
+- Dependency: `argon2 = "0.5"`
+- 16 unit tests (10 generator + 6 store)
+
 ### 2026-04-24
 
 **Cerulean Voto — Electronic voting frontend MVP**

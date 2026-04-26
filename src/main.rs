@@ -29,6 +29,7 @@ mod msp;
 mod network;
 mod network_security;
 mod ordering;
+mod pin;
 mod pki;
 mod private_data;
 mod pruning;
@@ -911,6 +912,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             }
             reg
         }),
+        pin_store: Some(Arc::new(pin::store::MemoryPinStore::new())),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

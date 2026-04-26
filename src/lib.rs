@@ -50,6 +50,7 @@ pub mod governance;
 pub mod light_client;
 pub mod msp;
 pub mod ordering;
+pub mod pin;
 pub mod pki;
 pub mod private_data;
 pub mod testnet;

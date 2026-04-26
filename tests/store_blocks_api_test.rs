@@ -88,6 +88,7 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         proposal_store: None,
         vote_store: None,
         param_registry: None,
+        pin_store: None,
     }
 }
 
@@ -129,6 +130,7 @@ fn make_state_no_store() -> AppState {
         proposal_store: None,
         vote_store: None,
         param_registry: None,
+        pin_store: None,
     }
 }
 

@@ -2,8 +2,8 @@ use actix_web::{web, Scope};
 
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, evm, gateway,
-    governance, identity, msp, organizations, private_data, proposals, snapshots, transactions,
-    utilities,
+    governance, identity, msp, organizations, pin, private_data, proposals, snapshots,
+    transactions, utilities,
 };
 
 /// API routes configuration
@@ -109,7 +109,9 @@ impl ApiRoutes {
             .service(governance::execute_governance_proposal)
             .service(governance::delegate_vote)
             .service(governance::veto_governance_proposal)
-            .service(governance::close_governance_voting);
+            .service(governance::close_governance_voting)
+            .service(pin::generate_pin)
+            .service(pin::verify_pin);
     }
 
     fn identity_routes() -> Scope {
