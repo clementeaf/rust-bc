@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+mod account;
 mod acl;
 mod airdrop;
 mod api;
@@ -39,7 +40,9 @@ mod staking;
 mod state_reconstructor;
 mod state_snapshot;
 mod storage;
+mod testnet;
 mod tls;
+mod tokenomics;
 mod transaction;
 mod transaction_validation;
 

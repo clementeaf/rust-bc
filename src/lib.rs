@@ -19,6 +19,9 @@ pub mod crypto;
 pub mod identity;
 pub mod storage;
 
+// Cryptocurrency account model
+pub mod account;
+
 // Runtime stack (shared with binary for AppState and scaffold handlers)
 pub mod airdrop;
 pub mod billing;

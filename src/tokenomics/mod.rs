@@ -5,4 +5,5 @@
 //! staking.rs, and billing.rs.
 
 pub mod economics;
+pub mod reward;
 pub mod storage_deposit;
