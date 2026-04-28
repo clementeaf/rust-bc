@@ -93,7 +93,7 @@ Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_
 - `RateLimitMiddleware` (sliding window) wraps all routes except `/health`.
 - Chaincode install computes SHA-256 of Wasm bytes; optional `expected_hash` query param for supply-chain verification.
 - `jwt_secret` is loaded but reserved for future use — mTLS + ACL is the active auth mechanism.
-- See `docs/architecture/SECURITY-AUDIT.md` for the full audit and remediation status.
+- See `docs/architecture/security/SECURITY-AUDIT.md` for the full audit and remediation status.
 
 ### AppState (`src/app_state.rs`)
 Central shared state. Legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store` coexist independently.
@@ -176,6 +176,20 @@ Key structure:
 
 Not required to run the node.
 
+### SDKs (`sdks/`)
+
+| Path | Language | Notes |
+|---|---|---|
+| `sdks/js/` | TypeScript | v1.0, axios-based client, tests, examples |
+| `sdks/python/` | Python | Client, types, exceptions, tests |
+
+### Tools (`tools/`)
+
+| Path | Purpose |
+|---|---|
+| `tools/acvp_dry_run/` | ACVP test vector harness (SHA3, ML-DSA, ML-KEM) |
+| `tools/caliper/` | Hyperledger Caliper benchmark configs |
+
 ### Documentation (`docs/`)
 
 Organized into subdirectories:
@@ -183,10 +197,16 @@ Organized into subdirectories:
 | Directory | Contents |
 |---|---|
 | `docs/api/` | API reference, quick-start, deployment, configuration guides |
-| `docs/architecture/` | Benchmarks, gap analyses, security audit, network membership |
+| `docs/architecture/` | Core architecture, network membership, storage schema, use cases |
+| `docs/architecture/benchmarks/` | Performance benchmarks and results |
+| `docs/architecture/comparisons/` | Competitive analyses (Bitcoin, Fabric, IOTA) |
+| `docs/architecture/roadmaps/` | Roadmaps, progress tracking, production status |
+| `docs/architecture/security/` | Security audits and audit packages |
 | `docs/camara/` | Blockchain Chamber of Chile: presentations, dossiers, quotations (md + pdf) |
 | `docs/commercial/` | Enterprise docs, impact studies, sales materials |
 | `docs/compliance/` | FIPS 140, certification roadmap, compliance framework, PQC enterprise |
+| `docs/compliance/fips_submission/` | CMVP submission package (lab selection, gap analysis, timeline) |
+| `docs/compliance/pre_lab_audit/` | Pre-lab mock audit (findings, traceability, ACVP plan) |
 | `docs/prompts/` | Test generation prompts (POE, PROMPT1–10) |
 | `docs/analysis/` | Phase analysis, architecture notes, decision matrices |
 | `docs/dev/` | Developer onboarding, branching strategy, setup |
