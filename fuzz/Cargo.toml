@@ -1,0 +1,28 @@
+[package]
+name = "rust-bc-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rust-bc = { path = ".." }
+serde_json = "1.0"
+
+[[bin]]
+name = "block_parser"
+path = "fuzz_targets/block_parser.rs"
+doc = false
+
+[[bin]]
+name = "signature_parser"
+path = "fuzz_targets/signature_parser.rs"
+doc = false
+
+[[bin]]
+name = "gossip_message_parser"
+path = "fuzz_targets/gossip_message_parser.rs"
+doc = false

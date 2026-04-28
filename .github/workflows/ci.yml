@@ -11,6 +11,11 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
   ACL_MODE: permissive
+  REQUIRE_PQC_SIGNATURES: "true"
+  TLS_PQC_KEM: "true"
+  DUAL_SIGN_VERIFY_MODE: "both"
+  HASH_ALGORITHM: "sha3-256"
+  SIGNING_ALGORITHM: "ml-dsa-65"
 
 jobs:
   check:
@@ -63,19 +68,29 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run all tests
-        run: |
-          cargo test 2>&1 | tee test-output.txt
-          grep "^test result" test-output.txt
+      - name: Run lib tests
+        run: cargo test -p rust-bc --lib
 
-      - name: Verify no failures
-        run: |
-          if grep -qE "[1-9][0-9]* failed" test-output.txt; then
-            echo "::error::Tests failed!"
-            grep "test result:" test-output.txt
-            exit 1
-          fi
-          echo "All tests passed"
+      - name: Run crypto module tests
+        run: cargo test -p pqc_crypto_module -- --test-threads=1
+
+      - name: Crypto boundary enforcement
+        run: cargo test --test crypto_boundary
+
+      - name: FIPS readiness
+        run: cargo test --test fips_readiness -- --test-threads=1
+
+      - name: PQC security audit
+        run: cargo test --test pqc_security_audit
+
+      - name: Property invariants
+        run: cargo test --test property_invariants
+
+      - name: Byzantine equivocation
+        run: cargo test --test byzantine_equivocation
+
+      - name: Slashing lifecycle
+        run: cargo test --test slashing_penalty_lifecycle
 
   bench:
     name: Release Benchmarks

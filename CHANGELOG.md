@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**Self-Auditing CI Pipeline**
+- 5 GitHub Actions workflows: `ci.yml` (updated with PQC tests), `security-audit.yml`, `performance-guardrails.yml`, `nightly-chaos.yml`, `fuzz.yml`
+- `tests/property_invariants.rs` — 7 proptest invariants (tampering invalidates sigs, equivocation always detected, hash collision resistance, serde roundtrip preserves PQC metadata, consistency catches all mismatches)
+- `fuzz/` — 3 libfuzzer targets (block parser, signature parser, gossip message parser)
+- `deny.toml` — dependency policy (vulnerable=deny, unmaintained=warn, license allowlist)
+- CI env: strict PQC mode on all jobs (`REQUIRE_PQC_SIGNATURES=true`, `HASH_ALGORITHM=sha3-256`)
+
 **CMVP Submission Readiness Package**
 - `fips_submission/` — complete CMVP intake package for FIPS 140-3 lab engagement
 - `SUBMISSION_CHECKLIST.md` — 15 artifacts tracked (10 ready, 2 needs work, 3 not started)
