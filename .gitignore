@@ -43,10 +43,7 @@ test_*_blocks/
 test_*_snapshots/
 test_*_checkpoints/
 
-# Node modules (subprojects)
-block-explorer/node_modules/
-block-explorer-vite/node_modules/
-sdk-js/node_modules/
+# Node modules (covered by **/node_modules/ below)
 
 # Tesseract prototype (lives in tesseract-prototype branch)
 tesseract/
@@ -60,4 +57,13 @@ test_*.db-wal
 blockchain_blocks/
 blockchain_checkpoints/
 blockchain_snapshots/
+
+# RocksDB / runtime data
+data/
+
+# Claude Code project memory
+memory/
+
+# Node modules (all subprojects)
+**/node_modules/
 

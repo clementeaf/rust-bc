@@ -1,2 +1,0 @@
-- [Roadmap de fases](project_tls_roadmap.md) — TLS A-F, Consensus G-H, Storage I-V completos
-- [Microtask preference](feedback_microtasks.md) — Tareas pequeñas, sin agentes de planning innecesarios
