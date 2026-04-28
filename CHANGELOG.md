@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**Pre-Lab Mock Audit Package**
+- `pre_lab_audit/` — 9 documents: mock audit report, ACVP dry-run plan, IG checklist, clean-room build, entropy/RNG evidence, vendor evidence, traceability matrix, findings register
+- Mock audit: 0 CRITICAL, 2 HIGH (ML-KEM placeholder, ACVP vectors), 2 MEDIUM, 2 LOW, 3 INFO
+- Traceability matrix: 11/12 requirements PASS, 1 PARTIAL (ML-KEM)
+- `tools/acvp_dry_run/` — ACVP test vector harness (SHA3, ML-DSA, ML-KEM dry-run)
+- `scripts/clean_room_build.sh` — reproducible build verification
+- `.github/workflows/pre-lab-audit.yml` — FIPS pre-lab CI workflow
+
 **CI Reliability Hardening**
 - `tests/test_seeds.rs` — shared deterministic seed constants for reproducible chaos/property tests
 - `.config/nextest.toml` — cargo-nextest profiles: default (no retry), chaos (1 retry, 120s timeout), ci

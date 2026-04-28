@@ -247,6 +247,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "acvp_dry_run"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "hex",
+ "pqc_crypto_module",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
