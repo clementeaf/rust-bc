@@ -38,7 +38,9 @@ pub fn state() -> ModuleState {
 }
 
 /// Transition to a new state. Returns the previous state.
-pub(crate) fn set_state(new: ModuleState) -> ModuleState {
+/// Transition to a new state. Returns the previous state.
+/// Exposed for testing error-state behavior.
+pub fn set_state(new: ModuleState) -> ModuleState {
     let prev = MODULE_STATE.swap(new as u8, Ordering::SeqCst);
     ModuleState::from(prev)
 }

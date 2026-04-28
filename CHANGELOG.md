@@ -8,6 +8,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**Pre-CMVP FIPS 140-3 Documentation Package**
+- `SECURITY_POLICY.md` — finalized 13-section security policy (module ID, boundary, algorithms, roles, services, FSM, self-tests, zeroization)
+- `DESIGN_DOCUMENT.md` — architecture diagram, API entry points, data flow, internal components
+- `FINITE_STATE_MODEL.md` — 4-state machine with transitions, forbidden paths, fail-closed behavior
+- `KEY_MANAGEMENT.md` — key types, generation, storage (in-memory only), usage, ZeroizeOnDrop destruction
+- `SELF_TEST_DOCUMENTATION.md` — 4 KATs (SHA3, ML-DSA, ML-KEM, RNG), failure behavior
+- `NON_APPROVED_USAGE.md` — legacy algorithms, runtime guard + feature flag gating
+- `OPERATIONAL_GUIDANCE.md` — initialization, configuration, error handling, monitoring
+- `build/reproducible_build.md` — Rust toolchain pinning, Cargo.lock, deterministic builds
+- `build/module_boundary_definition.md` — files inside/outside boundary, enforcement mechanisms
+- `tests/fips_readiness.rs` — 8 tests: pre-init rejection, approved ops, legacy blocking, state transitions, fail-closed, no-panic
+
 **Approved vs Legacy Crypto Separation**
 - Runtime guards on all legacy functions: `ensure_not_approved()` blocks Ed25519, SHA-256, HMAC when module is in Approved mode
 - Guarded functions: `legacy_ed25519_verify`, `legacy_ed25519_sign`, `legacy_sha256`, `legacy_hmac_sha256`
