@@ -8,6 +8,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**CMVP Submission Readiness Package**
+- `fips_submission/` — complete CMVP intake package for FIPS 140-3 lab engagement
+- `SUBMISSION_CHECKLIST.md` — 15 artifacts tracked (10 ready, 2 needs work, 3 not started)
+- `LAB_SELECTION.md` — 5 NVLAP-accredited labs profiled (Acumen, atsec, UL, Leidos, InfoGard)
+- `TEST_VECTOR_PLAN.md` — ML-DSA, ML-KEM, SHA3, RNG vector requirements and ACVP gaps
+- `BUILD_ENVIRONMENT.md` — Rust toolchain, target platforms, deterministic build instructions
+- `GAP_ANALYSIS.md` — 7/10 areas aligned, 2 partial (vectors, RNG), 2 missing (CAVP, lab tooling)
+- `VALIDATION_TIMELINE.md` — 5-phase plan, 12-24 month estimate, $80K-$250K range
+- `CONTACT_PACKAGE/` — executive summary, module overview, 21 questions for initial lab call
+
 **Pre-CMVP FIPS 140-3 Documentation Package**
 - `SECURITY_POLICY.md` — finalized 13-section security policy (module ID, boundary, algorithms, roles, services, FSM, self-tests, zeroization)
 - `DESIGN_DOCUMENT.md` — architecture diagram, API entry points, data flow, internal components
