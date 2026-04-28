@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "crates/pqc_crypto_module/**"
+      - "tools/acvp_dry_run/**"
       - "pre_lab_audit/**"
 
 env:
@@ -29,6 +30,12 @@ jobs:
       - name: FIPS readiness tests
         run: cargo test -p pqc_crypto_module --test fips_readiness -- --test-threads=1
 
+      - name: ACVP dry-run tests
+        run: cargo test -p acvp_dry_run
+
+      - name: ACVP dry-run all algorithms
+        run: cargo run -p acvp_dry_run -- --all
+
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 
@@ -42,4 +49,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pre-lab-audit-package
-          path: pre_lab_audit/
+          path: |
+            pre_lab_audit/
+            tools/acvp_dry_run/report.json

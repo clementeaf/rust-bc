@@ -56,6 +56,16 @@ pub fn require_approved() -> Result<(), CryptoError> {
     }
 }
 
+/// Check if a transition from `from` to `to` is valid per the FSM spec.
+pub fn is_valid_transition(from: ModuleState, to: ModuleState) -> bool {
+    matches!(
+        (from, to),
+        (ModuleState::Uninitialized, ModuleState::SelfTesting)
+            | (ModuleState::SelfTesting, ModuleState::Approved)
+            | (ModuleState::SelfTesting, ModuleState::Error)
+    )
+}
+
 /// Reset to Uninitialized (for testing only).
 #[cfg(test)]
 pub fn reset_for_testing() {
@@ -66,4 +76,158 @@ pub fn reset_for_testing() {
 #[doc(hidden)]
 pub fn __test_reset() {
     MODULE_STATE.store(0, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn all_states() -> [ModuleState; 4] {
+        [
+            ModuleState::Uninitialized,
+            ModuleState::SelfTesting,
+            ModuleState::Approved,
+            ModuleState::Error,
+        ]
+    }
+
+    // ── Valid transitions (3) ──────────────────────────────────
+
+    #[test]
+    fn valid_uninitialized_to_selftesting() {
+        assert!(is_valid_transition(
+            ModuleState::Uninitialized,
+            ModuleState::SelfTesting
+        ));
+    }
+
+    #[test]
+    fn valid_selftesting_to_approved() {
+        assert!(is_valid_transition(
+            ModuleState::SelfTesting,
+            ModuleState::Approved
+        ));
+    }
+
+    #[test]
+    fn valid_selftesting_to_error() {
+        assert!(is_valid_transition(
+            ModuleState::SelfTesting,
+            ModuleState::Error
+        ));
+    }
+
+    // ── Invalid transitions (13) ──────────────────────────────
+
+    #[test]
+    fn invalid_self_transitions() {
+        for s in all_states() {
+            assert!(
+                !is_valid_transition(s, s),
+                "self-transition {:?} -> {:?} should be invalid",
+                s,
+                s
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_uninitialized_to_approved() {
+        assert!(!is_valid_transition(
+            ModuleState::Uninitialized,
+            ModuleState::Approved
+        ));
+    }
+
+    #[test]
+    fn invalid_uninitialized_to_error() {
+        assert!(!is_valid_transition(
+            ModuleState::Uninitialized,
+            ModuleState::Error
+        ));
+    }
+
+    #[test]
+    fn invalid_selftesting_to_uninitialized() {
+        assert!(!is_valid_transition(
+            ModuleState::SelfTesting,
+            ModuleState::Uninitialized
+        ));
+    }
+
+    #[test]
+    fn invalid_approved_to_uninitialized() {
+        assert!(!is_valid_transition(
+            ModuleState::Approved,
+            ModuleState::Uninitialized
+        ));
+    }
+
+    #[test]
+    fn invalid_approved_to_selftesting() {
+        assert!(!is_valid_transition(
+            ModuleState::Approved,
+            ModuleState::SelfTesting
+        ));
+    }
+
+    #[test]
+    fn invalid_approved_to_error() {
+        assert!(!is_valid_transition(
+            ModuleState::Approved,
+            ModuleState::Error
+        ));
+    }
+
+    #[test]
+    fn invalid_error_to_any() {
+        for target in all_states() {
+            assert!(
+                !is_valid_transition(ModuleState::Error, target),
+                "Error -> {:?} should be invalid (Error is terminal)",
+                target
+            );
+        }
+    }
+
+    // ── Exhaustive coverage: exactly 3 valid out of 16 ────────
+
+    #[test]
+    fn exactly_three_valid_transitions_out_of_sixteen() {
+        let mut valid_count = 0;
+        for from in all_states() {
+            for to in all_states() {
+                if is_valid_transition(from, to) {
+                    valid_count += 1;
+                }
+            }
+        }
+        assert_eq!(valid_count, 3, "FSM must have exactly 3 valid transitions");
+    }
+
+    // ── require_approved guard ─────────────────────────────────
+
+    #[test]
+    fn require_approved_in_each_state() {
+        set_state(ModuleState::Uninitialized);
+        assert!(require_approved().is_err());
+
+        set_state(ModuleState::SelfTesting);
+        assert!(require_approved().is_err());
+
+        set_state(ModuleState::Approved);
+        assert!(require_approved().is_ok());
+
+        set_state(ModuleState::Error);
+        assert!(require_approved().is_err());
+    }
+
+    // ── u8 conversion edge cases ──────────────────────────────
+
+    #[test]
+    fn unknown_u8_maps_to_error() {
+        for v in 4..=255u8 {
+            assert_eq!(ModuleState::from(v), ModuleState::Error);
+        }
+    }
 }

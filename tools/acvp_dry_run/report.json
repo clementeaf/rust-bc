@@ -1,0 +1,99 @@
+{
+  "tool": "acvp_dry_run",
+  "version": "0.1.0",
+  "algorithms": [
+    {
+      "algorithm": "sha3-256",
+      "passed": 5,
+      "failed": 0,
+      "results": [
+        {
+          "tcId": 1,
+          "status": "passed"
+        },
+        {
+          "tcId": 2,
+          "status": "passed"
+        },
+        {
+          "tcId": 3,
+          "status": "passed"
+        },
+        {
+          "tcId": 4,
+          "status": "passed"
+        },
+        {
+          "tcId": 5,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "algorithm": "ml-dsa-65",
+      "passed": 5,
+      "failed": 0,
+      "results": [
+        {
+          "tcId": 1,
+          "status": "passed",
+          "detail": "pk=1952B sig=3309B"
+        },
+        {
+          "tcId": 2,
+          "status": "passed",
+          "detail": "pk=1952B sig=3309B"
+        },
+        {
+          "tcId": 3,
+          "status": "passed",
+          "detail": "pk=1952B sig=3309B"
+        },
+        {
+          "tcId": 4,
+          "status": "passed",
+          "detail": "pk=1952B sig=3309B"
+        },
+        {
+          "tcId": 5,
+          "status": "passed",
+          "detail": "pk=1952B sig=3309B"
+        }
+      ]
+    },
+    {
+      "algorithm": "ml-kem-768",
+      "passed": 5,
+      "failed": 0,
+      "results": [
+        {
+          "tcId": 1,
+          "status": "passed",
+          "detail": "pk=1184B sk=2400B ct=1088B ss=32B"
+        },
+        {
+          "tcId": 2,
+          "status": "passed",
+          "detail": "pk=1184B sk=2400B ct=1088B ss=32B"
+        },
+        {
+          "tcId": 3,
+          "status": "passed",
+          "detail": "pk=1184B sk=2400B ct=1088B ss=32B"
+        },
+        {
+          "tcId": 4,
+          "status": "passed",
+          "detail": "pk=1184B sk=2400B ct=1088B ss=32B"
+        },
+        {
+          "tcId": 5,
+          "status": "passed",
+          "detail": "pk=1184B sk=2400B ct=1088B ss=32B"
+        }
+      ]
+    }
+  ],
+  "total_passed": 15,
+  "total_failed": 0
+}

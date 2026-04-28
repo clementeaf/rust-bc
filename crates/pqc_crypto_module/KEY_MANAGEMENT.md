@@ -11,10 +11,10 @@
 | `MldsaPrivateKey` | ML-DSA-65 (FIPS 204) | 4032 bytes | Secret | `ZeroizeOnDrop` |
 | `MldsaPublicKey` | ML-DSA-65 (FIPS 204) | 1952 bytes | Public | None |
 | `MldsaSignature` | ML-DSA-65 (FIPS 204) | 3309 bytes | Public | None |
-| `MlKemPrivateKey` | ML-KEM-768 (FIPS 203) | Variable (placeholder) | Secret | `ZeroizeOnDrop` |
-| `MlKemPublicKey` | ML-KEM-768 (FIPS 203) | Variable (placeholder) | Public | None |
+| `MlKemPrivateKey` | ML-KEM-768 (FIPS 203) | 2400 bytes | Secret | `ZeroizeOnDrop` |
+| `MlKemPublicKey` | ML-KEM-768 (FIPS 203) | 1184 bytes | Public | None |
 | `MlKemSharedSecret` | ML-KEM-768 (FIPS 203) | 32 bytes | Secret | `ZeroizeOnDrop` |
-| `MlKemCiphertext` | ML-KEM-768 (FIPS 203) | Variable (placeholder) | Public | None |
+| `MlKemCiphertext` | ML-KEM-768 (FIPS 203) | 1088 bytes | Public | None |
 | `Hash256` | SHA3-256 (FIPS 202) | 32 bytes | Public | None |
 
 ## 2. Key Generation
@@ -29,7 +29,7 @@ Generated via `api::generate_mldsa_keypair()`, which delegates to `pqcrypto_mlds
 
 ### ML-KEM-768 keypairs
 
-Generated via `api::generate_mlkem_keypair()`. Currently a structural placeholder that derives keys from random bytes and SHA3-256. Will be replaced with a FIPS 203 validated implementation.
+Generated via `api::generate_mlkem_keypair()`, which delegates to `pqcrypto_mlkem::mlkem768::keypair()`. The underlying implementation uses the reference C implementation of FIPS 203.
 
 - Requires `Approved` state.
 - Returns `MlKemKeyPair { public_key, private_key }`.

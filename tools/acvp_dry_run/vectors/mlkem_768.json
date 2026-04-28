@@ -1,0 +1,30 @@
+{
+  "algorithm": "ml-kem-768",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "tests": [
+        {
+          "tcId": 1,
+          "mode": "encapsThenDecaps"
+        },
+        {
+          "tcId": 2,
+          "mode": "encapsThenDecaps"
+        },
+        {
+          "tcId": 3,
+          "mode": "encapsThenDecaps"
+        },
+        {
+          "tcId": 4,
+          "mode": "encapsThenDecaps"
+        },
+        {
+          "tcId": 5,
+          "mode": "encapsThenDecaps"
+        }
+      ]
+    }
+  ]
+}

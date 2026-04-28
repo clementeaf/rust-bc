@@ -66,14 +66,15 @@ Tests execute sequentially. If any test fails, execution stops and the remaining
 
 **Procedure**:
 1. Generate a fresh ML-KEM-768 keypair using `kem_keygen_raw()`.
-2. Encapsulate with the public key, producing a ciphertext and shared secret.
-3. Decapsulate the ciphertext with the private key.
+2. Encapsulate with the public key, producing a ciphertext and shared secret (ss1).
+3. Decapsulate the ciphertext with the private key, producing shared secret (ss2).
+4. Verify `ss1 == ss2` (shared secret roundtrip).
+5. Attempt decapsulation with an invalid ciphertext (1088 bytes of `0xAA`).
+6. Verify invalid ciphertext produces a different shared secret or an error (implicit rejection).
 
-**Note**: The current placeholder implementation does not produce matching shared secrets between encapsulate and decapsulate. When the real FIPS 203 implementation is integrated, a shared secret equality check will be added.
+**Failure conditions**: Keygen, encapsulate, or decapsulate error; shared secrets do not match; corrupted ciphertext produces same shared secret.
 
-**Failure conditions**: Any of keygen, encapsulate, or decapsulate returns an error.
-
-**Error messages**: `"ML-KEM keygen: ..."`, `"ML-KEM encaps: ..."`, `"ML-KEM decaps: ..."`.
+**Error messages**: `"ML-KEM keygen: ..."`, `"ML-KEM encaps: ..."`, `"ML-KEM decaps: ..."`, `"ML-KEM KAT: shared secrets from encapsulate and decapsulate do not match"`, `"ML-KEM KAT: corrupted ciphertext produced same shared secret"`.
 
 ### 3.4 Continuous RNG Test (`test_rng`)
 

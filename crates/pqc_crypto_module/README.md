@@ -9,7 +9,7 @@ FIPS-oriented post-quantum cryptographic module for Cerulean Ledger DLT.
 | Algorithm | Standard | Purpose |
 |---|---|---|
 | ML-DSA-65 | FIPS 204 | Digital signatures |
-| ML-KEM-768 | FIPS 203 | Key encapsulation (placeholder) |
+| ML-KEM-768 | FIPS 203 | Key encapsulation |
 | SHA3-256 | FIPS 202 | Hashing |
 
 ## Non-approved algorithms (excluded)

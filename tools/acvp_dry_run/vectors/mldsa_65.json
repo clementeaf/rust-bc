@@ -1,0 +1,35 @@
+{
+  "algorithm": "ml-dsa-65",
+  "testGroups": [
+    {
+      "tgId": 1,
+      "tests": [
+        {
+          "tcId": 1,
+          "messageHex": "74657374",
+          "mode": "signThenVerify"
+        },
+        {
+          "tcId": 2,
+          "messageHex": "4649505320323034204b4154",
+          "mode": "signThenVerify"
+        },
+        {
+          "tcId": 3,
+          "messageHex": "",
+          "mode": "signThenVerify"
+        },
+        {
+          "tcId": 4,
+          "messageHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+          "mode": "signThenVerify"
+        },
+        {
+          "tcId": 5,
+          "messageHex": "4345525554454c45414e204c4544474552",
+          "mode": "signThenVerify"
+        }
+      ]
+    }
+  ]
+}

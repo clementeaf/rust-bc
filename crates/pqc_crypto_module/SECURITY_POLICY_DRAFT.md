@@ -17,7 +17,7 @@ Files within boundary: `src/api.rs`, `src/mldsa.rs`, `src/mlkem.rs`, `src/hashin
 | Algorithm | Standard | Key sizes | Output sizes |
 |---|---|---|---|
 | ML-DSA-65 | FIPS 204 | PK: 1952 B, SK: 4032 B | Sig: 3309 B |
-| ML-KEM-768 | FIPS 203 | (placeholder) | SS: 32 B |
+| ML-KEM-768 | FIPS 203 | PK: 1184 B, SK: 2400 B, CT: 1088 B | SS: 32 B |
 | SHA3-256 | FIPS 202 | N/A | 32 B |
 
 ## 4. Non-approved algorithms excluded
@@ -68,7 +68,7 @@ These algorithms are outside the approved cryptographic boundary.
 
 ## 11. Future validation notes
 
-- ML-KEM-768 uses a structural placeholder. Replace with a FIPS 203 validated implementation when available.
+- ~~ML-KEM-768 placeholder~~: RESOLVED — implemented via `pqcrypto-mlkem` v0.1.1 with shared secret roundtrip verification.
 - The RNG wraps `OsRng` (OS-backed CSPRNG). A DRBG with health tests may be required for full FIPS 140-3 compliance.
 - No physical security boundary is defined (software module only).
 - Algorithm agility is intentionally limited to approved algorithms within this module.

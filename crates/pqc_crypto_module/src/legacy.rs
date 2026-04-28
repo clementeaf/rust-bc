@@ -80,9 +80,18 @@ pub fn legacy_hmac_sha256(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CryptoErro
     Ok(mac.finalize().into_bytes().to_vec())
 }
 
-// ── Raw re-exports (type-level compatibility) ───────────────────────
-// These expose types for struct definitions and pattern matching.
-// Production crypto operations should use the guarded functions above.
+// ── Raw re-exports (OUTSIDE approved cryptographic boundary) ────────
+// These expose types and functions from external crates for the DLT
+// application layer to handle legacy data. They are NOT module-internal
+// crypto operations and are NOT governed by the module FSM.
+//
+// FIPS 140-3 boundary note: operations performed via these re-exports
+// occur OUTSIDE the cryptographic module boundary. The module's approved
+// operations are exclusively those accessed through `pqc_crypto_module::api`.
+//
+// When compiled with `--features approved-only`, the entire `legacy`
+// module is excluded via `compile_error!` above, blocking both guarded
+// functions AND raw re-exports at compile time.
 
 /// Legacy Ed25519 types (non-approved). Use guarded functions for operations.
 pub mod ed25519 {

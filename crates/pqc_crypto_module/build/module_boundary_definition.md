@@ -17,7 +17,7 @@ The Rust crate system provides a natural isolation boundary: external code can o
 | `src/lib.rs` | ~34 | Crate root, module re-exports | No |
 | `src/api.rs` | ~82 | Public API entry point, all approved operations | Delegates |
 | `src/mldsa.rs` | ~95 | ML-DSA-65 key generation, signing, verification | Yes |
-| `src/mlkem.rs` | ~101 | ML-KEM-768 key encapsulation (placeholder) | Yes |
+| `src/mlkem.rs` | ~130 | ML-KEM-768 key encapsulation (FIPS 203 via `pqcrypto-mlkem`) | Yes |
 | `src/hashing.rs` | ~41 | SHA3-256 hashing | Yes |
 | `src/rng.rs` | ~61 | CSPRNG wrapper, continuous RNG test | Yes |
 | `src/self_tests.rs` | ~100 | Known Answer Tests | Yes (test vectors) |

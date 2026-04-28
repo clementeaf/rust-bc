@@ -8,6 +8,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**Pre-Lab Findings Closure — All 11 Findings Resolved**
+
+ML-KEM-768 real implementation:
+- `pqcrypto-mlkem` v0.1.1 replaces SHA3-based placeholder (F-001 CLOSED)
+- Real keygen/encapsulate/decapsulate: pk=1184B, sk=2400B, ct=1088B, ss=32B
+- KAT self-test verifies shared secret roundtrip + invalid ciphertext rejection
+- 8 unit tests in `mlkem.rs`
+
+ACVP dry-run harness:
+- `tools/acvp_dry_run/` rewritten: 6 modules (vectors, sha3, mldsa, mlkem, report, main)
+- 3 JSON vector files: SHA3-256 (5), ML-DSA-65 (5), ML-KEM-768 (5)
+- CLI: `--algorithm`, `--vectors`, `--all` flags; generates `report.json`
+- 15/15 vectors pass; 5 integration tests (F-002 CLOSED)
+
+Security Policy and documentation:
+- `SECURITY_POLICY.md` expanded to 16 sections: CO Guide, User Guide, Error Recovery (F-010, F-009 CLOSED)
+- `MODULE_SPECIFICATION.md` created: 9 sections with full API surface (F-008 CLOSED)
+- SP 800-90B justification added to `ENTROPY_RNG_EVIDENCE.md` (F-003 CLOSED)
+- Boundary documentation clarified in `legacy.rs` (F-006 CLOSED)
+
+Code hardening:
+- `libc::mlock` on `MldsaPrivateKey`, `MlKemPrivateKey`, `MlKemSharedSecret` (F-004 CLOSED)
+- `is_valid_transition()` + 14 exhaustive FSM tests covering all 16 (state, transition) pairs (F-007 CLOSED)
+- Reproducible build verified: hash `29af517b` matches across 2 independent builds (F-011 CLOSED)
+
+CI updates:
+- `pre-lab-audit.yml` adds `cargo test -p acvp_dry_run` + `cargo run -p acvp_dry_run -- --all`
+- ACVP report.json uploaded as artifact
+
+Audit status: 0 CRITICAL, 0 HIGH, 0 MEDIUM, 0 LOW open. 1 INFO accepted (F-005).
+Traceability: 8 PASS, 4 PARTIAL, 0 FAIL.
+Tests: 69 pqc_crypto_module + 5 ACVP + 1427 lib = 1501 total.
+
 **Pre-Lab Mock Audit Package**
 - `pre_lab_audit/` — 9 documents: mock audit report, ACVP dry-run plan, IG checklist, clean-room build, entropy/RNG evidence, vendor evidence, traceability matrix, findings register
 - Mock audit: 0 CRITICAL, 2 HIGH (ML-KEM placeholder, ACVP vectors), 2 MEDIUM, 2 LOW, 3 INFO

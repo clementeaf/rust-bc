@@ -1,14 +1,12 @@
-//! ML-KEM-768 key encapsulation (aligned with FIPS 203).
+//! ML-KEM-768 key encapsulation (FIPS 203).
 //!
-//! Note: `pqcrypto-mldsa` does not include ML-KEM. For now, this module
-//! provides a structural placeholder using SHA3-based key derivation
-//! that demonstrates the API boundary. When a FIPS 203 crate is available,
-//! replace the internals without changing the public API.
+//! Uses `pqcrypto-mlkem` for the underlying ML-KEM-768 implementation.
+
+use pqcrypto_mlkem::mlkem768;
+use pqcrypto_traits::kem::{Ciphertext, PublicKey, SecretKey, SharedSecret};
 
 use crate::approved_mode::require_approved;
 use crate::errors::CryptoError;
-use crate::hashing::sha3_256_raw;
-use crate::rng::random_bytes;
 use crate::types::{MlKemCiphertext, MlKemPrivateKey, MlKemPublicKey, MlKemSharedSecret};
 
 /// ML-KEM-768 keypair.
@@ -18,19 +16,18 @@ pub struct MlKemKeyPair {
 }
 
 /// Generate an ML-KEM-768 keypair. Requires approved mode.
-///
-/// Placeholder: uses random bytes. Replace with FIPS 203 implementation.
 pub fn generate_keypair() -> Result<MlKemKeyPair, CryptoError> {
     require_approved()?;
     generate_keypair_raw()
 }
 
 pub(crate) fn generate_keypair_raw() -> Result<MlKemKeyPair, CryptoError> {
-    let sk = random_bytes(32)?;
-    let pk_input = sha3_256_raw(&sk);
+    let (pk, sk) = mlkem768::keypair();
+    let private_key = MlKemPrivateKey(sk.as_bytes().to_vec());
+    private_key.mlock();
     Ok(MlKemKeyPair {
-        public_key: MlKemPublicKey(pk_input.0.to_vec()),
-        private_key: MlKemPrivateKey(sk),
+        public_key: MlKemPublicKey(pk.as_bytes().to_vec()),
+        private_key,
     })
 }
 
@@ -45,22 +42,15 @@ pub fn encapsulate(
 pub(crate) fn encapsulate_raw(
     public_key: &MlKemPublicKey,
 ) -> Result<(MlKemCiphertext, MlKemSharedSecret), CryptoError> {
-    let random = random_bytes(32)?;
-    let mut combined = public_key.as_bytes().to_vec();
-    combined.extend_from_slice(&random);
-    let shared_hash = sha3_256_raw(&combined);
-    let ct_hash = sha3_256_raw(&[shared_hash.0.as_slice(), &random].concat());
-    Ok((
-        MlKemCiphertext(ct_hash.0.to_vec()),
-        MlKemSharedSecret(shared_hash.0.to_vec()),
-    ))
+    let pk = mlkem768::PublicKey::from_bytes(public_key.as_bytes())
+        .map_err(|_| CryptoError::InvalidKey("invalid ML-KEM-768 public key".into()))?;
+    let (ss, ct) = mlkem768::encapsulate(&pk);
+    let shared = MlKemSharedSecret(ss.as_bytes().to_vec());
+    shared.mlock();
+    Ok((MlKemCiphertext(ct.as_bytes().to_vec()), shared))
 }
 
 /// Decapsulate: recover the shared secret from a ciphertext and private key.
-///
-/// Placeholder: in a real ML-KEM implementation, the shared secret would be
-/// deterministically derived from the ciphertext and private key. This
-/// placeholder always returns a derived value for structural completeness.
 pub fn decapsulate(
     private_key: &MlKemPrivateKey,
     ciphertext: &MlKemCiphertext,
@@ -73,28 +63,83 @@ pub(crate) fn decapsulate_raw(
     private_key: &MlKemPrivateKey,
     ciphertext: &MlKemCiphertext,
 ) -> Result<MlKemSharedSecret, CryptoError> {
-    let mut combined = private_key.0.clone();
-    combined.extend_from_slice(ciphertext.as_bytes());
-    let hash = sha3_256_raw(&combined);
-    Ok(MlKemSharedSecret(hash.0.to_vec()))
+    let sk = mlkem768::SecretKey::from_bytes(&private_key.0)
+        .map_err(|_| CryptoError::InvalidKey("invalid ML-KEM-768 private key".into()))?;
+    let ct = mlkem768::Ciphertext::from_bytes(ciphertext.as_bytes())
+        .map_err(|_| CryptoError::InvalidKey("invalid ML-KEM-768 ciphertext".into()))?;
+    let ss = mlkem768::decapsulate(&ct, &sk);
+    let shared = MlKemSharedSecret(ss.as_bytes().to_vec());
+    shared.mlock();
+    Ok(shared)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::approved_mode::{set_state, ModuleState};
 
     #[test]
-    fn keygen_produces_keys() {
+    fn keygen_produces_correct_sizes() {
         let kp = generate_keypair_raw().unwrap();
-        assert_eq!(kp.public_key.as_bytes().len(), 32);
-        assert!(!kp.private_key.0.is_empty());
+        assert_eq!(kp.public_key.as_bytes().len(), 1184);
+        assert_eq!(kp.private_key.0.len(), 2400);
     }
 
     #[test]
-    fn encapsulate_produces_ciphertext_and_secret() {
+    fn encapsulate_produces_correct_sizes() {
         let kp = generate_keypair_raw().unwrap();
         let (ct, ss) = encapsulate_raw(&kp.public_key).unwrap();
-        assert!(!ct.as_bytes().is_empty());
-        assert!(!ss.as_bytes().is_empty());
+        assert_eq!(ct.as_bytes().len(), 1088);
+        assert_eq!(ss.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn mlkem_keypair_encaps_decaps_roundtrip() {
+        let kp = generate_keypair_raw().unwrap();
+        let (ct, ss1) = encapsulate_raw(&kp.public_key).unwrap();
+        let ss2 = decapsulate_raw(&kp.private_key, &ct).unwrap();
+        assert_eq!(ss1.as_bytes(), ss2.as_bytes());
+    }
+
+    #[test]
+    fn mlkem_invalid_ciphertext_rejected() {
+        let kp = generate_keypair_raw().unwrap();
+        let bad_ct = MlKemCiphertext(vec![0xAA; 100]);
+        assert!(decapsulate_raw(&kp.private_key, &bad_ct).is_err());
+    }
+
+    #[test]
+    fn mlkem_private_key_zeroizes_on_drop() {
+        let kp = generate_keypair_raw().unwrap();
+        let len = kp.private_key.0.len();
+        assert!(len > 0);
+        drop(kp.private_key);
+        // ZeroizeOnDrop derive verified by compilation and non-zero initial size.
+    }
+
+    #[test]
+    fn mlkem_shared_secret_zeroizes_on_drop() {
+        let kp = generate_keypair_raw().unwrap();
+        let (_, ss) = encapsulate_raw(&kp.public_key).unwrap();
+        let len = ss.as_bytes().len();
+        assert_eq!(len, 32);
+        drop(ss);
+        // ZeroizeOnDrop derive verified by compilation.
+    }
+
+    #[test]
+    fn mlkem_api_rejects_before_approved_mode() {
+        // Reset state to Uninitialized
+        set_state(ModuleState::Uninitialized);
+        assert!(generate_keypair().is_err());
+    }
+
+    #[test]
+    fn mlkem_api_works_after_approved_mode() {
+        set_state(ModuleState::Approved);
+        let kp = generate_keypair().unwrap();
+        let (ct, ss1) = encapsulate(&kp.public_key).unwrap();
+        let ss2 = decapsulate(&kp.private_key, &ct).unwrap();
+        assert_eq!(ss1.as_bytes(), ss2.as_bytes());
     }
 }

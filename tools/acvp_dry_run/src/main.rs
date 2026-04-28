@@ -1,25 +1,42 @@
 //! ACVP dry-run harness for pqc_crypto_module.
 //!
-//! Placeholder tool for processing NIST ACVP test vectors.
-//! Supports: SHA3-256, ML-DSA-65, ML-KEM-768.
+//! Processes ACVP-inspired test vectors for SHA3-256, ML-DSA-65, and ML-KEM-768.
 //!
 //! Usage:
-//!   cargo run -p acvp_dry_run -- --algorithm sha3-256
-//!   cargo run -p acvp_dry_run -- --algorithm ml-dsa-65 --vectors vectors/mldsa.json
+//!   cargo run -p acvp_dry_run -- --algorithm sha3-256 --vectors vectors/sha3_256.json
+//!   cargo run -p acvp_dry_run -- --algorithm ml-dsa-65 --vectors vectors/mldsa_65.json
+//!   cargo run -p acvp_dry_run -- --algorithm ml-kem-768 --vectors vectors/mlkem_768.json
+//!   cargo run -p acvp_dry_run -- --all
+
+mod mldsa;
+mod mlkem;
+mod report;
+mod sha3;
+mod vectors;
 
 use clap::Parser;
+use report::FullReport;
+use vectors::AlgorithmReport;
 
 #[derive(Parser)]
 #[command(name = "acvp_dry_run", about = "ACVP test vector dry-run harness")]
 struct Cli {
     /// Algorithm to test: sha3-256, ml-dsa-65, ml-kem-768
     #[arg(long)]
-    algorithm: String,
+    algorithm: Option<String>,
 
-    /// Path to ACVP vector JSON file (optional for built-in KAT)
+    /// Path to ACVP vector JSON file
     #[arg(long)]
     vectors: Option<String>,
+
+    /// Run all algorithms with default vector files
+    #[arg(long)]
+    all: bool,
 }
+
+const DEFAULT_SHA3_VECTORS: &str = "tools/acvp_dry_run/vectors/sha3_256.json";
+const DEFAULT_MLDSA_VECTORS: &str = "tools/acvp_dry_run/vectors/mldsa_65.json";
+const DEFAULT_MLKEM_VECTORS: &str = "tools/acvp_dry_run/vectors/mlkem_768.json";
 
 fn main() {
     let cli = Cli::parse();
@@ -27,57 +44,78 @@ fn main() {
     // Initialize crypto module
     pqc_crypto_module::api::initialize_approved_mode().expect("crypto module self-tests failed");
 
-    println!("ACVP Dry-Run: algorithm={}", cli.algorithm);
+    let mut reports: Vec<AlgorithmReport> = Vec::new();
 
-    match cli.algorithm.as_str() {
-        "sha3-256" => run_sha3_kat(),
-        "ml-dsa-65" => run_mldsa_kat(),
-        "ml-kem-768" => run_mlkem_kat(),
-        _ => {
-            eprintln!("Unknown algorithm: {}", cli.algorithm);
-            std::process::exit(1);
+    if cli.all {
+        reports.push(run_algorithm("sha3-256", DEFAULT_SHA3_VECTORS));
+        reports.push(run_algorithm("ml-dsa-65", DEFAULT_MLDSA_VECTORS));
+        reports.push(run_algorithm("ml-kem-768", DEFAULT_MLKEM_VECTORS));
+    } else if let Some(ref alg) = cli.algorithm {
+        let vectors_path = cli.vectors.as_deref().unwrap_or(match alg.as_str() {
+            "sha3-256" => DEFAULT_SHA3_VECTORS,
+            "ml-dsa-65" => DEFAULT_MLDSA_VECTORS,
+            "ml-kem-768" => DEFAULT_MLKEM_VECTORS,
+            _ => {
+                eprintln!("Unknown algorithm: {alg}");
+                eprintln!("Supported: sha3-256, ml-dsa-65, ml-kem-768");
+                std::process::exit(1);
+            }
+        });
+        reports.push(run_algorithm(alg, vectors_path));
+    } else {
+        eprintln!("Error: specify --algorithm <name> or --all");
+        std::process::exit(1);
+    }
+
+    let report = FullReport::new(reports);
+    report.print_summary();
+
+    // Write JSON report
+    let json = report.to_json();
+    if let Err(e) = std::fs::write("tools/acvp_dry_run/report.json", &json) {
+        eprintln!("Warning: could not write report.json: {e}");
+        // Still print to stdout as fallback
+        println!("{json}");
+    }
+
+    if report.total_failed > 0 {
+        std::process::exit(1);
+    }
+}
+
+fn run_algorithm(algorithm: &str, vectors_path: &str) -> AlgorithmReport {
+    println!("Running {algorithm} vectors from {vectors_path}...");
+
+    let vectors = match vectors::load_vectors(vectors_path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error loading vectors: {e}");
+            return AlgorithmReport {
+                algorithm: algorithm.into(),
+                passed: 0,
+                failed: 1,
+                results: vec![vectors::TestResult {
+                    tc_id: 0,
+                    status: "failed".into(),
+                    detail: Some(e),
+                }],
+            };
         }
+    };
+
+    match algorithm {
+        "sha3-256" => sha3::run(&vectors),
+        "ml-dsa-65" => mldsa::run(&vectors),
+        "ml-kem-768" => mlkem::run(&vectors),
+        _ => AlgorithmReport {
+            algorithm: algorithm.into(),
+            passed: 0,
+            failed: 1,
+            results: vec![vectors::TestResult {
+                tc_id: 0,
+                status: "failed".into(),
+                detail: Some(format!("unknown algorithm: {algorithm}")),
+            }],
+        },
     }
-
-    if let Some(path) = &cli.vectors {
-        println!("Vector file: {path}");
-        println!("Status: PARTIAL — official ACVP vector parsing not yet implemented");
-        println!("Action: Integrate NIST ACVP JSON schema when available");
-    }
-}
-
-fn run_sha3_kat() {
-    let hash = pqc_crypto_module::api::sha3_256(b"").unwrap();
-    let expected = "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a";
-    assert_eq!(hash.to_hex(), expected);
-    println!("SHA3-256 KAT: PASS (empty string)");
-
-    let hash2 = pqc_crypto_module::api::sha3_256(b"abc").unwrap();
-    println!("SHA3-256(\"abc\") = {}", hash2.to_hex());
-    println!("SHA3-256 KAT: PASS");
-}
-
-fn run_mldsa_kat() {
-    let kp = pqc_crypto_module::api::generate_mldsa_keypair().unwrap();
-    let msg = b"ACVP-KAT-ML-DSA-65";
-    let sig = pqc_crypto_module::api::sign_message(&kp.private_key, msg).unwrap();
-    pqc_crypto_module::api::verify_signature(&kp.public_key, msg, &sig).unwrap();
-    println!("ML-DSA-65 sign/verify KAT: PASS");
-    println!("  public_key: {} bytes", kp.public_key.as_bytes().len());
-    println!("  signature:  {} bytes", sig.as_bytes().len());
-
-    // Corrupted sig must fail
-    let mut bad = sig.as_bytes().to_vec();
-    bad[0] ^= 0xff;
-    let bad_sig = pqc_crypto_module::types::MldsaSignature(bad);
-    assert!(pqc_crypto_module::api::verify_signature(&kp.public_key, msg, &bad_sig).is_err());
-    println!("ML-DSA-65 corrupted sig rejection: PASS");
-}
-
-fn run_mlkem_kat() {
-    let kp = pqc_crypto_module::api::generate_mlkem_keypair().unwrap();
-    let (ct, _ss) = pqc_crypto_module::api::mlkem_encapsulate(&kp.public_key).unwrap();
-    let _ss2 = pqc_crypto_module::api::mlkem_decapsulate(&kp.private_key, &ct).unwrap();
-    println!("ML-KEM-768 encaps/decaps KAT: PASS (placeholder implementation)");
-    println!("  Note: Replace with FIPS 203 implementation for shared secret matching");
 }

@@ -49,7 +49,7 @@ The boundary is defined as all Rust source files under `crates/pqc_crypto_module
 | `lib.rs` | Crate root; re-exports public modules |
 | `api.rs` | Public API entry point for all approved operations |
 | `mldsa.rs` | ML-DSA-65 key generation, signing, verification |
-| `mlkem.rs` | ML-KEM-768 key encapsulation (placeholder) |
+| `mlkem.rs` | ML-KEM-768 key encapsulation (FIPS 203 via `pqcrypto-mlkem`) |
 | `hashing.rs` | SHA3-256 hashing |
 | `rng.rs` | CSPRNG wrapper with continuous test |
 | `self_tests.rs` | Known Answer Tests |

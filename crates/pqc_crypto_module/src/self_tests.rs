@@ -70,15 +70,29 @@ fn kat_mlkem() -> Result<(), CryptoError> {
     let kp =
         kem_keygen_raw().map_err(|e| CryptoError::SelfTestFailed(format!("ML-KEM keygen: {e}")))?;
 
-    let (ct, _ss) = encapsulate_raw(&kp.public_key)
+    let (ct, ss) = encapsulate_raw(&kp.public_key)
         .map_err(|e| CryptoError::SelfTestFailed(format!("ML-KEM encaps: {e}")))?;
 
-    let _ss2 = decapsulate_raw(&kp.private_key, &ct)
+    let ss2 = decapsulate_raw(&kp.private_key, &ct)
         .map_err(|e| CryptoError::SelfTestFailed(format!("ML-KEM decaps: {e}")))?;
 
-    // Note: placeholder ML-KEM does not produce matching shared secrets.
-    // When real FIPS 203 implementation is available, add:
-    //   assert!(ss == ss2, "ML-KEM KAT: shared secrets must match");
+    if ss.as_bytes() != ss2.as_bytes() {
+        return Err(CryptoError::SelfTestFailed(
+            "ML-KEM KAT: shared secrets from encapsulate and decapsulate do not match".into(),
+        ));
+    }
+
+    // Invalid ciphertext must fail or produce different secret
+    let bad_ct = crate::types::MlKemCiphertext(vec![0xAA; 1088]);
+    let ss_bad = decapsulate_raw(&kp.private_key, &bad_ct);
+    match ss_bad {
+        Ok(ref bad_ss) if bad_ss.as_bytes() == ss.as_bytes() => {
+            return Err(CryptoError::SelfTestFailed(
+                "ML-KEM KAT: corrupted ciphertext produced same shared secret".into(),
+            ));
+        }
+        _ => {} // Error or different secret — both acceptable
+    }
 
     Ok(())
 }

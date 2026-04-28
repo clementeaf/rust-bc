@@ -16,9 +16,11 @@ pub fn generate_keypair() -> Result<MldsaKeyPair, CryptoError> {
 /// Internal keygen without approved-mode check (for self-tests).
 pub(crate) fn generate_keypair_raw() -> MldsaKeyPair {
     let (pk, sk) = mldsa65::keypair();
+    let private_key = MldsaPrivateKey(sk.as_bytes().to_vec());
+    private_key.mlock();
     MldsaKeyPair {
         public_key: MldsaPublicKey(pk.as_bytes().to_vec()),
-        private_key: MldsaPrivateKey(sk.as_bytes().to_vec()),
+        private_key,
     }
 }
 

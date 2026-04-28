@@ -20,7 +20,7 @@ The cryptographic boundary encompasses all source files within `crates/pqc_crypt
 |---|---|
 | `api.rs` | Single public entry point for all approved operations |
 | `mldsa.rs` | ML-DSA-65 key generation, signing, verification |
-| `mlkem.rs` | ML-KEM-768 key encapsulation (structural placeholder) |
+| `mlkem.rs` | ML-KEM-768 key encapsulation (FIPS 203) |
 | `hashing.rs` | SHA3-256 hashing |
 | `rng.rs` | CSPRNG wrapper with continuous test |
 | `self_tests.rs` | Known Answer Tests (KATs) |
@@ -39,10 +39,10 @@ Files outside `src/` (tests, Cargo.toml, documentation) are outside the cryptogr
 | Algorithm | Standard | Purpose | Key Sizes | Output Sizes |
 |---|---|---|---|---|
 | ML-DSA-65 | FIPS 204 | Digital signatures | PK: 1952 B, SK: 4032 B | Sig: 3309 B |
-| ML-KEM-768 | FIPS 203 | Key encapsulation | Placeholder | SS: 32 B |
+| ML-KEM-768 | FIPS 203 | Key encapsulation | PK: 1184 B, SK: 2400 B, CT: 1088 B | SS: 32 B |
 | SHA3-256 | FIPS 202 | Hashing | N/A | 32 B |
 
-**Implementation note**: ML-KEM-768 is a structural placeholder using SHA3-based key derivation. It will be replaced with a FIPS 203 validated implementation when a suitable Rust crate is available. The API surface will not change.
+**Implementation note**: ML-KEM-768 is implemented via the `pqcrypto-mlkem` crate (v0.1.1), which wraps the reference C implementation of FIPS 203. Encapsulation produces a ciphertext and shared secret; decapsulation deterministically recovers the same shared secret. Invalid ciphertexts are handled via implicit rejection (different shared secret) or error return.
 
 ## 4. Non-Approved Algorithms
 
@@ -132,8 +132,8 @@ The module assumes a single-operator environment where the operating system prov
 |---|---|---|---|
 | `MldsaPrivateKey` | 4032 B | `ZeroizeOnDrop` | ML-DSA-65 signing |
 | `MldsaPublicKey` | 1952 B | N/A (public) | ML-DSA-65 verification |
-| `MlKemPrivateKey` | Variable | `ZeroizeOnDrop` | ML-KEM-768 decapsulation |
-| `MlKemPublicKey` | Variable | N/A (public) | ML-KEM-768 encapsulation |
+| `MlKemPrivateKey` | 2400 B | `ZeroizeOnDrop` | ML-KEM-768 decapsulation |
+| `MlKemPublicKey` | 1184 B | N/A (public) | ML-KEM-768 encapsulation |
 | `MlKemSharedSecret` | 32 B | `ZeroizeOnDrop` | Shared secret material |
 
 ### Key lifecycle
@@ -170,14 +170,62 @@ See [SELF_TEST_DOCUMENTATION.md](SELF_TEST_DOCUMENTATION.md) for the complete se
 | State manipulation | `AtomicU8` with `SeqCst` ordering; `Error` state is terminal |
 | RNG failure | Continuous RNG test at startup; explicit error propagation on `OsRng` failure |
 
-## 13. Future Validation Notes
+## 13. Error State and Recovery
+
+The `Error` state is **terminal**. Once entered, no cryptographic operations can be performed and no transition to any other state is possible.
+
+**Recovery procedure:**
+1. The Crypto Officer observes that all API calls return `CryptoError::ModuleInErrorState`.
+2. The Crypto Officer must terminate the host process.
+3. The Crypto Officer restarts the process. The module re-enters `Uninitialized` state.
+4. `initialize_approved_mode()` is called again. If self-tests pass, the module transitions to `Approved`.
+5. If self-tests fail again, the Crypto Officer must investigate the root cause (corrupted binary, hardware fault, or dependency issue) before retrying.
+
+**Operator indicators:**
+- `CryptoError::ModuleInErrorState` on any API call → module is in Error state.
+- `CryptoError::ModuleNotInitialized` → module has not been initialized (call `initialize_approved_mode()`).
+- `CryptoError::SelfTestFailed(msg)` → initialization failed; module transitioned to Error.
+
+There is no in-process re-initialization path. This is by design: a self-test failure may indicate a compromised binary or hardware fault, and continuing operation would violate fail-closed semantics.
+
+## 14. Crypto Officer Procedures
+
+### Module initialization
+1. At process startup, call `pqc_crypto_module::api::initialize_approved_mode()`.
+2. If the call returns `Ok(())`, the module is in `Approved` state and all services are available.
+3. If the call returns `Err(SelfTestFailed(_))`, the module is in `Error` state. Terminate the process, investigate, and restart.
+4. Do not attempt to call `initialize_approved_mode()` more than once per process lifetime.
+
+### Monitoring
+- All API functions return `Result<T, CryptoError>`. The Crypto Officer should log and alert on any `Err` variant.
+- Periodic health checks: call `sha3_256(b"healthcheck")` and verify a successful result.
+
+### Incident response
+- If any operation returns `ModuleInErrorState`, treat the process as compromised and restart immediately.
+- If signature verification fails unexpectedly, investigate key compromise before retrying.
+
+## 15. User Guide
+
+### For DLT application developers
+- Import only `pqc_crypto_module::api`. Do not import internal modules.
+- Call `initialize_approved_mode()` exactly once at process startup before any crypto operation.
+- Handle all `Result` errors explicitly. Do not `unwrap()` in production.
+- Private keys (`MldsaPrivateKey`, `MlKemPrivateKey`) are `ZeroizeOnDrop`. Let them drop naturally or call `drop()` explicitly when done.
+- Shared secrets (`MlKemSharedSecret`) are also `ZeroizeOnDrop`. Derive session keys or MACs promptly, then drop.
+
+### For legacy compatibility
+- Use `pqc_crypto_module::legacy::*` only for verifying pre-PQC data.
+- Legacy functions are blocked when the module is in `Approved` state.
+- Plan migration to ML-DSA-65 and ML-KEM-768 for all new operations.
+
+## 16. Future Validation Notes
 
 The following items are identified for resolution before formal CMVP submission:
 
-1. **ML-KEM-768**: Replace structural placeholder with a FIPS 203 validated implementation.
+1. ~~**ML-KEM-768**~~: RESOLVED — implemented via `pqcrypto-mlkem` v0.1.1 with roundtrip verification.
 2. **DRBG**: The RNG wraps `OsRng` directly. A NIST SP 800-90A compliant DRBG with health tests may be required for full FIPS 140-3 compliance.
 3. **Entropy source**: Document the OS entropy source and its compliance with SP 800-90B.
 4. **Physical boundary**: Not applicable (software module), but the operational environment documentation may need expansion for the lab.
-5. **Algorithm certificates**: Obtain CAVP algorithm certificates for ML-DSA-65 and SHA3-256 once implementations are validated.
+5. **Algorithm certificates**: Obtain CAVP algorithm certificates for ML-DSA-65, ML-KEM-768, and SHA3-256 once implementations are validated.
 6. **Conditional self-tests**: Add pair-wise consistency tests for key generation if required by the lab.
-7. **ML-KEM shared secret verification**: The placeholder does not verify shared secret equality between encapsulate and decapsulate. This must be validated with the real FIPS 203 implementation.
+7. ~~**ML-KEM shared secret verification**~~: RESOLVED — KAT self-test now verifies shared secret equality between encapsulate and decapsulate.
