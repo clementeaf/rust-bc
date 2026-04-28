@@ -139,7 +139,11 @@ mod tests {
             transactions: vec![format!("tx_{height}")],
             proposer: "proposer".into(),
             signature: vec![1u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         }
     }

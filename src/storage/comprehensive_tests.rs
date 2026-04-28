@@ -27,7 +27,11 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -118,7 +122,11 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             assert!(store.write_block(&block).is_ok());
@@ -155,7 +163,11 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_batch(&[block], &[]).is_ok());
@@ -187,7 +199,11 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let tx = Transaction {
@@ -220,7 +236,11 @@ mod comprehensive_storage_tests {
                 transactions: vec![format!("tx{}", i)],
                 proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             })
             .collect::<Vec<_>>();
@@ -256,7 +276,11 @@ mod comprehensive_storage_tests {
                 transactions: (1..=10).map(|j| format!("tx{i}_{j}")).collect(),
                 proposer: format!("proposer{i}"),
                 signature: vec![2u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             })
             .collect::<Vec<_>>();
@@ -274,7 +298,11 @@ mod comprehensive_storage_tests {
             transactions: vec!["tx1".to_string()],
             proposer: "proposer1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         }];
         let txs = vec![Transaction {
@@ -301,7 +329,11 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "proposer".to_string(),
                 signature: vec![2u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             assert!(store.write_batch(&[block], &[]).is_ok());
@@ -344,7 +376,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let block2 = Block {
@@ -355,7 +391,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p2".to_string(),
             signature: vec![3u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_batch(&[block1, block2], &[]).is_ok());
@@ -374,7 +414,11 @@ mod comprehensive_storage_tests {
             transactions: (1..=1000).map(|i| format!("tx{i:04}")).collect(),
             proposer: "proposer".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -391,7 +435,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "genesis".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -408,7 +456,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "max".to_string(),
             signature: vec![255u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -425,7 +477,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -455,7 +511,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-!@#$%^&*()".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -472,7 +532,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer-🚀-✅".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -605,7 +669,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p1".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -622,7 +690,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "proposer".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         assert!(store.write_block(&block).is_ok());
@@ -659,7 +731,11 @@ mod comprehensive_storage_tests {
             transactions: vec![],
             proposer: "p".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let start = Instant::now();
@@ -682,7 +758,11 @@ mod comprehensive_storage_tests {
                 transactions: vec![],
                 proposer: "p".to_string(),
                 signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             let _ = store.write_block(&block);

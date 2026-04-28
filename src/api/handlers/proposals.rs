@@ -55,6 +55,7 @@ pub async fn submit_proposal(
         signer_did: "did:local:peer".to_string(),
         org_id: "local".to_string(),
         signature: vec![0u8; 64],
+        signature_algorithm: Default::default(),
         payload_hash,
         timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -234,6 +235,7 @@ mod tests {
             tx: sample_tx("tx-test-1"),
             creator_did: "did:example:alice".to_string(),
             creator_signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             rwset: sample_rwset(),
         };
 
@@ -261,12 +263,14 @@ mod tests {
                 tx: sample_tx("tx-test-2"),
                 creator_did: "did:example:alice".to_string(),
                 creator_signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 rwset: sample_rwset(),
             },
             endorsements: vec![Endorsement {
                 signer_did: "did:example:org1".to_string(),
                 org_id: "Org1".to_string(),
                 signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 payload_hash: [0u8; 32],
                 timestamp: 0,
             }],

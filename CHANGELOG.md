@@ -6,6 +6,68 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-28
+
+**Post-Quantum Readiness — Full Stack Hardening**
+
+Crypto-agility layer:
+- `signature_algorithm: SigningAlgorithm` field added to `Block`, `DagBlock`, `Endorsement`, `AliveMessage`, `TransactionProposal` (replaces size-based heuristic detection)
+- `hash_algorithm: HashAlgorithm` field added to `Block` (enables migration without breaking old blocks)
+- `secondary_signature` + `secondary_signature_algorithm` on `Block` and `DagBlock` for dual-signing migration
+- `HashAlgorithm` enum (`Sha256`, `Sha3_256`) with `HASH_ALGORITHM` env var, configurable `hash()` / `hash_with()`, KAT self-tests at startup
+- `SigningAlgorithm::is_post_quantum()` helper, `Default` impl (Ed25519 for backwards compat)
+- All new fields use `#[serde(default)]` for backwards compatibility with legacy JSON
+
+PQC enforcement:
+- `REQUIRE_PQC_SIGNATURES=true` env var rejects Ed25519 in consensus and endorsement validation
+- `validate_signature_consistency()` catches tag forgery (declared algorithm vs actual signature size)
+- Integrated into `ConsensusEngine::accept_block()` and `validate_endorsements()`
+
+TLS post-quantum handshake:
+- `rustls-post-quantum` dependency: X25519+ML-KEM-768 hybrid key exchange
+- `TLS_PQC_KEM=true` env var installs PQ `CryptoProvider` at startup
+- `install_crypto_provider()` called before any TLS config is built
+
+Dual-signing for migration:
+- `dual_sign()` and `verify_dual()` with `Either` / `Both` modes
+- `DUAL_SIGN_VERIFY_MODE` env var for transition policy
+
+Equivocation detection:
+- `EquivocationDetector` with `ConsensusPosition` key `(height, slot, proposer)`
+- `EquivocationProof` with two block hashes + two signatures + algorithm tag
+- Gossip deduplication, `receive_proof()`, `is_penalized()` quarantine
+- Serde persistence (`to_bytes()` / `from_bytes()`) for restart survival
+
+Slashing economics:
+- `PenaltyManager` with `PenaltyRecord`, `PenaltyPolicy`, `PenaltyStatus` (Active/Expired/Permanent)
+- Deterministic expiration at `start_height + duration`, permanent mode, escalation on repeat
+- Anti-double-slash via `processed_proofs` set, reputation tracking
+- Serde persistence for restart survival
+
+New modules:
+- `src/crypto/hasher.rs` — configurable SHA-256 / SHA3-256 hash abstraction
+- `src/identity/pqc_policy.rs` — PQC enforcement + signature consistency validation
+- `src/identity/dual_signing.rs` — dual-signing helpers for crypto migration
+- `src/consensus/equivocation.rs` — equivocation detection, proofs, gossip, persistence
+- `src/consensus/slashing.rs` — penalty lifecycle, policy, reputation, persistence
+
+New test suites:
+- `tests/pqc_security_audit.rs` — 24 adversarial tests (tag forgery, downgrade, dual-sign bypass, TLS, hash migration)
+- `tests/chaos_network.rs` — 11 multi-node scenarios (partition, replay, crash, mixed config, flood, convergence)
+- `tests/persistent_crash_recovery.rs` — 5 RocksDB crash/restart tests (exact state restoration, tampered storage rejection)
+- `tests/crypto_dos_flood.rs` — 6 flood resistance tests (10K invalid flood, duplicate caching, rate limiting, cheap rejection ordering)
+- `tests/byzantine_equivocation.rs` — 9 equivocation tests (detection, proof, gossip dedup, penalty, negative cases, stress)
+- `tests/equivocation_persistence_partition.rs` — 6 tests (penalty restart survival, cross-partition retroactive detection)
+- `tests/slashing_penalty_lifecycle.rs` — 9 tests (active/expired/permanent penalties, restart, escalation, anti-double-slash)
+- `tests/performance_guardrails.rs` — 6 threshold tests (cheap rejection 213x faster, 4843 blocks/sec PQC validation, RocksDB 10K reopen 641ms)
+- `benches/pqc_performance.rs` — 9 Criterion benchmarks (ML-DSA sign/verify, SHA3, block validation, RocksDB, flood rejection, throughput)
+
+Dependencies: `sha3 = "0.10"`, `rustls-post-quantum = "0.2"`
+
+New env vars: `REQUIRE_PQC_SIGNATURES`, `TLS_PQC_KEM`, `DUAL_SIGN_VERIFY_MODE`, `HASH_ALGORITHM`
+
+Tests: 1503 total (1427 lib + 76 integration), 0 failures
+
 ### 2026-04-25
 
 **PIN Module — Generation, Hashing, and DID Association**

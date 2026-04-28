@@ -1645,6 +1645,7 @@ impl Node {
                     signer_did,
                     org_id: node_org_id.to_string(),
                     signature,
+                    signature_algorithm: Default::default(),
                     payload_hash,
                     timestamp,
                 };
@@ -3275,7 +3276,11 @@ mod tests {
             transactions: vec![],
             proposer: "ord".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
 
@@ -3390,7 +3395,11 @@ mod tests {
             transactions: vec!["tx-test".to_string()],
             proposer: "orderer1".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let msg = Message::OrderedBlock(block);
@@ -3439,7 +3448,11 @@ mod tests {
             transactions: vec!["tx1".to_string()],
             proposer: "peer0".to_string(),
             signature: vec![3u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let msg = Message::StateResponse {

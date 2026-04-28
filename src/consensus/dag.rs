@@ -3,6 +3,7 @@
 //! Implements the core DAG data structures for the consensus layer.
 //! Supports block representation, slot-based ordering, and DAG traversal.
 
+use crate::identity::signing::SigningAlgorithm;
 use std::collections::HashMap;
 
 /// Block in the DAG consensus
@@ -22,6 +23,12 @@ pub struct DagBlock {
     pub proposer: String,
     /// Block signature (variable-length: Ed25519 = 64, ML-DSA-65 = 3309)
     pub signature: Vec<u8>,
+    /// Cryptographic algorithm used for the block signature.
+    pub signature_algorithm: SigningAlgorithm,
+    /// Secondary (dual) signature for crypto-agility migration.
+    pub secondary_signature: Option<Vec<u8>>,
+    /// Algorithm used for the secondary signature.
+    pub secondary_signature_algorithm: Option<SigningAlgorithm>,
     /// Transaction hashes included in block
     pub transactions: Vec<[u8; 32]>,
     /// BFT commit quorum certificate (present when block was decided via BFT).
@@ -49,6 +56,9 @@ impl DagBlock {
             timestamp,
             proposer,
             signature,
+            signature_algorithm: SigningAlgorithm::default(),
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
             transactions: Vec::new(),
             commit_qc: None,
         }

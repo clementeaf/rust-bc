@@ -22,10 +22,20 @@ pub enum SigningError {
 }
 
 /// Identifies the cryptographic algorithm used by a `SigningProvider`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum SigningAlgorithm {
+    #[default]
     Ed25519,
     MlDsa65,
+}
+
+impl SigningAlgorithm {
+    /// Returns `true` if this algorithm is post-quantum resistant.
+    pub fn is_post_quantum(&self) -> bool {
+        matches!(self, Self::MlDsa65)
+    }
 }
 
 impl std::fmt::Display for SigningAlgorithm {

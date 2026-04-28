@@ -435,6 +435,7 @@ impl Gateway {
                     },
                     creator_did: String::new(),
                     creator_signature: vec![0u8; 64],
+                    signature_algorithm: Default::default(),
                     rwset: ReadWriteSet::default(),
                 },
             };
@@ -1058,12 +1059,14 @@ mod tests {
                 tx: make_tx(id),
                 creator_did: "did:test:creator".to_string(),
                 creator_signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 rwset: rw.clone(),
             },
             endorsements: vec![Endorsement {
                 signer_did: "did:test:org1".to_string(),
                 org_id: "Org1".to_string(),
                 signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 payload_hash: [0u8; 32],
                 timestamp: 0,
             }],

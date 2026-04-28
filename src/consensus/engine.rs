@@ -169,6 +169,18 @@ impl ConsensusEngine {
             }
         }
 
+        // Signature-algorithm consistency: tag must match actual signature size.
+        crate::identity::pqc_policy::validate_signature_consistency(
+            block.signature_algorithm,
+            &block.signature,
+            "block signature",
+        )
+        .map_err(ConsensusError::InvalidBlock)?;
+
+        // PQC policy: reject blocks with classical signatures when PQC is mandatory.
+        crate::identity::pqc_policy::enforce_pqc(block.signature_algorithm, "block signature")
+            .map_err(ConsensusError::InvalidBlock)?;
+
         // BFT quorum check: non-genesis blocks must carry a valid CommitQC.
         if let Some(ref bft_qv) = self.bft_quorum_validator {
             if !block.is_genesis() {
@@ -227,7 +239,11 @@ impl ConsensusEngine {
                 transactions: block.transactions.iter().map(hex::encode).collect(),
                 proposer: block.proposer.clone(),
                 signature: block.signature,
+                signature_algorithm: block.signature_algorithm,
                 endorsements: vec![],
+                secondary_signature: block.secondary_signature,
+                secondary_signature_algorithm: block.secondary_signature_algorithm,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             store

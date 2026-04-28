@@ -123,6 +123,11 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
 - `src/pin/` — Numeric PIN generation (CSPRNG, 4-6 digits), Argon2id hashing/verification, `PinStore` trait with `MemoryPinStore` for DID-to-PIN association. HTTP: `POST /pin/generate`, `POST /pin/verify`
+- `src/crypto/hasher.rs` — Configurable hash algorithm (`SHA-256` / `SHA3-256`), `hash()`, `hash_with()`, KAT self-tests. `HASH_ALGORITHM` env var.
+- `src/identity/pqc_policy.rs` — PQC enforcement: `enforce_pqc()` rejects classical sigs when `REQUIRE_PQC_SIGNATURES=true`, `validate_signature_consistency()` catches tag forgery (size vs algorithm mismatch).
+- `src/identity/dual_signing.rs` — Crypto migration: `dual_sign()` with two providers, `verify_dual()` with `Either`/`Both` modes, `DUAL_SIGN_VERIFY_MODE` env var.
+- `src/consensus/equivocation.rs` — Byzantine equivocation detection: `EquivocationDetector` tracks `(height, slot, proposer)` proposals, constructs `EquivocationProof` on conflict, gossip dedup via `receive_proof()`, proposer quarantine. Serde persistence via `to_bytes()`/`from_bytes()`.
+- `src/consensus/slashing.rs` — Validator penalty economics: `PenaltyManager` with `PenaltyRecord`, `PenaltyPolicy` (configurable duration/permanent/escalation), deterministic expiration at `start_height + duration`, anti-double-slash, reputation tracking. Serde persistence.
 
 ### Block explorer — Cerulean Ledger UI
 
@@ -218,6 +223,10 @@ All `.md` presentation docs have a corresponding `.pdf` generated via pandoc + w
 | `P2P_HANDLER_BUFFER_BYTES` | 65536 | Buffer size for per-connection message handler (64 KB) |
 | `P2P_SYNC_BUFFER_BYTES` | 4194304 | Buffer size for pull-based state sync (4 MB) |
 | `SIGNING_ALGORITHM` | *(ed25519)* | `ed25519` or `ml-dsa-65` — selects the node's signing provider |
+| `REQUIRE_PQC_SIGNATURES` | *(false)* | Set to `true` to reject classical (Ed25519) signatures in consensus and endorsement |
+| `TLS_PQC_KEM` | *(false)* | Set to `true` to enable X25519+ML-KEM-768 hybrid TLS key exchange |
+| `DUAL_SIGN_VERIFY_MODE` | *(either)* | `either` (transition) or `both` (strict) — dual-signature verification mode |
+| `HASH_ALGORITHM` | *(sha256)* | `sha256` or `sha3-256` — configurable block hash algorithm |
 
 ## Global Claude configuration (`~/.claude/`)
 
@@ -323,3 +332,6 @@ cd deploy && ./generate-tls.sh
 - Secondary index keys use the same zero-padded prefix: `{:012}:{id}`, enabling cheap prefix range scans without a full table scan.
 - `tempfile::TempDir` is the standard test helper for RocksDB tests — the directory is cleaned up on drop.
 - Signature fields across all structs are `Vec<u8>` (not `[u8; 64]`) to support both Ed25519 (64 bytes) and ML-DSA-65 (3309 bytes). Serialized as hex strings via `vec_hex` serde helpers.
+- Every struct carrying a signature also carries `signature_algorithm: SigningAlgorithm` with `#[serde(default)]` (defaults to Ed25519 for backwards compat). `validate_signature_consistency()` enforces size matches tag.
+- `Block` carries `hash_algorithm: HashAlgorithm` with `#[serde(default)]` (defaults to Sha256). Old blocks without the field deserialize correctly.
+- `Block` and `DagBlock` carry optional `secondary_signature` + `secondary_signature_algorithm` for dual-signing during PQC migration.

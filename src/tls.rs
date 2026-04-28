@@ -9,6 +9,32 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// Returns `true` when `TLS_PQC_KEM` env var is set to a truthy value.
+///
+/// When enabled, TLS connections use X25519+ML-KEM-768 hybrid key exchange
+/// (post-quantum resistant). This affects both server and client configs.
+pub fn pqc_kem_enabled() -> bool {
+    std::env::var("TLS_PQC_KEM")
+        .map(|v| matches!(v.as_str(), "true" | "1" | "yes"))
+        .unwrap_or(false)
+}
+
+/// Install the appropriate `CryptoProvider` as the global default.
+///
+/// Must be called once before any TLS config is built. When `TLS_PQC_KEM=true`,
+/// installs the post-quantum provider (X25519+ML-KEM-768 hybrid). Otherwise
+/// installs the default `aws-lc-rs` provider.
+pub fn install_crypto_provider() {
+    if pqc_kem_enabled() {
+        log::info!("TLS: installing post-quantum CryptoProvider (X25519+ML-KEM-768 hybrid)");
+        rustls_post_quantum::provider()
+            .install_default()
+            .expect("failed to install PQ CryptoProvider");
+    } else {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    }
+}
+
 /// Carga certificados PEM desde un archivo.
 fn load_certs(path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsConfigError> {
     let file = fs::File::open(path)
@@ -1473,5 +1499,28 @@ mod tests {
         std::env::remove_var("TLS_OCSP_STAPLE_PATH");
         let staple = result.unwrap().unwrap();
         assert_eq!(staple.as_bytes(), data.as_ref());
+    }
+
+    #[test]
+    fn pqc_kem_disabled_by_default() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("TLS_PQC_KEM");
+        assert!(!pqc_kem_enabled());
+    }
+
+    #[test]
+    fn pqc_kem_enabled_when_true() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TLS_PQC_KEM", "true");
+        assert!(pqc_kem_enabled());
+        std::env::remove_var("TLS_PQC_KEM");
+    }
+
+    #[test]
+    fn pqc_kem_disabled_when_false() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        std::env::set_var("TLS_PQC_KEM", "false");
+        assert!(!pqc_kem_enabled());
+        std::env::remove_var("TLS_PQC_KEM");
     }
 }

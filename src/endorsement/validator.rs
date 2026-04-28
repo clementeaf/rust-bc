@@ -60,6 +60,18 @@ pub fn validate_endorsements(
     let mut valid_orgs: Vec<&str> = Vec::new();
 
     for e in endorsements {
+        // Signature-algorithm consistency: tag must match actual signature size.
+        crate::identity::pqc_policy::validate_signature_consistency(
+            e.signature_algorithm,
+            &e.signature,
+            "endorsement signature",
+        )
+        .map_err(EndorsementError::InvalidSignature)?;
+
+        // PQC policy: reject endorsements with classical signatures when PQC is mandatory.
+        crate::identity::pqc_policy::enforce_pqc(e.signature_algorithm, "endorsement signature")
+            .map_err(EndorsementError::InvalidSignature)?;
+
         let org = registry
             .get_org(&e.org_id)
             .map_err(|_| EndorsementError::OrgNotFound(e.org_id.clone()))?;
@@ -208,6 +220,7 @@ mod tests {
             signer_did: format!("did:bc:{org_id}:signer"),
             org_id: org_id.to_string(),
             signature: sig,
+            signature_algorithm: Default::default(),
             payload_hash,
             timestamp: 0,
         }
@@ -230,6 +243,7 @@ mod tests {
             signer_did: "did:bc:x".to_string(),
             org_id: "org1".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: payload,
             timestamp: 0,
         };

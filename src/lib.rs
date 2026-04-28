@@ -15,6 +15,7 @@ pub mod transaction_validation;
 
 // Phase 2 Week 2-3: Storage & Consensus Layers
 pub mod consensus;
+pub mod crypto;
 pub mod identity;
 pub mod storage;
 

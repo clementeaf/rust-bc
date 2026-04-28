@@ -278,6 +278,7 @@ mod tests {
             signer_did: "did:example:admin".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: [2u8; 32],
             timestamp: 1_000_000,
         }
@@ -416,6 +417,7 @@ mod tests {
             signer_did: format!("did:bc:{org_id}:admin"),
             org_id: org_id.to_string(),
             signature: sk.sign(&payload_hash).to_bytes().to_vec(),
+            signature_algorithm: Default::default(),
             payload_hash,
             timestamp: 0,
         }

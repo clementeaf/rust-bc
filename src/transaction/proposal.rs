@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::endorsement::types::Endorsement;
+use crate::identity::signing::SigningAlgorithm;
 use crate::storage::traits::Transaction;
 use crate::transaction::rwset::ReadWriteSet;
 
@@ -12,6 +13,8 @@ pub struct TransactionProposal {
     pub tx: Transaction,
     pub creator_did: String,
     pub creator_signature: Vec<u8>,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
     pub rwset: ReadWriteSet,
 }
 
@@ -57,6 +60,7 @@ mod tests {
             signer_did: "did:example:org1".to_string(),
             org_id: "Org1".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: [0u8; 32],
             timestamp: 0,
         }
@@ -68,6 +72,7 @@ mod tests {
             tx: sample_tx(),
             creator_did: "did:example:alice".to_string(),
             creator_signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             rwset: sample_rwset(),
         };
         assert_eq!(proposal.creator_did, "did:example:alice");

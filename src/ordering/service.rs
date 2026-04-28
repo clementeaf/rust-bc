@@ -123,7 +123,11 @@ impl OrderingService {
             transactions: tx_ids,
             proposer: proposer.to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
 

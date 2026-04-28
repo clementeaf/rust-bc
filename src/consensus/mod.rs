@@ -12,8 +12,10 @@ pub mod bft;
 pub mod dag;
 pub mod dpos;
 pub mod engine;
+pub mod equivocation;
 pub mod fork_choice;
 pub mod scheduler;
+pub mod slashing;
 pub mod validator;
 
 /// Consensus configuration

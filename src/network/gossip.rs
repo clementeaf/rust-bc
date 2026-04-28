@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::identity::signing::SigningAlgorithm;
 use serde::{Deserialize, Serialize};
 
 /// Serde helper for variable-length signature bytes — serializes as a hex string.
@@ -35,6 +36,9 @@ pub struct AliveMessage {
     /// Signature bytes (variable-length: Ed25519 = 64, ML-DSA-65 = 3309).
     #[serde(with = "signature_hex")]
     pub signature: Vec<u8>,
+    /// Cryptographic algorithm used for this alive message signature.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
     /// Latest block height known by this peer (used for anti-entropy gap detection).
     #[serde(default)]
     pub latest_height: u64,
@@ -60,6 +64,7 @@ impl AliveMessage {
             timestamp,
             sequence,
             signature,
+            signature_algorithm: SigningAlgorithm::default(),
             latest_height: 0,
         }
     }
@@ -80,6 +85,7 @@ impl AliveMessage {
             timestamp,
             sequence,
             signature,
+            signature_algorithm: SigningAlgorithm::default(),
             latest_height,
         }
     }

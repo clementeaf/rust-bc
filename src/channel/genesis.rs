@@ -30,7 +30,11 @@ pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
         transactions: vec![config_json],
         proposer: format!("genesis:{channel_id}"),
         signature: vec![0u8; 64],
+        signature_algorithm: Default::default(),
         endorsements: vec![],
+        secondary_signature: None,
+        secondary_signature_algorithm: None,
+        hash_algorithm: Default::default(),
         orderer_signature: None,
     }
 }

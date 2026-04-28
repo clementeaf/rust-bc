@@ -217,7 +217,11 @@ mod tests {
             transactions: vec![],
             proposer: "p".into(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         store.write_block(&block).unwrap();
@@ -254,7 +258,11 @@ mod tests {
             transactions: vec![],
             proposer: "p".into(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         store.write_block(&block).unwrap();
@@ -302,7 +310,11 @@ mod tests {
                 transactions: vec![format!("tx{h}_0"), format!("tx{h}_1"), format!("tx{h}_2")],
                 proposer: "p".into(),
                 signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             store.write_block(&block).unwrap();
@@ -338,7 +350,11 @@ mod tests {
                 transactions: vec![],
                 proposer: "p".into(),
                 signature: vec![0u8; 64],
+                signature_algorithm: Default::default(),
                 endorsements: vec![],
+                secondary_signature: None,
+                secondary_signature_algorithm: None,
+                hash_algorithm: Default::default(),
                 orderer_signature: None,
             };
             store.write_block(&block).unwrap();

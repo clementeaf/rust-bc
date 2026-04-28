@@ -15,6 +15,7 @@ mod chaincode;
 mod channel;
 mod checkpoint;
 mod consensus;
+mod crypto;
 mod discovery;
 mod endorsement;
 mod events;
@@ -97,6 +98,10 @@ async fn async_main() -> std::io::Result<()> {
 
 async fn async_main_inner() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+    // Install the TLS CryptoProvider early, before any TLS config is built.
+    // When TLS_PQC_KEM=true this enables X25519+ML-KEM-768 hybrid key exchange.
+    tls::install_crypto_provider();
 
     let difficulty = env::var("DIFFICULTY")
         .ok()
@@ -764,7 +769,11 @@ async fn async_main_inner() -> std::io::Result<()> {
     // FIPS 140-3 power-up self-tests — verify crypto correctness before accepting requests.
     crate::identity::signing::run_crypto_self_tests()
         .expect("FATAL: cryptographic self-tests failed — node cannot start");
-    log::info!("Cryptographic self-tests passed (Ed25519, ML-DSA-65, SHA-256)");
+    crate::crypto::hasher::run_hash_self_tests()
+        .expect("FATAL: hash self-tests failed — node cannot start");
+    let hash_algo = crate::crypto::hasher::configured_algorithm();
+    log::info!("Cryptographic self-tests passed (Ed25519, ML-DSA-65, SHA-256, SHA3-256)");
+    log::info!("Hash algorithm: {hash_algo}");
 
     let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
         let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();

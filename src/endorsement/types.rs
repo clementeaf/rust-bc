@@ -1,5 +1,7 @@
 //! Endorsement data types
 
+use crate::identity::signing::SigningAlgorithm;
+
 mod vec_hex {
     use serde::{Deserialize, Deserializer, Serializer};
 
@@ -42,6 +44,9 @@ pub struct Endorsement {
     /// Signature bytes (variable-length: Ed25519 = 64, ML-DSA-65 = 3309)
     #[serde(with = "vec_hex")]
     pub signature: Vec<u8>,
+    /// Cryptographic algorithm used for this endorsement signature.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
     /// Hash of the signed payload (32 bytes)
     #[serde(with = "hash_hex")]
     pub payload_hash: [u8; 32],
@@ -59,6 +64,7 @@ mod tests {
             signer_did: "did:bc:alice".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: [2u8; 32],
             timestamp: 1_000_000,
         };
@@ -73,6 +79,7 @@ mod tests {
             signer_did: "did:bc:bob".to_string(),
             org_id: "org2".to_string(),
             signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: [0u8; 32],
             timestamp: 0,
         };
@@ -83,6 +90,7 @@ mod tests {
             signer_did: "did:bc:carol".to_string(),
             org_id: "org3".to_string(),
             signature: vec![0u8; 3309],
+            signature_algorithm: Default::default(),
             payload_hash: [0u8; 32],
             timestamp: 0,
         };
@@ -95,6 +103,7 @@ mod tests {
             signer_did: "did:bc:test".to_string(),
             org_id: "org1".to_string(),
             signature: vec![42u8; 3309],
+            signature_algorithm: Default::default(),
             payload_hash: [7u8; 32],
             timestamp: 999,
         };

@@ -5,7 +5,9 @@
 use std::sync::Arc;
 
 use super::errors::StorageResult;
+use crate::crypto::hasher::HashAlgorithm;
 use crate::endorsement::types::Endorsement;
+use crate::identity::signing::SigningAlgorithm;
 
 /// Block structure for storage
 ///
@@ -21,9 +23,26 @@ pub struct Block {
     pub proposer: String,
     #[serde(with = "vec_hex")]
     pub signature: Vec<u8>,
+    /// Cryptographic algorithm used for the proposer signature.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
     /// Endorsements collected for this block (empty for legacy blocks)
     #[serde(default)]
     pub endorsements: Vec<Endorsement>,
+    /// Secondary (dual) signature for crypto-agility migration.
+    ///
+    /// During a PQC transition, blocks carry both a primary (classical) and
+    /// secondary (post-quantum) signature — or vice versa. Validators accept
+    /// the block if either signature is valid.
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_vec_hex")]
+    pub secondary_signature: Option<Vec<u8>>,
+    /// Algorithm used for the secondary signature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_signature_algorithm: Option<SigningAlgorithm>,
+    /// Hash algorithm used for merkle_root and block hashing.
+    /// Defaults to SHA-256 for backwards compatibility with legacy blocks.
+    #[serde(default)]
+    pub hash_algorithm: HashAlgorithm,
     /// Orderer signature over the block hash (absent for legacy blocks).
     #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_vec_hex")]
     pub orderer_signature: Option<Vec<u8>>,
@@ -276,7 +295,11 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         }
     }
@@ -297,6 +320,7 @@ mod tests {
             signer_did: "did:bc:alice".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
+            signature_algorithm: Default::default(),
             payload_hash: [2u8; 32],
             timestamp: 9999,
         };
@@ -308,7 +332,11 @@ mod tests {
             transactions: vec![],
             proposer: "node-1".to_string(),
             signature: vec![2u8; 64],
+            signature_algorithm: Default::default(),
             endorsements: vec![e.clone()],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
             orderer_signature: None,
         };
         let json = serde_json::to_string(&block).unwrap();
