@@ -1,6 +1,6 @@
 //! Endorsement verification logic
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
 use thiserror::Error;
 
 use super::key_policy::KeyEndorsementStore;
@@ -205,8 +205,8 @@ mod tests {
     use super::*;
     use crate::endorsement::org::Organization;
     use crate::endorsement::registry::MemoryOrgRegistry;
-    use ed25519_dalek::{Signer, SigningKey};
-    use rand::rngs::OsRng;
+    use pqc_crypto_module::legacy::ed25519::{Signer, SigningKey};
+    use pqc_crypto_module::legacy::rng::OsRng;
 
     fn make_keypair() -> (SigningKey, [u8; 32]) {
         let sk = SigningKey::generate(&mut OsRng);

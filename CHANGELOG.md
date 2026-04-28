@@ -8,11 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
-**Crypto Boundary Enforcement**
-- `tests/crypto_boundary.rs` — 5 tests enforcing that new production code uses `pqc_crypto_module::api` exclusively
-- Scans all `.rs` files in `src/` for forbidden raw crypto imports (`sha2`, `sha3`, `ed25519_dalek`, `pqcrypto_mldsa`, etc.)
-- LEGACY_ALLOWLIST documents 28 pre-existing files pending migration (85.7% of codebase already clean)
-- New files adding direct crypto imports will fail the build
+**100% Crypto Boundary Compliance**
+- All 28 legacy files migrated from direct crypto imports to `pqc_crypto_module::legacy::*`
+- `LEGACY_ALLOWLIST` is now empty — 189/189 files (100%) clean
+- `pqc_crypto_module::legacy` re-exports Ed25519, SHA-256, HMAC, rand, ML-DSA raw access as explicitly non-approved APIs
+- Boundary test fails if any production file imports raw crypto crates directly
+- Ed25519/SHA-256 still available for legacy block verification, but routed through the crypto module boundary
 
 **FIPS-Oriented Crypto Module**
 - `crates/pqc_crypto_module/` — standalone crate isolating all PQC cryptography behind a strict boundary

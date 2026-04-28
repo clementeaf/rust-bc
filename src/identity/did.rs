@@ -4,7 +4,7 @@
 //! did:bc:<pubkey_hash>
 
 use hex;
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 
 /// DID representation
 #[derive(Debug, Clone, PartialEq, Eq)]

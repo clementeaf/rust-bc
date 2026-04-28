@@ -289,7 +289,7 @@ impl TransactionValidator {
     /// Compute a content hash of a transaction's payload (excluding ID).
     /// Used to detect replayed transactions submitted with different UUIDs.
     fn content_hash(tx: &Transaction) -> String {
-        use sha2::{Digest, Sha256};
+        use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
         let data = format!(
             "{}:{}:{}:{}:{}",
             tx.from,

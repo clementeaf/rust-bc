@@ -171,7 +171,7 @@ impl super::signing::SigningProvider for HsmSigningProvider {
 
     #[cfg(feature = "hsm")]
     fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, super::signing::SigningError> {
-        use ed25519_dalek::{Signature, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{Signature, VerifyingKey};
         let sig_bytes: [u8; 64] = sig.try_into().map_err(|_| {
             super::signing::SigningError::VerifyFailed("Ed25519 signature must be 64 bytes".into())
         })?;

@@ -8,6 +8,7 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
+pqc_crypto_module = { path = "crates/pqc_crypto_module" }
 lazy_static = "1.4"
 sha2 = "0.10"
 sha3 = "0.10"

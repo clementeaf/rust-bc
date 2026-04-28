@@ -1,8 +1,8 @@
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use rustls::client::WebPkiServerVerifier;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::WebPkiClientVerifier;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
 use std::io::BufReader;

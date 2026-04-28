@@ -24,57 +24,11 @@ const FORBIDDEN_IMPORTS: &[&str] = &[
     "use blake",
 ];
 
-/// Pre-existing files with direct crypto imports, documented for gradual migration.
-/// These files predate the `pqc_crypto_module` boundary and are allowed temporarily.
+/// Legacy allowlist — EMPTY after full migration.
 ///
-/// **Policy**: No new files may be added to this list. Existing entries should
-/// be migrated to use `pqc_crypto_module::api` and removed from this list.
-const LEGACY_ALLOWLIST: &[&str] = &[
-    // Core signing providers — will become thin wrappers around pqc_crypto_module
-    "src/identity/signing.rs",
-    "src/identity/hsm.rs",
-    "src/identity/keys.rs",
-    "src/identity/did.rs",
-    // Hash usage in crypto module adapter (wraps sha2/sha3)
-    "src/crypto/hasher.rs",
-    // Endorsement verification (uses ed25519_dalek directly)
-    "src/endorsement/validator.rs",
-    // Legacy blockchain + models (sha2 for block hashing)
-    "src/blockchain.rs",
-    "src/models.rs",
-    // Network gossip (ed25519 signature verification)
-    "src/network/gossip.rs",
-    "src/network/mod.rs",
-    // TLS (sha2 for cert pinning fingerprints)
-    "src/tls.rs",
-    // Storage / checkpoint (sha2 for integrity checks)
-    "src/checkpoint.rs",
-    "src/storage/snapshot.rs",
-    "src/private_data/mod.rs",
-    // Bridge (sha2 for Merkle proofs)
-    "src/bridge/verifier.rs",
-    "src/bridge/protocol.rs",
-    // Light client (sha2 for header hashing)
-    "src/light_client/header.rs",
-    // EVM compat (sha2 for ABI, precompiles)
-    "src/evm_compat/abi.rs",
-    "src/evm_compat/precompile.rs",
-    // Channel config (sha2 for config hashing)
-    "src/channel/config.rs",
-    // Chaincode handler (sha2 for wasm hash verification)
-    "src/api/handlers/chaincode.rs",
-    // Ordering (sha2 for block signing)
-    "src/ordering/mod.rs",
-    // Transaction validation (sha2)
-    "src/transaction_validation.rs",
-    // PIN generator (argon2 + rand)
-    "src/pin/generator.rs",
-    // Smart contracts, billing, staking, oracle (sha2/rand for various)
-    "src/smart_contracts.rs",
-    "src/billing.rs",
-    "src/staking.rs",
-    "src/oracle_system.rs",
-];
+/// All 28 previously-listed files now import crypto exclusively through
+/// `pqc_crypto_module::legacy::*` instead of raw crates.
+const LEGACY_ALLOWLIST: &[&str] = &[];
 
 fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -196,14 +150,11 @@ fn crypto_module_crate_does_not_exist_in_src() {
 // ═══════════════════════════════════════════════════════════════════
 
 #[test]
-fn allowlist_entries_are_valid_files() {
-    for &entry in LEGACY_ALLOWLIST {
-        let path = Path::new(entry);
-        assert!(
-            path.exists(),
-            "LEGACY_ALLOWLIST entry does not exist: {entry} — remove stale entries"
-        );
-    }
+fn legacy_allowlist_is_empty() {
+    assert!(
+        LEGACY_ALLOWLIST.is_empty(),
+        "LEGACY_ALLOWLIST must be empty — all files migrated to pqc_crypto_module"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════

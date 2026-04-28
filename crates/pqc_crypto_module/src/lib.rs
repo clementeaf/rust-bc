@@ -26,6 +26,7 @@ pub mod api;
 pub mod approved_mode;
 pub mod errors;
 pub mod hashing;
+pub mod legacy;
 pub mod mldsa;
 pub mod mlkem;
 pub mod rng;

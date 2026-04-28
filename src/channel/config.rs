@@ -401,7 +401,7 @@ mod tests {
     // ── validate_config_tx tests ─────────────────────────────────────────────
 
     fn make_keypair() -> (ed25519_dalek::SigningKey, [u8; 32]) {
-        use rand::rngs::OsRng;
+        use pqc_crypto_module::legacy::rng::OsRng;
         let sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
         let pk = sk.verifying_key().to_bytes();
         (sk, pk)
@@ -412,7 +412,7 @@ mod tests {
         payload_hash: [u8; 32],
         org_id: &str,
     ) -> Endorsement {
-        use ed25519_dalek::Signer as _;
+        use pqc_crypto_module::legacy::ed25519::Signer as _;
         Endorsement {
             signer_did: format!("did:bc:{org_id}:admin"),
             org_id: org_id.to_string(),

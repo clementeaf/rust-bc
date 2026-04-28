@@ -4,7 +4,7 @@
 //! Precompiles are called by address (0x01-0x09 in Ethereum convention).
 //! Each precompile takes raw input bytes and returns output bytes.
 
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 
 /// Precompile address range.
 pub const PRECOMPILE_START: u8 = 0x01;

@@ -299,7 +299,7 @@ async fn gossip_loop(
     peers: Arc<Mutex<HashSet<String>>>,
     tls_connector: Option<Arc<TlsConnector>>,
 ) {
-    use rand::seq::SliceRandom as _;
+    use pqc_crypto_module::legacy::rng::SliceRandom as _;
     while let Some((block, source)) = rx.recv().await {
         let all_peers: Vec<String> = peers
             .lock()
@@ -1619,8 +1619,8 @@ impl Node {
                 // 3. Sign the rwset hash
                 let rwset_bytes = serde_json::to_vec(&rwset).unwrap_or_default();
                 let payload_hash: [u8; 32] = {
-                    use sha2::Digest;
-                    let mut hasher = sha2::Sha256::new();
+                    use pqc_crypto_module::legacy::sha256::Digest;
+                    let mut hasher = pqc_crypto_module::legacy::sha256::Sha256::new();
                     hasher.update(&rwset_bytes);
                     hasher.finalize().into()
                 };

@@ -3,7 +3,7 @@
 //! Defaults to SHA-256. Set `HASH_ALGORITHM=sha3-256` to use SHA3-256 instead.
 //! Both produce 32-byte digests, so all downstream code works unchanged.
 
-use sha2::Digest as _;
+use pqc_crypto_module::legacy::sha256::Digest as _;
 
 /// Supported hash algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -41,7 +41,7 @@ pub fn configured_algorithm() -> HashAlgorithm {
 pub fn hash_with(algorithm: HashAlgorithm, data: &[u8]) -> [u8; 32] {
     match algorithm {
         HashAlgorithm::Sha256 => {
-            let digest = sha2::Sha256::digest(data);
+            let digest = pqc_crypto_module::legacy::sha256::Sha256::digest(data);
             digest.into()
         }
         HashAlgorithm::Sha3_256 => {

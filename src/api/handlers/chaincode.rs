@@ -1,6 +1,6 @@
 use actix_web::{post, web, HttpRequest, HttpResponse};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;

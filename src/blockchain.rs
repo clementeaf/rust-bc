@@ -2,9 +2,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // External crates
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 // Crate modules
 use crate::models::{Transaction, WalletManager};

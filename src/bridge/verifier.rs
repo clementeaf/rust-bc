@@ -3,7 +3,7 @@
 //! Verifies Merkle inclusion proofs submitted by relayers to confirm that
 //! a message was included in a source chain block.
 
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 
 use super::types::InclusionProof;
 

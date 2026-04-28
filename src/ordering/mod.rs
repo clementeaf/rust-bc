@@ -8,8 +8,8 @@ use std::str::FromStr;
 
 use crate::storage::errors::StorageResult;
 use crate::storage::traits::{Block, Transaction};
-use ed25519_dalek::Signer;
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::ed25519::Signer;
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 
 /// Compute a block hash for orderer signing: `sha256(height || parent_hash || merkle_root)`.
 pub fn block_hash_for_signing(block: &Block) -> [u8; 32] {
@@ -48,7 +48,7 @@ pub fn verify_orderer_signature(
         .try_into()
         .map_err(|_| "invalid signature length: expected 64 bytes".to_string())?;
     let sig = ed25519_dalek::Signature::from_bytes(sig_array);
-    use ed25519_dalek::Verifier;
+    use pqc_crypto_module::legacy::ed25519::Verifier;
     orderer_key
         .verify(&hash, &sig)
         .map(|()| true)
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn cut_block_signs_with_orderer_key() {
-        use ed25519_dalek::{Signature, SigningKey, Verifier, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{Signature, SigningKey, Verifier, VerifyingKey};
 
         let key = SigningKey::from_bytes(&[42u8; 32]);
         let verifying = VerifyingKey::from(&key);
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn verify_valid_orderer_signature_accepts() {
-        use ed25519_dalek::{SigningKey, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{SigningKey, VerifyingKey};
 
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let verifying = VerifyingKey::from(&key);
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn verify_invalid_orderer_signature_rejects() {
-        use ed25519_dalek::{SigningKey, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{SigningKey, VerifyingKey};
 
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let wrong_key = SigningKey::from_bytes(&[99u8; 32]);
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn verify_absent_orderer_signature_accepts() {
-        use ed25519_dalek::{SigningKey, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{SigningKey, VerifyingKey};
 
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let verifying = VerifyingKey::from(&key);

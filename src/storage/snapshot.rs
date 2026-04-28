@@ -7,8 +7,8 @@ use std::io::Write;
 use std::path::Path;
 
 use base64::Engine as _;
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use super::errors::{StorageError, StorageResult};
 use super::traits::BlockStore;

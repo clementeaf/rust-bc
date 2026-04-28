@@ -2,10 +2,11 @@
 use std::collections::HashMap;
 
 // External crates
-use ed25519_dalek::{Signature, SignatureError, Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use pqc_crypto_module::legacy::ed25519::SignatureError;
+use pqc_crypto_module::legacy::ed25519::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use pqc_crypto_module::legacy::rng::OsRng;
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /**
@@ -117,13 +118,17 @@ impl Transaction {
 
         // ML-DSA-65 path: 1952-byte public key, 3309-byte signature
         if public_key_bytes.len() == 1952 && signature_bytes.len() == 3309 {
-            use pqcrypto_traits::sign::{DetachedSignature, PublicKey};
-            let pk = pqcrypto_mldsa::mldsa65::PublicKey::from_bytes(public_key_bytes)
-                .map_err(|_| SignatureError::new())?;
-            let sig = pqcrypto_mldsa::mldsa65::DetachedSignature::from_bytes(&signature_bytes)
-                .map_err(|_| SignatureError::new())?;
+            use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
+            let pk = pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(
+                public_key_bytes,
+            )
+            .map_err(|_| SignatureError::new())?;
+            let sig = pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
+                &signature_bytes,
+            )
+            .map_err(|_| SignatureError::new())?;
             let message = self.calculate_hash();
-            return pqcrypto_mldsa::mldsa65::verify_detached_signature(
+            return pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(
                 &sig,
                 message.as_bytes(),
                 &pk,

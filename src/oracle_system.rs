@@ -1,6 +1,6 @@
-use hmac::{Hmac, Mac};
+use pqc_crypto_module::legacy::hmac::{Hmac, Mac};
+use pqc_crypto_module::legacy::sha256::Sha256;
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use std::collections::HashMap;
 use tracing::{debug, info, warn};
 

@@ -3,8 +3,8 @@
 //! Headers contain just enough information to verify state proofs without
 //! downloading full block data (transactions, endorsements, etc.).
 
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::consensus::bft::types::QuorumCertificate;
 

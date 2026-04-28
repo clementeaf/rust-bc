@@ -96,7 +96,7 @@ impl AliveMessage {
     /// Returns `true` when the signature matches. The canonical message that
     /// was signed is `"{peer_address}:{org_id}:{timestamp}:{sequence}"`.
     pub fn verify_signature(&self, public_key: &[u8; 32]) -> bool {
-        use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
 
         let Ok(verifying_key) = VerifyingKey::from_bytes(public_key) else {
             return false;
@@ -394,7 +394,7 @@ mod tests {
 
     #[test]
     fn verify_signature_with_valid_key() {
-        use ed25519_dalek::{Signer, SigningKey};
+        use pqc_crypto_module::legacy::ed25519::{Signer, SigningKey};
 
         let signing_key = SigningKey::from_bytes(&[1u8; 32]);
         let public_key = signing_key.verifying_key().to_bytes();
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn verify_signature_rejects_wrong_key() {
-        use ed25519_dalek::{Signer, SigningKey};
+        use pqc_crypto_module::legacy::ed25519::{Signer, SigningKey};
 
         let signing_key = SigningKey::from_bytes(&[1u8; 32]);
         let wrong_key = SigningKey::from_bytes(&[2u8; 32]);

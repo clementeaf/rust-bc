@@ -3,7 +3,7 @@
 //!
 //! Supports the core ABI types: uint256, address, bytes, string, bool.
 
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 
 /// ABI-encoded value types (subset of Solidity ABI).
 #[derive(Debug, Clone, PartialEq, Eq)]

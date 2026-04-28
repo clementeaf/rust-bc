@@ -2,8 +2,8 @@
 //!
 //! Supports Ed25519 keypair generation, storage, and rotation
 
-use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
-use rand::rngs::OsRng;
+use pqc_crypto_module::legacy::ed25519::{Signer, SigningKey, Verifier, VerifyingKey};
+use pqc_crypto_module::legacy::rng::OsRng;
 
 /// Public key information
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,7 +120,7 @@ impl KeyManager {
     /// Verify a signature with the active key
     pub fn verify(&self, data: &[u8], signature: &[u8; 64]) -> bool {
         let verifying_key = self.active_key.signing_key.verifying_key();
-        use ed25519_dalek::Signature;
+        use pqc_crypto_module::legacy::ed25519::Signature;
         if let Ok(sig) = Signature::from_slice(signature) {
             verifying_key.verify(data, &sig).is_ok()
         } else {
@@ -139,7 +139,7 @@ impl KeyManager {
         // Try retired keys
         for retired_key in &self.retired_keys {
             if let Ok(verifying_key) = VerifyingKey::from_bytes(&retired_key.public_key) {
-                use ed25519_dalek::Signature;
+                use pqc_crypto_module::legacy::ed25519::Signature;
                 if let Ok(sig) = Signature::from_slice(signature) {
                     if verifying_key.verify(data, &sig).is_ok() {
                         return true;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, RwLock};
 
-use sha2::{Digest, Sha256};
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::storage::errors::{StorageError, StorageResult};
