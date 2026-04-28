@@ -8,6 +8,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**FIPS-Oriented Crypto Module**
+- `crates/pqc_crypto_module/` — standalone crate isolating all PQC cryptography behind a strict boundary
+- Approved-mode state machine: `Uninitialized → SelfTesting → Approved → Error`
+- All crypto APIs reject calls unless module is in `Approved` state
+- ML-DSA-65 sign/verify (FIPS 204), SHA3-256 (FIPS 202), ML-KEM-768 placeholder (FIPS 203)
+- Startup KAT self-tests for all algorithms + continuous RNG test
+- `ZeroizeOnDrop` on all private key and shared secret types
+- No classical algorithm fallback — Ed25519, SHA-256, RSA excluded from module API
+- `SECURITY_POLICY_DRAFT.md` aligned with FIPS 140-3 Security Policy structure
+- 17 integration tests: API boundary, self-tests, no-fallback, key zeroization
+- Workspace configuration: root `Cargo.toml` adds `[workspace]` with `crates/pqc_crypto_module`
+
 **Post-Quantum Readiness — Full Stack Hardening**
 
 Crypto-agility layer:

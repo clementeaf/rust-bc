@@ -4726,6 +4726,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pqc_crypto_module"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "pqcrypto-mldsa",
+ "pqcrypto-traits",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "sha3",
+ "tempfile",
+ "thiserror 1.0.69",
+ "zeroize",
+]
+
+[[package]]
 name = "pqcrypto-internals"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

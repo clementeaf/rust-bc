@@ -128,6 +128,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/identity/dual_signing.rs` — Crypto migration: `dual_sign()` with two providers, `verify_dual()` with `Either`/`Both` modes, `DUAL_SIGN_VERIFY_MODE` env var.
 - `src/consensus/equivocation.rs` — Byzantine equivocation detection: `EquivocationDetector` tracks `(height, slot, proposer)` proposals, constructs `EquivocationProof` on conflict, gossip dedup via `receive_proof()`, proposer quarantine. Serde persistence via `to_bytes()`/`from_bytes()`.
 - `src/consensus/slashing.rs` — Validator penalty economics: `PenaltyManager` with `PenaltyRecord`, `PenaltyPolicy` (configurable duration/permanent/escalation), deterministic expiration at `start_height + duration`, anti-double-slash, reputation tracking. Serde persistence.
+- `crates/pqc_crypto_module/` — FIPS-oriented standalone crate: approved-mode lifecycle (`Uninitialized→Approved→Error`), ML-DSA-65, SHA3-256, ML-KEM-768 placeholder, KAT self-tests, `ZeroizeOnDrop` on private keys, no classical fallback. See `crates/pqc_crypto_module/README.md`.
 
 ### Block explorer — Cerulean Ledger UI
 
