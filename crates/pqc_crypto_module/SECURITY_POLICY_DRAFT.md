@@ -54,7 +54,19 @@ Once in `Error` state, the module cannot be re-initialized. All cryptographic op
 
 All private key types derive `ZeroizeOnDrop`. When the containing variable goes out of scope, the memory is overwritten with zeros before deallocation.
 
-## 10. Future validation notes
+## 10. Non-Approved Algorithm Enforcement
+
+Legacy algorithms (Ed25519, SHA-256, HMAC-SHA256) are present only for backward compatibility with pre-PQC blocks.
+
+When the module is in Approved mode:
+- All non-approved algorithms are disabled via runtime guards (`ensure_not_approved()`)
+- Any attempt to use legacy guarded functions returns `CryptoError::NonApprovedAlgorithm`
+- No fallback from approved to non-approved algorithms occurs
+- The `approved-only` Cargo feature excludes the legacy module entirely at compile time
+
+These algorithms are outside the approved cryptographic boundary.
+
+## 11. Future validation notes
 
 - ML-KEM-768 uses a structural placeholder. Replace with a FIPS 203 validated implementation when available.
 - The RNG wraps `OsRng` (OS-backed CSPRNG). A DRBG with health tests may be required for full FIPS 140-3 compliance.

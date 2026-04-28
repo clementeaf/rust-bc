@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**Approved vs Legacy Crypto Separation**
+- Runtime guards on all legacy functions: `ensure_not_approved()` blocks Ed25519, SHA-256, HMAC when module is in Approved mode
+- Guarded functions: `legacy_ed25519_verify`, `legacy_ed25519_sign`, `legacy_sha256`, `legacy_hmac_sha256`
+- `approved-only` Cargo feature flag excludes legacy module at compile time
+- 12 tests in `approved_vs_legacy.rs`: legacy blocked in approved, works before init, no fallback, API cleanliness
+- `SECURITY_POLICY_DRAFT.md` updated with non-approved algorithm enforcement section
+
 **100% Crypto Boundary Compliance**
 - All 28 legacy files migrated from direct crypto imports to `pqc_crypto_module::legacy::*`
 - `LEGACY_ALLOWLIST` is now empty — 189/189 files (100%) clean
