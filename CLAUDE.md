@@ -93,7 +93,7 @@ Response envelope: `ApiResponse<T>` in `errors.rs` — always `{ status, status_
 - `RateLimitMiddleware` (sliding window) wraps all routes except `/health`.
 - Chaincode install computes SHA-256 of Wasm bytes; optional `expected_hash` query param for supply-chain verification.
 - `jwt_secret` is loaded but reserved for future use — mTLS + ACL is the active auth mechanism.
-- See `docs/SECURITY-AUDIT.md` for the full audit and remediation status.
+- See `docs/architecture/SECURITY-AUDIT.md` for the full audit and remediation status.
 
 ### AppState (`src/app_state.rs`)
 Central shared state. Legacy `blockchain: Arc<Mutex<Blockchain>>` and new `store` coexist independently.
@@ -176,29 +176,25 @@ Key structure:
 
 Not required to run the node.
 
-### Presentation materials (`docs/`)
+### Documentation (`docs/`)
 
-Documentation prepared for the Blockchain Chamber of Chile:
+Organized into subdirectories:
 
-| Document | Purpose |
+| Directory | Contents |
 |---|---|
-| `PRESENTACION.md` | Full platform overview for the board |
-| `FAQ.md` | ~40 questions by audience (board, enterprise, technical, regulators) |
-| `PITCH.md` | Talking points, one-liners, objection handling |
-| `ONE-PAGER-CAMARA.md` | One-page executive summary |
-| `DEMO-SCRIPT.md` | 5-minute live demo script with timing and commands |
-| `TESSERACT.md` | Standalone Tesseract explanation (geometric consensus prototype) |
-| `PUBLIC-ROADMAP.md` | Public roadmap with concrete dates (Q2 2026 – H2 2027) |
-| `PQC-TEST-EVIDENCE.md` | PQC test inventory evidence |
-| `COTIZACION-VOTO-ELECTRONICO.md` | E-voting quotation (md + html + pdf) |
-| `DOSSIER-CAMARA-BLOCKCHAIN-CHILE.pdf` | Technical dossier — 44-page PDF with cover, TOC, and bookmarks |
-| `RESUMEN-NO-TECNICO.md` | Plain-language overview for non-technical audience |
-| `QUE-ES-DLT-EMPRESARIAL.md` | DLT concepts, Rust, FIPS 204, PQC, standards, Fabric comparison |
-| `CASOS-PRACTICOS.md` | 6 business cases with before/after value tables |
-| `POR-QUE-CERULEAN.md` | Commercial value proposition, 5 reasons, adoption path, FAQ |
-| `DOSSIER-COMERCIAL.pdf` | Commercial dossier — 30-page PDF with cover, TOC, and bookmarks |
+| `docs/api/` | API reference, quick-start, deployment, configuration guides |
+| `docs/architecture/` | Benchmarks, gap analyses, security audit, network membership |
+| `docs/camara/` | Blockchain Chamber of Chile: presentations, dossiers, quotations (md + pdf) |
+| `docs/commercial/` | Enterprise docs, impact studies, sales materials |
+| `docs/compliance/` | FIPS 140, certification roadmap, compliance framework, PQC enterprise |
+| `docs/prompts/` | Test generation prompts (POE, PROMPT1–10) |
+| `docs/analysis/` | Phase analysis, architecture notes, decision matrices |
+| `docs/dev/` | Developer onboarding, branching strategy, setup |
+| `docs/es/` | Spanish translations |
+| `docs/archive/` | Legacy documentation |
+| `docs/book/` | mdBook documentation site |
 
-All `.md` presentation docs have a corresponding `.pdf` generated via pandoc + weasyprint.
+All `.md` presentation docs in `docs/camara/` have corresponding `.pdf` via pandoc + weasyprint.
 
 ## Environment variables
 
