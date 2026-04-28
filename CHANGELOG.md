@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-28
 
+**CI Reliability Hardening**
+- `tests/test_seeds.rs` — shared deterministic seed constants for reproducible chaos/property tests
+- `.config/nextest.toml` — cargo-nextest profiles: default (no retry), chaos (1 retry, 120s timeout), ci
+- `.github/workflows/coverage.yml` — cargo-llvm-cov coverage report on PR + push main
+- `scripts/ci_runtime_report.sh` — PR gate timing budget script (target: ≤15 min)
+- PR pipeline runs fast critical gates only (no chaos/fuzz/benchmarks)
+- Nightly pipeline runs full adversarial validation + benchmarks
+- Fix: `fips_readiness` test correctly targets `pqc_crypto_module` crate
+
 **Self-Auditing CI Pipeline**
 - 5 GitHub Actions workflows: `ci.yml` (updated with PQC tests), `security-audit.yml`, `performance-guardrails.yml`, `nightly-chaos.yml`, `fuzz.yml`
 - `tests/property_invariants.rs` — 7 proptest invariants (tampering invalidates sigs, equivocation always detected, hash collision resistance, serde roundtrip preserves PQC metadata, consistency catches all mismatches)

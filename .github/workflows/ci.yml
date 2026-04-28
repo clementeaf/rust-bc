@@ -78,7 +78,7 @@ jobs:
         run: cargo test --test crypto_boundary
 
       - name: FIPS readiness
-        run: cargo test --test fips_readiness -- --test-threads=1
+        run: cargo test -p pqc_crypto_module --test fips_readiness -- --test-threads=1
 
       - name: PQC security audit
         run: cargo test --test pqc_security_audit

@@ -1,0 +1,17 @@
+[profile.default]
+retries = 0
+slow-timeout = { period = "60s", terminate-after = 2 }
+failure-output = "immediate-final"
+success-output = "never"
+
+[profile.chaos]
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 2 }
+failure-output = "immediate-final"
+success-output = "never"
+
+[profile.ci]
+retries = 0
+slow-timeout = { period = "90s", terminate-after = 2 }
+failure-output = "immediate-final"
+success-output = "never"
