@@ -336,3 +336,4 @@ cd deploy && ./generate-tls.sh
 - Every struct carrying a signature also carries `signature_algorithm: SigningAlgorithm` with `#[serde(default)]` (defaults to Ed25519 for backwards compat). `validate_signature_consistency()` enforces size matches tag.
 - `Block` carries `hash_algorithm: HashAlgorithm` with `#[serde(default)]` (defaults to Sha256). Old blocks without the field deserialize correctly.
 - `Block` and `DagBlock` carry optional `secondary_signature` + `secondary_signature_algorithm` for dual-signing during PQC migration.
+- **Crypto boundary policy**: All new production code must use `pqc_crypto_module::api` for cryptographic operations. Direct imports of `sha2`, `sha3`, `ed25519_dalek`, `pqcrypto_mldsa`, `rand` in `src/` are forbidden for new files. Existing violations are documented in `tests/crypto_boundary.rs` LEGACY_ALLOWLIST. Enforced by `cargo test --test crypto_boundary`.
