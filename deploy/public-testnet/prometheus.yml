@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'cerulean-validators'
+    static_configs:
+      - targets:
+          - 'validator-1:8080'
+          - 'validator-2:8082'
+          - 'validator-3:8084'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'cerulean-api'
+    static_configs:
+      - targets: ['api:8080']
+    metrics_path: '/metrics'

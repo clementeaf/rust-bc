@@ -1,0 +1,131 @@
+version: "3.8"
+
+# Cerulean Ledger — Public Testnet Deployment
+# Usage: docker compose -f deploy/public-testnet/docker-compose.public.yml up -d
+
+x-node-common: &node-common
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  env_file: .env
+
+services:
+  # ── Validators (private) ──────────────────────────────────────────────────
+
+  validator-1:
+    <<: *node-common
+    container_name: cl-validator-1
+    environment:
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      P2P_EXTERNAL_ADDRESS: "validator-1:8081"
+      STORAGE_PATH: /data/rocksdb
+      NODE_ROLE: PeerAndOrderer
+      BOOTSTRAP_NODES: "validator-2:8083,validator-3:8085"
+    volumes:
+      - validator1-data:/data
+    networks:
+      - internal
+
+  validator-2:
+    <<: *node-common
+    container_name: cl-validator-2
+    environment:
+      API_PORT: "8082"
+      P2P_PORT: "8083"
+      P2P_EXTERNAL_ADDRESS: "validator-2:8083"
+      STORAGE_PATH: /data/rocksdb
+      NODE_ROLE: Peer
+      BOOTSTRAP_NODES: "validator-1:8081,validator-3:8085"
+    volumes:
+      - validator2-data:/data
+    networks:
+      - internal
+
+  validator-3:
+    <<: *node-common
+    container_name: cl-validator-3
+    environment:
+      API_PORT: "8084"
+      P2P_PORT: "8085"
+      P2P_EXTERNAL_ADDRESS: "validator-3:8085"
+      STORAGE_PATH: /data/rocksdb
+      NODE_ROLE: Peer
+      BOOTSTRAP_NODES: "validator-1:8081,validator-2:8083"
+    volumes:
+      - validator3-data:/data
+    networks:
+      - internal
+
+  # ── API Node (public via nginx) ───────────────────────────────────────────
+
+  api:
+    <<: *node-common
+    container_name: cl-api
+    environment:
+      API_PORT: "8080"
+      P2P_PORT: "8091"
+      P2P_EXTERNAL_ADDRESS: "api:8091"
+      STORAGE_PATH: /data/rocksdb
+      NODE_ROLE: Peer
+      BOOTSTRAP_NODES: "validator-1:8081,validator-2:8083"
+      FAUCET_ENABLED: "true"
+    volumes:
+      - api-data:/data
+    networks:
+      - internal
+
+  # ── Nginx reverse proxy ───────────────────────────────────────────────────
+
+  nginx:
+    image: nginx:alpine
+    container_name: cl-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - internal
+      - public
+
+  # ── Monitoring ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cl-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - internal
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cl-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - internal
+
+volumes:
+  validator1-data:
+  validator2-data:
+  validator3-data:
+  api-data:
+  prometheus-data:
+
+networks:
+  internal:
+    driver: bridge
+  public:
+    driver: bridge
