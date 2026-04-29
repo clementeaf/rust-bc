@@ -5,6 +5,7 @@
 //! optional code hash for smart contract accounts.
 
 pub mod address;
+pub mod metrics;
 pub mod reorg;
 pub mod rocksdb_store;
 pub mod sync;
