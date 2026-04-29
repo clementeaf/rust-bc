@@ -169,6 +169,20 @@ pub enum Message {
         /// Highest commit QC this validator has seen (proof of progress).
         highest_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
     },
+    // ── Native cryptocurrency messages ─────────────────────────────────────
+    /// Gossip a native transfer to peers for mempool inclusion.
+    NativeTransferGossip(crate::transaction::native::NativeTransaction),
+    /// Broadcast a produced native block to peers.
+    NativeBlockAnnounce {
+        /// Height of the produced block.
+        height: u64,
+        /// Proposer address.
+        proposer: String,
+        /// Number of transactions in the block.
+        tx_count: usize,
+        /// Serialized block (JSON).
+        block_data: Vec<u8>,
+    },
 }
 
 /**
@@ -246,6 +260,8 @@ pub struct Node {
     /// Externally reachable address (from `P2P_EXTERNAL_ADDRESS` env, e.g. `node1:8081`).
     /// Falls back to `self.address` when unset.
     pub announce_address: Option<String>,
+    /// Native cryptocurrency mempool (shared with API layer).
+    pub native_mempool: Option<Arc<crate::transaction::mempool::Mempool>>,
 }
 
 /// Parsea `PEER_ALLOWLIST` (coma-separada, cada token `IP:puerto` o `[IPv6]:puerto`).
@@ -428,6 +444,7 @@ impl Node {
                 .map(|v| gossip::parse_anchor_peers(&v))
                 .unwrap_or_default(),
             announce_address: std::env::var("P2P_EXTERNAL_ADDRESS").ok(),
+            native_mempool: None,
             chaincode_store: None,
             world_state: None,
             signing_provider: None,
@@ -1727,6 +1744,26 @@ impl Node {
                 );
                 Ok(None)
             }
+
+            // Native cryptocurrency messages — mempool insertion happens at
+            // the Node::handle_connection level where `self` is available.
+            // Here we just pass them through.
+            Message::NativeTransferGossip(ref tx) => {
+                log::debug!("Received native tx gossip: {}", tx.id);
+                Ok(None)
+            }
+
+            Message::NativeBlockAnnounce {
+                height,
+                ref proposer,
+                tx_count,
+                ..
+            } => {
+                log::info!(
+                    "Native block announced: height={height}, proposer={proposer}, txs={tx_count}"
+                );
+                Ok(None)
+            }
         }
     }
 
@@ -2620,6 +2657,57 @@ impl Node {
         let msg_json = serde_json::to_string(&msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
         Ok(())
+    }
+
+    /// Broadcast a native cryptocurrency transaction to all peers.
+    pub async fn broadcast_native_tx(&self, tx: &crate::transaction::native::NativeTransaction) {
+        let peers: Vec<String> = {
+            let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
+            guard.iter().cloned().collect()
+        };
+        let msg = Message::NativeTransferGossip(tx.clone());
+        let msg_json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                log::error!("Failed to serialize native tx gossip: {e}");
+                return;
+            }
+        };
+        for peer in &peers {
+            if let Ok(mut stream) = self.open_stream(peer).await {
+                let _ = stream.write_all(msg_json.as_bytes()).await;
+            }
+        }
+    }
+
+    /// Broadcast a native block announcement to all peers.
+    pub async fn announce_native_block(
+        &self,
+        produced: &crate::transaction::block_producer::ProducedBlock,
+    ) {
+        let peers: Vec<String> = {
+            let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
+            guard.iter().cloned().collect()
+        };
+        let block_data = serde_json::to_vec(produced).unwrap_or_default();
+        let msg = Message::NativeBlockAnnounce {
+            height: produced.height,
+            proposer: produced.proposer.clone(),
+            tx_count: produced.tx_success_count,
+            block_data,
+        };
+        let msg_json = match serde_json::to_string(&msg) {
+            Ok(j) => j,
+            Err(e) => {
+                log::error!("Failed to serialize native block announce: {e}");
+                return;
+            }
+        };
+        for peer in &peers {
+            if let Ok(mut stream) = self.open_stream(peer).await {
+                let _ = stream.write_all(msg_json.as_bytes()).await;
+            }
+        }
     }
 
     /**

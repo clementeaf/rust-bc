@@ -10,7 +10,7 @@ use crate::transaction::mempool::Mempool;
 use crate::transaction::native::{execute_transfer, NativeTransaction, NativeTxError};
 
 /// Result of executing a single transaction within a block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TxExecResult {
     pub tx_id: String,
     pub success: bool,
@@ -20,7 +20,7 @@ pub struct TxExecResult {
 }
 
 /// Summary of a produced block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProducedBlock {
     /// Block height.
     pub height: u64,
@@ -152,6 +152,77 @@ fn apply_block_rewards_mint_only(
         reward: result.reward,
         fee_split: result.fee_split,
     })
+}
+
+// ── Persistence ────────────────────────────────────────────────────────────
+
+use crate::storage::errors::StorageResult;
+use crate::storage::traits::{Block, BlockStore, Transaction as StorageTx};
+
+/// Convert a `ProducedBlock` to a storage `Block` and persist it along with
+/// its transactions to the given `BlockStore`.
+///
+/// `parent_hash` must be the hash of the previous block (or `[0u8; 32]` for genesis).
+pub fn persist_block(
+    produced: &ProducedBlock,
+    store: &dyn BlockStore,
+    parent_hash: [u8; 32],
+) -> StorageResult<()> {
+    let tx_ids: Vec<String> = produced
+        .tx_results
+        .iter()
+        .filter(|r| r.success)
+        .map(|r| r.tx_id.clone())
+        .collect();
+
+    // Simple merkle root: hash of concatenated tx IDs
+    let merkle_root = {
+        use pqc_crypto_module::legacy::legacy_sha256;
+        let concat: String = tx_ids.join("");
+        legacy_sha256(concat.as_bytes()).unwrap_or([0u8; 32])
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let block = Block {
+        height: produced.height,
+        timestamp: now,
+        parent_hash,
+        merkle_root,
+        transactions: tx_ids,
+        proposer: produced.proposer.clone(),
+        signature: Vec::new(),
+        signature_algorithm: Default::default(),
+        endorsements: Vec::new(),
+        secondary_signature: None,
+        secondary_signature_algorithm: None,
+        hash_algorithm: Default::default(),
+        orderer_signature: None,
+    };
+
+    store.write_block(&block)?;
+
+    // Persist successful transactions
+    for result in &produced.tx_results {
+        if !result.success {
+            continue;
+        }
+        let tx = StorageTx {
+            id: result.tx_id.clone(),
+            block_height: produced.height,
+            timestamp: now,
+            input_did: String::new(),
+            output_recipient: String::new(),
+            amount: 0,
+            state: "confirmed".to_string(),
+        };
+        store.write_transaction(&tx)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -289,5 +360,50 @@ mod tests {
         // bob started with 5000, paid 10 + 100 fee
         let bob = store.get_account("bob").unwrap();
         assert_eq!(bob.balance, 5000 - 10 - 100);
+    }
+
+    #[test]
+    fn persist_block_writes_to_store() {
+        use crate::storage::memory::MemoryStore;
+        use std::sync::Arc;
+
+        let (mempool, account_store, economics) = setup();
+        let tx = NativeTransaction::new_transfer("alice", "bob", 50, 0, 5);
+        mempool.add(tx).unwrap();
+
+        let produced = produce_block(&mempool, &account_store, &economics, "miner", 100).unwrap();
+
+        let block_store = Arc::new(MemoryStore::new());
+        persist_block(&produced, block_store.as_ref(), [0u8; 32]).unwrap();
+
+        // Block is persisted at height 1
+        let stored: Block = block_store.read_block(1).expect("block should exist");
+        assert_eq!(stored.height, 1);
+        assert_eq!(stored.proposer, "miner");
+        assert_eq!(stored.transactions.len(), 1); // 1 successful tx
+    }
+
+    #[test]
+    fn persist_block_only_includes_successful_txs() {
+        use crate::storage::memory::MemoryStore;
+        use std::sync::Arc;
+
+        let (mempool, account_store, economics) = setup();
+        // Good tx
+        let tx1 = NativeTransaction::new_transfer("alice", "bob", 50, 0, 5);
+        // Bad tx: charlie only has 1000, trying 5000
+        let tx2 = NativeTransaction::new_transfer("charlie", "alice", 5000, 0, 3);
+        mempool.add(tx1).unwrap();
+        mempool.add(tx2).unwrap();
+
+        let produced = produce_block(&mempool, &account_store, &economics, "miner", 100).unwrap();
+        assert_eq!(produced.tx_success_count, 1);
+
+        let block_store = Arc::new(MemoryStore::new());
+        persist_block(&produced, block_store.as_ref(), [0u8; 32]).unwrap();
+
+        let stored: Block = block_store.read_block(1).expect("block should exist");
+        // Only 1 successful tx persisted
+        assert_eq!(stored.transactions.len(), 1);
     }
 }

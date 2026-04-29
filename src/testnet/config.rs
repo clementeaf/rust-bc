@@ -190,6 +190,22 @@ impl GenesisConfig {
 
         Ok(())
     }
+
+    /// Apply genesis allocations to an AccountStore.
+    ///
+    /// Credits each allocation address with its initial balance.
+    /// Returns the total amount allocated.
+    pub fn apply_to_account_store(
+        &self,
+        store: &dyn crate::account::AccountStore,
+    ) -> Result<u64, crate::account::AccountError> {
+        let mut total = 0u64;
+        for alloc in &self.allocations {
+            store.credit(&alloc.address, alloc.amount)?;
+            total += alloc.amount;
+        }
+        Ok(total)
+    }
 }
 
 /// Genesis validation errors.
@@ -297,5 +313,31 @@ mod tests {
             config.validate(),
             Err(GenesisError::EmptyNetworkId)
         ));
+    }
+
+    #[test]
+    fn apply_genesis_allocations_to_account_store() {
+        use crate::account::{AccountStore, MemoryAccountStore};
+        let config = GenesisConfig::testnet();
+        let store = MemoryAccountStore::new();
+
+        let total = config.apply_to_account_store(&store).unwrap();
+        assert_eq!(total, 15_000_000); // 10M faucet + 5M treasury
+
+        let faucet = store.get_account("faucet").unwrap();
+        assert_eq!(faucet.balance, 10_000_000);
+
+        let treasury = store.get_account("treasury").unwrap();
+        assert_eq!(treasury.balance, 5_000_000);
+    }
+
+    #[test]
+    fn apply_devnet_genesis() {
+        use crate::account::MemoryAccountStore;
+        let config = GenesisConfig::devnet();
+        let store = MemoryAccountStore::new();
+
+        let total = config.apply_to_account_store(&store).unwrap();
+        assert_eq!(total, 50_000_000);
     }
 }

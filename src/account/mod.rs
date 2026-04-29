@@ -4,6 +4,8 @@
 //! holds a balance of NOTA tokens, a nonce for replay protection, and an
 //! optional code hash for smart contract accounts.
 
+pub mod address;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;

@@ -167,8 +167,57 @@ pub enum NativeTxError {
     SelfTransfer,
     #[error("zero amount transfer")]
     ZeroAmount,
+    #[error("missing or empty signature")]
+    MissingSignature,
+    #[error("invalid signature")]
+    InvalidSignature,
     #[error("account error: {0}")]
     Account(#[from] AccountError),
+}
+
+// ── Signature Verification ─────────────────────────────────────────────────
+
+/// Verify the signature on a native transaction using the sender's public key.
+///
+/// Supports Ed25519 (64-byte sig, 32-byte pk) and ML-DSA-65 (3309-byte sig, 1952-byte pk).
+pub fn verify_tx_signature(tx: &NativeTransaction, pubkey: &[u8]) -> Result<bool, NativeTxError> {
+    if tx.signature.is_empty() {
+        return Err(NativeTxError::MissingSignature);
+    }
+
+    let payload = tx.signing_payload();
+
+    // Detect algorithm by signature size
+    match tx.signature.len() {
+        64 => {
+            // Ed25519
+            use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
+            let vk = VerifyingKey::from_bytes(
+                pubkey
+                    .try_into()
+                    .map_err(|_| NativeTxError::InvalidSignature)?,
+            )
+            .map_err(|_| NativeTxError::InvalidSignature)?;
+            let sig_bytes: [u8; 64] = tx
+                .signature
+                .as_slice()
+                .try_into()
+                .map_err(|_| NativeTxError::InvalidSignature)?;
+            let sig = Signature::from_bytes(&sig_bytes);
+            Ok(vk.verify(&payload, &sig).is_ok())
+        }
+        3309 => {
+            // ML-DSA-65
+            use pqc_crypto_module::legacy::mldsa_raw::mldsa65;
+            use pqcrypto_traits::sign::{DetachedSignature as _, PublicKey as _};
+            let pk = mldsa65::PublicKey::from_bytes(pubkey)
+                .map_err(|_| NativeTxError::InvalidSignature)?;
+            let sig = mldsa65::DetachedSignature::from_bytes(&tx.signature)
+                .map_err(|_| NativeTxError::InvalidSignature)?;
+            Ok(mldsa65::verify_detached_signature(&sig, &payload, &pk).is_ok())
+        }
+        _ => Err(NativeTxError::InvalidSignature),
+    }
 }
 
 // ── Execution ──────────────────────────────────────────────────────────────
@@ -392,5 +441,46 @@ mod tests {
         let json = serde_json::to_string(&tx).unwrap();
         let deserialized: NativeTransaction = serde_json::from_str(&json).unwrap();
         assert_eq!(tx, deserialized);
+    }
+
+    #[test]
+    fn verify_ed25519_signature() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let pk = provider.public_key();
+
+        let mut tx = NativeTransaction::new_transfer("alice", "bob", 100, 0, 5);
+        let payload = tx.signing_payload();
+        tx.signature = provider.sign(&payload).unwrap();
+        tx.signature_algorithm = "ed25519".to_string();
+
+        assert!(verify_tx_signature(&tx, &pk).unwrap());
+    }
+
+    #[test]
+    fn verify_rejects_empty_signature() {
+        let tx = NativeTransaction::new_transfer("alice", "bob", 100, 0, 5);
+        let err = verify_tx_signature(&tx, &[0u8; 32]).unwrap_err();
+        assert!(matches!(err, NativeTxError::MissingSignature));
+    }
+
+    #[test]
+    fn verify_rejects_wrong_signature() {
+        let mut tx = NativeTransaction::new_transfer("alice", "bob", 100, 0, 5);
+        tx.signature = vec![0u8; 64]; // wrong sig bytes
+
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let pk = provider.public_key();
+
+        assert!(!verify_tx_signature(&tx, &pk).unwrap());
+    }
+
+    #[test]
+    fn verify_rejects_bad_sig_length() {
+        let mut tx = NativeTransaction::new_transfer("alice", "bob", 100, 0, 5);
+        tx.signature = vec![0u8; 50]; // not 64 or 3309
+        let err = verify_tx_signature(&tx, &[0u8; 32]).unwrap_err();
+        assert!(matches!(err, NativeTxError::InvalidSignature));
     }
 }

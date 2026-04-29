@@ -140,7 +140,7 @@ pub fn capped_block_reward(height: u64, total_minted: u64) -> u64 {
 // ── Fee Distribution ────────────────────────────────────────────────────────
 
 /// Split transaction fees into burn and proposer portions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeeSplit {
     /// Amount sent to `BURN_ADDRESS` (permanently removed from supply).
     pub burn: u64,
