@@ -6,6 +6,7 @@
 
 pub mod address;
 pub mod rocksdb_store;
+pub mod sync;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
