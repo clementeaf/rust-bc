@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 
+use crate::account::AccountStore;
 use crate::acl::AclProvider;
 use crate::airdrop::AirdropManager;
 use crate::billing::BillingManager;
@@ -30,6 +31,8 @@ use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
 use crate::storage::traits::BlockStore;
+use crate::tokenomics::economics::EconomicsState;
+use crate::transaction::mempool::Mempool as NativeMempool;
 use crate::transaction_validation::TransactionValidator;
 
 /// Shared application state for the HTTP API layer.
@@ -90,4 +93,11 @@ pub struct AppState {
     pub param_registry: Option<Arc<ParamRegistry>>,
     /// PIN store — DID-to-hashed-PIN mappings.
     pub pin_store: Option<Arc<dyn PinStore>>,
+    // ── Cryptocurrency layer ───────────────────────────────────────────────
+    /// Native account state (balances, nonces).
+    pub account_store: Option<Arc<dyn AccountStore>>,
+    /// Fee-ordered mempool for native transactions.
+    pub native_mempool: Option<Arc<NativeMempool>>,
+    /// Protocol economics state (supply, base fee, epoch).
+    pub economics_state: Arc<Mutex<EconomicsState>>,
 }

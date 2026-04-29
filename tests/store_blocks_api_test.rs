@@ -89,6 +89,11 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         vote_store: None,
         param_registry: None,
         pin_store: None,
+        account_store: None,
+        native_mempool: None,
+        economics_state: std::sync::Arc::new(std::sync::Mutex::new(
+            crate::tokenomics::economics::EconomicsState::default(),
+        )),
     }
 }
 
@@ -131,6 +136,11 @@ fn make_state_no_store() -> AppState {
         vote_store: None,
         param_registry: None,
         pin_store: None,
+        account_store: None,
+        native_mempool: None,
+        economics_state: std::sync::Arc::new(std::sync::Mutex::new(
+            crate::tokenomics::economics::EconomicsState::default(),
+        )),
     }
 }
 

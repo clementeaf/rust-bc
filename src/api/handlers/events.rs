@@ -527,6 +527,11 @@ mod tests {
             vote_store: None,
             param_registry: None,
             pin_store: None,
+            account_store: None,
+            native_mempool: None,
+            economics_state: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tokenomics::economics::EconomicsState::default(),
+            )),
         }
     }
 
@@ -739,6 +744,11 @@ mod tests {
             vote_store: None,
             param_registry: None,
             pin_store: None,
+            account_store: None,
+            native_mempool: None,
+            economics_state: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::tokenomics::economics::EconomicsState::default(),
+            )),
         }
     }
 

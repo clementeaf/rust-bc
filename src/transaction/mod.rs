@@ -1,3 +1,4 @@
+pub mod block_producer;
 pub mod endorsed;
 pub mod executor;
 pub mod mempool;

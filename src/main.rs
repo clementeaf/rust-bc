@@ -925,6 +925,12 @@ async fn async_main_inner() -> std::io::Result<()> {
             reg
         }),
         pin_store: Some(Arc::new(pin::store::MemoryPinStore::new())),
+        // Cryptocurrency layer
+        account_store: Some(Arc::new(account::MemoryAccountStore::new())),
+        native_mempool: Some(Arc::new(transaction::mempool::Mempool::default())),
+        economics_state: Arc::new(std::sync::Mutex::new(
+            tokenomics::economics::EconomicsState::default(),
+        )),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
