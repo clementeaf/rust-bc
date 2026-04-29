@@ -5,6 +5,7 @@
 //! optional code hash for smart contract accounts.
 
 pub mod address;
+pub mod rocksdb_store;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
