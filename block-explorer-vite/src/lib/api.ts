@@ -371,3 +371,45 @@ export const getVotes = (proposalId: number) =>
 
 export const tallyVotes = (proposalId: number) =>
   client.get(`/governance/proposals/${proposalId}/tally`).then((r) => unwrap<TallyResult>(r.data));
+
+// ── Cryptocurrency ──────────────────────────────────────────────────────────
+
+export interface AccountInfo {
+  address: string;
+  balance: number;
+  nonce: number;
+  is_contract: boolean;
+}
+
+export interface MempoolStats {
+  pending: number;
+  base_fee: number;
+}
+
+export interface TransferResult {
+  tx_id: string;
+  from: string;
+  to: string;
+  amount: number;
+  fee: number;
+  nonce: number;
+  queued: boolean;
+}
+
+export interface FaucetResult {
+  address: string;
+  amount: number;
+  new_balance: number;
+}
+
+export const getAccount = (address: string) =>
+  client.get(`/accounts/${address}`).then((r) => unwrap<AccountInfo>(r.data));
+
+export const getMempoolStats = () =>
+  client.get('/mempool/stats').then((r) => unwrap<MempoolStats>(r.data));
+
+export const submitTransfer = (data: { from: string; to: string; amount: number; nonce: number; fee: number }) =>
+  client.post('/transfer', data).then((r) => unwrap<TransferResult>(r.data));
+
+export const faucetDrip = (address: string) =>
+  client.post('/faucet/drip', { address }).then((r) => unwrap<FaucetResult>(r.data));

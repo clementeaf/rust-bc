@@ -67,6 +67,8 @@ rustls-post-quantum = "0.2"
 revm = "38"
 alloy-primitives = "1"
 
+ureq = { version = "2", default-features = false, features = ["json"] }
+
 [features]
 default = []
 hsm = ["cryptoki"]

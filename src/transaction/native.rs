@@ -31,6 +31,10 @@ pub enum TransactionKind {
 pub struct NativeTransaction {
     /// Unique transaction ID (hex hash of the canonical payload).
     pub id: String,
+    /// Chain ID for domain separation (prevents cross-network replay).
+    /// 0 = legacy/unset, 9999 = testnet, 9998 = devnet, 1 = mainnet.
+    #[serde(default)]
+    pub chain_id: u64,
     /// The transaction payload.
     pub kind: TransactionKind,
     /// Sender's nonce (must match account nonce for transfers; 0 for coinbase).
@@ -48,13 +52,25 @@ pub struct NativeTransaction {
 }
 
 impl NativeTransaction {
-    /// Create a new transfer transaction.
+    /// Create a new transfer transaction (chain_id defaults to 0 = unset).
     pub fn new_transfer(
         from: impl Into<String>,
         to: impl Into<String>,
         amount: u64,
         nonce: u64,
         fee: u64,
+    ) -> Self {
+        Self::new_transfer_with_chain(from, to, amount, nonce, fee, 0)
+    }
+
+    /// Create a new transfer with explicit chain ID.
+    pub fn new_transfer_with_chain(
+        from: impl Into<String>,
+        to: impl Into<String>,
+        amount: u64,
+        nonce: u64,
+        fee: u64,
+        chain_id: u64,
     ) -> Self {
         let from = from.into();
         let to = to.into();
@@ -68,10 +84,11 @@ impl NativeTransaction {
             .unwrap_or_default()
             .as_secs();
 
-        let id = Self::compute_id(&kind, nonce, fee, timestamp);
+        let id = Self::compute_id(&kind, nonce, fee, timestamp, chain_id);
 
         Self {
             id,
+            chain_id,
             kind,
             nonce,
             fee,
@@ -93,10 +110,11 @@ impl NativeTransaction {
             .unwrap_or_default()
             .as_secs();
 
-        let id = Self::compute_id(&kind, 0, 0, timestamp);
+        let id = Self::compute_id(&kind, 0, 0, timestamp, 0);
 
         Self {
             id,
+            chain_id: 0,
             kind,
             nonce: 0,
             fee: 0,
@@ -106,9 +124,12 @@ impl NativeTransaction {
         }
     }
 
-    /// Canonical bytes for signing (kind + nonce + fee + timestamp).
+    /// Canonical bytes for signing (chain_id + kind + nonce + fee + timestamp).
+    ///
+    /// `chain_id` is always included for domain separation, even if 0.
     pub fn signing_payload(&self) -> Vec<u8> {
         let canonical = serde_json::json!({
+            "chain_id": self.chain_id,
             "kind": self.kind,
             "nonce": self.nonce,
             "fee": self.fee,
@@ -141,9 +162,16 @@ impl NativeTransaction {
         }
     }
 
-    fn compute_id(kind: &TransactionKind, nonce: u64, fee: u64, timestamp: u64) -> String {
+    fn compute_id(
+        kind: &TransactionKind,
+        nonce: u64,
+        fee: u64,
+        timestamp: u64,
+        chain_id: u64,
+    ) -> String {
         use pqc_crypto_module::legacy::legacy_sha256;
         let payload = serde_json::json!({
+            "chain_id": chain_id,
             "kind": kind,
             "nonce": nonce,
             "fee": fee,
@@ -167,6 +195,8 @@ pub enum NativeTxError {
     SelfTransfer,
     #[error("zero amount transfer")]
     ZeroAmount,
+    #[error("chain_id mismatch: expected {expected}, got {got}")]
+    ChainIdMismatch { expected: u64, got: u64 },
     #[error("missing or empty signature")]
     MissingSignature,
     #[error("invalid signature")]
@@ -221,6 +251,25 @@ pub fn verify_tx_signature(tx: &NativeTransaction, pubkey: &[u8]) -> Result<bool
 }
 
 // ── Execution ──────────────────────────────────────────────────────────────
+
+/// Execute a native transfer with chain ID validation.
+///
+/// If `expected_chain_id` is non-zero and tx.chain_id is non-zero,
+/// they must match. Chain ID 0 is accepted as "any" for backwards compat.
+pub fn execute_transfer_checked(
+    store: &dyn AccountStore,
+    tx: &NativeTransaction,
+    proposer_address: &str,
+    expected_chain_id: u64,
+) -> Result<(u64, u64), NativeTxError> {
+    if expected_chain_id != 0 && tx.chain_id != 0 && tx.chain_id != expected_chain_id {
+        return Err(NativeTxError::ChainIdMismatch {
+            expected: expected_chain_id,
+            got: tx.chain_id,
+        });
+    }
+    execute_transfer(store, tx, proposer_address)
+}
 
 /// Execute a native transfer against the account store.
 ///
@@ -325,6 +374,7 @@ mod tests {
     fn signing_payload_is_deterministic() {
         let tx = NativeTransaction {
             id: "test".into(),
+            chain_id: 0,
             kind: TransactionKind::Transfer {
                 from: "a".into(),
                 to: "b".into(),
@@ -482,5 +532,59 @@ mod tests {
         tx.signature = vec![0u8; 50]; // not 64 or 3309
         let err = verify_tx_signature(&tx, &[0u8; 32]).unwrap_err();
         assert!(matches!(err, NativeTxError::InvalidSignature));
+    }
+
+    // ── Chain ID tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn chain_id_in_signing_payload() {
+        let tx_a = NativeTransaction::new_transfer_with_chain("a", "b", 10, 0, 1, 9999);
+        let tx_b = NativeTransaction::new_transfer_with_chain("a", "b", 10, 0, 1, 9998);
+        // Different chain_id → different payload → different ID
+        assert_ne!(tx_a.signing_payload(), tx_b.signing_payload());
+        assert_ne!(tx_a.id, tx_b.id);
+    }
+
+    #[test]
+    fn chain_id_mismatch_rejected() {
+        let store = MemoryAccountStore::with_genesis(&[("alice", 1000)]);
+        let tx = NativeTransaction::new_transfer_with_chain("alice", "bob", 100, 0, 5, 9999);
+        let err = execute_transfer_checked(&store, &tx, "v", 1).unwrap_err();
+        assert!(matches!(
+            err,
+            NativeTxError::ChainIdMismatch {
+                expected: 1,
+                got: 9999
+            }
+        ));
+    }
+
+    #[test]
+    fn chain_id_zero_accepted_as_any() {
+        let store = MemoryAccountStore::with_genesis(&[("alice", 1000)]);
+        // tx with chain_id=0 accepted by any network
+        let tx = NativeTransaction::new_transfer("alice", "bob", 100, 0, 5);
+        assert_eq!(tx.chain_id, 0);
+        execute_transfer_checked(&store, &tx, "v", 9999).unwrap();
+    }
+
+    #[test]
+    fn chain_id_match_accepted() {
+        let store = MemoryAccountStore::with_genesis(&[("alice", 1000)]);
+        let tx = NativeTransaction::new_transfer_with_chain("alice", "bob", 100, 0, 5, 9999);
+        execute_transfer_checked(&store, &tx, "v", 9999).unwrap();
+    }
+
+    #[test]
+    fn cross_network_replay_prevented_by_chain_id() {
+        let store = MemoryAccountStore::with_genesis(&[("alice", 1000)]);
+        let tx = NativeTransaction::new_transfer_with_chain("alice", "bob", 100, 0, 5, 9999);
+        // Works on testnet (9999)
+        assert!(execute_transfer_checked(&store, &tx, "v", 9999).is_ok());
+
+        // Same tx rejected on mainnet (1)
+        let store2 = MemoryAccountStore::with_genesis(&[("alice", 1000)]);
+        let err = execute_transfer_checked(&store2, &tx, "v", 1).unwrap_err();
+        assert!(matches!(err, NativeTxError::ChainIdMismatch { .. }));
     }
 }

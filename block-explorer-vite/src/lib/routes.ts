@@ -22,4 +22,5 @@ export const routes: RouteEntry[] = [
   { path: '/identity', component: lazy(() => import('../pages/Identity')) },
   { path: '/credentials', component: lazy(() => import('../pages/Credentials')) },
   { path: '/governance', component: lazy(() => import('../pages/Governance')) },
+  { path: '/crypto', component: lazy(() => import('../pages/Crypto')) },
 ]
