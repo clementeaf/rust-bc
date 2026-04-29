@@ -2,8 +2,8 @@ use actix_web::{web, Scope};
 
 use crate::api::handlers::{
     accounts, acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, evm,
-    gateway, governance, identity, msp, organizations, pin, private_data, proposals, snapshots,
-    transactions, utilities,
+    faucet, gateway, governance, identity, msp, organizations, pin, private_data, proposals,
+    snapshots, transactions, utilities,
 };
 
 /// API routes configuration
@@ -118,7 +118,9 @@ impl ApiRoutes {
     fn register_crypto_handlers(cfg: &mut web::ServiceConfig) {
         cfg.service(accounts::get_account)
             .service(accounts::submit_transfer)
-            .service(accounts::mempool_stats);
+            .service(accounts::mempool_stats)
+            .service(faucet::faucet_drip)
+            .service(faucet::faucet_status);
     }
 
     fn identity_routes() -> Scope {

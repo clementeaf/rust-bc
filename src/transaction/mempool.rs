@@ -16,6 +16,8 @@ pub struct MempoolConfig {
     pub max_size: usize,
     /// Maximum number of pending transactions per sender.
     pub max_per_sender: usize,
+    /// Minimum fee to accept into mempool (absolute floor).
+    pub min_fee: u64,
 }
 
 impl Default for MempoolConfig {
@@ -23,6 +25,7 @@ impl Default for MempoolConfig {
         Self {
             max_size: 10_000,
             max_per_sender: 64,
+            min_fee: crate::tokenomics::economics::MIN_TX_FEE,
         }
     }
 }
@@ -90,6 +93,14 @@ impl Mempool {
     /// Returns `Ok(true)` if added, `Ok(false)` if duplicate, `Err` if pool is full
     /// or sender has too many pending.
     pub fn add(&self, tx: NativeTransaction) -> Result<bool, MempoolError> {
+        // Fee floor enforcement
+        if tx.fee < self.config.min_fee {
+            return Err(MempoolError::FeeTooLow {
+                offered: tx.fee,
+                minimum: self.config.min_fee,
+            });
+        }
+
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
 
         // Dedup
@@ -214,6 +225,8 @@ pub enum MempoolError {
     PoolFull,
     #[error("sender {sender} has {max} pending transactions")]
     SenderFull { sender: String, max: usize },
+    #[error("fee {offered} below minimum {minimum}")]
+    FeeTooLow { offered: u64, minimum: u64 },
 }
 
 #[cfg(test)]
@@ -229,6 +242,7 @@ mod tests {
         let pool = Mempool::new(MempoolConfig {
             max_size: 100,
             max_per_sender: 10,
+            min_fee: 1,
         });
 
         pool.add(make_tx("a", "b", 1, 0)).unwrap();
@@ -271,6 +285,7 @@ mod tests {
         let pool = Mempool::new(MempoolConfig {
             max_size: 2,
             max_per_sender: 10,
+            min_fee: 1,
         });
         pool.add(make_tx("a", "b", 10, 0)).unwrap();
         pool.add(make_tx("a", "b", 5, 1)).unwrap();
@@ -285,6 +300,7 @@ mod tests {
         let pool = Mempool::new(MempoolConfig {
             max_size: 2,
             max_per_sender: 10,
+            min_fee: 1,
         });
         pool.add(make_tx("a", "b", 5, 0)).unwrap();
         pool.add(make_tx("a", "b", 3, 1)).unwrap();
@@ -303,6 +319,7 @@ mod tests {
         let pool = Mempool::new(MempoolConfig {
             max_size: 100,
             max_per_sender: 2,
+            min_fee: 1,
         });
         pool.add(make_tx("alice", "b", 5, 0)).unwrap();
         pool.add(make_tx("alice", "b", 5, 1)).unwrap();

@@ -236,6 +236,7 @@ mod tests {
         let mempool = Mempool::new(MempoolConfig {
             max_size: 100,
             max_per_sender: 20,
+            min_fee: 1,
         });
         let store = MemoryAccountStore::with_genesis(&[
             ("alice", 10_000),

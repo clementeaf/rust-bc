@@ -1,0 +1,76 @@
+version: "3.8"
+
+# Cerulean Ledger — 3-node cryptocurrency testnet
+# Usage: docker compose -f deploy/testnet/docker-compose.testnet.yml up -d
+
+x-node-common: &node-common
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  environment: &node-env
+    NETWORK_ID: cerulean-testnet
+    STORAGE_BACKEND: rocksdb
+    ACL_MODE: permissive
+    CONSENSUS_MODE: bft
+    DIFFICULTY: "1"
+    SIGNING_ALGORITHM: ed25519
+    HASH_ALGORITHM: sha256
+    BIND_ADDR: "0.0.0.0"
+
+services:
+  node1:
+    <<: *node-common
+    container_name: testnet-node1
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      <<: *node-env
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      P2P_EXTERNAL_ADDRESS: "node1:8081"
+      STORAGE_PATH: /data/rocksdb
+      BOOTSTRAP_NODES: "node2:8083,node3:8085"
+      NODE_ROLE: PeerAndOrderer
+    volumes:
+      - node1-data:/data
+
+  node2:
+    <<: *node-common
+    container_name: testnet-node2
+    ports:
+      - "8082:8082"
+      - "8083:8083"
+    environment:
+      <<: *node-env
+      API_PORT: "8082"
+      P2P_PORT: "8083"
+      P2P_EXTERNAL_ADDRESS: "node2:8083"
+      STORAGE_PATH: /data/rocksdb
+      BOOTSTRAP_NODES: "node1:8081,node3:8085"
+      NODE_ROLE: Peer
+    volumes:
+      - node2-data:/data
+
+  node3:
+    <<: *node-common
+    container_name: testnet-node3
+    ports:
+      - "8084:8084"
+      - "8085:8085"
+    environment:
+      <<: *node-env
+      API_PORT: "8084"
+      P2P_PORT: "8085"
+      P2P_EXTERNAL_ADDRESS: "node3:8085"
+      STORAGE_PATH: /data/rocksdb
+      BOOTSTRAP_NODES: "node1:8081,node2:8083"
+      NODE_ROLE: Peer
+    volumes:
+      - node3-data:/data
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:

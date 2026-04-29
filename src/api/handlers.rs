@@ -11,6 +11,7 @@ pub mod credentials;
 pub mod discovery;
 pub mod events;
 pub mod evm;
+pub mod faucet;
 pub mod gateway;
 pub mod governance;
 pub mod identity;

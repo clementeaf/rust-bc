@@ -31,6 +31,7 @@ use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
 use crate::storage::traits::BlockStore;
+use crate::testnet::faucet::Faucet;
 use crate::tokenomics::economics::EconomicsState;
 use crate::transaction::mempool::Mempool as NativeMempool;
 use crate::transaction_validation::TransactionValidator;
@@ -100,4 +101,6 @@ pub struct AppState {
     pub native_mempool: Option<Arc<NativeMempool>>,
     /// Protocol economics state (supply, base fee, epoch).
     pub economics_state: Arc<Mutex<EconomicsState>>,
+    /// Testnet faucet (None on mainnet).
+    pub faucet: Option<Arc<Faucet>>,
 }

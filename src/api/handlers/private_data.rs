@@ -344,6 +344,7 @@ mod tests {
             economics_state: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::tokenomics::economics::EconomicsState::default(),
             )),
+            faucet: None,
         })
     }
 

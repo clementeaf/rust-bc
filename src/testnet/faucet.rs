@@ -72,6 +72,11 @@ impl Faucet {
         }
     }
 
+    /// Access the faucet configuration.
+    pub fn config(&self) -> &FaucetConfig {
+        &self.config
+    }
+
     /// Request tokens from the faucet.
     ///
     /// Returns the drip result on success. The caller is responsible for

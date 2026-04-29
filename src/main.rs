@@ -931,6 +931,9 @@ async fn async_main_inner() -> std::io::Result<()> {
         economics_state: Arc::new(std::sync::Mutex::new(
             tokenomics::economics::EconomicsState::default(),
         )),
+        faucet: Some(Arc::new(testnet::faucet::Faucet::new(
+            testnet::faucet::FaucetConfig::default(),
+        ))),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
