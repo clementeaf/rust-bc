@@ -1,9 +1,17 @@
 pub mod block_producer;
+pub mod block_version;
+pub mod compact_block;
 pub mod endorsed;
 pub mod executor;
 pub mod mempool;
 pub mod mvcc;
 pub mod native;
 pub mod parallel;
+pub mod pqc_validation;
 pub mod proposal;
+pub mod replay_protection;
 pub mod rwset;
+pub mod segwit;
+pub mod verification_cache;
+pub mod weight_fee;
+pub mod witness_pruning;

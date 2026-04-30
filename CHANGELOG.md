@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-04-30
+
+**SegWit/PQC Block Architecture (P0–P11)**
+
+Complete segregated witness subsystem for post-quantum signatures:
+
+- `segwit.rs` — `TxCore` / `TxWitness` separation, dual Merkle roots (`tx_root`, `witness_root`), block validation, legacy `NativeTransaction` conversion
+- `verification_cache.rs` — FIFO-evicting cache keyed on `SHA-256(core||witness)`, `validate_segwit_block_parallel()` with rayon (2.7x speedup at 200 txs)
+- `compact_block.rs` — `ShortId` (8-byte SHA3-256 truncation), `CompactBlock`, `SegWitMempool`, reconstruction + missing-object protocol (84.7% size reduction)
+- `witness_pruning.rs` — `PrunedSegWitBlock`, depth-based pruning, structural validation
+- `weight_fee.rs` — weight = `core_size×4 + witness_size×1`, ML-DSA naturally ~19x costlier than Ed25519
+- `pqc_validation.rs` — unified pipeline `validate_pqc_block(block, cache, config)`: structure → roots → fees → signatures
+- `block_version.rs` — `BlockVersion` enum (Legacy/SegWitPqcV1), `ChainConfig` activation height, `validate_block_versioned()`
+- `replay_protection.rs` — domain separator `RUST_BC_SEGWIT_PQC_V1_TX` + version byte prevents cross-version replay
+- `tests/mldsa65_acvp.rs` — ACVP ML-DSA-65 vector validation (feature-gated `acvp-tests`)
+- `docs/pqc-consensus-invariants.md` — consensus rules, security invariants, PR checklist
+- `README_PQC.md` — technical whitepaper (architecture, threat model, limitations, roadmap)
+
+Tests: 86 new (1616 lib total), all passing. Quality gate: fmt + clippy -D warnings + tests green.
+
 ### 2026-04-28
 
 **Pre-Lab Findings Closure — All 11 Findings Resolved**

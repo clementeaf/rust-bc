@@ -129,6 +129,14 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/consensus/equivocation.rs` — Byzantine equivocation detection: `EquivocationDetector` tracks `(height, slot, proposer)` proposals, constructs `EquivocationProof` on conflict, gossip dedup via `receive_proof()`, proposer quarantine. Serde persistence via `to_bytes()`/`from_bytes()`.
 - `src/consensus/slashing.rs` — Validator penalty economics: `PenaltyManager` with `PenaltyRecord`, `PenaltyPolicy` (configurable duration/permanent/escalation), deterministic expiration at `start_height + duration`, anti-double-slash, reputation tracking. Serde persistence.
 - `crates/pqc_crypto_module/` — FIPS-oriented standalone crate: approved-mode lifecycle (`Uninitialized→Approved→Error`), ML-DSA-65 (FIPS 204), SHA3-256 (FIPS 202), ML-KEM-768 (FIPS 203 via `pqcrypto-mlkem`), KAT self-tests with roundtrip verification, `ZeroizeOnDrop` + `mlock` on private keys, exhaustive FSM tests (16/16 transition pairs), no classical fallback. ACVP dry-run harness (`tools/acvp_dry_run/`) validates all three algorithms. See `crates/pqc_crypto_module/README.md`.
+- `src/transaction/segwit.rs` — SegWit model: `TxCore` (executable data) + `TxWitness` (signature + pubkey + scheme), dual Merkle roots, `validate_segwit_block()`, `NativeTransaction::to_segwit()` conversion.
+- `src/transaction/verification_cache.rs` — `VerificationCache` (FIFO, key=`SHA-256(core||witness)`), `validate_segwit_block_with_cache()`, `validate_segwit_block_parallel()` (rayon).
+- `src/transaction/compact_block.rs` — `CompactBlock` with `ShortId` (8-byte SHA3-256), `SegWitMempool`, `reconstruct_compact_block()`, `apply_missing_response()`.
+- `src/transaction/witness_pruning.rs` — `PrunedSegWitBlock`, `prune_witnesses(block, height, depth)`, `validate_pruned_block()`.
+- `src/transaction/weight_fee.rs` — Weight-based fees: `core_size×4 + witness_size×1`, `validate_fee()`, `validate_segwit_block_with_fees()`.
+- `src/transaction/pqc_validation.rs` — Unified pipeline: `validate_pqc_block(block, cache, config)` with `PqcValidationConfig` (enforce_fees, use_cache, parallel_verify).
+- `src/transaction/block_version.rs` — `BlockVersion` (Legacy=0, SegWitPqcV1=1), `AnyBlock`, `ChainConfig`, `validate_block_versioned()` with activation height.
+- `src/transaction/replay_protection.rs` — `signing_payload_for_version()` with domain separator `RUST_BC_SEGWIT_PQC_V1_TX`, `verify_witness_versioned()`.
 
 ### Block explorer — Cerulean Ledger UI
 
