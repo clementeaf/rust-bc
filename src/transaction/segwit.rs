@@ -99,28 +99,22 @@ impl NativeTransaction {
 
 /// Compute the Merkle root of a list of `TxCore` entries.
 pub fn compute_tx_root(cores: &[TxCore]) -> [u8; 32] {
-    compute_merkle_root(
-        cores
-            .iter()
-            .map(|c| serde_json::to_vec(c).expect("TxCore serialization cannot fail")),
-    )
+    use crate::transaction::canonical::CanonicalEncode;
+    compute_merkle_root(cores.iter().map(|c| c.to_canonical_bytes()))
 }
 
 /// Compute the Merkle root of a list of `TxWitness` entries.
 pub fn compute_witness_root(witnesses: &[TxWitness]) -> [u8; 32] {
-    compute_merkle_root(
-        witnesses
-            .iter()
-            .map(|w| serde_json::to_vec(w).expect("TxWitness serialization cannot fail")),
-    )
+    use crate::transaction::canonical::CanonicalEncode;
+    compute_merkle_root(witnesses.iter().map(|w| w.to_canonical_bytes()))
 }
 
 /// Generic Merkle root over an iterator of byte sequences.
 fn compute_merkle_root(items: impl Iterator<Item = Vec<u8>>) -> [u8; 32] {
-    use pqc_crypto_module::legacy::legacy_sha256;
+    use crate::crypto::hasher::{hash_with, HashAlgorithm};
 
     let mut hashes: Vec<[u8; 32]> = items
-        .map(|data| legacy_sha256(&data).unwrap_or([0u8; 32]))
+        .map(|data| hash_with(HashAlgorithm::Sha256, &data))
         .collect();
 
     if hashes.is_empty() {
@@ -137,7 +131,7 @@ fn compute_merkle_root(items: impl Iterator<Item = Vec<u8>>) -> [u8; 32] {
             } else {
                 combined.extend_from_slice(&pair[0]);
             }
-            next.push(legacy_sha256(&combined).unwrap_or([0u8; 32]));
+            next.push(hash_with(HashAlgorithm::Sha256, &combined));
         }
         hashes = next;
     }
@@ -179,7 +173,19 @@ pub fn validate_segwit_block(
         });
     }
 
-    // 2. Signature verification per pair
+    // 2. tx_root (cheap — before expensive sig verification)
+    let computed_tx_root = compute_tx_root(tx_cores);
+    if &computed_tx_root != tx_root {
+        return Err(SegwitValidationError::TxRootMismatch);
+    }
+
+    // 3. witness_root
+    let computed_witness_root = compute_witness_root(witnesses);
+    if &computed_witness_root != witness_root {
+        return Err(SegwitValidationError::WitnessRootMismatch);
+    }
+
+    // 4. Signature verification per pair (expensive — last)
     for (i, (core, witness)) in tx_cores.iter().zip(witnesses.iter()).enumerate() {
         let payload = core.signing_payload();
         let valid = verify_witness(&payload, witness)
@@ -187,18 +193,6 @@ pub fn validate_segwit_block(
         if !valid {
             return Err(SegwitValidationError::InvalidWitness { index: i });
         }
-    }
-
-    // 3. tx_root
-    let computed_tx_root = compute_tx_root(tx_cores);
-    if &computed_tx_root != tx_root {
-        return Err(SegwitValidationError::TxRootMismatch);
-    }
-
-    // 4. witness_root
-    let computed_witness_root = compute_witness_root(witnesses);
-    if &computed_witness_root != witness_root {
-        return Err(SegwitValidationError::WitnessRootMismatch);
     }
 
     Ok(())

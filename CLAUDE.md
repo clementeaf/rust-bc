@@ -137,6 +137,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/transaction/pqc_validation.rs` — Unified pipeline: `validate_pqc_block(block, cache, config)` with `PqcValidationConfig` (enforce_fees, use_cache, parallel_verify).
 - `src/transaction/block_version.rs` — `BlockVersion` (Legacy=0, SegWitPqcV1=1), `AnyBlock`, `ChainConfig`, `validate_block_versioned()` with activation height.
 - `src/transaction/replay_protection.rs` — `signing_payload_for_version()` with domain separator `RUST_BC_SEGWIT_PQC_V1_TX`, `verify_witness_versioned()`.
+- `src/transaction/canonical.rs` — `CanonicalEncode` trait: deterministic binary serialization for consensus types (replaces `serde_json` in roots, cache keys, short IDs, SegWitPqcV1 signing payload). LE integers, length-prefixed strings/bytes, u8 enum discriminants.
 
 ### Block explorer — Cerulean Ledger UI
 

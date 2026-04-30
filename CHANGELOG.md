@@ -8,6 +8,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-04-30
 
+**Security Audit + Canonical Binary Serialization (P12)**
+
+- `canonical.rs` — `CanonicalEncode` trait with deterministic binary format (LE integers, length-prefixed strings/bytes, u8 discriminants). Implementations for `TxCore`, `TxWitness`, `SigningAlgorithm`, `BlockVersion`, `TransactionKind`
+- Migrated all consensus-critical serialization from `serde_json` to canonical binary: Merkle roots, cache keys, compact block short IDs, SegWitPqcV1 signing payload
+- `SEGWIT-PQC-AUDIT.md` — internal security audit: 7 findings (3 fixed, 4 observations)
+  - F-001 HIGH FIXED: `validate_segwit_block()` reordered (roots before signatures)
+  - F-002 MEDIUM FIXED: canonical binary replaces JSON for consensus bytes
+  - F-003 MEDIUM FIXED: `hash_with()` replaces `legacy_sha256().unwrap_or([0u8;32])`
+- 20 new tests (determinism, field sensitivity, audit regression). 1636 total passing.
+
 **SegWit/PQC Block Architecture (P0–P11)**
 
 Complete segregated witness subsystem for post-quantum signatures:

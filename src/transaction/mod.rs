@@ -1,5 +1,6 @@
 pub mod block_producer;
 pub mod block_version;
+pub mod canonical;
 pub mod compact_block;
 pub mod endorsed;
 pub mod executor;

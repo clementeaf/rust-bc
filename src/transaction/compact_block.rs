@@ -20,8 +20,8 @@ pub type ShortId = [u8; 8];
 
 /// Compute a deterministic short ID for a `TxCore`.
 pub fn short_id_tx_core(core: &TxCore) -> ShortId {
-    let serialized = serde_json::to_vec(core).expect("TxCore serialization cannot fail");
-    let hash = hash_with(HashAlgorithm::Sha3_256, &serialized);
+    use crate::transaction::canonical::CanonicalEncode;
+    let hash = hash_with(HashAlgorithm::Sha3_256, &core.to_canonical_bytes());
     let mut id = [0u8; 8];
     id.copy_from_slice(&hash[..8]);
     id
@@ -29,8 +29,8 @@ pub fn short_id_tx_core(core: &TxCore) -> ShortId {
 
 /// Compute a deterministic short ID for a `TxWitness`.
 pub fn short_id_witness(witness: &TxWitness) -> ShortId {
-    let serialized = serde_json::to_vec(witness).expect("TxWitness serialization cannot fail");
-    let hash = hash_with(HashAlgorithm::Sha3_256, &serialized);
+    use crate::transaction::canonical::CanonicalEncode;
+    let hash = hash_with(HashAlgorithm::Sha3_256, &witness.to_canonical_bytes());
     let mut id = [0u8; 8];
     id.copy_from_slice(&hash[..8]);
     id

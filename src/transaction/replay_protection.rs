@@ -9,7 +9,7 @@
 //! a domain separator and version tag.
 
 use crate::transaction::block_version::BlockVersion;
-use crate::transaction::native::TransactionKind;
+use crate::transaction::canonical::CanonicalEncode;
 use crate::transaction::segwit::{SegwitValidationError, TxCore, TxWitness};
 
 // ── Domain Separator ─────────────────────────────────────────────────────
@@ -22,24 +22,12 @@ pub const SEGWIT_PQC_V1_DOMAIN: &[u8] = b"RUST_BC_SEGWIT_PQC_V1_TX";
 /// Compute the signing payload for a transaction bound to a specific block version.
 ///
 /// - `Legacy`: uses the original canonical JSON format (backward compatible).
-/// - `SegWitPqcV1`: prepends domain separator + version byte to prevent replay.
+/// - `SegWitPqcV1`: `domain_separator || version_byte || canonical_encode(TxCore)`.
 pub fn signing_payload_for_version(core: &TxCore, version: BlockVersion) -> Vec<u8> {
     match version {
         BlockVersion::Legacy => core.signing_payload(),
         BlockVersion::SegWitPqcV1 => {
-            let kind = core.kind.clone().unwrap_or(TransactionKind::Transfer {
-                from: core.from.clone(),
-                to: core.to.clone(),
-                amount: core.amount,
-            });
-            let canonical = serde_json::json!({
-                "chain_id": core.chain_id,
-                "kind": kind,
-                "nonce": core.nonce,
-                "fee": core.fee,
-                "timestamp": core.timestamp,
-            });
-            let core_bytes = canonical.to_string().into_bytes();
+            let core_bytes = core.to_canonical_bytes();
 
             let mut payload = Vec::with_capacity(SEGWIT_PQC_V1_DOMAIN.len() + 1 + core_bytes.len());
             payload.extend_from_slice(SEGWIT_PQC_V1_DOMAIN);
@@ -72,6 +60,7 @@ mod tests {
         validate_block_versioned, AnyBlock, BlockVersion, ChainConfig,
     };
     use crate::transaction::compact_block::{CompactBlockHeader, SegWitBlock};
+    use crate::transaction::native::TransactionKind;
     use crate::transaction::pqc_validation::PqcValidationConfig;
     use crate::transaction::segwit::{compute_tx_root, compute_witness_root, TxCore, TxWitness};
     use crate::transaction::verification_cache::VerificationCache;
@@ -187,19 +176,12 @@ mod tests {
 
     #[test]
     fn different_domain_separator_fails() {
+        use crate::transaction::canonical::CanonicalEncode;
         let provider = SoftwareSigningProvider::generate();
         let core = make_core(0, 5000);
 
-        // Sign with a fake "wrong" domain by manually constructing payload
-        let kind = core.kind.clone().unwrap();
-        let canonical = serde_json::json!({
-            "chain_id": core.chain_id,
-            "kind": kind,
-            "nonce": core.nonce,
-            "fee": core.fee,
-            "timestamp": core.timestamp,
-        });
-        let core_bytes = canonical.to_string().into_bytes();
+        // Sign with a fake "wrong" domain using canonical binary core
+        let core_bytes = core.to_canonical_bytes();
         let mut wrong_payload = Vec::new();
         wrong_payload.extend_from_slice(b"WRONG_DOMAIN_SEPARATOR_XX");
         wrong_payload.push(BlockVersion::SegWitPqcV1 as u8);

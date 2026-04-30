@@ -21,18 +21,19 @@ pub fn cache_key_for(core: &TxCore, witness: &TxWitness) -> [u8; 32] {
     cache_key(core, witness)
 }
 
-/// Deterministic cache key: `SHA-256(core_bytes || witness_bytes)`.
+/// Deterministic cache key: `SHA-256(canonical(core) || canonical(witness))`.
 fn cache_key(core: &TxCore, witness: &TxWitness) -> [u8; 32] {
-    use pqc_crypto_module::legacy::legacy_sha256;
+    use crate::crypto::hasher::{hash_with, HashAlgorithm};
+    use crate::transaction::canonical::CanonicalEncode;
 
-    let core_bytes = serde_json::to_vec(core).expect("TxCore serialization cannot fail");
-    let witness_bytes = serde_json::to_vec(witness).expect("TxWitness serialization cannot fail");
+    let core_bytes = core.to_canonical_bytes();
+    let witness_bytes = witness.to_canonical_bytes();
 
     let mut combined = Vec::with_capacity(core_bytes.len() + witness_bytes.len());
     combined.extend_from_slice(&core_bytes);
     combined.extend_from_slice(&witness_bytes);
 
-    legacy_sha256(&combined).unwrap_or([0u8; 32])
+    hash_with(HashAlgorithm::Sha256, &combined)
 }
 
 // ── VerificationCache ────────────────────────────────────────────────────
