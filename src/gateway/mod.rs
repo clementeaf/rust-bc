@@ -272,6 +272,43 @@ impl Gateway {
             .write_block(&block)
             .map_err(|e| GatewayError::Storage(e.to_string()))?;
 
+        // ── Step 3.1: index transactions by tx_id ─────────────────────────────
+        // Index the submitted tx with full metadata. Other batched txs get a
+        // minimal record (we don't have their original input/output in scope).
+        for tx_id_in_block in &block.transactions {
+            let indexed_tx = if *tx_id_in_block == tx_id {
+                Transaction {
+                    id: tx_id_in_block.clone(),
+                    block_height,
+                    timestamp: block.timestamp,
+                    input_did: tx.input_did.clone(),
+                    output_recipient: tx.output_recipient.clone(),
+                    amount: tx.amount,
+                    state: "committed".to_string(),
+                }
+            } else {
+                Transaction {
+                    id: tx_id_in_block.clone(),
+                    block_height,
+                    timestamp: block.timestamp,
+                    input_did: String::new(),
+                    output_recipient: String::new(),
+                    amount: 0,
+                    state: "committed".to_string(),
+                }
+            };
+            let _ = self.store.write_transaction(&indexed_tx);
+        }
+
+        // ── Step 3.25: broadcast committed block to peers ───────────────────
+        if let Some(ref p2p) = self.p2p_node {
+            let p2p = p2p.clone();
+            let block_clone = block.clone();
+            tokio::spawn(async move {
+                p2p.broadcast_ordered_block(&block_clone).await;
+            });
+        }
+
         // ── Step 3.5: MVCC validate + apply write-set to world state ────────
         let tx_valid =
             if let (Some(ref rwset), Some(ref ws)) = (&simulation_rwset, &self.world_state) {

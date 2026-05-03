@@ -13,6 +13,15 @@ mod comprehensive_storage_tests {
     use crate::storage::errors::StorageError;
     use crate::storage::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
     use std::time::Instant;
+    use tempfile::TempDir;
+
+    /// Create an isolated RocksDB store backed by a temp directory.
+    /// The directory is cleaned up when `_dir` is dropped.
+    fn temp_store() -> (RocksDbBlockStore, TempDir) {
+        let dir = TempDir::new().unwrap();
+        let store = RocksDbBlockStore::new(dir.path().to_str().unwrap()).unwrap();
+        (store, dir)
+    }
 
     // ========== CRUD OPERATIONS (20 tests) ==========
 
@@ -154,7 +163,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_single_block() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_single_block").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -175,7 +184,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_single_transaction() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_single_tx").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 1,
@@ -190,7 +199,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_mixed() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_mixed").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -220,13 +229,13 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_empty_fails() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_empty").unwrap();
+        let (store, _dir) = temp_store();
         assert!(store.write_batch(&[], &[]).is_err());
     }
 
     #[test]
     fn test_write_batch_multiple_blocks() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_multi_blocks").unwrap();
+        let (store, _dir) = temp_store();
         let blocks = (1..=5)
             .map(|i| Block {
                 height: i,
@@ -249,7 +258,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_multiple_transactions() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_multi_tx").unwrap();
+        let (store, _dir) = temp_store();
         let txs = (1..=5)
             .map(|i| Transaction {
                 id: format!("tx{i}"),
@@ -266,7 +275,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_batch_large_blocks() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_large_blocks").unwrap();
+        let (store, _dir) = temp_store();
         let blocks = (1..=100)
             .map(|i| Block {
                 height: i,
@@ -289,7 +298,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_batch_atomicity() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_atomic").unwrap();
+        let (store, _dir) = temp_store();
         let blocks = vec![Block {
             height: 1,
             timestamp: 1000,
@@ -319,7 +328,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_batch_sequential() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_seq").unwrap();
+        let (store, _dir) = temp_store();
         for i in 1..=10 {
             let block = Block {
                 height: i,
@@ -342,7 +351,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_batch_with_credentials() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_creds").unwrap();
+        let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
             issuer_did: "did:bc:issuer".to_string(),
@@ -357,7 +366,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_batch_error_handling() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_error").unwrap();
+        let (store, _dir) = temp_store();
         let result = store.write_batch(&[], &[]);
         assert!(result.is_err());
         if let Err(StorageError::BatchOperationFailed(msg)) = result {
@@ -367,7 +376,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_batch_concurrent_write() {
-        let store = RocksDbBlockStore::new("/tmp/test_batch_concurrent").unwrap();
+        let (store, _dir) = temp_store();
         let block1 = Block {
             height: 1,
             timestamp: 1000,

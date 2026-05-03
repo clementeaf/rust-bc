@@ -65,7 +65,7 @@ use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
-use storage::{BlockStore, MemoryStore, RocksDbBlockStore};
+use storage::{BlockStore, RocksDbBlockStore};
 use tls::{
     load_client_config_from_env, load_tls_config_from_env, reload_tls_config,
     tls_reload_params_from_env,
@@ -609,6 +609,43 @@ async fn async_main_inner() -> std::io::Result<()> {
     // Inicializar MetricsCollector
     let metrics_collector = Arc::new(MetricsCollector::new());
 
+    // FIPS 140-3 power-up self-tests — verify crypto correctness before accepting requests.
+    crate::identity::signing::run_crypto_self_tests()
+        .expect("FATAL: cryptographic self-tests failed — node cannot start");
+    crate::crypto::hasher::run_hash_self_tests()
+        .expect("FATAL: hash self-tests failed — node cannot start");
+    let hash_algo = crate::crypto::hasher::configured_algorithm();
+    log::info!("Cryptographic self-tests passed (Ed25519, ML-DSA-65, SHA-256, SHA3-256)");
+    log::info!("Hash algorithm: {hash_algo}");
+
+    let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
+        use crate::identity::signing::SigningProvider as _;
+        let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
+        match algo.to_lowercase().as_str() {
+            "ml-dsa-65" | "mldsa65" => {
+                let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+                log::info!(
+                    "Signing algorithm: ML-DSA-65 (FIPS 204, post-quantum) | pubkey_len={} bytes",
+                    provider.public_key().len()
+                );
+                Arc::new(provider)
+            }
+            "" | "ed25519" => {
+                let provider = crate::identity::signing::SoftwareSigningProvider::generate();
+                log::info!(
+                    "Signing algorithm: Ed25519 | pubkey_len={} bytes",
+                    provider.public_key().len()
+                );
+                Arc::new(provider)
+            }
+            other => {
+                panic!(
+                    "FATAL: Unknown SIGNING_ALGORITHM='{other}'. Accepted values: ed25519, ml-dsa-65"
+                );
+            }
+        }
+    };
+
     // Ordering backend: "raft" or "solo" (default)
     //
     // When ORDERING_BACKEND=raft, also reads:
@@ -652,6 +689,7 @@ async fn async_main_inner() -> std::io::Result<()> {
                         log::info!(
                             "Ordering backend: Raft (node_id={raft_id}, peers={peer_map_raw})"
                         );
+                        let svc = svc.with_signing_provider(signing_provider.clone());
                         let raft_arc = svc.raft_node.clone();
                         shared_raft_node = Some(raft_arc.clone());
                         raft_peer_map = Some(Arc::new(Mutex::new(parsed_map)));
@@ -664,13 +702,19 @@ async fn async_main_inner() -> std::io::Result<()> {
                         log::error!(
                             "Failed to create Raft ordering service: {e}. Falling back to solo."
                         );
-                        Some(Arc::new(ordering::service::OrderingService::new()))
+                        Some(Arc::new(
+                            ordering::service::OrderingService::new()
+                                .with_signing_provider(signing_provider.clone()),
+                        ))
                     }
                 }
             }
             _ => {
                 log::info!("Ordering backend: Solo");
-                Some(Arc::new(ordering::service::OrderingService::new()))
+                Some(Arc::new(
+                    ordering::service::OrderingService::new()
+                        .with_signing_provider(signing_provider.clone()),
+                ))
             }
         }
     };
@@ -766,34 +810,13 @@ async fn async_main_inner() -> std::io::Result<()> {
         } else {
             Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
         };
-    // FIPS 140-3 power-up self-tests — verify crypto correctness before accepting requests.
-    crate::identity::signing::run_crypto_self_tests()
-        .expect("FATAL: cryptographic self-tests failed — node cannot start");
-    crate::crypto::hasher::run_hash_self_tests()
-        .expect("FATAL: hash self-tests failed — node cannot start");
-    let hash_algo = crate::crypto::hasher::configured_algorithm();
-    log::info!("Cryptographic self-tests passed (Ed25519, ML-DSA-65, SHA-256, SHA3-256)");
-    log::info!("Hash algorithm: {hash_algo}");
-
-    let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
-        let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
-        match algo.to_lowercase().as_str() {
-            "ml-dsa-65" | "mldsa65" => {
-                log::info!("Signing algorithm: ML-DSA-65 (FIPS 204, post-quantum)");
-                Arc::new(crate::identity::signing::MlDsaSigningProvider::generate())
-            }
-            _ => {
-                if !algo.is_empty() && algo.to_lowercase() != "ed25519" {
-                    log::warn!("Unknown SIGNING_ALGORITHM='{algo}', falling back to Ed25519");
-                }
-                log::info!("Signing algorithm: Ed25519");
-                Arc::new(crate::identity::signing::SoftwareSigningProvider::generate())
-            }
-        }
-    };
-    let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> = ordering_backend
-        .clone()
-        .unwrap_or_else(|| Arc::new(ordering::service::OrderingService::new()));
+    let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> =
+        ordering_backend.clone().unwrap_or_else(|| {
+            Arc::new(
+                ordering::service::OrderingService::new()
+                    .with_signing_provider(signing_provider.clone()),
+            )
+        });
     let gateway_store: Arc<dyn storage::BlockStore> = if let Some(ref db) = shared_rocksdb {
         db.clone()
     } else {
@@ -855,12 +878,9 @@ async fn async_main_inner() -> std::io::Result<()> {
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),
         store: {
-            let default_store: Arc<dyn storage::BlockStore> = if let Some(ref db) = shared_rocksdb {
-                db.clone()
-            } else {
-                log::info!("Storage backend: MemoryStore");
-                Arc::new(MemoryStore::new())
-            };
+            // Use the same store instance as the gateway so queries and commits
+            // operate on the same data.
+            let default_store: Arc<dyn storage::BlockStore> = gateway_store.clone();
             // Write genesis block for the default channel if store is empty.
             if !default_store.block_exists(0).unwrap_or(true) {
                 let genesis_config = crate::channel::config::ChannelConfig::default();

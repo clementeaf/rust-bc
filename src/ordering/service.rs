@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use crate::identity::signing::SigningProvider;
 use crate::metrics::MetricsCollector;
 use crate::storage::{
     errors::StorageResult,
@@ -15,6 +16,7 @@ pub struct OrderingService {
     pub batch_timeout_ms: u64,
     metrics: Option<Arc<MetricsCollector>>,
     signing_key: Option<ed25519_dalek::SigningKey>,
+    signing_provider: Option<Arc<dyn SigningProvider>>,
 }
 
 impl Default for OrderingService {
@@ -48,6 +50,7 @@ impl OrderingService {
             batch_timeout_ms,
             metrics: None,
             signing_key: None,
+            signing_provider: None,
         }
     }
 
@@ -62,6 +65,13 @@ impl OrderingService {
     /// Attach an Ed25519 signing key so `cut_block` signs each block.
     pub fn with_signing_key(mut self, key: ed25519_dalek::SigningKey) -> Self {
         self.signing_key = Some(key);
+        self
+    }
+
+    /// Attach a pluggable signing provider (Ed25519 or ML-DSA-65).
+    /// When set, `cut_block` signs both the proposer and orderer fields.
+    pub fn with_signing_provider(mut self, provider: Arc<dyn SigningProvider>) -> Self {
+        self.signing_provider = Some(provider);
         self
     }
 
@@ -131,7 +141,9 @@ impl OrderingService {
             orderer_signature: None,
         };
 
-        if let Some(key) = &self.signing_key {
+        if let Some(provider) = &self.signing_provider {
+            super::sign_block_with_provider(&mut block, provider.as_ref());
+        } else if let Some(key) = &self.signing_key {
             super::sign_block(&mut block, key);
         }
 

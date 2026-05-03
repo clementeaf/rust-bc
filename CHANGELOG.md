@@ -6,6 +6,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-03
+
+**E2E Distributed Demo — PQC ML-DSA-65 Validated**
+
+Connected all subsystems into a functional distributed demo:
+
+- PQC block signing via pluggable `SigningProvider` (Ed25519 or ML-DSA-65)
+- Raft ordering: synchronous commit after propose (no async wait)
+- Peer replication: `OrderedBlock` broadcast to all connected peers
+- TX indexing: gateway writes transactions to store, queryable by `GET /tx/{tx_id}`
+- Smart contract execution: `POST /chaincode/{id}/invoke` with shared world state
+- Explorer API: `GET /blocks`, `GET /blocks/{height}` (no channel enforcement)
+- Strict algorithm validation: unknown `SIGNING_ALGORITHM` values panic (no silent fallback)
+- Block signature verification via `verify_block_signature()` dispatching by algorithm
+- Gateway and API now share the same store instance (fixes query-after-commit)
+- 7 RocksDB test failures fixed (hardcoded `/tmp/` paths → `tempfile::TempDir`)
+- Demo compose: `docker-compose.demo.yml` (3 nodes, ARM64 native, PQC, no TLS)
+- Scripts: `demo-consistency.sh`, `demo-persistence.sh`
+- Contract: `contracts/kv_store.wat` (set/get demo)
+- Docs: `DEMO.md` (10-min onboarding), `docs/dev/LOCAL-DLT-TESTING.md`
+
+Tests: 1427 lib (0 failures), all quality gates pass.
+
 ### 2026-04-28
 
 **Pre-Lab Findings Closure — All 11 Findings Resolved**

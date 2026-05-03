@@ -258,6 +258,27 @@ pub async fn store_get_transactions_by_block(
     Ok(HttpResponse::Ok().json(ApiResponse::success(txs, trace_id)))
 }
 
+/// GET /api/v1/tx/{tx_id} — query a committed transaction by ID (any node).
+///
+/// Simplified endpoint without channel membership enforcement — intended for
+/// cross-node tx verification in the DLT demo.
+#[get("/tx/{tx_id}")]
+pub async fn get_tx_by_id(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let tx_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    // Try the default channel store.
+    let store = get_channel_store(&state, "default")?;
+    match store.read_transaction(&tx_id) {
+        Ok(tx) => Ok(HttpResponse::Ok().json(ApiResponse::success(tx, trace_id))),
+        Err(_) => Err(ApiError::NotFound {
+            resource: format!("transaction {tx_id}"),
+        }),
+    }
+}
+
 /// GET /api/v1/mempool — transacciones pendientes.
 #[get("/mempool")]
 pub async fn get_mempool(state: web::Data<AppState>) -> ApiResult<HttpResponse> {

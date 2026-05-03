@@ -61,6 +61,9 @@ impl ApiRoutes {
     fn register_tx_handlers(cfg: &mut web::ServiceConfig) {
         cfg.service(transactions::create_transaction)
             .service(transactions::get_mempool)
+            .service(transactions::get_tx_by_id)
+            .service(blocks::explorer_list_blocks)
+            .service(blocks::explorer_get_block)
             .service(proposals::submit_proposal)
             .service(proposals::submit_endorsed_transaction)
             .service(channels::create_channel)
@@ -81,6 +84,7 @@ impl ApiRoutes {
             .service(chaincode::approve_chaincode)
             .service(chaincode::commit_chaincode)
             .service(chaincode::simulate_chaincode)
+            .service(chaincode::invoke_chaincode)
             .service(discovery::get_endorsers)
             .service(discovery::get_channel_peers)
             .service(discovery::post_register_peer)

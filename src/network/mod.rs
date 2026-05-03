@@ -2589,6 +2589,33 @@ impl Node {
         Ok(())
     }
 
+    /// Broadcast a committed DLT block to all connected peers.
+    ///
+    /// Peers that receive `OrderedBlock` persist it to their local store,
+    /// keeping the ledger in sync without pull-based state sync.
+    pub async fn broadcast_ordered_block(&self, block: &crate::storage::traits::Block) {
+        let peers: Vec<String> = {
+            let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
+            guard.iter().cloned().collect()
+        };
+        let msg = Message::OrderedBlock(block.clone());
+        for peer_addr in &peers {
+            let msg_json = match serde_json::to_string(&msg) {
+                Ok(j) => j,
+                Err(_) => continue,
+            };
+            let addr = peer_addr.clone();
+            match self.open_stream(&addr).await {
+                Ok(mut stream) => {
+                    let _ = stream.write_all(msg_json.as_bytes()).await;
+                }
+                Err(e) => {
+                    log::debug!("Failed to send OrderedBlock to {addr}: {e}");
+                }
+            }
+        }
+    }
+
     /**
      * Envía una transacción a todos los peers
      */

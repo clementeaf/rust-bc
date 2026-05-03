@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use crate::identity::signing::SigningProvider;
 use crate::ordering::raft_node::{RaftError, RaftNode};
 use crate::storage::errors::StorageResult;
 use crate::storage::traits::{Block, Transaction};
@@ -14,6 +15,7 @@ pub struct RaftOrderingService {
     #[allow(dead_code)]
     pub batch_timeout_ms: u64,
     signing_key: Option<ed25519_dalek::SigningKey>,
+    signing_provider: Option<Arc<dyn SigningProvider>>,
 }
 
 impl RaftOrderingService {
@@ -29,6 +31,7 @@ impl RaftOrderingService {
             max_batch_size,
             batch_timeout_ms,
             signing_key: None,
+            signing_provider: None,
         })
     }
 
@@ -46,6 +49,7 @@ impl RaftOrderingService {
             max_batch_size,
             batch_timeout_ms,
             signing_key: None,
+            signing_provider: None,
         })
     }
 
@@ -62,6 +66,7 @@ impl RaftOrderingService {
             max_batch_size,
             batch_timeout_ms,
             signing_key: None,
+            signing_provider: None,
         }
     }
 
@@ -72,13 +77,34 @@ impl RaftOrderingService {
         self
     }
 
+    /// Attach a pluggable signing provider (Ed25519 or ML-DSA-65).
+    pub fn with_signing_provider(mut self, provider: Arc<dyn SigningProvider>) -> Self {
+        self.signing_provider = Some(provider);
+        self
+    }
+
     /// Serialize the transaction and propose it through Raft.
+    ///
+    /// After proposing, drives the Raft state machine forward so the entry
+    /// can be committed before the caller calls `cut_block`. Without this,
+    /// the async tick loop might not have run yet and `cut_block` would
+    /// return `None`.
     pub fn submit_tx(&self, tx: &Transaction) -> StorageResult<()> {
         let data = serde_json::to_vec(tx)
             .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))?;
         let mut node = self.raft_node.lock().unwrap_or_else(|e| e.into_inner());
         node.propose(data)
-            .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))
+            .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))?;
+        // Drive Raft forward so the entry gets committed synchronously.
+        // For a single-node or quorum-ready cluster, one advance cycle suffices.
+        for _ in 0..5 {
+            node.tick();
+            node.advance();
+            if !node.committed_entries.is_empty() {
+                break;
+            }
+        }
+        Ok(())
     }
 
     /// Number of committed entries not yet consumed by `cut_block`.
@@ -134,7 +160,9 @@ impl RaftOrderingService {
             orderer_signature: None,
         };
 
-        if let Some(key) = &self.signing_key {
+        if let Some(provider) = &self.signing_provider {
+            super::sign_block_with_provider(&mut block, provider.as_ref());
+        } else if let Some(key) = &self.signing_key {
             super::sign_block(&mut block, key);
         }
 

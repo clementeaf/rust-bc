@@ -140,6 +140,42 @@ pub async fn store_get_block(
     }
 }
 
+// ── Explorer-friendly endpoints (no channel enforcement) ─────────────────────
+
+/// GET /api/v1/blocks — list recent blocks (default: last 10).
+#[get("/blocks")]
+pub async fn explorer_list_blocks(
+    state: web::Data<AppState>,
+    query: web::Query<crate::api::pagination::PaginationParams>,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, "default")?;
+    let (blocks, total) = store
+        .list_blocks(query.offset(), query.limit())
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    let resp = crate::api::pagination::PaginatedResponse::new(blocks, total, &query);
+    Ok(HttpResponse::Ok().json(ApiResponse::success(resp, trace_id)))
+}
+
+/// GET /api/v1/blocks/{height} — get block by height.
+#[get("/blocks/{height}")]
+pub async fn explorer_get_block(
+    state: web::Data<AppState>,
+    path: web::Path<u64>,
+) -> ApiResult<HttpResponse> {
+    let height = *path;
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, "default")?;
+    match store.read_block(height) {
+        Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
+        Err(_) => Err(ApiError::NotFound {
+            resource: format!("block height {height}"),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

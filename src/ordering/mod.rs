@@ -6,6 +6,7 @@ pub mod service;
 
 use std::str::FromStr;
 
+use crate::identity::signing::SigningProvider;
 use crate::storage::errors::StorageResult;
 use crate::storage::traits::{Block, Transaction};
 use pqc_crypto_module::legacy::ed25519::Signer;
@@ -27,8 +28,32 @@ pub fn sign_block(block: &mut Block, key: &ed25519_dalek::SigningKey) {
     block.orderer_signature = Some(sig.to_bytes().to_vec());
 }
 
+/// Sign a block using a pluggable `SigningProvider` (Ed25519 or ML-DSA-65).
+///
+/// Populates both the proposer `signature` + `signature_algorithm` fields,
+/// and the `orderer_signature` field.
+pub fn sign_block_with_provider(block: &mut Block, provider: &dyn SigningProvider) {
+    let hash = block_hash_for_signing(block);
+    match provider.sign(&hash) {
+        Ok(sig) => {
+            log::debug!(
+                "Block {} signed with {:?} | sig_len={} bytes",
+                block.height,
+                provider.algorithm(),
+                sig.len()
+            );
+            block.signature = sig.clone();
+            block.signature_algorithm = provider.algorithm();
+            block.orderer_signature = Some(sig);
+        }
+        Err(e) => {
+            log::error!("Block {} signing FAILED: {e}", block.height);
+        }
+    }
+}
+
 #[allow(dead_code)]
-/// Verify a block's orderer signature against the orderer's public key.
+/// Verify a block's orderer signature against the orderer's public key (Ed25519 only).
 ///
 /// Returns:
 /// - `Ok(true)` if signature is present and valid
@@ -53,6 +78,33 @@ pub fn verify_orderer_signature(
         .verify(&hash, &sig)
         .map(|()| true)
         .map_err(|e| format!("invalid orderer signature: {e}"))
+}
+
+#[allow(dead_code)]
+/// Verify a block's signature using a `SigningProvider`.
+///
+/// Dispatches to Ed25519 or ML-DSA-65 based on `block.signature_algorithm`.
+/// Returns `Err` if the algorithm doesn't match or verification fails.
+pub fn verify_block_signature(
+    block: &Block,
+    provider: &dyn SigningProvider,
+) -> Result<bool, String> {
+    if block.signature_algorithm != provider.algorithm() {
+        return Err(format!(
+            "algorithm mismatch: block uses {:?}, provider uses {:?}",
+            block.signature_algorithm,
+            provider.algorithm()
+        ));
+    }
+
+    if block.signature.is_empty() {
+        return Ok(false);
+    }
+
+    let hash = block_hash_for_signing(block);
+    provider
+        .verify(&hash, &block.signature)
+        .map_err(|e| format!("block signature verification failed: {e}"))
 }
 
 /// Common interface for ordering backends (solo batching vs Raft consensus).

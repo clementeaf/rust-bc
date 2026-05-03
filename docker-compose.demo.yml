@@ -1,0 +1,107 @@
+# Cerulean Ledger DLT — Demo Compose (PQC ML-DSA-65)
+#
+# Usage:
+#   docker compose -f docker-compose.demo.yml build
+#   docker compose -f docker-compose.demo.yml up -d
+#
+# Builds natively (no platform emulation) — works on both ARM64 and AMD64.
+# No TLS — simpler for demo/testing. PQC signing enabled by default.
+
+x-node-defaults: &node-defaults
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  networks:
+    - cerulean-net
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    start_period: 15s
+
+services:
+  node1:
+    <<: *node-defaults
+    container_name: cerulean-node1
+    ports:
+      - "9600:8080"
+      - "9601:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      P2P_EXTERNAL_ADDRESS: "node1:8081"
+      RUST_LOG: "info"
+      NETWORK_ID: "cerulean-demo"
+      ORG_ID: "org1"
+      NODE_ROLE: "peer_and_orderer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      ACL_MODE: "permissive"
+      SIGNING_ALGORITHM: "ml-dsa-65"
+      BOOTSTRAP_NODES: "node2:8081,node3:8081"
+    volumes:
+      - node1-data:/app/data
+
+  node2:
+    <<: *node-defaults
+    container_name: cerulean-node2
+    ports:
+      - "9602:8080"
+      - "9603:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      P2P_EXTERNAL_ADDRESS: "node2:8081"
+      RUST_LOG: "info"
+      NETWORK_ID: "cerulean-demo"
+      ORG_ID: "org2"
+      NODE_ROLE: "peer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      ACL_MODE: "permissive"
+      SIGNING_ALGORITHM: "ml-dsa-65"
+      BOOTSTRAP_NODES: "node1:8081,node3:8081"
+    volumes:
+      - node2-data:/app/data
+    depends_on:
+      node1:
+        condition: service_healthy
+
+  node3:
+    <<: *node-defaults
+    container_name: cerulean-node3
+    ports:
+      - "9604:8080"
+      - "9605:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      P2P_EXTERNAL_ADDRESS: "node3:8081"
+      RUST_LOG: "info"
+      NETWORK_ID: "cerulean-demo"
+      ORG_ID: "org1"
+      NODE_ROLE: "peer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      ACL_MODE: "permissive"
+      SIGNING_ALGORITHM: "ml-dsa-65"
+      BOOTSTRAP_NODES: "node1:8081,node2:8081"
+    volumes:
+      - node3-data:/app/data
+    depends_on:
+      node1:
+        condition: service_healthy
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+networks:
+  cerulean-net:
+    driver: bridge

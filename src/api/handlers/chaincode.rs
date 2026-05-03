@@ -418,8 +418,13 @@ pub async fn simulate_chaincode(
                     reason: e.to_string(),
                 })?;
 
+            // Use shared world state if available; otherwise fresh empty state.
             let base: std::sync::Arc<dyn crate::storage::WorldState> =
-                std::sync::Arc::new(MemoryWorldState::new());
+                if let Some(ref ws) = state.world_state {
+                    ws.clone()
+                } else {
+                    std::sync::Arc::new(MemoryWorldState::new())
+                };
 
             executor
                 .simulate(base, &body.function)
@@ -451,6 +456,77 @@ pub async fn simulate_chaincode(
         },
     };
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+/// POST /api/v1/chaincode/{id}/invoke?version=...
+///
+/// Executes the chaincode against the shared world state and APPLIES the
+/// resulting writes.  This is the "real" execution path for the demo —
+/// unlike simulate which only returns the rwset without modifying state.
+#[post("/chaincode/{id}/invoke")]
+pub async fn invoke_chaincode(
+    http_req: HttpRequest,
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    query: web::Query<SimulateQuery>,
+    body: web::Json<SimulateRequest>,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/ChaincodeToChaincode",
+        &http_req,
+    )?;
+    use crate::chaincode::executor::WasmExecutor;
+
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let chaincode_id = path.into_inner();
+
+    let pkg_store = state
+        .chaincode_package_store
+        .as_ref()
+        .ok_or(ApiError::NotFound {
+            resource: "chaincode_package_store".to_string(),
+        })?;
+
+    let wasm = pkg_store
+        .get_package(&chaincode_id, &query.version)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?
+        .ok_or_else(|| ApiError::NotFound {
+            resource: format!("chaincode package '{chaincode_id}:{}'", query.version),
+        })?;
+
+    let executor = WasmExecutor::new(&wasm, 10_000_000).map_err(|e| ApiError::StorageError {
+        reason: e.to_string(),
+    })?;
+
+    let ws = state.world_state.as_ref().ok_or(ApiError::NotFound {
+        resource: "world_state".to_string(),
+    })?;
+
+    // Execute (not simulate) — writes go directly to world state.
+    let result_bytes =
+        executor
+            .invoke(ws.clone(), &body.function)
+            .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
+
+    let response = InvokeResponse {
+        chaincode_id,
+        function: body.function.clone(),
+        result: base64_encode(&result_bytes),
+    };
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+#[derive(Debug, Serialize)]
+pub struct InvokeResponse {
+    pub chaincode_id: String,
+    pub function: String,
+    pub result: String,
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
