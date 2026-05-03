@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Cotizacion Blockchain Mineria Argentina</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="-" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Cotizacion Blockchain Mineria Argentina</h1>
+</header>
+<h1
+id="cotizacion-infraestructura-blockchain-para-monitoreo-ambiental-minero-en-argentina">Cotizacion
+— Infraestructura Blockchain para Monitoreo Ambiental Minero en
+Argentina</h1>
+<p><strong>Fecha:</strong> 28 de abril de 2026
+<strong>Vigencia:</strong> 30 dias corridos desde la fecha de emision
+<strong>Moneda:</strong> Dolares estadounidenses (USD), valores netos
+<strong>Cliente:</strong> Ambioteck <strong>Proveedor:</strong> Cerulean
+Ledger</p>
+<hr />
+<h2 id="resumen-ejecutivo">1. Resumen ejecutivo</h2>
+<p>Propuesta de infraestructura blockchain como capa de trazabilidad,
+auditoria e inmutabilidad para la plataforma de inteligencia satelital y
+monitoreo ambiental de Ambioteck, orientada a proyectos de mineria en
+Argentina.</p>
+<p>Cerulean Ledger provee el ledger permisionado donde se registran de
+forma inmutable las mediciones IoT hidricas (AquaTrace), los resultados
+de modelos de IA satelital, y los pasaportes ESG (AquaPassport) que las
+mineras presentan ante reguladores provinciales (DPA), la Secretaria de
+Mineria y rondas de financiamiento internacional (IFC/BID/PE).</p>
+<p><strong>Contexto regulatorio:</strong> La Ley de Glaciares, el
+regimen RIGI y las exigencias ESG del financiamiento internacional
+requieren evidencia objetiva, continua y auditable. El blockchain
+transforma datos de sensores y modelos de IA en registros legalmente
+verificables que no pueden ser alterados retroactivamente.</p>
+<hr />
+<h2 id="rol-de-cerulean-ledger-en-la-solucion">2. Rol de Cerulean Ledger
+en la solucion</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Servicio Ambioteck</th>
+<th>Rol blockchain</th>
+<th>Valor para la minera</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>S-6 AquaTrace</strong> — Trazabilidad hidrica IoT</td>
+<td>Ledger permisionado: cada lectura de sensor (caudal, calidad, nivel)
+queda registrada con timestamp, firma criptografica y hash del dato
+crudo. Acceso de solo lectura para reguladores.</td>
+<td>El DPA puede auditar el historial hidrico completo sin depender de
+reportes manuales de la minera. Evidencia inimpugnable.</td>
+</tr>
+<tr>
+<td><strong>S-8 AquaPassport</strong> — Pasaporte ESG</td>
+<td>Certificados de cumplimiento on-chain: huella hidrica operacional,
+compromisos del EIA, indicadores de impacto. Credencial verificable
+vinculada al DID de la operacion minera.</td>
+<td>Instrumento concreto para roadshows IFC/BID. El inversor verifica el
+cumplimiento ESG en tiempo real, no en un PDF estatico.</td>
+</tr>
+<tr>
+<td><strong>S-1 GeoClassify / S-2 GlacierWatch / S-3
+EIA-AI</strong></td>
+<td>Registro inmutable de resultados de clasificacion IA: hash del
+modelo, version, datos de entrada, resultado. Cadena de custodia digital
+del dato satelital.</td>
+<td>El EIA se respalda con evidencia tecnica cuyo historial es
+publicamente verificable. Dificil de impugnar judicialmente.</td>
+</tr>
+<tr>
+<td><strong>S-4 HydroTwin</strong></td>
+<td>Anclaje periodico del estado del gemelo digital al ledger (snapshot
+hash). Auditoria de cambios en el modelo.</td>
+<td>Demuestra que el modelo predictivo no fue ajustado retroactivamente
+para favorecer resultados.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="arquitectura-tecnica">3. Arquitectura tecnica</h2>
+<h3 id="red-permisionada-por-proyecto-minero">Red permisionada por
+proyecto minero</h3>
+<p>Cada proyecto minero opera en un <strong>canal aislado</strong>
+(channel) dentro de la red Cerulean Ledger:</p>
+<ul>
+<li><strong>Aislamiento de datos:</strong> Los datos hidricos de Los
+Azules no son visibles desde el canal de Rincon, y viceversa.</li>
+<li><strong>Acceso regulatorio:</strong> Cada canal otorga acceso de
+lectura al DPA provincial correspondiente (San Juan, Salta, Jujuy,
+Catamarca, Santa Cruz) via identidad verificada.</li>
+<li><strong>Consenso BFT:</strong> Tolerancia a fallas bizantinas —
+ningun nodo individual puede alterar registros.</li>
+<li><strong>Firmas post-cuanticas:</strong> ML-DSA-65 (FIPS 204)
+disponible para operaciones que requieran proteccion a largo plazo.</li>
+</ul>
+<h3 id="componentes-desplegados">Componentes desplegados</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nodos validadores</td>
+<td>Red de 3-5 nodos BFT (Ambioteck, Cerulean, opcionalmente la minera y
+el regulador)</td>
+</tr>
+<tr>
+<td>API de ingestion</td>
+<td>Endpoints REST para recibir datos IoT (sensores Aguartec),
+resultados de IA, y documentos EIA</td>
+</tr>
+<tr>
+<td>API de consulta</td>
+<td>Endpoints de lectura para dashboards, auditoria regulatoria, y
+verificacion ESG</td>
+</tr>
+<tr>
+<td>Almacenamiento persistente</td>
+<td>RocksDB con column families por tipo de dato (mediciones,
+certificados, hashes de modelo)</td>
+</tr>
+<tr>
+<td>Identidad descentralizada</td>
+<td>DIDs para cada actor: operacion minera, sensor IoT, modelo de IA,
+regulador, auditor ESG</td>
+</tr>
+<tr>
+<td>Credenciales verificables</td>
+<td>AquaPassport como credencial W3C verificable, emitida on-chain,
+verificable off-chain</td>
+</tr>
+<tr>
+<td>Explorer / Dashboard</td>
+<td>Panel web de auditoria publica (Cerulean Ledger Explorer) adaptado
+al dominio minero-ambiental</td>
+</tr>
+</tbody>
+</table>
+<h3 id="integracion-con-stack-ambioteck">Integracion con stack
+Ambioteck</h3>
+<pre><code>Sensores IoT (Aguartec)  ──┐
+Modelos IA satelital     ──┤──&gt; API Ingestion ──&gt; Cerulean Ledger ──&gt; API Consulta ──┐
+Gemelo digital (HydroTwin)─┘                         |                               |
+                                                     v                               v
+                                              Registro inmutable              Dashboard regulador
+                                              (canal por proyecto)            Dashboard ESG (IFC/BID)</code></pre>
+<hr />
+<h2 id="alcance-por-fase">4. Alcance por fase</h2>
+<h3 id="fase-1-infraestructura-base-aquatrace-semanas-1-6">Fase 1 —
+Infraestructura base + AquaTrace (Semanas 1-6)</h3>
+<p>Despliegue de la red y el flujo completo de trazabilidad hidrica para
+el primer proyecto piloto.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Entregable</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Red permisionada</td>
+<td>3 nodos BFT desplegados (cloud o on-premise), configuracion de
+canales, genesis block</td>
+</tr>
+<tr>
+<td>2</td>
+<td>API de ingestion IoT</td>
+<td>Endpoints para registrar lecturas de sensores hidricos (caudal, pH,
+conductividad, nivel, temperatura) con firma y timestamp</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Modelo de datos on-chain</td>
+<td>Esquema de transacciones para mediciones hidricas, metadatos de
+sensor, alertas de anomalia</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Canal piloto</td>
+<td>Un canal configurado para el primer proyecto minero (recomendado:
+Los Azules o Rincon)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Acceso regulatorio</td>
+<td>DID + credencial para el DPA provincial, con permisos de solo
+lectura sobre el canal</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Dashboard de auditoria</td>
+<td>Explorer web adaptado: timeline de mediciones, alertas, busqueda por
+sensor/fecha/parametro</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Documentacion tecnica</td>
+<td>Guia de integracion API, manual de operacion de nodos, procedimiento
+de onboarding de proyecto</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fase-2-aquapassport-certificacion-esg-semanas-7-10">Fase 2 —
+AquaPassport + Certificacion ESG (Semanas 7-10)</h3>
+<p>Capa de certificacion para roadshows de financiamiento.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Entregable</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Motor de credenciales ESG</td>
+<td>Emision automatica de AquaPassport como credencial verificable (W3C
+VC) vinculada al historial on-chain</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Indicadores configurables</td>
+<td>Huella hidrica operacional, cumplimiento de compromisos EIA,
+variacion glaciar, balance de cuenca</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Verificacion publica</td>
+<td>Endpoint y QR para que un inversor o auditor verifique la credencial
+sin acceder al ledger completo</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Reportes periodicos</td>
+<td>Generacion automatica de reportes de cumplimiento
+(mensual/trimestral) con hash anclado al ledger</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Integracion IA</td>
+<td>Registro de hashes de resultados de modelos (GeoClassify,
+GlacierWatch, EIA-AI, HydroTwin) con cadena de custodia</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fase-3-escalamiento-multi-proyecto-semanas-11-14">Fase 3 —
+Escalamiento multi-proyecto (Semanas 11-14)</h3>
+<p>Onboarding de proyectos adicionales y hardening para produccion.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Entregable</th>
+<th>Descripcion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Canales adicionales</td>
+<td>Hasta 5 proyectos mineros adicionales, cada uno en canal
+aislado</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Multi-DPA</td>
+<td>Configuracion de acceso para multiples reguladores provinciales (San
+Juan, Salta, Jujuy, Catamarca, Santa Cruz)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Nodo regulador (opcional)</td>
+<td>Un nodo de la red operado por el regulador para maxima
+transparencia</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Alta disponibilidad</td>
+<td>Expansion a 5 nodos, failover automatico, backups cifrados</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Monitoreo y alertas</td>
+<td>Prometheus + Grafana: salud de nodos, latencia de consenso, volumen
+de transacciones</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Capacitacion</td>
+<td>Sesion para equipo Ambioteck (operacion de nodos, onboarding de
+clientes, troubleshooting)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="cronograma-y-costos">5. Cronograma y costos</h2>
+<h3 id="setup-e-integracion-one-time">Setup e integracion
+(one-time)</h3>
+<table>
+<thead>
+<tr>
+<th>Fase</th>
+<th>Duracion</th>
+<th>Costo (USD)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fase 1 — Infraestructura + AquaTrace</td>
+<td>6 semanas</td>
+<td>$5.000</td>
+</tr>
+<tr>
+<td>Fase 2 — AquaPassport + ESG</td>
+<td>4 semanas</td>
+<td>$3.500</td>
+</tr>
+<tr>
+<td>Fase 3 — Escalamiento multi-proyecto</td>
+<td>4 semanas</td>
+<td>$3.000</td>
+</tr>
+<tr>
+<td><strong>Total setup</strong></td>
+<td><strong>14 semanas</strong></td>
+<td><strong>$11.500</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Descuento por contrato completo anticipado: $10.000</strong>
+(ahorro de $1.500).</p>
+<p>Nota: La infraestructura base (consenso BFT, identidad, storage, API,
+explorer) ya esta construida y en produccion. El costo de setup cubre
+exclusivamente integracion con los sistemas Ambioteck (IoT, IA),
+configuracion de canales por proyecto, y personalizacion del
+dashboard.</p>
+<h3 id="licencia-mensual-de-operacion-post-despliegue">Licencia mensual
+de operacion (post-despliegue)</h3>
+<table>
+<thead>
+<tr>
+<th>Concepto</th>
+<th>Costo mensual (USD)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Operacion de red base (3 nodos, hasta 3 canales)</td>
+<td>$500</td>
+</tr>
+<tr>
+<td>Canal adicional (por proyecto minero)</td>
+<td>$150 /canal</td>
+</tr>
+<tr>
+<td>Emision de AquaPassport (por credencial)</td>
+<td>$25 /credencial</td>
+</tr>
+<tr>
+<td>Almacenamiento extendido (&gt;50 GB on-chain)</td>
+<td>$100 /50 GB adicionales</td>
+</tr>
+</tbody>
+</table>
+<h3 id="soporte-post-despliegue">Soporte (post-despliegue)</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Incluye</th>
+<th>Costo mensual (USD)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Basico</td>
+<td>Bugs criticos, actualizaciones de seguridad, soporte email
+(48h)</td>
+<td>$300</td>
+</tr>
+<tr>
+<td>Estandar</td>
+<td>Basico + mejoras menores, soporte prioritario (24h), monitoreo
+24/7</td>
+<td>$600</td>
+</tr>
+<tr>
+<td>Premium</td>
+<td>Estandar + ingeniero dedicado parcial, SLA 4h, soporte telefono</td>
+<td>$1.200</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="estimacion-de-costos-por-escenario">6. Estimacion de costos por
+escenario</h2>
+<h3 id="escenario-a-piloto-con-1-proyecto-6-meses">Escenario A: Piloto
+con 1 proyecto (6 meses)</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Costo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fase 1 (setup)</td>
+<td>$5.000</td>
+</tr>
+<tr>
+<td>Operacion 6 meses (1 canal)</td>
+<td>$3.000</td>
+</tr>
+<tr>
+<td>Soporte basico 6 meses</td>
+<td>$1.800</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>$9.800</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="escenario-b-3-proyectos-prioritarios-12-meses">Escenario B: 3
+proyectos prioritarios (12 meses)</h3>
+<p>Proyectos: Los Azules (McEwen), Rincon (Rio Tinto), Vicuna Corp
+(Lundin/BHP)</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Costo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Setup completo (Fases 1-3)</td>
+<td>$10.000</td>
+</tr>
+<tr>
+<td>Operacion 12 meses (3 canales)</td>
+<td>$6.000</td>
+</tr>
+<tr>
+<td>12 AquaPassports (trimestrales x 3 proyectos x 4 trimestres)</td>
+<td>$300</td>
+</tr>
+<tr>
+<td>Soporte estandar 12 meses</td>
+<td>$7.200</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>$23.500</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="escenario-c-plataforma-completa-10-proyectos-12-meses">Escenario
+C: Plataforma completa — 10 proyectos (12 meses)</h3>
+<p>Cobertura de los proyectos de urgencia ALTA y MEDIA-ALTA del
+portafolio Ambioteck.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Costo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Setup completo (Fases 1-3)</td>
+<td>$10.000</td>
+</tr>
+<tr>
+<td>Operacion 12 meses (3 base + 7 adicionales)</td>
+<td>$18.600</td>
+</tr>
+<tr>
+<td>40 AquaPassports</td>
+<td>$1.000</td>
+</tr>
+<tr>
+<td>Soporte premium 12 meses</td>
+<td>$14.400</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>$44.000</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="modelo-de-revenue-share-alternativa">7. Modelo de revenue-share
+(alternativa)</h2>
+<p>Si Ambioteck prefiere minimizar el desembolso inicial, ofrecemos un
+modelo de revenue-share:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Parametro</th>
+<th>Valor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Setup con descuento</td>
+<td>$5.000 (50% del costo base)</td>
+</tr>
+<tr>
+<td>Revenue share por proyecto minero onboarded</td>
+<td>8% del valor facturado por Ambioteck al cliente final por los
+servicios S-6 y S-8</td>
+</tr>
+<tr>
+<td>Minimo mensual garantizado</td>
+<td>$500</td>
+</tr>
+<tr>
+<td>Duracion del acuerdo</td>
+<td>24 meses, renovable</td>
+</tr>
+</tbody>
+</table>
+<p>Este modelo alinea incentivos: Cerulean Ledger invierte en el exito
+comercial de Ambioteck.</p>
+<hr />
+<h2 id="diferenciadores-tecnicos">8. Diferenciadores tecnicos</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Caracteristica</th>
+<th>Cerulean Ledger</th>
+<th>Alternativas (Hyperledger, cloud generico)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Consenso BFT nativo</td>
+<td>Si, HotStuff-inspired</td>
+<td>Requiere configuracion compleja</td>
+</tr>
+<tr>
+<td>Firmas post-cuanticas (ML-DSA-65)</td>
+<td>Si, FIPS 204</td>
+<td>No disponible</td>
+</tr>
+<tr>
+<td>Identidad descentralizada (DIDs)</td>
+<td>Nativo</td>
+<td>Requiere integracion externa</td>
+</tr>
+<tr>
+<td>Credenciales verificables (W3C VC)</td>
+<td>Nativo</td>
+<td>Requiere desarrollo custom</td>
+</tr>
+<tr>
+<td>Canales aislados por proyecto</td>
+<td>Si, Fabric-compatible</td>
+<td>Parcial</td>
+</tr>
+<tr>
+<td>Ejecucion paralela de transacciones</td>
+<td>Si, wave-parallel MVCC (56K TPS)</td>
+<td>Limitado</td>
+</tr>
+<tr>
+<td>EVM compatible</td>
+<td>Si, contratos Solidity si se requieren</td>
+<td>Depende</td>
+</tr>
+<tr>
+<td>Modulo criptografico FIPS 140-3</td>
+<td>En proceso de certificacion</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Codigo fuente auditable</td>
+<td>Si</td>
+<td>Depende del vendor</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="requisitos-de-ambioteck">9. Requisitos de Ambioteck</h2>
+<ul>
+<li>Designar un punto de contacto tecnico para la integracion API.</li>
+<li>Proveer especificaciones de los sensores IoT (Aguartec): formato de
+datos, frecuencia de envio, protocolo.</li>
+<li>Definir los indicadores ESG que componen cada AquaPassport por tipo
+de proyecto (cobre, litio, oro).</li>
+<li>Infraestructura cloud para nodos (o contratar hosting como servicio
+adicional, estimado $300-500/mes por nodo).</li>
+</ul>
+<hr />
+<h2 id="exclusiones">10. Exclusiones</h2>
+<ul>
+<li>Desarrollo de los modelos de IA satelital (responsabilidad de
+Ambioteck).</li>
+<li>Sensores IoT y su instalacion en campo.</li>
+<li>Tramites regulatorios ante DPA, Secretaria de Mineria, o
+COFEMA.</li>
+<li>Certificaciones formales ante organismos ambientales
+argentinos.</li>
+<li>Hosting e infraestructura cloud (cotizable por separado).</li>
+<li>Integracion con sistemas gubernamentales argentinos (TAD, COFEMA
+digital) — cotizable como adenda.</li>
+</ul>
+<hr />
+<h2 id="proyectos-mineros-de-referencia-del-portafolio-ambioteck">11.
+Proyectos mineros de referencia (del portafolio Ambioteck)</h2>
+<p>La siguiente tabla resume los 15 proyectos identificados y los
+servicios blockchain aplicables a cada uno:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Proyecto</th>
+<th>Provincia</th>
+<th>Urgencia</th>
+<th>Servicios blockchain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Los Azules (McEwen)</td>
+<td>San Juan</td>
+<td>MUY ALTA</td>
+<td>AquaTrace + AquaPassport + cadena de custodia EIA/IA</td>
+</tr>
+<tr>
+<td>Vicuna / Josemaria (Lundin/BHP)</td>
+<td>San Juan</td>
+<td>MUY ALTA</td>
+<td>AquaTrace + AquaPassport (roadshow USD 18.000M)</td>
+</tr>
+<tr>
+<td>Rincon (Rio Tinto)</td>
+<td>Salta</td>
+<td>ALTA</td>
+<td>AquaTrace + AquaPassport (ESG Tier 1)</td>
+</tr>
+<tr>
+<td>Hombre Muerto O. (Galan)</td>
+<td>Catamarca</td>
+<td>ALTA</td>
+<td>AquaTrace + HydroTwin anchor</td>
+</tr>
+<tr>
+<td>Cauchari-Olaroz (Ganfeng)</td>
+<td>Jujuy</td>
+<td>ALTA</td>
+<td>AquaTrace + AquaPassport (ampliacion RIGI)</td>
+</tr>
+<tr>
+<td>Centenario-Ratones (Eramet)</td>
+<td>Salta</td>
+<td>ALTA</td>
+<td>AquaTrace (EU ESG reporting)</td>
+</tr>
+<tr>
+<td>El Pachon (Glencore)</td>
+<td>San Juan</td>
+<td>MEDIA-ALTA</td>
+<td>AquaTrace + cadena de custodia EIA</td>
+</tr>
+<tr>
+<td>Lindero (Fortuna Silver)</td>
+<td>Salta</td>
+<td>MEDIA</td>
+<td>AquaTrace</td>
+</tr>
+<tr>
+<td>Joaquin + Cerro Leon (Unico)</td>
+<td>Santa Cruz</td>
+<td>MEDIA-ALTA</td>
+<td>Cadena de custodia EIA (cotiza ASX)</td>
+</tr>
+<tr>
+<td>Pastos Grandes (Ganfeng)</td>
+<td>Salta</td>
+<td>MEDIA</td>
+<td>AquaTrace + AquaPassport</td>
+</tr>
+<tr>
+<td>Cerro Moro (AEM/PAAS)</td>
+<td>Santa Cruz</td>
+<td>MEDIA</td>
+<td>AquaTrace</td>
+</tr>
+<tr>
+<td>Pirquitas (SSR Mining)</td>
+<td>Jujuy</td>
+<td>MEDIA</td>
+<td>AquaTrace</td>
+</tr>
+<tr>
+<td>Esperanza (Latin Metals)</td>
+<td>San Juan</td>
+<td>BAJA</td>
+<td>Cadena de custodia EIA</td>
+</tr>
+<tr>
+<td>Solaroz (Lithium Energy)</td>
+<td>Jujuy</td>
+<td>BAJA</td>
+<td>HydroTwin anchor</td>
+</tr>
+<tr>
+<td>La Manchuria (Astra)</td>
+<td>Santa Cruz</td>
+<td>BAJA</td>
+<td>Cadena de custodia EIA</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="garantias">12. Garantias</h2>
+<ul>
+<li>Todo el codigo fuente de la capa de integracion se entrega a
+Ambioteck.</li>
+<li>La plataforma base (Cerulean Ledger) es de codigo abierto y
+auditable.</li>
+<li>Suite de tests automatizados con cobertura superior al 80%.</li>
+<li>Documentacion tecnica y de integracion incluida.</li>
+<li>2 semanas de soporte post-lanzamiento incluidas en Fase 3.</li>
+</ul>
+<hr />
+<h2 id="contacto">13. Contacto</h2>
+<p><strong>Cerulean Ledger</strong> Contacto: [nombre] Email: [email]
+Telefono: [telefono]</p>
+<hr />
+<p><em>Este documento es una cotizacion referencial. Los plazos y costos
+pueden ajustarse segun los requisitos especificos del proyecto una vez
+definido el alcance detallado con Ambioteck.</em></p>
+</body>
+</html>
