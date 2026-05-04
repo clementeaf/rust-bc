@@ -122,3 +122,7 @@ path = "src/bin/test_mining_worker.rs"
 [[bin]]
 name = "test_metrics"
 path = "src/bin/test_metrics.rs"
+
+[[bin]]
+name = "testnet_node"
+path = "src/bin/testnet_node.rs"

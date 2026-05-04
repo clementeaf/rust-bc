@@ -104,6 +104,30 @@ impl NodeHandle {
             NetworkMessage::SyncResponse(blocks) => {
                 self.on_sync_response(blocks);
             }
+            NetworkMessage::MineBlock => {
+                let result = self.mine_block().await;
+                let (height, tx_count) = match result {
+                    Some(b) => (b.header.height, b.tx_cores.len()),
+                    None => (self.chain_height(), 0),
+                };
+                let _ = peer
+                    .send(&NetworkMessage::MineBlockResponse { height, tx_count })
+                    .await;
+            }
+            NetworkMessage::QueryBalance { address } => {
+                let balance = self.get_balance(&address);
+                let nonce = self.get_nonce(&address);
+                let _ = peer
+                    .send(&NetworkMessage::BalanceResponse {
+                        address,
+                        balance,
+                        nonce,
+                    })
+                    .await;
+            }
+            NetworkMessage::MineBlockResponse { .. } | NetworkMessage::BalanceResponse { .. } => {
+                // Responses handled by the CLI client, not the node
+            }
         }
     }
 

@@ -24,6 +24,20 @@ pub enum NetworkMessage {
     SyncRequest,
     /// Response with all blocks.
     SyncResponse(Vec<SegWitBlock>),
+
+    // ── CLI control messages ───────────────────────────────────────────
+    /// CLI: trigger block mining on this node.
+    MineBlock,
+    /// CLI: query account balance.
+    QueryBalance { address: String },
+    /// Response to QueryBalance.
+    BalanceResponse {
+        address: String,
+        balance: u64,
+        nonce: u64,
+    },
+    /// Response to MineBlock.
+    MineBlockResponse { height: u64, tx_count: usize },
 }
 
 /// Encode a message as length-prefixed JSON for TCP transport.
