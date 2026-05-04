@@ -3,7 +3,7 @@
 //! Usage:
 //!   cargo run --bin testnet_node -- node --port 3000
 //!   cargo run --bin testnet_node -- node --port 3001 --peers 127.0.0.1:3000
-//!   cargo run --bin testnet_node -- send-tx --from ADDR --to ADDR --amount 100 --fee 1 --node 127.0.0.1:3000
+//!   cargo run --bin testnet_node -- send-tx --to ADDR --amount 100 --node 127.0.0.1:3000
 //!   cargo run --bin testnet_node -- mine-block --node 127.0.0.1:3000
 //!   cargo run --bin testnet_node -- show-balance --addr ADDR --node 127.0.0.1:3000
 
@@ -20,6 +20,22 @@ use rust_bc::network::testnet::server;
 use rust_bc::transaction::native::NativeTransaction;
 
 const CHAIN_ID: u64 = 9999;
+const GENESIS_BALANCE: u64 = 1_000_000;
+
+/// Deterministic testnet key — DO NOT use in production.
+/// All nodes and CLI commands share this key so the funded genesis address is consistent.
+fn testnet_signer() -> SoftwareSigningProvider {
+    let seed: [u8; 32] = [
+        0xCE, 0x00, 0x1E, 0xA0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+        0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A,
+        0x1B, 0x1C,
+    ];
+    SoftwareSigningProvider::from_key(ed25519_dalek::SigningKey::from_bytes(&seed))
+}
+
+fn testnet_address() -> String {
+    address_from_pubkey(&testnet_signer().public_key())
+}
 
 #[derive(Parser)]
 #[command(name = "testnet_node", about = "Cerulean Ledger — minimal testnet")]
@@ -35,19 +51,13 @@ enum Commands {
         /// TCP port to listen on.
         #[arg(long)]
         port: u16,
-        /// Comma-separated peer addresses (e.g. 127.0.0.1:3000,127.0.0.1:3001).
+        /// Comma-separated peer addresses.
         #[arg(long, default_value = "")]
         peers: String,
-        /// Genesis balance for a test address (addr:amount, e.g. abc...def:10000).
-        #[arg(long)]
-        genesis: Vec<String>,
     },
-    /// Send a transaction to a running node.
+    /// Send a transaction from the testnet genesis account.
     SendTx {
-        /// Sender address.
-        #[arg(long)]
-        from: String,
-        /// Recipient address.
+        /// Recipient address (40 hex chars).
         #[arg(long)]
         to: String,
         /// Amount to send.
@@ -56,6 +66,9 @@ enum Commands {
         /// Transaction fee.
         #[arg(long, default_value = "1")]
         fee: u64,
+        /// Sender nonce (auto=0 if omitted).
+        #[arg(long, default_value = "0")]
+        nonce: u64,
         /// Node address to send to.
         #[arg(long)]
         node: String,
@@ -68,7 +81,7 @@ enum Commands {
     },
     /// Query account balance on a running node.
     ShowBalance {
-        /// Address to query.
+        /// Address to query. Use "genesis" for the testnet genesis address.
         #[arg(long)]
         addr: String,
         /// Node address.
@@ -83,25 +96,22 @@ async fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Node {
-            port,
-            peers,
-            genesis,
-        } => run_node(port, &peers, &genesis).await,
+        Commands::Node { port, peers } => run_node(port, &peers).await,
         Commands::SendTx {
-            from,
             to,
             amount,
             fee,
+            nonce,
             node,
-        } => send_tx(&from, &to, amount, fee, &node).await,
+        } => send_tx(&to, amount, fee, nonce, &node).await,
         Commands::MineBlock { node } => mine_block(&node).await,
         Commands::ShowBalance { addr, node } => show_balance(&addr, &node).await,
     }
 }
 
-async fn run_node(port: u16, peers_csv: &str, genesis_args: &[String]) {
+async fn run_node(port: u16, peers_csv: &str) {
     let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+    let genesis_addr = testnet_address();
 
     let peer_addrs: Vec<SocketAddr> = if peers_csv.is_empty() {
         vec![]
@@ -112,59 +122,34 @@ async fn run_node(port: u16, peers_csv: &str, genesis_args: &[String]) {
             .collect()
     };
 
-    // Parse genesis: "address:amount"
-    let genesis_allocs: Vec<(String, u64)> = genesis_args
-        .iter()
-        .filter_map(|g| {
-            let parts: Vec<&str> = g.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                Some((parts[0].to_string(), parts[1].parse().ok()?))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let genesis_refs: Vec<(&str, u64)> = genesis_allocs
-        .iter()
-        .map(|(a, b)| (a.as_str(), *b))
-        .collect();
-
     let config = NodeConfig {
         addr,
         peers: peer_addrs.clone(),
-        proposer_address: String::new(),
+        proposer_address: genesis_addr.clone(),
     };
 
-    let node = Arc::new(NodeHandle::new(config, &genesis_refs));
+    let node = Arc::new(NodeHandle::new(config, &[(&genesis_addr, GENESIS_BALANCE)]));
 
     eprintln!("[node] started on :{port}");
+    eprintln!("[node] genesis address: {genesis_addr}");
+    eprintln!("[node] genesis balance: {GENESIS_BALANCE} NOTA");
     for p in &peer_addrs {
         eprintln!("[peer] configured: {p}");
     }
-    for (a, b) in &genesis_allocs {
-        eprintln!("[genesis] {a} = {b}");
-    }
 
-    // Run server — blocks forever
     if let Err(e) = server::start_server(addr, node).await {
         eprintln!("[node] server error: {e}");
     }
 }
 
-async fn send_tx(from: &str, to: &str, amount: u64, fee: u64, node_addr: &str) {
+async fn send_tx(to: &str, amount: u64, fee: u64, nonce: u64, node_addr: &str) {
     let addr: SocketAddr = node_addr.parse().expect("invalid node address");
-
-    // Generate a stub signer for the tx (in real use, cerulean-wallet signs)
-    let signer = SoftwareSigningProvider::generate();
+    let signer = testnet_signer();
     let pk = signer.public_key();
-    let signer_addr = address_from_pubkey(&pk);
-
-    // Use the signer's address if --from matches, otherwise warn
-    let effective_from = if from == "auto" { &signer_addr } else { from };
+    let from = address_from_pubkey(&pk);
 
     let native =
-        NativeTransaction::new_transfer_with_chain(effective_from, to, amount, 0, fee, CHAIN_ID);
+        NativeTransaction::new_transfer_with_chain(&from, to, amount, nonce, fee, CHAIN_ID);
     let (core, mut witness) = native.to_segwit(pk);
     let payload = core.signing_payload();
     witness.signature = signer.sign(&payload).unwrap();
@@ -173,38 +158,39 @@ async fn send_tx(from: &str, to: &str, amount: u64, fee: u64, node_addr: &str) {
     match client::send_to_peer(addr, &msg).await {
         Ok(mut peer) => {
             let _ = tokio::io::AsyncWriteExt::shutdown(&mut peer.stream).await;
-            eprintln!(
-                "[tx] sent to {node_addr}: {effective_from} → {to} amount={amount} fee={fee}"
-            );
+            eprintln!("[tx] sent: {from} -> {to} amount={amount} fee={fee} nonce={nonce}");
         }
-        Err(e) => eprintln!("[tx] failed to send: {e}"),
+        Err(e) => eprintln!("[tx] failed: {e}"),
     }
 }
 
 async fn mine_block(node_addr: &str) {
     let addr: SocketAddr = node_addr.parse().expect("invalid node address");
-
     match client::send_to_peer(addr, &NetworkMessage::MineBlock).await {
-        Ok(mut peer) => {
-            // Wait for response
-            match peer.recv().await {
-                Ok(Some(NetworkMessage::MineBlockResponse { height, tx_count })) => {
-                    eprintln!("[block] mined height={height} txs={tx_count}");
-                }
-                Ok(Some(other)) => eprintln!("[block] unexpected response: {other:?}"),
-                Ok(None) => eprintln!("[block] no response (connection closed)"),
-                Err(e) => eprintln!("[block] recv error: {e}"),
+        Ok(mut peer) => match peer.recv().await {
+            Ok(Some(NetworkMessage::MineBlockResponse { height, tx_count })) => {
+                eprintln!("[block] mined height={height} txs={tx_count}");
             }
-        }
-        Err(e) => eprintln!("[mine] failed to connect: {e}"),
+            Ok(Some(other)) => eprintln!("[block] unexpected response: {other:?}"),
+            Ok(None) => eprintln!("[block] no response (connection closed)"),
+            Err(e) => eprintln!("[block] error: {e}"),
+        },
+        Err(e) => eprintln!("[mine] failed: {e}"),
     }
 }
 
 async fn show_balance(address: &str, node_addr: &str) {
     let addr: SocketAddr = node_addr.parse().expect("invalid node address");
 
+    // Resolve "genesis" to the actual testnet genesis address
+    let resolved = if address == "genesis" {
+        testnet_address()
+    } else {
+        address.to_string()
+    };
+
     let msg = NetworkMessage::QueryBalance {
-        address: address.to_string(),
+        address: resolved.clone(),
     };
     match client::send_to_peer(addr, &msg).await {
         Ok(mut peer) => match peer.recv().await {
@@ -215,10 +201,10 @@ async fn show_balance(address: &str, node_addr: &str) {
             })) => {
                 eprintln!("[balance] {address}: {balance} NOTA (nonce={nonce})");
             }
-            Ok(Some(other)) => eprintln!("[balance] unexpected response: {other:?}"),
+            Ok(Some(other)) => eprintln!("[balance] unexpected: {other:?}"),
             Ok(None) => eprintln!("[balance] no response"),
-            Err(e) => eprintln!("[balance] recv error: {e}"),
+            Err(e) => eprintln!("[balance] error: {e}"),
         },
-        Err(e) => eprintln!("[balance] failed to connect: {e}"),
+        Err(e) => eprintln!("[balance] failed: {e}"),
     }
 }
