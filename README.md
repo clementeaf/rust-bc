@@ -20,6 +20,41 @@ cd deploy && ./generate-tls.sh && cd ..
 docker compose up -d
 ```
 
+## Quickstart (PQC Testnet)
+
+> **Experimental testnet** — not audited, no real funds, TCP-only P2P, no persistence.
+
+```bash
+# Build
+cargo build --release --bin testnet_node
+
+# Start 3 nodes (terminal 1)
+./scripts/start-testnet.sh
+
+# Run demo flow (terminal 2)
+./scripts/demo-flow.sh
+```
+
+Or manually:
+
+```bash
+# Terminal 1: Node A
+cargo run --bin testnet_node -- node --port 3000 --peers 127.0.0.1:3001,127.0.0.1:3002
+
+# Terminal 2: Node B
+cargo run --bin testnet_node -- node --port 3001 --peers 127.0.0.1:3000
+
+# Terminal 3: Node C
+cargo run --bin testnet_node -- node --port 3002 --peers 127.0.0.1:3000,127.0.0.1:3001
+
+# Terminal 4: Interact
+cargo run --bin testnet_node -- send-tx --to bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb --amount 5000 --fee 1 --nonce 0 --node 127.0.0.1:3000
+cargo run --bin testnet_node -- mine-block --node 127.0.0.1:3000
+cargo run --bin testnet_node -- show-balance --addr genesis --node 127.0.0.1:3000
+```
+
+See [docs/testnet-manual-runbook.md](docs/testnet-manual-runbook.md) for the full operational runbook.
+
 ## Features
 
 - **Channels** — Isolated ledgers per business network
