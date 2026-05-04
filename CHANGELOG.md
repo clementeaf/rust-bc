@@ -4,6 +4,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.1.0-pqc-testnet] — 2026-05-04
+
+### Added
+
+- Minimal distributed testnet (P16–P19)
+  - `src/network/testnet/` — TCP transport layer: node, server, client, messages, peer
+  - `SegWitMempool::drain_all()`, `cores_len()` for block production
+  - `NetworkMessage` control variants: `MineBlock`, `QueryBalance`, `BalanceResponse`, `MineBlockResponse`
+  - `testnet_node` binary with 4 subcommands: `node`, `send-tx`, `mine-block`, `show-balance`
+  - Deterministic testnet signer for consistent genesis across nodes
+  - `scripts/start-testnet.sh` — launch 3-node network
+  - `scripts/demo-flow.sh` — automated tx/mine/balance demo
+  - `docs/testnet-manual-runbook.md` — operational runbook
+  - `docs/release-checklist-v0.1.md` — full release checklist
+
+### Fixed
+
+- `storage/comprehensive_tests.rs` — replaced 43 hardcoded `/tmp/` RocksDB paths with `tempfile::TempDir` (fixes corruption between test runs)
+
+### Tests
+
+- `tests/network_e2e.rs` — 6 tests: 2-node sync, 3-node convergence, tx propagation, compact block reconstruction, invalid block rejection, wallet recovery in network
+- Total: 1686+ tests, 0 failures
+
+---
+
 ## [Unreleased]
 
 ### 2026-04-30
