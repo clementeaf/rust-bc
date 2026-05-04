@@ -114,6 +114,30 @@ impl SegWitMempool {
     pub fn get_witness(&self, id: &ShortId) -> Option<&TxWitness> {
         self.witnesses.get(id)
     }
+
+    /// Drain all entries, returning (cores, witnesses) in insertion order.
+    pub fn drain_all(&mut self) -> (Vec<TxCore>, Vec<TxWitness>) {
+        let core_ids: Vec<ShortId> = self.cores.keys().cloned().collect();
+        let mut cores = Vec::with_capacity(core_ids.len());
+        let mut witnesses = Vec::new();
+        for id in &core_ids {
+            if let Some(core) = self.cores.remove(id) {
+                cores.push(core);
+            }
+        }
+        let witness_ids: Vec<ShortId> = self.witnesses.keys().cloned().collect();
+        for id in &witness_ids {
+            if let Some(w) = self.witnesses.remove(id) {
+                witnesses.push(w);
+            }
+        }
+        (cores, witnesses)
+    }
+
+    /// Number of transaction cores in the mempool.
+    pub fn cores_len(&self) -> usize {
+        self.cores.len()
+    }
 }
 
 impl Default for SegWitMempool {

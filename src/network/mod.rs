@@ -1,4 +1,5 @@
 pub mod gossip;
+pub mod testnet;
 
 // Type alias for the gossip block sender to reduce type complexity.
 type GossipBlockTx = Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>;
