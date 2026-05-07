@@ -45,6 +45,7 @@ pub mod channel;
 pub mod discovery;
 pub mod endorsement;
 pub mod events;
+#[cfg(feature = "evm")]
 pub mod evm_compat;
 pub mod gateway;
 pub mod governance;

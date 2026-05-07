@@ -1010,8 +1010,9 @@ mod tests {
         assert_eq!(resp.status(), 404);
     }
 
-    // ── simulate tests ────────────────────────────────────────────────────────
+    // ── simulate tests (require wasm-chaincode feature) ─────────────────────────
 
+    #[cfg(feature = "wasm-chaincode")]
     /// Minimal WAT that puts "x"="1" and returns empty (ptr=0, len=0).
     ///
     /// Used to verify that simulate produces a write in the rwset and does NOT
@@ -1030,6 +1031,7 @@ mod tests {
 )
 "#;
 
+    #[cfg(feature = "wasm-chaincode")]
     fn make_app_with_simulate_wasm() -> (web::Data<AppState>, Arc<MemoryChaincodePackageStore>) {
         let pkg_store = Arc::new(MemoryChaincodePackageStore::new());
         // Store the WAT bytes as "wasm" — WasmExecutor::new accepts WAT too.
@@ -1040,6 +1042,7 @@ mod tests {
         (state, pkg_store)
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[actix_web::test]
     async fn simulate_returns_rwset_and_leaves_world_state_untouched() {
         let (state, _pkg) = make_app_with_simulate_wasm();

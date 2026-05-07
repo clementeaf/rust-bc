@@ -7,6 +7,7 @@
 //! - Ledger state management
 //! - Error handling with exponential backoff
 
+#[cfg(feature = "rocksdb-storage")]
 pub mod adapters;
 pub mod comprehensive_tests;
 pub mod couchdb;
@@ -16,6 +17,7 @@ pub mod snapshot;
 pub mod traits;
 pub mod world_state;
 
+#[cfg(feature = "rocksdb-storage")]
 pub use adapters::RocksDbBlockStore;
 pub use memory::MemoryStore;
 pub use traits::BlockStore;

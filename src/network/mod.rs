@@ -3,6 +3,12 @@ pub mod gossip;
 // Type alias for the gossip block sender to reduce type complexity.
 type GossipBlockTx = Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>;
 
+// Conditional type alias for Raft node handle.
+#[cfg(feature = "raft-ordering")]
+type RaftNodeHandle = Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>;
+#[cfg(not(feature = "raft-ordering"))]
+type RaftNodeHandle = Option<Arc<()>>; // Arc<()> is not Copy, so .clone() is valid
+
 // Standard library
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -231,7 +237,7 @@ pub struct Node {
     /// Signing provider for producing endorsements.
     pub signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
     /// Raft node for delivering inbound consensus messages.
-    pub raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+    pub raft_node: RaftNodeHandle,
     /// Private data store for receiving replicated private data from peers.
     pub private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
     /// Collection registry for validating membership on private data push.
@@ -722,7 +728,7 @@ impl Node {
         world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
         signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
         node_org_id: String,
-        raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+        raft_node: RaftNodeHandle,
         private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
         collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
         net_security: Arc<Mutex<NetworkSecurityManager>>,
@@ -903,7 +909,7 @@ impl Node {
         world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
         signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
         node_org_id: &str,
-        raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>>,
+        _raft_node: RaftNodeHandle,
         private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
         collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
@@ -1491,18 +1497,21 @@ impl Node {
                 Ok(None)
             }
 
-            Message::RaftMessage(data) => {
-                // Decode protobuf and deliver to the local Raft node.
-                if let Some(ref raft) = raft_node {
-                    match crate::ordering::raft_transport::decode_raft_msg(&data) {
-                        Ok(raft_msg) => {
-                            let mut node = raft.lock().unwrap_or_else(|e| e.into_inner());
-                            if let Err(e) = node.step(raft_msg) {
-                                eprintln!("RaftMessage step error: {e}");
+            Message::RaftMessage(_data) => {
+                #[cfg(feature = "raft-ordering")]
+                {
+                    // Decode protobuf and deliver to the local Raft node.
+                    if let Some(ref raft) = _raft_node {
+                        match crate::ordering::raft_transport::decode_raft_msg(&_data) {
+                            Ok(raft_msg) => {
+                                let mut node = raft.lock().unwrap_or_else(|e| e.into_inner());
+                                if let Err(e) = node.step(raft_msg) {
+                                    eprintln!("RaftMessage step error: {e}");
+                                }
                             }
-                        }
-                        Err(e) => {
-                            eprintln!("RaftMessage decode error: {e}");
+                            Err(e) => {
+                                eprintln!("RaftMessage decode error: {e}");
+                            }
                         }
                     }
                 }

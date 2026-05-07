@@ -934,12 +934,15 @@ mod tests {
     }
 
     // ── 14.3.1 — Wasm simulation + key-level policy tests ─────────────────────
-
+    #[cfg(feature = "wasm-chaincode")]
     use crate::chaincode::executor::WasmExecutor;
+    #[cfg(feature = "wasm-chaincode")]
     use crate::endorsement::key_policy::MemoryKeyEndorsementStore;
+    #[cfg(feature = "wasm-chaincode")]
     use crate::storage::world_state::MemoryWorldState;
 
     /// WAT that writes key "asset:1" = "v" and returns empty result.
+    #[cfg(feature = "wasm-chaincode")]
     const WRITE_ASSET_WAT: &[u8] = br#"
 (module
   (import "env" "put_state" (func $put_state (param i32 i32 i32 i32) (result i32)))
@@ -953,6 +956,7 @@ mod tests {
 )
 "#;
 
+    #[cfg(feature = "wasm-chaincode")]
     fn make_gateway_with_simulation(
         kep_store: Option<Arc<dyn crate::endorsement::key_policy::KeyEndorsementStore>>,
     ) -> Gateway {
@@ -961,6 +965,7 @@ mod tests {
         make_gateway().with_wasm_simulation(exec, ws, kep_store)
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn submit_with_wasm_simulation_no_key_policy_commits_block() {
         let gw = make_gateway_with_simulation(None);
@@ -968,6 +973,7 @@ mod tests {
         assert_eq!(result.block_height, 1);
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn submit_simulation_key_policy_satisfied_commits_block() {
         let registry = Arc::new(MemoryOrgRegistry::new());
@@ -992,6 +998,7 @@ mod tests {
         assert_eq!(result.block_height, 1);
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn submit_simulation_key_policy_not_satisfied_returns_error() {
         // org registry is empty → key policy AllOf(["org1"]) cannot be satisfied
@@ -1010,6 +1017,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn submit_simulation_key_policy_store_absent_skips_key_check() {
         // No kep_store attached → key-level check is skipped, commit succeeds.
@@ -1020,6 +1028,7 @@ mod tests {
 
     // ── MVCC conflict detection tests ───────────────────────────────────────
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn submit_first_wasm_tx_is_valid_and_applies_to_world_state() {
         let gw = make_gateway_with_simulation(None);
@@ -1036,6 +1045,7 @@ mod tests {
         assert_eq!(val.unwrap().version, 1);
     }
 
+    #[cfg(feature = "wasm-chaincode")]
     #[tokio::test]
     async fn second_wasm_tx_reading_stale_version_gets_mvcc_conflict() {
         let exec = Arc::new(WasmExecutor::new(WRITE_ASSET_WAT, 10_000_000).unwrap());

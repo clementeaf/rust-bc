@@ -1,18 +1,95 @@
 use std::sync::Arc;
 
+use crate::chaincode::ChaincodeError;
+use crate::storage::world_state::WorldState;
+
+// ── Stub implementation when wasmtime is not compiled ──────────────────────────
+#[cfg(not(feature = "wasm-chaincode"))]
+pub struct WasmExecutor {
+    _fuel_limit: u64,
+}
+
+#[cfg(not(feature = "wasm-chaincode"))]
+pub const MAX_CHAINCODE_DEPTH: u32 = 8;
+
+#[cfg(not(feature = "wasm-chaincode"))]
+impl WasmExecutor {
+    pub fn new(_wasm_bytes: &[u8], fuel_limit: u64) -> Result<Self, ChaincodeError> {
+        Ok(Self {
+            _fuel_limit: fuel_limit,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub fn with_event_bus(self, _bus: crate::events::EventBus, _id: impl Into<String>) -> Self {
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_key_endorsement_store(
+        self,
+        _store: Arc<dyn crate::endorsement::key_policy::KeyEndorsementStore>,
+    ) -> Self {
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_chaincode_resolver(
+        self,
+        _resolver: Arc<dyn crate::chaincode::resolver::ChaincodeResolver>,
+    ) -> Self {
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_acl_provider(self, _acl: Arc<dyn crate::acl::provider::AclProvider>) -> Self {
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_memory_limit(self, _max_bytes: usize) -> Self {
+        self
+    }
+
+    pub fn invoke(
+        &self,
+        _state: Arc<dyn WorldState>,
+        _func_name: &str,
+    ) -> Result<Vec<u8>, ChaincodeError> {
+        Err(ChaincodeError::Execution(
+            "wasm-chaincode feature not enabled".to_string(),
+        ))
+    }
+
+    pub fn simulate(
+        &self,
+        _state: Arc<dyn WorldState>,
+        _func_name: &str,
+    ) -> Result<(Vec<u8>, crate::transaction::rwset::ReadWriteSet), ChaincodeError> {
+        Err(ChaincodeError::Execution(
+            "wasm-chaincode feature not enabled".to_string(),
+        ))
+    }
+}
+
+// ── Real implementation with wasmtime ─────────────────────────────────────────
+#[cfg(feature = "wasm-chaincode")]
 use wasmtime::{Caller, Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 
+#[cfg(feature = "wasm-chaincode")]
 use crate::acl::provider::AclProvider;
+#[cfg(feature = "wasm-chaincode")]
 use crate::chaincode::resolver::ChaincodeResolver;
-use crate::chaincode::ChaincodeError;
+#[cfg(feature = "wasm-chaincode")]
 use crate::endorsement::key_policy::KeyEndorsementStore;
+#[cfg(feature = "wasm-chaincode")]
 use crate::events::{BlockEvent, EventBus};
-use crate::storage::world_state::WorldState;
 
 /// Compiles and holds a Wasm chaincode module ready for execution.
 ///
 /// Each invocation creates a fresh [`Store`] so that fuel and memory limits
 /// are enforced independently per call.
+#[cfg(feature = "wasm-chaincode")]
 pub struct WasmExecutor {
     pub(crate) engine: Engine,
     pub(crate) module: Module,
@@ -28,8 +105,10 @@ pub struct WasmExecutor {
 }
 
 /// Maximum nesting depth for chaincode-to-chaincode invocations.
+#[cfg(feature = "wasm-chaincode")]
 pub const MAX_CHAINCODE_DEPTH: u32 = 8;
 
+#[cfg(feature = "wasm-chaincode")]
 /// Host data injected into the `Store` for every invocation.
 struct HostState {
     world_state: Arc<dyn WorldState>,
@@ -44,6 +123,7 @@ struct HostState {
     fuel_limit: u64,
 }
 
+#[cfg(feature = "wasm-chaincode")]
 impl WasmExecutor {
     /// Compile `wasm_bytes` and prepare the executor with a CPU fuel cap.
     ///
@@ -523,6 +603,7 @@ impl WasmExecutor {
 
 /// Borrow `data[ptr..ptr+len]` as a UTF-8 `&str`, or `None` on out-of-bounds
 /// or invalid UTF-8.
+#[cfg(feature = "wasm-chaincode")]
 fn read_str(data: &[u8], ptr: i32, len: i32) -> Option<&str> {
     let start = ptr as usize;
     let end = start.checked_add(len as usize)?;
@@ -530,6 +611,7 @@ fn read_str(data: &[u8], ptr: i32, len: i32) -> Option<&str> {
 }
 
 /// Borrow `data[ptr..ptr+len]` as `&[u8]`, or `None` on out-of-bounds.
+#[cfg(feature = "wasm-chaincode")]
 fn read_bytes(data: &[u8], ptr: i32, len: i32) -> Option<&[u8]> {
     let start = ptr as usize;
     let end = start.checked_add(len as usize)?;
@@ -538,7 +620,7 @@ fn read_bytes(data: &[u8], ptr: i32, len: i32) -> Option<&[u8]> {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-chaincode"))]
 mod tests {
     use super::*;
     use crate::storage::world_state::MemoryWorldState;

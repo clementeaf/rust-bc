@@ -6,7 +6,9 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use crate::storage::errors::{StorageError, StorageResult};
+#[cfg(feature = "rocksdb-storage")]
+use crate::storage::errors::StorageError;
+use crate::storage::errors::StorageResult;
 
 use super::policy::EndorsementPolicy;
 
@@ -75,6 +77,7 @@ impl KeyEndorsementStore for MemoryKeyEndorsementStore {
 
 // ── RocksDB implementation ────────────────────────────────────────────────────
 
+#[cfg(feature = "rocksdb-storage")]
 impl KeyEndorsementStore for crate::storage::adapters::RocksDbBlockStore {
     fn set_key_policy(&self, key: &str, policy: &EndorsementPolicy) -> StorageResult<()> {
         let cf = self.cf_key_endorsement_policies()?;
@@ -162,6 +165,7 @@ mod tests {
 
     // ── RocksDbBlockStore ─────────────────────────────────────────────────────
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_set_and_get() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -173,6 +177,7 @@ mod tests {
         assert_eq!(got, Some(any_of(&["org1"])));
     }
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_get_missing_returns_none() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -180,6 +185,7 @@ mod tests {
         assert!(store.get_key_policy("nonexistent").unwrap().is_none());
     }
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_overwrite_policy() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -189,6 +195,7 @@ mod tests {
         assert_eq!(store.get_key_policy("k").unwrap(), Some(any_of(&["org2"])));
     }
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_delete_policy() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -198,6 +205,7 @@ mod tests {
         assert!(store.get_key_policy("k").unwrap().is_none());
     }
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_delete_missing_is_noop() {
         let dir = tempfile::TempDir::new().unwrap();
@@ -205,6 +213,7 @@ mod tests {
         assert!(store.delete_key_policy("nonexistent").is_ok());
     }
 
+    #[cfg(feature = "rocksdb-storage")]
     #[test]
     fn rocksdb_policies_isolated_from_world_state() {
         let dir = tempfile::TempDir::new().unwrap();

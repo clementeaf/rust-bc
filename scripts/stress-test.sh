@@ -1,245 +1,196 @@
 #!/usr/bin/env bash
-# Stress test — ramp load until the node breaks.
-# Finds the throughput ceiling, error threshold, and failure mode.
-#
-# Usage: ./scripts/stress-test.sh
+# Cerulean Ledger — Ramp-up Stress Test
+# Finds the throughput ceiling by increasing load until errors appear.
+# Usage: ./scripts/stress-test.sh [node_url]
 
-set -uo pipefail
+set -euo pipefail
 
-NODE="https://127.0.0.1:8080"
-CURL="curl -sk --max-time 10"
+NODE="${1:-http://localhost:8080}"
+VERIFY_SAMPLE=10
 
-red()    { printf "\033[31m%s\033[0m" "$1"; }
-green()  { printf "\033[32m%s\033[0m" "$1"; }
-yellow() { printf "\033[33m%s\033[0m" "$1"; }
-bold()   { printf "\033[1m%s\033[0m" "$1"; }
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+now_ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time*1000'; }
 
 echo ""
-bold "═══ rust-bc Stress Test (ramp to failure) ═══"
+echo -e "${CYAN}============================================${NC}"
+echo -e "${CYAN} Cerulean Ledger — Ramp-up Stress Test${NC}"
+echo -e "${CYAN}============================================${NC}"
+echo " Node: $NODE"
 echo ""
 
-# ── Pre-flight ───────────────────────────────────────────────────────────────
-health=$($CURL "$NODE/api/v1/health" 2>/dev/null | jq -r '.data.status // empty')
-if [[ "$health" != "healthy" ]]; then
-    echo "$(red "ERROR"): Node not healthy. Start with: docker compose up -d"
+# ── Health check ──────────────────────────────────────────────────────────────
+
+echo -n "Health check... "
+if ! curl -sf "$NODE/api/v1/health" > /dev/null 2>&1; then
+    echo -e "${RED}FAILED${NC} — start node first"
     exit 1
 fi
-
-WALLET=$($CURL -X POST "$NODE/api/v1/wallets/create" -H 'Content-Type: application/json' -d '{}' 2>/dev/null | jq -r '.data.address')
-echo "  Wallet: ${WALLET:0:16}..."
+echo -e "${GREEN}OK${NC}"
 echo ""
 
-# ── Phase 1: Ramp throughput ─────────────────────────────────────────────────
-bold "Phase 1: Ramp throughput (find ceiling)"
+# ── Seed identities (once) ───────────────────────────────────────────────────
+
+SEED_IDENTITIES=100
+echo -n "Seeding $SEED_IDENTITIES identities... "
+seed_errors=0
+for i in $(seq 1 $SEED_IDENTITIES); do
+    code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "$NODE/api/v1/store/identities" \
+        -H "Content-Type: application/json" \
+        -H "X-Org-Id: stress" -H "X-Msp-Role: client" \
+        -d "{\"did\":\"did:cerulean:s-$i\",\"created_at\":$(date +%s),\"updated_at\":$(date +%s),\"status\":\"active\"}" 2>/dev/null)
+    if [[ "$code" -lt 200 || "$code" -gt 201 ]]; then
+        seed_errors=$((seed_errors + 1))
+    fi
+done
+echo -e "${GREEN}done${NC} ($seed_errors errors)"
 echo ""
 
-RESULTS_FILE=$(mktemp)
-SEQ=0
+# ── Ramp levels ───────────────────────────────────────────────────────────────
+#        credentials  concurrency
+LEVELS=( "500         10"
+         "1000        20"
+         "2000        50"
+         "5000        100"
+         "10000       200" )
 
-for CONCURRENCY in 1 5 10 20 50 100 200; do
-    # Send $CONCURRENCY requests in parallel, measure how many succeed in 10s
-    ok=0
-    err=0
-    throttled=0
-    latency_sum=0
-    latency_count=0
-    BATCH_FILE=$(mktemp)
+TMPDIR=$(mktemp -d)
+trap "rm -rf $TMPDIR" EXIT
 
-    start_ts=$(date +%s)
-    end_ts=$((start_ts + 10))
+echo -e "${CYAN}Level  Creds  Conc   TPS      p50    p95    p99    max    Errors${NC}"
+echo "-----  -----  ----   ------   -----  -----  -----  -----  ------"
 
-    while [[ $(date +%s) -lt $end_ts ]]; do
-        for i in $(seq 1 "$CONCURRENCY"); do
-            SEQ=$((SEQ + 1))
-            (
-                t_start=$(date +%s%N)
-                http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
-                    -X POST "$NODE/api/v1/store/transactions" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"id\":\"stress-${SEQ}\",\"block_height\":0,\"timestamp\":$(date +%s),\"input_did\":\"did:bc:${WALLET}\",\"output_recipient\":\"did:bc:target\",\"amount\":1,\"state\":\"pending\"}" 2>/dev/null)
-                t_end=$(date +%s%N)
-                lat_ms=$(( (t_end - t_start) / 1000000 ))
-                echo "$http_code $lat_ms" >> "$BATCH_FILE"
-            ) &
-        done
-        wait
+CRED_OFFSET=0
+BREAK_LEVEL=""
+
+for level_idx in "${!LEVELS[@]}"; do
+    read -r SIGS CONC <<< "${LEVELS[$level_idx]}"
+    LEVEL=$((level_idx + 1))
+
+    # Clear results
+    > "$TMPDIR/results.txt"
+
+    T_START=$(now_ms)
+
+    # Fire concurrent credential writes
+    running=0
+    for idx in $(seq 1 $SIGS); do
+        global_idx=$((CRED_OFFSET + idx))
+        (
+            did_num=$(( (global_idx % SEED_IDENTITIES) + 1 ))
+            hash=$(printf '%064d' $((global_idx * 7)))
+            cred_id="sig-r${LEVEL}-$(printf '%06d' $idx)"
+            ts=$(date +%s)
+            t0=$(now_ms)
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+                --max-time 10 \
+                -X POST "$NODE/api/v1/store/credentials" \
+                -H "Content-Type: application/json" \
+                -H "X-Org-Id: stress" -H "X-Msp-Role: client" \
+                -d "{\"id\":\"$cred_id\",\"issuer_did\":\"did:cerulean:s-$did_num\",\"subject_did\":\"did:cerulean:doc:$hash\",\"cred_type\":\"DigitalSignature\",\"issued_at\":$ts,\"expires_at\":0,\"revoked_at\":null}" 2>/dev/null || echo "000")
+            t1=$(now_ms)
+            echo "$((t1 - t0)) $code" >> "$TMPDIR/results.txt"
+        ) &
+        running=$((running + 1))
+        if (( running >= CONC )); then
+            wait -n 2>/dev/null || wait
+            running=$((running - 1))
+        fi
     done
+    wait
 
-    actual_duration=$(($(date +%s) - start_ts))
-    [[ $actual_duration -lt 1 ]] && actual_duration=1
+    T_END=$(now_ms)
+    ELAPSED=$((T_END - T_START))
+    TPS=$(echo "scale=1; $SIGS * 1000 / $ELAPSED" | bc 2>/dev/null || echo "?")
 
-    # Parse results
-    ok=$(grep -c "^200\|^201" "$BATCH_FILE" 2>/dev/null || true)
-    throttled=$(grep -c "^429" "$BATCH_FILE" 2>/dev/null || true)
-    err=$(grep -cEv "^200|^201|^429" "$BATCH_FILE" 2>/dev/null || true)
-    total=$((ok + throttled + err))
-    tps=$((ok / actual_duration))
+    # Parse latencies
+    ERRORS=0
+    P50="-"; P95="-"; P99="-"; MINL="-"; MAXL="-"
+    if [[ -s "$TMPDIR/results.txt" ]]; then
+        TOTAL_RESP=$(wc -l < "$TMPDIR/results.txt" | tr -d ' \n')
+        OK_COUNT=$(grep -cE " (200|201)" "$TMPDIR/results.txt" 2>/dev/null | tr -d ' \n' || echo 0)
+        THROTTLED=$(grep -cE " 429" "$TMPDIR/results.txt" 2>/dev/null | tr -d ' \n' || echo 0)
+        if ! [[ "$OK_COUNT" =~ ^[0-9]+$ ]]; then OK_COUNT=0; fi
+        if ! [[ "$TOTAL_RESP" =~ ^[0-9]+$ ]]; then TOTAL_RESP=0; fi
+        if ! [[ "$THROTTLED" =~ ^[0-9]+$ ]]; then THROTTLED=0; fi
+        ERRORS=$((TOTAL_RESP - OK_COUNT - THROTTLED))
 
-    # Latency stats (OK requests only)
-    avg_lat="N/A"
-    p99_lat="N/A"
-    if [[ $ok -gt 0 ]]; then
-        avg_lat=$(grep "^200\|^201" "$BATCH_FILE" | awk '{sum+=$2; n++} END {if(n>0) printf "%d", sum/n; else print "N/A"}')
-        p99_lat=$(grep "^200\|^201" "$BATCH_FILE" | awk '{print $2}' | sort -n | awk "NR==int($(grep -c "^200\|^201" "$BATCH_FILE")*0.99) {print}")
+        SORTED=$(awk '{print $1}' "$TMPDIR/results.txt" | sort -n)
+        N=$(echo "$SORTED" | wc -l | tr -d ' ')
+        if (( N > 0 )); then
+            MINL=$(echo "$SORTED" | head -1)
+            MAXL=$(echo "$SORTED" | tail -1)
+            P50=$(echo "$SORTED" | sed -n "$((N * 50 / 100))p")
+            P95=$(echo "$SORTED" | sed -n "$((N * 95 / 100))p")
+            P99=$(echo "$SORTED" | sed -n "$((N * 99 / 100))p")
+        fi
     fi
 
-    # Error rate
-    if [[ $total -gt 0 ]]; then
-        err_pct=$((err * 100 / total))
-        throttle_pct=$((throttled * 100 / total))
-    else
-        err_pct=0
-        throttle_pct=0
+    # Build error display
+    ERR_PARTS=""
+    if (( ERRORS > 0 )); then
+        ERR_PARTS="${RED}${ERRORS}err${NC}"
+    fi
+    if (( THROTTLED > 0 )); then
+        if [[ -n "$ERR_PARTS" ]]; then ERR_PARTS="$ERR_PARTS "; fi
+        ERR_PARTS="${ERR_PARTS}${YELLOW}${THROTTLED}x429${NC}"
+    fi
+    if [[ -z "$ERR_PARTS" ]]; then
+        ERR_PARTS="${GREEN}0${NC}"
     fi
 
-    # Status indicator
-    if [[ $err_pct -gt 10 ]]; then
-        status="$(red "BREAKING")"
-    elif [[ $throttle_pct -gt 50 ]]; then
-        status="$(yellow "THROTTLED")"
-    elif [[ $err_pct -gt 0 ]]; then
-        status="$(yellow "DEGRADED")"
-    else
-        status="$(green "OK")"
+    printf "  %-4d  %-5d  %-4d   %-6s   %-5s  %-5s  %-5s  %-5s  " \
+        "$LEVEL" "$SIGS" "$CONC" "${TPS}" "${P50}ms" "${P95}ms" "${P99}ms" "${MAXL}ms"
+    echo -e "$ERR_PARTS"
+
+    CRED_OFFSET=$((CRED_OFFSET + SIGS))
+
+    # Stop if real error rate (not 429) > 5%
+    ERROR_PCT=0
+    if (( SIGS > 0 && ERRORS > 0 )); then
+        ERROR_PCT=$((ERRORS * 100 / SIGS))
     fi
-
-    printf "  concurrency=%3d  tps=%4d  ok=%5d  throttled=%5d  err=%3d  avg=%4sms  p99=%4sms  %s\n" \
-        "$CONCURRENCY" "$tps" "$ok" "$throttled" "$err" "$avg_lat" "$p99_lat" "$status"
-
-    echo "$CONCURRENCY $tps $ok $throttled $err $avg_lat $p99_lat" >> "$RESULTS_FILE"
-    rm -f "$BATCH_FILE"
-
-    # Stop if error rate > 20%
-    if [[ $err_pct -gt 20 ]]; then
-        echo ""
-        echo "  $(red "STOPPED"): Error rate ${err_pct}% > 20% at concurrency=$CONCURRENCY"
+    if (( ERROR_PCT > 5 )); then
+        BREAK_LEVEL=$LEVEL
         break
     fi
+
+    # Brief cooldown between levels
+    sleep 1
 done
 
 echo ""
 
-# ── Phase 2: Large payload test ──────────────────────────────────────────────
-bold "Phase 2: Large payload handling"
-echo ""
+# ── Verify sample ────────────────────────────────────────────────────────────
 
-for size_kb in 1 10 100 1000 5000; do
-    payload=$(python3 -c "
-import json, sys
-data = 'X' * ($size_kb * 1024)
-obj = {'id':'big-$size_kb','block_height':0,'timestamp':1,'input_did':'did:bc:test','output_recipient':'did:bc:target','amount':1,'state':'pending','data':data}
-sys.stdout.write(json.dumps(obj))
-")
-    http_code=$(curl -sk --max-time 30 -o /dev/null -w "%{http_code}" \
-        -X POST "$NODE/api/v1/store/transactions" \
-        -H "Content-Type: application/json" \
-        -d "$payload" 2>/dev/null)
-
-    if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
-        printf "  %5d KB  $(green "ACCEPTED") (%s)\n" "$size_kb" "$http_code"
-    elif [[ "$http_code" == "413" ]]; then
-        printf "  %5d KB  $(yellow "REJECTED") (413 Payload Too Large)\n" "$size_kb"
-    elif [[ "$http_code" == "400" ]]; then
-        printf "  %5d KB  $(yellow "REJECTED") (400 Bad Request)\n" "$size_kb"
-    else
-        printf "  %5d KB  $(red "ERROR") (%s)\n" "$size_kb" "$http_code"
-    fi
+echo -n "Verifying $VERIFY_SAMPLE random credentials... "
+verify_ok=0
+for i in $(seq 1 $VERIFY_SAMPLE); do
+    # Pick a random credential from the last completed level
+    ridx=$(( (RANDOM % 200) + 1 ))
+    for lvl in $(seq 1 5); do
+        cred_id="sig-r${lvl}-$(printf '%06d' $ridx)"
+        code=$(curl -s -o /dev/null -w "%{http_code}" \
+            "$NODE/api/v1/store/credentials/$cred_id" 2>/dev/null)
+        if [[ "$code" -ge 200 && "$code" -le 299 ]]; then
+            verify_ok=$((verify_ok + 1))
+            break
+        fi
+    done
 done
+echo -e "${GREEN}${verify_ok}/${VERIFY_SAMPLE}${NC} verified"
 
 echo ""
-
-# ── Phase 3: Connection exhaustion ───────────────────────────────────────────
-bold "Phase 3: Connection exhaustion (500 concurrent connections)"
-echo ""
-
-CONN_FILE=$(mktemp)
-for i in $(seq 1 500); do
-    (
-        http_code=$(curl -sk --max-time 5 -o /dev/null -w "%{http_code}" \
-            "$NODE/api/v1/health" 2>/dev/null)
-        echo "$http_code" >> "$CONN_FILE"
-    ) &
-    # Batch in groups of 50 to avoid local fd exhaustion
-    if (( i % 50 == 0 )); then
-        wait
-    fi
-done
-wait
-
-conn_ok=$(grep -c "^200" "$CONN_FILE" 2>/dev/null || true)
-conn_err=$(grep -cEv "^200" "$CONN_FILE" 2>/dev/null || true)
-conn_total=$((conn_ok + conn_err))
-printf "  Connections: %d OK / %d failed (of %d)\n" "$conn_ok" "$conn_err" "$conn_total"
-if [[ $conn_err -gt $((conn_total / 4)) ]]; then
-    echo "  $(red "WARN"): >25% connection failures under 500 concurrent connections"
+echo -e "${CYAN}============================================${NC}"
+if [[ -n "$BREAK_LEVEL" ]]; then
+    echo -e " Ceiling hit at level ${RED}${BREAK_LEVEL}${NC} (>5% errors)"
 else
-    echo "  $(green "OK"): Node handles 500 concurrent connections"
+    echo -e " ${GREEN}All levels passed — ceiling not reached${NC}"
 fi
-rm -f "$CONN_FILE"
-
+echo -e "${CYAN}============================================${NC}"
 echo ""
-
-# ── Phase 4: Malformed input resilience ──────────────────────────────────────
-bold "Phase 4: Malformed input resilience"
-echo ""
-
-HUGE_ID=$(python3 -c "print('A'*10000)")
-
-test_malformed() {
-    local label="$1" payload="$2"
-    local http_code
-    http_code=$(curl -sk --max-time 10 -o /dev/null -w "%{http_code}" \
-        -X POST "$NODE/api/v1/store/transactions" \
-        -H "Content-Type: application/json" \
-        -d "$payload" 2>/dev/null)
-
-    if [[ "$http_code" == "400" || "$http_code" == "413" || "$http_code" == "415" || "$http_code" == "422" ]]; then
-        printf "  %-20s $(green "REJECTED") (%s)\n" "$label" "$http_code"
-    elif [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
-        printf "  %-20s $(yellow "ACCEPTED") (%s) — should have been rejected\n" "$label" "$http_code"
-    elif [[ "$http_code" == "000" || -z "$http_code" ]]; then
-        printf "  %-20s $(red "NO RESPONSE") — node may have crashed!\n" "$label"
-        return 1
-    else
-        printf "  %-20s $(yellow "OTHER") (%s)\n" "$label" "$http_code"
-    fi
-    return 0
-}
-
-node_alive=true
-test_malformed "empty body"       ""                                                                    || node_alive=false
-test_malformed "null JSON"        "null"                                                                || node_alive=false
-test_malformed "invalid JSON"     "{not json}"                                                          || node_alive=false
-test_malformed "missing fields"   '{"id":"x"}'                                                          || node_alive=false
-test_malformed "negative amount"  '{"id":"neg","block_height":0,"timestamp":1,"input_did":"did:bc:a","output_recipient":"did:bc:b","amount":-1,"state":"pending"}'  || node_alive=false
-test_malformed "overflow amount"  '{"id":"ovf","block_height":0,"timestamp":1,"input_did":"did:bc:a","output_recipient":"did:bc:b","amount":99999999999999999999,"state":"pending"}'  || node_alive=false
-test_malformed "XSS in field"     '{"id":"<script>alert(1)</script>","block_height":0,"timestamp":1,"input_did":"did:bc:a","output_recipient":"did:bc:b","amount":1,"state":"pending"}'  || node_alive=false
-test_malformed "SQL injection"    '{"id":"x OR 1=1--","block_height":0,"timestamp":1,"input_did":"did:bc:a","output_recipient":"did:bc:b","amount":1,"state":"pending"}'  || node_alive=false
-test_malformed "null bytes"       '{"id":"null\u0000byte","block_height":0,"timestamp":1,"input_did":"did:bc:a","output_recipient":"did:bc:b","amount":1,"state":"pending"}'  || node_alive=false
-test_malformed "huge ID"          "{\"id\":\"${HUGE_ID}\",\"block_height\":0,\"timestamp\":1,\"input_did\":\"did:bc:a\",\"output_recipient\":\"did:bc:b\",\"amount\":1,\"state\":\"pending\"}"  || node_alive=false
-
-# Verify node still alive after malformed inputs
-if $node_alive; then
-    final_health=$($CURL "$NODE/api/v1/health" 2>/dev/null | jq -r '.data.status // empty')
-    if [[ "$final_health" == "healthy" ]]; then
-        echo ""
-        echo "  $(green "OK"): Node survived all malformed inputs"
-    else
-        echo ""
-        echo "  $(red "FAIL"): Node unhealthy after malformed inputs"
-    fi
-fi
-
-echo ""
-
-# ── Summary ──────────────────────────────────────────────────────────────────
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-bold "  Throughput ramp results:"
-echo ""
-printf "  %-12s %-8s %-8s %-10s %-6s\n" "Concurrency" "TPS" "OK" "Throttled" "Errors"
-while IFS=' ' read -r conc tps ok thr err avg p99; do
-    printf "  %-12s %-8s %-8s %-10s %-6s\n" "$conc" "$tps" "$ok" "$thr" "$err"
-done < "$RESULTS_FILE"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-rm -f "$RESULTS_FILE"

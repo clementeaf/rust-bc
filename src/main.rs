@@ -19,6 +19,7 @@ mod crypto;
 mod discovery;
 mod endorsement;
 mod events;
+#[cfg(feature = "evm")]
 mod evm_compat;
 mod gateway;
 mod governance;
@@ -65,7 +66,10 @@ use state_snapshot::{StateSnapshot, StateSnapshotManager};
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
-use storage::{BlockStore, RocksDbBlockStore};
+#[cfg(feature = "rocksdb-storage")]
+use storage::BlockStore;
+#[cfg(feature = "rocksdb-storage")]
+use storage::RocksDbBlockStore;
 use tls::{
     load_client_config_from_env, load_tls_config_from_env, reload_tls_config,
     tls_reload_params_from_env,
@@ -651,12 +655,15 @@ async fn async_main_inner() -> std::io::Result<()> {
     // When ORDERING_BACKEND=raft, also reads:
     //   RAFT_NODE_ID  — this node's raft ID (default: 1)
     //   RAFT_PEERS    — comma-separated `id:host:port` (e.g. "1:orderer1:8087,2:orderer2:8087")
+    #[cfg(feature = "raft-ordering")]
     let mut shared_raft_node: Option<Arc<Mutex<crate::ordering::raft_node::RaftNode>>> = None;
+    #[cfg(feature = "raft-ordering")]
     let mut raft_peer_map: Option<crate::ordering::raft_transport::PeerMap> = None;
 
     let ordering_backend: Option<Arc<dyn ordering::OrderingBackend>> = {
         let backend_name = env::var("ORDERING_BACKEND").unwrap_or_else(|_| "solo".to_string());
         match backend_name.as_str() {
+            #[cfg(feature = "raft-ordering")]
             "raft" => {
                 let raft_id: u64 = env::var("RAFT_NODE_ID")
                     .ok()
@@ -721,6 +728,7 @@ async fn async_main_inner() -> std::io::Result<()> {
 
     // Initialize scaffold services — use RocksDB-backed impls when STORAGE_BACKEND=rocksdb.
     let storage_backend_env = env::var("STORAGE_BACKEND").unwrap_or_default();
+    #[cfg(feature = "rocksdb-storage")]
     let shared_rocksdb: Option<Arc<RocksDbBlockStore>> = if storage_backend_env == "rocksdb" {
         let path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./data/blocks".to_string());
         match RocksDbBlockStore::new(&path) {
@@ -738,8 +746,17 @@ async fn async_main_inner() -> std::io::Result<()> {
     } else {
         None
     };
+    #[cfg(not(feature = "rocksdb-storage"))]
+    let shared_rocksdb: Option<Arc<storage::MemoryStore>> = {
+        let _ = &storage_backend_env;
+        if storage_backend_env == "rocksdb" {
+            log::warn!("STORAGE_BACKEND=rocksdb but 'rocksdb-storage' feature not compiled. Using memory store.");
+        }
+        None
+    };
 
     // Attach persistent store to TransactionValidator for replay prevention
+    #[cfg(feature = "rocksdb-storage")]
     if let Some(ref db) = shared_rocksdb {
         let mut tv = transaction_validator
             .lock()
@@ -762,18 +779,26 @@ async fn async_main_inner() -> std::io::Result<()> {
         log::info!("Services: in-memory — data will be lost on restart");
     }
 
-    let org_registry: Arc<dyn crate::endorsement::registry::OrgRegistry> =
+    let org_registry: Arc<dyn crate::endorsement::registry::OrgRegistry> = {
+        #[cfg(feature = "rocksdb-storage")]
         if let Some(ref db) = shared_rocksdb {
             db.clone()
         } else {
             Arc::new(crate::endorsement::registry::MemoryOrgRegistry::new())
-        };
-    let policy_store: Arc<dyn crate::endorsement::policy_store::PolicyStore> =
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
+        Arc::new(crate::endorsement::registry::MemoryOrgRegistry::new())
+    };
+    let policy_store: Arc<dyn crate::endorsement::policy_store::PolicyStore> = {
+        #[cfg(feature = "rocksdb-storage")]
         if let Some(ref db) = shared_rocksdb {
             db.clone()
         } else {
             Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new())
-        };
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
+        Arc::new(crate::endorsement::policy_store::MemoryPolicyStore::new())
+    };
     let discovery_service = Arc::new(
         crate::discovery::service::DiscoveryService::new(
             org_registry.clone(),
@@ -804,12 +829,16 @@ async fn async_main_inner() -> std::io::Result<()> {
             Arc::new(storage::MemoryWorldState::new())
         }
     };
-    let chaincode_package_store: Arc<dyn crate::chaincode::ChaincodePackageStore> =
+    let chaincode_package_store: Arc<dyn crate::chaincode::ChaincodePackageStore> = {
+        #[cfg(feature = "rocksdb-storage")]
         if let Some(ref db) = shared_rocksdb {
             db.clone()
         } else {
             Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
-        };
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
+        Arc::new(crate::chaincode::MemoryChaincodePackageStore::new())
+    };
     let ordering_service_for_gateway: Arc<dyn ordering::OrderingBackend> =
         ordering_backend.clone().unwrap_or_else(|| {
             Arc::new(
@@ -817,9 +846,14 @@ async fn async_main_inner() -> std::io::Result<()> {
                     .with_signing_provider(signing_provider.clone()),
             )
         });
-    let gateway_store: Arc<dyn storage::BlockStore> = if let Some(ref db) = shared_rocksdb {
-        db.clone()
-    } else {
+    let gateway_store: Arc<dyn storage::BlockStore> = {
+        #[cfg(feature = "rocksdb-storage")]
+        if let Some(ref db) = shared_rocksdb {
+            db.clone()
+        } else {
+            Arc::new(storage::MemoryStore::new())
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
         Arc::new(storage::MemoryStore::new())
     };
     let mut gateway = crate::gateway::Gateway::new(
@@ -843,22 +877,31 @@ async fn async_main_inner() -> std::io::Result<()> {
     // (StateRequest handler reads blocks from this store).
     node_for_server.store = Some(gateway_store.clone());
     // Wire Raft node into the P2P server for RaftMessage handling.
+    #[cfg(feature = "raft-ordering")]
     if let Some(ref raft) = shared_raft_node {
         node_for_server.raft_node = Some(raft.clone());
     }
     // Wire private data resources for PrivateDataPush handling.
-    let private_data_store: Arc<dyn crate::private_data::PrivateDataStore> =
+    let private_data_store: Arc<dyn crate::private_data::PrivateDataStore> = {
+        #[cfg(feature = "rocksdb-storage")]
         if let Some(ref db) = shared_rocksdb {
             db.clone()
         } else {
             Arc::new(crate::private_data::MemoryPrivateDataStore::new())
-        };
-    let collection_registry: Arc<dyn crate::private_data::CollectionRegistry> =
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
+        Arc::new(crate::private_data::MemoryPrivateDataStore::new())
+    };
+    let collection_registry: Arc<dyn crate::private_data::CollectionRegistry> = {
+        #[cfg(feature = "rocksdb-storage")]
         if let Some(ref db) = shared_rocksdb {
             db.clone()
         } else {
             Arc::new(crate::private_data::MemoryCollectionRegistry::new())
-        };
+        }
+        #[cfg(not(feature = "rocksdb-storage"))]
+        Arc::new(crate::private_data::MemoryCollectionRegistry::new())
+    };
     node_for_server.private_data_store = Some(private_data_store.clone());
     node_for_server.collection_registry = Some(collection_registry.clone());
 
@@ -898,18 +941,34 @@ async fn async_main_inner() -> std::io::Result<()> {
         },
         org_registry: Some(org_registry),
         policy_store: Some(policy_store),
-        crl_store: Some(if let Some(ref db) = shared_rocksdb {
-            db.clone() as Arc<dyn crate::msp::CrlStore>
-        } else {
-            Arc::new(crate::msp::MemoryCrlStore::new())
+        crl_store: Some({
+            #[cfg(feature = "rocksdb-storage")]
+            if let Some(ref db) = shared_rocksdb {
+                db.clone() as Arc<dyn crate::msp::CrlStore>
+            } else {
+                Arc::new(crate::msp::MemoryCrlStore::new()) as Arc<dyn crate::msp::CrlStore>
+            }
+            #[cfg(not(feature = "rocksdb-storage"))]
+            {
+                Arc::new(crate::msp::MemoryCrlStore::new()) as Arc<dyn crate::msp::CrlStore>
+            }
         }),
         private_data_store: Some(private_data_store.clone()),
         collection_registry: Some(collection_registry.clone()),
         chaincode_package_store: Some(chaincode_package_store.clone()),
-        chaincode_definition_store: Some(if let Some(ref db) = shared_rocksdb {
-            db.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>
-        } else {
-            Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())
+        chaincode_definition_store: Some({
+            #[cfg(feature = "rocksdb-storage")]
+            if let Some(ref db) = shared_rocksdb {
+                db.clone() as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>
+            } else {
+                Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())
+                    as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>
+            }
+            #[cfg(not(feature = "rocksdb-storage"))]
+            {
+                Arc::new(crate::chaincode::MemoryChaincodeDefinitionStore::new())
+                    as Arc<dyn crate::chaincode::ChaincodeDefinitionStore>
+            }
         }),
         gateway: Some(Arc::new(gateway)),
         discovery_service: Some(discovery_service),
@@ -917,10 +976,17 @@ async fn async_main_inner() -> std::io::Result<()> {
         channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
             std::collections::HashMap::new(),
         )),
-        acl_provider: Some(if let Some(ref db) = shared_rocksdb {
-            db.clone() as Arc<dyn crate::acl::AclProvider>
-        } else {
-            Arc::new(crate::acl::MemoryAclProvider::new())
+        acl_provider: Some({
+            #[cfg(feature = "rocksdb-storage")]
+            if let Some(ref db) = shared_rocksdb {
+                db.clone() as Arc<dyn crate::acl::AclProvider>
+            } else {
+                Arc::new(crate::acl::MemoryAclProvider::new()) as Arc<dyn crate::acl::AclProvider>
+            }
+            #[cfg(not(feature = "rocksdb-storage"))]
+            {
+                Arc::new(crate::acl::MemoryAclProvider::new()) as Arc<dyn crate::acl::AclProvider>
+            }
         }),
         ordering_backend,
         world_state: Some(world_state.clone()),
@@ -1081,6 +1147,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         node_for_server.start_pull_sync_loop(crate::network::gossip::PULL_INTERVAL_MS);
 
     // Start Raft tick loop if raft backend is configured.
+    #[cfg(feature = "raft-ordering")]
     if let (Some(raft), Some(peer_map)) = (&shared_raft_node, &raft_peer_map) {
         let _raft_tick_handle = crate::ordering::raft_transport::start_raft_tick_loop(
             raft.clone(),
@@ -1156,6 +1223,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         .clone()
         .unwrap_or_else(|| Arc::new(crate::audit::MemoryAuditStore::new()));
 
+    #[cfg(feature = "evm")]
     let evm_state = web::Data::new(crate::api::handlers::evm::EvmState::new());
 
     let server = HttpServer::new(move || {
@@ -1166,7 +1234,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             .supports_credentials()
             .max_age(3600);
 
-        App::new()
+        let app = App::new()
             .wrap(cors)
             .wrap(Compress::default())
             .wrap(crate::api::middleware::AuditMiddleware {
@@ -1175,9 +1243,10 @@ async fn async_main_inner() -> std::io::Result<()> {
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .wrap(crate::api::middleware::TlsIdentityMiddleware)
             .wrap(crate::api::middleware::InputValidationMiddleware::default())
-            .app_data(web::Data::new(app_state.clone()))
-            .app_data(evm_state.clone())
-            .app_data(json_config.clone())
+            .app_data(web::Data::new(app_state.clone()));
+        #[cfg(feature = "evm")]
+        let app = app.app_data(evm_state.clone());
+        app.app_data(json_config.clone())
             .app_data(web::PayloadConfig::default().limit(10_485_760)) // 10MB max for raw payloads (chaincode)
             .app_data(web::JsonConfig::default().error_handler(|err, _req| {
                 log::debug!("[JSON] Deserialization error on {}: {err:?}", _req.path());

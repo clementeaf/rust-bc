@@ -7,7 +7,7 @@
 //! - Schema migration (10 tests)
 //! - Performance validation (15 tests)
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rocksdb-storage"))]
 mod comprehensive_storage_tests {
     use crate::storage::adapters::RocksDbBlockStore;
     use crate::storage::errors::StorageError;

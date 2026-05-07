@@ -1,7 +1,9 @@
 use actix_web::{web, Scope};
 
+#[cfg(feature = "evm")]
+use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, evm, gateway,
+    acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, gateway,
     governance, identity, msp, organizations, pin, private_data, proposals, snapshots,
     transactions, utilities,
 };
@@ -98,12 +100,13 @@ impl ApiRoutes {
             .service(snapshots::list_snapshots)
             .service(snapshots::download_snapshot)
             .service(audit::list_audit_entries)
-            .service(audit::export_audit_csv)
-            .service(evm::evm_deploy)
+            .service(audit::export_audit_csv);
+        #[cfg(feature = "evm")]
+        cfg.service(evm::evm_deploy)
             .service(evm::evm_call)
             .service(evm::evm_static_call)
-            .service(evm::evm_list_contracts)
-            .service(governance::list_params)
+            .service(evm::evm_list_contracts);
+        cfg.service(governance::list_params)
             .service(governance::submit_governance_proposal)
             .service(governance::list_governance_proposals)
             .service(governance::get_governance_proposal)

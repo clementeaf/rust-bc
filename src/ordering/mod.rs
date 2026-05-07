@@ -1,6 +1,10 @@
+#[cfg(feature = "raft-ordering")]
 pub mod raft_node;
+#[cfg(feature = "raft-ordering")]
 pub mod raft_service;
+#[cfg(feature = "raft-ordering")]
 pub mod raft_storage;
+#[cfg(feature = "raft-ordering")]
 pub mod raft_transport;
 pub mod service;
 
@@ -200,6 +204,7 @@ mod tests {
         assert_eq!(block.transactions, vec!["tx1"]);
     }
 
+    #[cfg(feature = "raft-ordering")]
     #[test]
     fn raft_backend_as_trait_object() {
         let svc = raft_service::RaftOrderingService::new(1, vec![1], 100, 2000).unwrap();

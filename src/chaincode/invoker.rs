@@ -70,7 +70,7 @@ impl ChaincodeInvoker for ExternalInvoker {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-chaincode"))]
 mod tests {
     use super::*;
     use crate::storage::world_state::MemoryWorldState;

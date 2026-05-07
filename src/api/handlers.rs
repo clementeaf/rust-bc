@@ -9,6 +9,7 @@ pub mod channels;
 pub mod credentials;
 pub mod discovery;
 pub mod events;
+#[cfg(feature = "evm")]
 pub mod evm;
 pub mod gateway;
 pub mod governance;
