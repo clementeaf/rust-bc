@@ -114,6 +114,36 @@ pub struct Credential {
     pub issued_at: u64,
     pub expires_at: u64,
     pub revoked_at: Option<u64>,
+    /// Free-form metadata: file hash, description, vote data, asset info, etc.
+    #[serde(default)]
+    pub claims: serde_json::Value,
+    /// Issuer's cryptographic signature over the credential content (hex-encoded).
+    #[serde(default)]
+    pub signature: String,
+    /// Lifecycle status: active, revoked, suspended.
+    #[serde(default = "default_credential_status")]
+    pub status: String,
+}
+
+fn default_credential_status() -> String {
+    "active".to_string()
+}
+
+impl Default for Credential {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            issuer_did: String::new(),
+            subject_did: String::new(),
+            cred_type: String::new(),
+            issued_at: 0,
+            expires_at: 0,
+            revoked_at: None,
+            claims: serde_json::Value::Null,
+            signature: String::new(),
+            status: default_credential_status(),
+        }
+    }
 }
 
 /// A single entry in the history of a world-state key.
@@ -170,6 +200,14 @@ pub trait BlockStore: Send + Sync {
     ///
     /// Returns an empty `Vec` when no credentials are indexed for that subject.
     fn credentials_by_subject_did(&self, subject_did: &str) -> StorageResult<Vec<Credential>>;
+
+    /// Return all credentials issued by a given issuer DID.
+    ///
+    /// Default implementation scans all credentials (slow). Backends with
+    /// secondary indexes should override.
+    fn credentials_by_issuer_did(&self, _issuer_did: &str) -> StorageResult<Vec<Credential>> {
+        Ok(vec![]) // Override in implementations with issuer index
+    }
 
     /// Mark a transaction ID as seen (for replay prevention).
     /// Stores `tx_id → timestamp` so it survives node restarts.

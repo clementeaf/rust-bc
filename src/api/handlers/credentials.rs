@@ -170,6 +170,28 @@ pub async fn store_get_credentials_by_subject(
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
+/// GET /api/v1/store/credentials/by-issuer/{issuer_did} — devuelve todos los
+/// Credentials cuyo `issuer_did` coincide con el parámetro de ruta.
+#[get("/store/credentials/by-issuer/{issuer_did}")]
+pub async fn store_get_credentials_by_issuer(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let issuer_did = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, _channel, &req)?;
+    let store = get_channel_store(&state, _channel)?;
+    let creds =
+        store
+            .credentials_by_issuer_did(&issuer_did)
+            .map_err(|e| ApiError::StorageError {
+                reason: e.to_string(),
+            })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

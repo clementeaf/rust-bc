@@ -183,8 +183,9 @@ fn cmd_init(node: &str, name: &str, org: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn cmd_sign(node: &str, file: &PathBuf, _description: Option<&str>) -> Result<(), String> {
+fn cmd_sign(node: &str, file: &PathBuf, description: Option<&str>) -> Result<(), String> {
     let mut wallet = Wallet::load()?;
+    let signing_key = wallet.signing_key()?;
 
     // Read and hash the file
     if !file.exists() {
@@ -193,6 +194,11 @@ fn cmd_sign(node: &str, file: &PathBuf, _description: Option<&str>) -> Result<()
     let file_bytes = fs::read(file).map_err(|e| format!("read file: {e}"))?;
     let file_hash = Sha256::digest(&file_bytes);
     let hash_hex = hex::encode(file_hash);
+
+    // Sign the hash with private key
+    use ed25519_dalek::Signer;
+    let signature = signing_key.sign(file_hash.as_slice());
+    let sig_hex = hex::encode(signature.to_bytes());
 
     // Build credential
     let file_name = file
@@ -204,15 +210,25 @@ fn cmd_sign(node: &str, file: &PathBuf, _description: Option<&str>) -> Result<()
     let now_ts = chrono::Utc::now().timestamp() as u64;
     let now = chrono::Utc::now().to_rfc3339();
 
-    // Store credential on-chain (Credential struct)
+    // Store credential on-chain with claims + signature
     let body = serde_json::json!({
         "id": cred_id,
         "issuer_did": wallet.did,
-        "subject_did": format!("did:cerulean:doc:{}:{}", &hash_hex[..16], file_name),
+        "subject_did": format!("did:cerulean:doc:{}", &hash_hex[..16]),
         "cred_type": "DigitalSignature",
         "issued_at": now_ts,
         "expires_at": 0,
         "revoked_at": null,
+        "claims": {
+            "file_name": file_name,
+            "file_hash_sha256": hash_hex,
+            "file_size_bytes": file_bytes.len(),
+            "description": description.unwrap_or(""),
+            "signed_at": now,
+            "signer_public_key": wallet.public_key_hex,
+        },
+        "signature": sig_hex,
+        "status": "active",
     });
 
     let client = http_client();
@@ -270,34 +286,52 @@ fn cmd_verify(node: &str, credential_id: &str) -> Result<(), String> {
 
     let issuer = cred["issuer_did"].as_str().unwrap_or("unknown");
     let cred_type = cred["cred_type"].as_str().unwrap_or("unknown");
-    let subject = cred["subject_did"].as_str().unwrap_or("");
+    let status = cred["status"].as_str().unwrap_or("unknown");
     let issued_at = cred["issued_at"].as_u64().unwrap_or(0);
+    let claims = &cred["claims"];
+    let sig_hex = cred["signature"].as_str().unwrap_or("");
 
-    // Parse subject_did to extract file info: "did:cerulean:doc:{hash}:{filename}"
-    let parts: Vec<&str> = subject.splitn(5, ':').collect();
-    let (doc_hash, doc_name) = if parts.len() >= 5 {
-        (parts[3], parts[4])
-    } else {
-        (subject, "")
-    };
+    // Extract info from claims
+    let file_name = claims["file_name"].as_str().unwrap_or("");
+    let file_hash = claims["file_hash_sha256"].as_str().unwrap_or("");
+    let signer_pk = claims["signer_public_key"].as_str().unwrap_or("");
 
     // Format timestamp
     let issued_str = chrono::DateTime::from_timestamp(issued_at as i64, 0)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_else(|| issued_at.to_string());
 
+    // Verify signature if we have all the pieces
+    let sig_status = if !sig_hex.is_empty() && !file_hash.is_empty() && !signer_pk.is_empty() {
+        if verify_ed25519(signer_pk, file_hash, sig_hex) {
+            "VALID"
+        } else {
+            "INVALID"
+        }
+    } else if sig_hex.is_empty() {
+        "NO SIGNATURE"
+    } else {
+        "UNVERIFIABLE (missing public key or hash)"
+    };
+
     println!("Credential: {credential_id}\n");
     println!("  Type:        {cred_type}");
+    println!("  Status:      {status}");
     println!("  Issuer:      {issuer}");
-    if !doc_name.is_empty() {
-        println!("  File:        {doc_name}");
+    if !file_name.is_empty() {
+        println!("  File:        {file_name}");
     }
-    if !doc_hash.is_empty() {
-        println!("  Doc hash:    {doc_hash}");
+    if !file_hash.is_empty() {
+        println!("  SHA-256:     {file_hash}");
     }
     println!("  Issued at:   {issued_str}");
+    if let Some(desc) = claims["description"].as_str() {
+        if !desc.is_empty() {
+            println!("  Description: {desc}");
+        }
+    }
     println!();
-    println!("  Credential found on-chain. Issuer identity: {issuer}");
+    println!("  Signature:   {sig_status}");
 
     Ok(())
 }
@@ -330,12 +364,9 @@ fn cmd_list(node: &str) -> Result<(), String> {
             Ok(r) if r.status().is_success() => {
                 let body: serde_json::Value = r.json().unwrap_or_default();
                 let cred = body.get("data").unwrap_or(&body);
-                let subject = cred["subject_did"].as_str().unwrap_or("");
+                let claims = &cred["claims"];
                 let issued_at = cred["issued_at"].as_u64().unwrap_or(0);
-
-                // Parse file name from subject_did
-                let parts: Vec<&str> = subject.splitn(5, ':').collect();
-                let doc_name = if parts.len() >= 5 { parts[4] } else { "-" };
+                let doc_name = claims["file_name"].as_str().unwrap_or("-");
 
                 let issued_str = chrono::DateTime::from_timestamp(issued_at as i64, 0)
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
@@ -355,6 +386,39 @@ fn cmd_list(node: &str) -> Result<(), String> {
 
     println!("\nTotal: {} ({} on-chain)", wallet.credentials.len(), found);
     Ok(())
+}
+
+// ── Crypto helpers ───────────────────────────────────────────────────────────
+
+/// Verify an Ed25519 signature: public_key and message are hex-encoded raw bytes,
+/// signature is hex-encoded 64-byte Ed25519 signature.
+fn verify_ed25519(public_key_hex: &str, message_hex: &str, signature_hex: &str) -> bool {
+    let Ok(pk_bytes) = hex::decode(public_key_hex) else {
+        return false;
+    };
+    let Ok(sig_bytes) = hex::decode(signature_hex) else {
+        return false;
+    };
+    let Ok(msg_bytes) = hex::decode(message_hex) else {
+        return false;
+    };
+
+    let pk_arr: [u8; 32] = match pk_bytes.try_into() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    let sig_arr: [u8; 64] = match sig_bytes.try_into() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+
+    let Ok(verifying_key) = VerifyingKey::from_bytes(&pk_arr) else {
+        return false;
+    };
+    let signature = ed25519_dalek::Signature::from_bytes(&sig_arr);
+
+    use ed25519_dalek::Verifier;
+    verifying_key.verify(&msg_bytes, &signature).is_ok()
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────

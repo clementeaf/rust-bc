@@ -1418,6 +1418,7 @@ mod tests {
             issued_at: 1_000,
             expires_at: 2_000,
             revoked_at: None,
+            ..Default::default()
         };
         store.write_credential(&cred).unwrap();
         let loaded = store.read_credential("cred-1").unwrap();
@@ -1543,6 +1544,7 @@ mod tests {
             issued_at: 1_000,
             expires_at: 9_999,
             revoked_at: None,
+            ..Default::default()
         }
     }
 

@@ -83,7 +83,7 @@ mod comprehensive_storage_tests {
             cred_type: "eid".to_string(),
             issued_at: 1000,
             expires_at: 2000,
-            revoked_at: None,
+            ..Default::default()
         };
         assert!(store.write_credential(&cred).is_ok());
     }
@@ -359,7 +359,7 @@ mod comprehensive_storage_tests {
             cred_type: "eid".to_string(),
             issued_at: 1000,
             expires_at: 2000,
-            revoked_at: None,
+            ..Default::default()
         };
         assert!(store.write_credential(&cred).is_ok());
     }
@@ -562,6 +562,7 @@ mod comprehensive_storage_tests {
             issued_at: 1000,
             expires_at: 2000,
             revoked_at: Some(1500),
+            ..Default::default()
         };
         assert!(store.write_credential(&cred).is_ok());
     }
@@ -576,7 +577,7 @@ mod comprehensive_storage_tests {
             cred_type: "passport".to_string(),
             issued_at: 0,
             expires_at: 1000,
-            revoked_at: None,
+            ..Default::default()
         };
         assert!(store.write_credential(&cred).is_ok());
     }

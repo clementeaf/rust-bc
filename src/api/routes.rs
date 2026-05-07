@@ -53,6 +53,7 @@ impl ApiRoutes {
             .service(credentials::store_write_credential)
             .service(credentials::store_get_credential)
             .service(credentials::store_get_credentials_by_subject)
+            .service(credentials::store_get_credentials_by_issuer)
             .service(organizations::store_create_organization)
             .service(organizations::store_list_organizations)
             .service(organizations::store_get_organization)
