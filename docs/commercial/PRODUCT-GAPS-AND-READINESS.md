@@ -225,10 +225,34 @@ Cerulean Ledger tiene el motor técnico completo: 1,427+ tests, criptografía po
 
 ---
 
-## Conclusión
+## Gaps identificados por auditoría Cámara Blockchain Chile (2026-05-08)
 
-El producto está técnicamente completo para demo y piloto. Los 4 gaps críticos son de **visibilidad y validación**, no de tecnología. Cerrarlos toma 4-6 semanas de esfuerzo enfocado. El primer caso de éxito es el hito que transforma a Cerulean de proyecto a producto.
+### 20. ~~Oráculo sin conectores a fuentes externas~~ CERRADO
+
+**Resolución:** `src/oracle_connector.rs` — `DataSource` trait, HTTP connector con JSON path extraction, multi-source aggregation (N-of-M consensus), spread validation, background poller con `spawn_oracle_poller()`. Env vars: `ORACLE_SOURCES`, `ORACLE_MIN_SOURCES`, `ORACLE_POLL_INTERVAL_SECS`. 11 tests.
 
 ---
 
-*Documento generado: 2026-05-08. Revisar mensualmente y actualizar estado de cada gap.*
+### 21. ~~Sandbox forense ausente~~ CERRADO
+
+**Resolución:** `src/forensic.rs` — `ForensicEngine` con: `build_timeline()` (audit + block events correlados y ordenados), `security_timeline()` (solo Warning/Critical), `correlate_security_events()` (vincula requests fallidos con eventos de seguridad), `build_evidence_package()` (paquete firmable con SHA-256 content hash, cadena de custodia), `severity_summary()`. Tipos: `TimelineEntry`, `Severity`, `ReplayResult`, `EvidencePackage`. 10 tests.
+
+---
+
+### 22. ~~ISO compliance para RWA y finanzas~~ CERRADO (fase 1)
+
+**Resolución:** `src/compliance/` — módulo con 3 sub-módulos:
+- `iso20022.rs`: tipos `Pacs008`, `Pain001`, `Camt053` con validadores (`validate_pacs008`, `validate_pain001`, `validate_camt053`). Valida BIC, IBAN, moneda, país, montos.
+- `iso3166.rs`: 27 códigos de país LATAM + principales, `is_valid_country()`, `country_name()`.
+- `iso4217.rs`: 15 monedas con decimales, `is_valid_currency()`, `format_amount()`.
+25 tests. Pendiente fase 2: ERC-3643 security tokens.
+
+---
+
+## Conclusión
+
+El core de la plataforma fue validado por la Cámara Blockchain Chile como "flagship que supera expectativas" en las 4 fases de auditoría (motor, transaccional, contratos, seguridad). Los gaps restantes son de **conectividad con el mundo exterior** (oráculo), **herramientas de auditoría avanzada** (forense), y **compliance financiero** (ISOs). Resolverlos posiciona a Cerulean para entrada en banca y gobierno a nivel nacional.
+
+---
+
+*Documento generado: 2026-05-08. Actualizado con feedback de Cámara Blockchain Chile.*
