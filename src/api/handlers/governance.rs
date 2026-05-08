@@ -336,8 +336,25 @@ pub async fn cast_governance_vote(
         proposal.voting_ends_at,
     ) {
         Ok(()) => {
-            let votes = vote_store.get_votes(id);
-            Ok(HttpResponse::Ok().json(ApiResponse::success(votes, trace)))
+            // Return tally (aggregates only) — never expose individual votes.
+            let registry = state.param_registry.as_ref().unwrap();
+            let quorum = registry.get_u64("quorum_percent", 33);
+            let threshold = registry.get_u64("pass_threshold_percent", 67);
+            let total_staked = total_staked_power(&state).max(1);
+            let tally = vote_store.tally(id, total_staked, quorum, threshold);
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                TallyResponse {
+                    proposal_id: tally.proposal_id,
+                    yes_power: tally.yes_power,
+                    no_power: tally.no_power,
+                    abstain_power: tally.abstain_power,
+                    total_voted_power: tally.total_voted_power,
+                    total_staked_power: tally.total_staked_power,
+                    quorum_reached: tally.quorum_reached,
+                    passed: tally.passed,
+                },
+                trace,
+            )))
         }
         Err(e) => {
             Ok(HttpResponse::BadRequest()
@@ -347,12 +364,32 @@ pub async fn cast_governance_vote(
 }
 
 /// GET /api/v1/governance/proposals/{id}/votes
+///
+/// Returns individual votes. Requires admin role (`X-Msp-Role: admin`) unless
+/// in permissive mode. Public auditors should use `/tally` instead.
 #[get("/governance/proposals/{id}/votes")]
 pub async fn get_governance_votes(
+    req: actix_web::HttpRequest,
     state: web::Data<AppState>,
     path: web::Path<u64>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
+
+    // Require admin role for individual vote access (privacy)
+    if !crate::api::errors::acl_permissive() {
+        let role = req
+            .headers()
+            .get("X-Msp-Role")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if role != "admin" {
+            return Ok(HttpResponse::Forbidden().json(ApiResponse::<()>::error(
+                err_dto("individual votes require admin role — use /tally for public audit"),
+                403,
+            )));
+        }
+    }
+
     let id = path.into_inner();
     let vote_store = match &state.vote_store {
         Some(s) => s,
