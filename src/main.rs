@@ -868,6 +868,12 @@ async fn async_main_inner() -> std::io::Result<()> {
     let event_bus = Arc::new(events::EventBus::new());
     gateway.event_bus = Some(event_bus.clone());
 
+    // CSIRT/SIEM webhook: forward security events to external endpoint.
+    if let Some(webhook_config) = events::webhook::WebhookConfig::from_env() {
+        let webhook_rx = event_bus.subscribe();
+        events::webhook::spawn_webhook_notifier(webhook_config, webhook_rx);
+    }
+
     // Wire endorsement resources into the P2P server node so it can handle
     // ProposalRequest messages (simulate chaincode + sign rwset).
     node_for_server.chaincode_store = Some(chaincode_package_store.clone());

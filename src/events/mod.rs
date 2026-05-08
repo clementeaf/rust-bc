@@ -8,6 +8,7 @@ use tokio::sync::broadcast;
 pub mod filtered;
 pub mod private_delivery;
 pub mod types;
+pub mod webhook;
 pub use types::BlockEvent;
 
 /// Default channel capacity: how many events can be buffered before the

@@ -27,6 +27,26 @@ pub enum ChannelError {
     EndorsementFailed(String),
 }
 
+/// Data retention policy for a channel.
+///
+/// Controls how long different categories of data are kept.
+/// A value of `0` means "retain indefinitely" (no automatic purge).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RetentionPolicy {
+    /// Blocks older than this many blocks from tip are eligible for pruning.
+    /// `0` = retain all blocks.
+    #[serde(default)]
+    pub block_retention_count: u64,
+    /// Private data entries expire after this many blocks past their write height.
+    /// `0` = retain indefinitely (default).
+    #[serde(default)]
+    pub private_data_ttl_blocks: u64,
+    /// Transaction records older than this (seconds) may be archived.
+    /// `0` = retain indefinitely.
+    #[serde(default)]
+    pub transaction_retention_secs: u64,
+}
+
 /// Full governance configuration of a channel.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChannelConfig {
@@ -46,6 +66,9 @@ pub struct ChannelConfig {
     pub batch_timeout_ms: u64,
     /// Anchor peers per org: org_id → list of "host:port" addresses.
     pub anchor_peers: HashMap<String, Vec<String>>,
+    /// Data retention policy for this channel.
+    #[serde(default)]
+    pub retention_policy: RetentionPolicy,
 }
 
 impl Default for ChannelConfig {
@@ -59,6 +82,7 @@ impl Default for ChannelConfig {
             batch_size: 100,
             batch_timeout_ms: 2000,
             anchor_peers: HashMap::new(),
+            retention_policy: RetentionPolicy::default(),
         }
     }
 }
@@ -80,6 +104,7 @@ pub enum ConfigUpdateType {
         org_id: String,
         peer_address: String,
     },
+    SetRetention(RetentionPolicy),
 }
 
 /// Apply a slice of [`ConfigUpdateType`] changes to `config`, returning a new
@@ -130,6 +155,9 @@ pub fn apply_config_update(
                     .entry(org_id.clone())
                     .or_default()
                     .push(peer_address.clone());
+            }
+            ConfigUpdateType::SetRetention(policy) => {
+                next.retention_policy = policy.clone();
             }
         }
     }
@@ -190,6 +218,7 @@ mod tests {
                 "org1".to_string(),
                 vec!["peer0.org1:7051".to_string()],
             )]),
+            retention_policy: RetentionPolicy::default(),
         }
     }
 
@@ -270,6 +299,16 @@ mod tests {
             org_id: "org1".to_string(),
             peer_address: "peer0.org1:7051".to_string(),
         };
+        assert_eq!(roundtrip(u.clone()), u);
+    }
+
+    #[test]
+    fn config_update_set_retention_roundtrip() {
+        let u = ConfigUpdateType::SetRetention(RetentionPolicy {
+            block_retention_count: 1000,
+            private_data_ttl_blocks: 500,
+            transaction_retention_secs: 86400,
+        });
         assert_eq!(roundtrip(u.clone()), u);
     }
 
@@ -388,6 +427,74 @@ mod tests {
         let err =
             apply_config_update(&cfg, &[ConfigUpdateType::AddOrg("org1".to_string())]).unwrap_err();
         assert_eq!(err, ChannelError::OrgAlreadyExists("org1".to_string()));
+    }
+
+    // ── Retention policy tests ────────────────────────────────────────────────
+
+    #[test]
+    fn retention_policy_default_is_indefinite() {
+        let rp = RetentionPolicy::default();
+        assert_eq!(rp.block_retention_count, 0);
+        assert_eq!(rp.private_data_ttl_blocks, 0);
+        assert_eq!(rp.transaction_retention_secs, 0);
+    }
+
+    #[test]
+    fn retention_policy_serde_roundtrip() {
+        let rp = RetentionPolicy {
+            block_retention_count: 10_000,
+            private_data_ttl_blocks: 500,
+            transaction_retention_secs: 2_592_000,
+        };
+        let json = serde_json::to_string(&rp).expect("serialize");
+        let restored: RetentionPolicy = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(rp, restored);
+    }
+
+    #[test]
+    fn retention_policy_deserializes_with_missing_fields() {
+        let json = "{}";
+        let rp: RetentionPolicy = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(rp, RetentionPolicy::default());
+    }
+
+    #[test]
+    fn channel_config_default_has_indefinite_retention() {
+        let cfg = ChannelConfig::default();
+        assert_eq!(cfg.retention_policy, RetentionPolicy::default());
+    }
+
+    #[test]
+    fn channel_config_serde_backwards_compat_without_retention() {
+        // Old JSON without retention_policy should deserialize with defaults.
+        let json = r#"{
+            "version": 1,
+            "member_orgs": ["org1"],
+            "orderer_orgs": [],
+            "endorsement_policy": {"AnyOf": ["org1"]},
+            "acls": {},
+            "batch_size": 50,
+            "batch_timeout_ms": 1000,
+            "anchor_peers": {}
+        }"#;
+        let cfg: ChannelConfig = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(cfg.retention_policy, RetentionPolicy::default());
+    }
+
+    #[test]
+    fn apply_set_retention_updates_policy() {
+        let cfg = sample();
+        let rp = RetentionPolicy {
+            block_retention_count: 5000,
+            private_data_ttl_blocks: 200,
+            transaction_retention_secs: 604_800,
+        };
+        let next = apply_config_update(&cfg, &[ConfigUpdateType::SetRetention(rp.clone())])
+            .expect("apply");
+        assert_eq!(next.retention_policy, rp);
+        assert_eq!(next.version, cfg.version + 1);
+        // Original unchanged.
+        assert_eq!(cfg.retention_policy, RetentionPolicy::default());
     }
 
     #[test]

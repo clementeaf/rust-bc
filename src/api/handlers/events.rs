@@ -83,12 +83,16 @@ fn get_last_ack(client_id: &str) -> Option<u64> {
 fn event_passes_filter(event: &BlockEvent, filter: &WsFilter) -> bool {
     if let Some(ref fch) = filter.channel_id {
         let event_channel = match event {
-            BlockEvent::BlockCommitted { channel_id, .. } => channel_id.as_str(),
-            BlockEvent::TransactionCommitted { channel_id, .. } => channel_id.as_str(),
-            BlockEvent::ChaincodeEvent { channel_id, .. } => channel_id.as_str(),
+            BlockEvent::BlockCommitted { channel_id, .. } => Some(channel_id.as_str()),
+            BlockEvent::TransactionCommitted { channel_id, .. } => Some(channel_id.as_str()),
+            BlockEvent::ChaincodeEvent { channel_id, .. } => Some(channel_id.as_str()),
+            // Security events are channel-agnostic — skip channel filter.
+            _ => None,
         };
-        if event_channel != fch {
-            return false;
+        if let Some(ch) = event_channel {
+            if ch != fch {
+                return false;
+            }
         }
     }
     if let Some(ref fcc) = filter.chaincode_id {

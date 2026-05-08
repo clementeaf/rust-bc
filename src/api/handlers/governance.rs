@@ -160,22 +160,24 @@ pub async fn submit_governance_proposal(
     let voting_period = registry.get_u64("voting_period_blocks", 17_280);
     let current_height = chain_height(&state);
 
-    // Verify proposer has enough stake to cover deposit (minus already locked)
-    let proposer_stake = state
-        .staking_manager
-        .get_validator(&body.proposer)
-        .map(|v| v.staked_amount)
-        .unwrap_or(0);
-    let already_locked = store.locked_deposit_for(&body.proposer);
-    let available = proposer_stake.saturating_sub(already_locked);
-    if available < body.deposit {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(&format!(
-                "insufficient available stake: have {available} (stake {proposer_stake} - locked {already_locked}), need {} for deposit",
-                body.deposit
-            )),
-            400,
-        )));
+    // Verify proposer has enough stake to cover deposit (skip in permissive mode)
+    if !crate::api::errors::acl_permissive() {
+        let proposer_stake = state
+            .staking_manager
+            .get_validator(&body.proposer)
+            .map(|v| v.staked_amount)
+            .unwrap_or(0);
+        let already_locked = store.locked_deposit_for(&body.proposer);
+        let available = proposer_stake.saturating_sub(already_locked);
+        if available < body.deposit {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto(&format!(
+                    "insufficient available stake: have {available} (stake {proposer_stake} - locked {already_locked}), need {} for deposit",
+                    body.deposit
+                )),
+                400,
+            )));
+        }
     }
 
     let action = match &body.action {
@@ -307,14 +309,21 @@ pub async fn cast_governance_vote(
         }
     };
 
-    // Resolve real voting power from StakingManager (own + delegated)
-    let power = voter_power(&state, &body.voter);
-    if power == 0 {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("voter has no staked tokens (zero voting power)"),
-            400,
-        )));
-    }
+    // Resolve real voting power from StakingManager (own + delegated).
+    // In permissive mode, grant power=1 so sandbox demos work without staking.
+    let power = {
+        let real = voter_power(&state, &body.voter);
+        if real > 0 {
+            real
+        } else if crate::api::errors::acl_permissive() {
+            1
+        } else {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("voter has no staked tokens (zero voting power)"),
+                400,
+            )));
+        }
+    };
 
     let current_height = chain_height(&state);
 

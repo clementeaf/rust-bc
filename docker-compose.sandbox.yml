@@ -1,0 +1,79 @@
+# Cerulean Ledger — Sandbox Compose
+#
+# Single-node demo with both frontends. Designed for Cloudflare Tunnel exposure.
+#
+# Usage:
+#   docker compose -f docker-compose.sandbox.yml build
+#   docker compose -f docker-compose.sandbox.yml up -d
+#
+# Services exposed:
+#   :9600  — Cerulean node API (PQC, permissive ACL, RocksDB)
+#   :5173  — Block Explorer (Cerulean Ledger UI)
+#   :5174  — Cerulean Voto (electronic voting UI)
+
+services:
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cerulean-sandbox-node
+    restart: unless-stopped
+    ports:
+      - "9600:8080"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      RUST_LOG: "info"
+      NETWORK_ID: "cerulean-sandbox"
+      ORG_ID: "sandbox"
+      NODE_ROLE: "peer_and_orderer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      ACL_MODE: "permissive"
+      SIGNING_ALGORITHM: "ml-dsa-65"
+    volumes:
+      - sandbox-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - cerulean-sandbox
+
+  explorer:
+    build:
+      context: ./block-explorer-vite
+      dockerfile: Dockerfile
+    container_name: cerulean-sandbox-explorer
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      node:
+        condition: service_healthy
+    networks:
+      - cerulean-sandbox
+
+  voto:
+    build:
+      context: ./cerulean-voto
+      dockerfile: Dockerfile
+    container_name: cerulean-sandbox-voto
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    depends_on:
+      node:
+        condition: service_healthy
+    networks:
+      - cerulean-sandbox
+
+volumes:
+  sandbox-data:
+
+networks:
+  cerulean-sandbox:
+    driver: bridge

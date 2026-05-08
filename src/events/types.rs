@@ -26,6 +26,49 @@ pub enum BlockEvent {
         event_name: String,
         payload: Vec<u8>,
     },
+
+    // ── Security events (for CSIRT/SIEM integration) ─────────────────────────
+    /// An ACL check denied a request.
+    AclDenied {
+        resource: String,
+        identity: String,
+        reason: String,
+    },
+    /// A validator produced conflicting proposals (equivocation).
+    EquivocationDetected {
+        proposer: String,
+        height: u64,
+        slot: u64,
+    },
+    /// Rate limiter rejected a request.
+    RateLimitExceeded { source_ip: String, endpoint: String },
+    /// A block or transaction signature failed verification.
+    InvalidSignature {
+        entity: String,
+        algorithm: String,
+        reason: String,
+    },
+    /// A validator was penalized (slashing).
+    ValidatorSlashed {
+        validator: String,
+        reason: String,
+        penalty_height: u64,
+    },
+}
+
+impl BlockEvent {
+    /// Returns `true` if this is a security-relevant event suitable for
+    /// CSIRT/SIEM forwarding.
+    pub fn is_security_event(&self) -> bool {
+        matches!(
+            self,
+            BlockEvent::AclDenied { .. }
+                | BlockEvent::EquivocationDetected { .. }
+                | BlockEvent::RateLimitExceeded { .. }
+                | BlockEvent::InvalidSignature { .. }
+                | BlockEvent::ValidatorSlashed { .. }
+        )
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -104,5 +147,111 @@ mod tests {
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"type\":\"chaincode_event\""));
+    }
+
+    // ── Security event tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn acl_denied_roundtrip() {
+        let event = BlockEvent::AclDenied {
+            resource: "/api/v1/blocks".into(),
+            identity: "did:cerulean:abc".into(),
+            reason: "missing X-Org-Id".into(),
+        };
+        assert_eq!(roundtrip(&event), event);
+    }
+
+    #[test]
+    fn equivocation_detected_roundtrip() {
+        let event = BlockEvent::EquivocationDetected {
+            proposer: "validator-1".into(),
+            height: 100,
+            slot: 5,
+        };
+        assert_eq!(roundtrip(&event), event);
+    }
+
+    #[test]
+    fn rate_limit_exceeded_roundtrip() {
+        let event = BlockEvent::RateLimitExceeded {
+            source_ip: "192.168.1.100".into(),
+            endpoint: "/api/v1/transactions".into(),
+        };
+        assert_eq!(roundtrip(&event), event);
+    }
+
+    #[test]
+    fn invalid_signature_roundtrip() {
+        let event = BlockEvent::InvalidSignature {
+            entity: "block-42".into(),
+            algorithm: "ml-dsa-65".into(),
+            reason: "size mismatch".into(),
+        };
+        assert_eq!(roundtrip(&event), event);
+    }
+
+    #[test]
+    fn validator_slashed_roundtrip() {
+        let event = BlockEvent::ValidatorSlashed {
+            validator: "validator-3".into(),
+            reason: "equivocation".into(),
+            penalty_height: 200,
+        };
+        assert_eq!(roundtrip(&event), event);
+    }
+
+    #[test]
+    fn is_security_event_returns_true_for_security_variants() {
+        assert!(BlockEvent::AclDenied {
+            resource: "".into(),
+            identity: "".into(),
+            reason: "".into(),
+        }
+        .is_security_event());
+
+        assert!(BlockEvent::EquivocationDetected {
+            proposer: "".into(),
+            height: 0,
+            slot: 0,
+        }
+        .is_security_event());
+
+        assert!(BlockEvent::RateLimitExceeded {
+            source_ip: "".into(),
+            endpoint: "".into(),
+        }
+        .is_security_event());
+
+        assert!(BlockEvent::InvalidSignature {
+            entity: "".into(),
+            algorithm: "".into(),
+            reason: "".into(),
+        }
+        .is_security_event());
+
+        assert!(BlockEvent::ValidatorSlashed {
+            validator: "".into(),
+            reason: "".into(),
+            penalty_height: 0,
+        }
+        .is_security_event());
+    }
+
+    #[test]
+    fn is_security_event_returns_false_for_block_events() {
+        assert!(!BlockEvent::BlockCommitted {
+            channel_id: "".into(),
+            height: 0,
+            tx_count: 0,
+        }
+        .is_security_event());
+
+        assert!(!BlockEvent::TransactionCommitted {
+            channel_id: "".into(),
+            tx_id: "".into(),
+            block_height: 0,
+            valid: true,
+        }
+        .is_security_event());
     }
 }

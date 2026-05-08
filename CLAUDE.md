@@ -121,6 +121,8 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/testnet/` — `GenesisConfig` (testnet/devnet/mainnet presets with validation), `Faucet` (rate-limited token drip with cooldown and depletion)
 - `src/evm_compat/` — Full EVM execution via revm (`executor.rs`), Solidity ABI encoding/decoding (`abi.rs`), precompile interface with gas metering (`precompile.rs`), DID-to-address derivation. HTTP endpoints: `POST /evm/deploy`, `POST /evm/call`, `POST /evm/static-call`, `GET /evm/contracts`
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
+- `src/channel/config.rs` — `ChannelConfig` with `RetentionPolicy` (block retention count, private data TTL, transaction retention), configurable per channel via `ConfigUpdateType::SetRetention`
+- `src/events/webhook.rs` — `WebhookNotifier`: subscribes to `EventBus`, filters security events (`AclDenied`, `EquivocationDetected`, `RateLimitExceeded`, `InvalidSignature`, `ValidatorSlashed`), POSTs to `CSIRT_WEBHOOK_URL` with exponential backoff
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
 - `src/pin/` — Numeric PIN generation (CSPRNG, 4-6 digits), Argon2id hashing/verification, `PinStore` trait with `MemoryPinStore` for DID-to-PIN association. HTTP: `POST /pin/generate`, `POST /pin/verify`
 - `src/crypto/hasher.rs` — Configurable hash algorithm (`SHA-256` / `SHA3-256`), `hash()`, `hash_with()`, KAT self-tests. `HASH_ALGORITHM` env var.
@@ -162,17 +164,20 @@ Standalone voting frontend built on the same patterns as `block-explorer-vite/`.
 
 Routes:
 - `/` — Landing page (hero + 3 pillars, standalone)
-- `/dashboard` — Active/closed election stats, tally bars
-- `/elections` — Create elections, history table
-- `/vote` — Emit vote (Yes/No/Abstain) with DID identity
-- `/results` — Public audit with percentage bars, quorum indicators
-- `/voters` — Register and lookup voters via DID
+- `/dashboard` — Active/closed election stats with internal scroll panels
+- `/elections` — History table + slide-over drawer for creation
+- `/vote` — Inline voter bar, per-election vote buttons (disabled without name), animated receipt with cryptographic guarantees
+- `/results` — Compact tally cards with percentage bars, quorum/threshold stats
+- `/voters` — Inline registration + verification bar, scrollable padrón table
+
+UI patterns: `h-screen` fixed layout, no page-level scroll, `border-neutral-100` borders, no shadows, compact padding. DIDs hidden from users — generated internally from names.
 
 Key structure:
 - `src/lib/api.ts` — governance + identity API client
 - `src/lib/routes.ts` — 5 lazy-loaded routes
 - `src/lib/format.ts` — shared formatters (`timeAgo`, `pct`, `fmtDateTime`)
-- `src/components/Layout.tsx` — header + sidebar + footer (same pattern as block explorer)
+- `src/components/Layout.tsx` — header + sidebar + minimal footer, `h-screen overflow-hidden`
+- `Dockerfile` + `nginx.conf` — containerized with API proxy to node
 
 Not required to run the node.
 
@@ -244,6 +249,9 @@ All `.md` presentation docs in `docs/camara/` have corresponding `.pdf` via pand
 | `TLS_PQC_KEM` | *(false)* | Set to `true` to enable X25519+ML-KEM-768 hybrid TLS key exchange |
 | `DUAL_SIGN_VERIFY_MODE` | *(either)* | `either` (transition) or `both` (strict) — dual-signature verification mode |
 | `HASH_ALGORITHM` | *(sha256)* | `sha256` or `sha3-256` — configurable block hash algorithm |
+| `CSIRT_WEBHOOK_URL` | — | POST security events to this URL (enables CSIRT/SIEM integration) |
+| `CSIRT_WEBHOOK_SECRET` | — | Shared secret sent as `X-Webhook-Secret` header |
+| `CSIRT_WEBHOOK_TIMEOUT_SECS` | 10 | HTTP timeout for webhook requests |
 
 ## Global Claude configuration (`~/.claude/`)
 
@@ -326,6 +334,16 @@ cd deploy && ./generate-tls.sh
 | orderer3 | 8090 (API), 8091 (P2P) | orderer (Raft ID 3) |
 | prometheus | 9090 | Metrics |
 | grafana | 3000 | Dashboards (admin/admin) |
+
+## Sandbox (public demo)
+
+```bash
+# One-command launcher: node + explorer + voto + Cloudflare tunnels
+./scripts/sandbox.sh          # Start (gives public URLs)
+./scripts/sandbox.sh stop     # Stop everything
+```
+
+Uses `docker-compose.sandbox.yml` (single node, PQC, permissive ACL, RocksDB). See `SANDBOX.md` for custom domain setup.
 
 ## Operator tooling
 

@@ -6,6 +6,62 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-08
+
+**CSIRT Webhook Notifier & Security Events**
+
+- 5 security event variants in `BlockEvent`: `AclDenied`, `EquivocationDetected`, `RateLimitExceeded`, `InvalidSignature`, `ValidatorSlashed`
+- `is_security_event()` filter for CSIRT/SIEM forwarding
+- `WebhookNotifier` (`src/events/webhook.rs`): subscribes to EventBus, filters security events, POSTs to configurable endpoint with exponential backoff
+- Env vars: `CSIRT_WEBHOOK_URL`, `CSIRT_WEBHOOK_SECRET`, `CSIRT_WEBHOOK_TIMEOUT_SECS`
+- Wired in `main.rs` — activates only when `CSIRT_WEBHOOK_URL` is set
+
+**Channel Retention Policy**
+
+- `RetentionPolicy` struct: `block_retention_count`, `private_data_ttl_blocks`, `transaction_retention_secs`
+- Integrated in `ChannelConfig` with `#[serde(default)]` for backwards compatibility
+- `ConfigUpdateType::SetRetention` — configurable via governance config transactions
+
+**Governance Permissive Mode**
+
+- Stake/deposit check skipped in `ACL_MODE=permissive` for proposal submission
+- Voter power defaults to 1 in permissive mode (enables sandbox demos without staking)
+
+**Cerulean Voto — UI Overhaul**
+
+- Removed all page titles (sidebar provides context)
+- Elections: create form moved to slide-over drawer, history table with internal scroll
+- Vote: inline voter bar with per-election buttons, disabled when no name entered
+- Vote receipt overlay with animated guarantee checks (signed, immutable, consensus, PQC)
+- Voters (Padrón): compact inline registration + verification, no exposed DIDs
+- Results: compact cards with tally bars and stats
+- All pages: `h-screen` layout with internal scroll, no page-level scrolling
+- Borders softened (`border-neutral-100`), shadows removed, padding reduced
+- `did:cerulean:` prefix hidden from all user-facing inputs — DIDs generated internally
+- "Deposito" / "Garantia" field removed from elections (hardcoded internally)
+- "Peso del voto" removed — 1 person = 1 vote
+
+**Sandbox Infrastructure**
+
+- `docker-compose.sandbox.yml` — single-node + explorer + voto compose
+- `block-explorer-vite/Dockerfile` + `nginx.conf` — containerized frontend with API proxy
+- `cerulean-voto/Dockerfile` + `nginx.conf` — same for voting app
+- `scripts/sandbox.sh` — one-command launcher with Cloudflare Quick Tunnels
+- `SANDBOX.md` — guide for quick tunnels and custom domain setup
+
+**Commercial Documentation**
+
+- `COMPLIANCE-LEY-21663-CIBERSEGURIDAD.md` + PDF — Ley 21.663 compliance mapping
+- `ONE-PAGER-PRODUCTO.md` — non-technical product explanation
+- `POLYGON-COMPARISON.md` — Cerulean vs Polygon positioning
+- `VERTICAL-HORIZONTAL-MATRIX.md` — how verticals consume platform capabilities
+- `GO-TO-MARKET-STRATEGY.md` — 5-step adoption playbook
+- `GOVERNANCE-OPERATIONAL.md` — operational governance framework for regulators
+- `SLA.md` — 3-tier service level agreement
+- `PRODUCT-GAPS-AND-READINESS.md` — 19 gaps identified, 8 closed this session
+
+Tests: 1445 (18 new), 0 failures. All quality gates pass.
+
 ### 2026-05-03
 
 **E2E Distributed Demo — PQC ML-DSA-65 Validated**
