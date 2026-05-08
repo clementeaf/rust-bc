@@ -186,18 +186,112 @@ Cómo se administra.
 
 ---
 
-## Líneas de acción consolidadas
+## Flujo entre capas
 
-| Línea de acción | Capas involucradas | Verticales que habilita |
-|---|---|---|
-| **Compliance regulatorio** | Criptografía + Privacidad + Observabilidad | Todas |
-| **Protección a largo plazo** | Criptografía (PQC + dual-signing) | Credenciales, Finanzas |
-| **Automatización de procesos** | Lógica de negocio (contratos + gobernanza) | Supply chain, Finanzas, Voto |
-| **Privacidad multi-organización** | Privacidad (canales + ACL + private data) | Todas |
-| **Rendimiento y escalabilidad** | Consenso (paralelo + MVCC) + Almacenamiento | Supply chain, Finanzas |
-| **Integración con sistemas existentes** | Interfaces (API + SDKs + EVM) | Todas |
-| **Verificabilidad independiente** | Interfaces (light client) + Criptografía | Credenciales, Voto |
-| **Soberanía operacional** | Red + Operación (self-hosted, sin cloud lock-in) | Todas |
+Cómo se conectan las capas cuando un usuario realiza una operación:
+
+```
+Usuario (navegador / SDK / API)
+       │
+       ▼
+  ┌─ Interfaces ─────────────────┐
+  │  API REST / WebSocket / SDK  │  Autenticación mTLS
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Privacidad y acceso ────────┐
+  │  ACL → Canal → DID → MSP    │  ¿Tiene permiso? ¿En qué canal?
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Lógica de negocio ─────────┐
+  │  Chaincode / EVM / Gobernanza│  Ejecutar regla de negocio
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Consenso ───────────────────┐
+  │  Raft / BFT → Wave executor │  Ordenar + validar + ejecutar en paralelo
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Criptografía ──────────────┐
+  │  ML-DSA-65 firma + SHA3 hash│  Sellar criptográficamente
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Almacenamiento ────────────┐
+  │  RocksDB → Block + World St │  Persistir de forma inmutable
+  └──────────┬───────────────────┘
+             │
+             ▼
+  ┌─ Red ───────────────────────┐
+  │  Gossip → Peers + CSIRT     │  Replicar a otros nodos + notificar
+  └─────────────────────────────┘
+```
+
+Cada capa agrega una garantía. Al final del flujo, el registro está autenticado, autorizado, ejecutado, consensuado, firmado, persistido y replicado.
+
+---
+
+## Líneas de acción
+
+Cada línea conecta capacidades existentes con un objetivo de negocio y un siguiente paso concreto.
+
+### 1. Compliance regulatorio
+**Qué usa:** Criptografía + Privacidad + Observabilidad + CSIRT webhook
+**Qué habilita:** Cumplimiento de Ley 21.663 y normativas sectoriales
+**Beneficiario:** Gobierno, banca, servicios esenciales
+**Estado:** Mapeo completo documentado, CSIRT implementado
+**Siguiente paso:** Piloto con institución regulada
+
+### 2. Protección a largo plazo
+**Qué usa:** ML-DSA-65, SHA3-256, ML-KEM-768, dual-signing
+**Qué habilita:** Registros válidos por décadas, incluso ante computación cuántica
+**Beneficiario:** Universidades (títulos), registros civiles, contratos a largo plazo
+**Estado:** Producción completa, pre-lab FIPS hecho
+**Siguiente paso:** Certificación FIPS 140-3 formal (12-24 meses)
+
+### 3. Automatización de procesos
+**Qué usa:** Chaincode Wasm + EVM + gobernanza on-chain + tokenomics
+**Qué habilita:** Reglas de negocio que se ejecutan sin intervención manual
+**Beneficiario:** Fintech, supply chain, consorcios
+**Estado:** Dos runtimes en producción + lifecycle completo
+**Siguiente paso:** Desarrollar chaincode específico para primer piloto
+
+### 4. Privacidad multi-organización
+**Qué usa:** Canales + private data + ACL deny-by-default + MSP roles
+**Qué habilita:** Múltiples organizaciones comparten infraestructura sin ver datos ajenos
+**Beneficiario:** Consorcios, banca, gobierno inter-institucional
+**Estado:** Producción completa con retention policy configurable
+**Siguiente paso:** Demo con 2+ organizaciones en sandbox
+
+### 5. Rendimiento bajo carga
+**Qué usa:** Wave-parallel execution + MVCC + RocksDB + rate limiting
+**Qué habilita:** Operaciones masivas (graduaciones, elecciones, conciliaciones)
+**Beneficiario:** Instituciones con volúmenes altos
+**Estado:** ~18,700 TX/s motor, ~42 TPS E2E, p50 14ms, stress test publicado
+**Siguiente paso:** Benchmark en hardware dedicado sin Docker Desktop
+
+### 6. Integración con sistemas existentes
+**Qué usa:** API REST (60+ endpoints) + SDKs (JS, Python) + EVM + WebSocket
+**Qué habilita:** Conectar con ERP, SIEM, bases de datos, wallets Ethereum
+**Beneficiario:** Equipos de TI que integran con infraestructura existente
+**Estado:** SDKs v1.0, OpenAPI spec, EVM compatible con ecosistema Ethereum
+**Siguiente paso:** Documentar guía de integración para primer cliente
+
+### 7. Verificabilidad independiente
+**Qué usa:** Light client + Merkle proofs + tally público
+**Qué habilita:** Un tercero verifica sin acceder al sistema — solo con matemáticas
+**Beneficiario:** Auditores, reguladores, ciudadanos (en caso de voto)
+**Estado:** Light client en producción, tally público sin votos individuales
+**Siguiente paso:** App móvil de verificación (consumir light client)
+
+### 8. Soberanía operacional
+**Qué usa:** Self-hosted + Docker + Cloudflare Tunnel + sin token público
+**Qué habilita:** Operar sin depender de AWS, GCP, Ethereum, ni terceros
+**Beneficiario:** Gobierno, defensa, instituciones que exigen control total
+**Estado:** Sandbox funcional, Docker compose para producción
+**Siguiente paso:** Guía de despliegue on-premise para primer cliente
 
 ---
 
