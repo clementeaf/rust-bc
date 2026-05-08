@@ -10,12 +10,14 @@
 
 ## Resultados
 
-| Nivel | Credenciales | Concurrencia | TPS | p50 | p95 | p99 | max | Errores | Throttled (429) |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | 500 | 10 | **42.5** | 14ms | 21ms | 25ms | 105ms | 0 | 0 |
-| 2 | 1,000 | 20 | **41.1** | 14ms | 23ms | 47ms | 91ms | 0 | 800 |
-| 3 | 2,000 | 50 | **40.1** | 14ms | 27ms | 149ms | 336ms | 0 | 1,200 |
-| 4 | 5,000 | 100 | **43.4** | 14ms | 20ms | 143ms | 306ms | 0 | 3,400 |
+| Nivel | Creds | Conc. | TPS | p50 | p95 | p99 | Errores |
+|---|---|---|---|---|---|---|---|
+| 1 | 500 | 10 | **42.5** | 14ms | 21ms | 25ms | 0 |
+| 2 | 1,000 | 20 | **41.1** | 14ms | 23ms | 47ms | 0 |
+| 3 | 2,000 | 50 | **40.1** | 14ms | 27ms | 149ms | 0 |
+| 4 | 5,000 | 100 | **43.4** | 14ms | 20ms | 143ms | 0 |
+
+Rate limiter throttled requests (HTTP 429): 800 → 1,200 → 3,400 en niveles 2-4. Comportamiento esperado — protege al nodo de sobrecarga.
 
 **100 identidades pre-cargadas. 8,500 credenciales escritas exitosamente. 0 errores reales.**
 

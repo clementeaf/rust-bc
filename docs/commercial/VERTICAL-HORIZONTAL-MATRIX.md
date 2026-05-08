@@ -41,18 +41,34 @@ Trail de auditoría compartido entre instituciones reguladas.
 
 ## Matriz de consumo
 
-Intensidad de uso: alto / medio / bajo / mínimo
-
-| Capacidad horizontal | Credenciales | Voto electrónico | Supply chain | Auditoría financiera |
+| Capacidad | Credenciales | Voto | Supply chain | Finanzas |
 |---|---|---|---|---|
-| **Inmutabilidad** | Alto — título no se altera | Alto — acta no se altera | Alto — custodia intacta | Alto — trail intocable |
-| **PQC** | Alto — título válido 30+ años | Alto — elección verificable a futuro | Medio — datos de vida corta | Alto — regulador lo exigirá |
-| **Canales** | Medio — separar emisores | Alto — separar elecciones | Alto — cada consorcio aislado | Alto — cada banco ve lo suyo |
-| **ACL / MSP** | Medio — solo emisor emite | Alto — solo votante registrado vota | Alto — cada actor ve su tramo | Alto — auditor ve todo, operador parcial |
-| **Gobernanza on-chain** | Mínimo | Alto — es el producto mismo | Medio — cambios de reglas entre socios | Medio — cambios de política entre bancos |
-| **EVM** | Mínimo | Mínimo | Bajo | Alto — lógica financiera programable |
-| **Light client** | Alto — verificar desde celular | Medio — verificar resultado desde móvil | Bajo | Bajo |
-| **Ejecución paralela** | Alto — emisión masiva (graduación) | Alto — miles de votos simultáneos | Alto — miles de checkpoints | Alto — conciliación batch |
+| Inmutabilidad | Alto | Alto | Alto | Alto |
+| PQC | Alto | Alto | Medio | Alto |
+| Canales | Medio | Alto | Alto | Alto |
+| ACL / MSP | Medio | Alto | Alto | Alto |
+| Gobernanza | Mínimo | Alto | Medio | Medio |
+| EVM | Mínimo | Mínimo | Bajo | Alto |
+| Light client | Alto | Medio | Bajo | Bajo |
+| Ejecución paralela | Alto | Alto | Alto | Alto |
+
+### Detalle por cruce
+
+**Inmutabilidad:** Título no se altera · Acta no se altera · Custodia intacta · Trail intocable
+
+**PQC:** Título válido 30+ años · Elección verificable a futuro · Datos de vida corta (medio) · Regulador lo exigirá
+
+**Canales:** Separar emisores · Separar elecciones · Cada consorcio aislado · Cada banco ve lo suyo
+
+**ACL / MSP:** Solo emisor emite · Solo votante registrado vota · Cada actor ve su tramo · Auditor ve todo, operador parcial
+
+**Gobernanza:** Poco uso · Es el producto mismo · Cambios de reglas entre socios · Cambios de política entre bancos
+
+**EVM:** Poco uso · Poco uso · Poco uso · Lógica financiera programable
+
+**Light client:** Verificar desde celular · Verificar resultado desde móvil · Poco uso · Poco uso
+
+**Ejecución paralela:** Emisión masiva (graduación) · Miles de votos simultáneos · Miles de checkpoints · Conciliación batch
 
 ---
 
@@ -62,12 +78,12 @@ Intensidad de uso: alto / medio / bajo / mínimo
 
 Cada vertical adicional tiene costo marginal cercano a cero porque reutiliza la misma infraestructura:
 
-```
-Costo de la primera vertical:   ████████████████████  (construir plataforma + vertical)
-Costo de la segunda vertical:   ████                  (solo lógica de negocio)
-Costo de la tercera vertical:   ███                   (menos aún)
-Costo de la cuarta vertical:    ██                    (casi solo configuración)
-```
+| Vertical | Costo relativo | Razón |
+|---|---|---|
+| Primera | 100% | Construir plataforma + vertical |
+| Segunda | 20% | Solo lógica de negocio |
+| Tercera | 15% | Menos aún |
+| Cuarta | 10% | Casi solo configuración |
 
 ### Priorización recomendada
 
