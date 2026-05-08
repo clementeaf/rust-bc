@@ -82,12 +82,9 @@ Cerulean Ledger tiene el motor técnico completo: 1,427+ tests, criptografía po
 
 ## Gaps importantes (frenan aceleración)
 
-### 5. Resultados de stress test no publicados
+### 5. ~~Resultados de stress test no publicados~~ CERRADO
 
-**Problema:** El script `stress-test.sh` existe y funciona (ramp 500→10K creds, concurrencia 10→200), pero no hay resultados documentados. No sabemos el punto de quiebre end-to-end publicado.
-
-**Acción:** Correr stress test contra Docker compose, capturar output, publicar en `docs/architecture/benchmarks/`.
-**Esfuerzo:** 1 día
+**Resolución:** `docs/architecture/benchmarks/STRESS-TEST-RESULTS.md` — 4 niveles de ramp-up (500→5K creds, concurrencia 10→100). ~42 TPS end-to-end via HTTP, p50 14ms, 0 errores reales, 8,500 credenciales escritas. Rate limiter es el cuello de botella, no el nodo. Punto de quiebre no alcanzado.
 
 ---
 
