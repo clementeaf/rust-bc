@@ -8,6 +8,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-09
 
+**Adversarial Pentest Suite**
+
+15 attack scenarios executed against live code (`src/forensic_pentest.rs`):
+- Block tampering, signature forgery, replay, double-spend, equivocation
+- ACL bypass, rate limit evasion, channel crossing, identity spoofing
+- Hash collision, timestamp manipulation, overflow, null injection, key extraction, state rollback
+- 2 real vulnerabilities found and fixed:
+  - `SecurityToken::mint` integer overflow → `checked_add`
+  - `MemoryStore::write_block` allowed overwrites → duplicate height rejection
+- API: `GET /pentest/report`
+- 0 critical vulnerabilities remaining
+
+**Forensic, Intelligence, Stress — Full API Exposure**
+
+- Forensic: `GET /forensic/replay`, `GET /forensic/integrity` (block chain verification)
+- Intelligence: `POST /intelligence/anomaly`, `POST /intelligence/risk`, `POST /intelligence/patterns`
+- Stress: expanded to 8 modules (+ governance, forensic, pattern detection)
+
 **Pre-Launch Modules (5/5 Complete)**
 
 Intelligence layer (`src/intelligence/`):

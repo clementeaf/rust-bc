@@ -132,11 +132,12 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/consensus/slashing.rs` — Validator penalty economics: `PenaltyManager` with `PenaltyRecord`, `PenaltyPolicy` (configurable duration/permanent/escalation), deterministic expiration at `start_height + duration`, anti-double-slash, reputation tracking. Serde persistence.
 - `crates/pqc_crypto_module/` — FIPS-oriented standalone crate: approved-mode lifecycle (`Uninitialized→Approved→Error`), ML-DSA-65 (FIPS 204), SHA3-256 (FIPS 202), ML-KEM-768 (FIPS 203 via `pqcrypto-mlkem`), KAT self-tests with roundtrip verification, `ZeroizeOnDrop` + `mlock` on private keys, exhaustive FSM tests (16/16 transition pairs), no classical fallback. ACVP dry-run harness (`tools/acvp_dry_run/`) validates all three algorithms. See `crates/pqc_crypto_module/README.md`.
 
-- `src/intelligence/` — Anomaly detection (z-score), risk scoring (6-rule AML), pattern recognition (velocity, structuring, round-trip, dormant activation). HTTP: anomaly/risk APIs planned.
+- `src/intelligence/` — Anomaly detection (z-score), risk scoring (6-rule AML), pattern recognition (velocity, structuring, round-trip, dormant activation). HTTP: `POST /intelligence/anomaly`, `POST /intelligence/risk`, `POST /intelligence/patterns`.
 - `src/oracle_demo.rs` — Simulated market feeds (BTC/ETH/CLP) for sandbox. `ORACLE_DEMO=true` env var.
 - `src/regulatory/` — 21 compliance checks (Ley 21.663, ISO 20022, ERC-3643, retention, intelligence, forensic). Report generation with SHA-256 hash. HTTP: `GET /regulatory/checks`, `GET /regulatory/report`.
-- `src/stress.rs` — Per-module stress tests (storage, crypto, anomaly, risk, compliance). Certification report with ops/sec, p50/p99, Pass/Degraded/Fail. HTTP: `GET /stress/report?ops=N`.
-- `src/compliance/` — ISO 20022 (7 message types), ISO 3166 (193 countries), ISO 4217 (64 currencies), ISO 8601 (dates/durations), ERC-3643 (security tokens). HTTP: `POST /compliance/validate/*`, `GET /compliance/countries`, `GET /compliance/currencies`.
+- `src/stress.rs` — Per-module stress tests (8 modules: storage, crypto, anomaly, risk, compliance, governance, forensic, patterns). HTTP: `GET /stress/report?ops=N`.
+- `src/compliance/` — ISO 20022 (7 message types), ISO 3166 (193 countries), ISO 4217 (64 currencies), ISO 8601 (dates/durations), ERC-3643 (security tokens with `checked_add` overflow protection). HTTP: `POST /compliance/validate/*`, `GET /compliance/countries`, `GET /compliance/currencies`.
+- `src/forensic_pentest.rs` — 15 adversarial attack scenarios (tampering, forgery, double-spend, equivocation, ACL bypass, channel crossing, identity spoofing, overflow, rollback, etc.). 0 critical vulnerabilities. HTTP: `GET /pentest/report`.
 
 ### Block explorer — Cerulean Ledger UI
 
