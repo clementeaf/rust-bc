@@ -21,6 +21,7 @@ pub mod intelligence;
 pub mod msp;
 pub mod oracle;
 pub mod organizations;
+pub mod pentest;
 pub mod pin;
 pub mod private_data;
 pub mod proposals;

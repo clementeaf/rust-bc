@@ -51,6 +51,7 @@ pub mod events;
 #[cfg(feature = "evm")]
 pub mod evm_compat;
 pub mod forensic;
+pub mod forensic_pentest;
 pub mod gateway;
 pub mod governance;
 pub mod intelligence;

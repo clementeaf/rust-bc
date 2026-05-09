@@ -23,6 +23,7 @@ mod events;
 #[cfg(feature = "evm")]
 mod evm_compat;
 mod forensic;
+mod forensic_pentest;
 mod gateway;
 mod governance;
 mod identity;

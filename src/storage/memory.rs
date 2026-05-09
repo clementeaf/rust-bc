@@ -36,6 +36,13 @@ impl Default for MemoryStore {
 impl BlockStore for MemoryStore {
     fn write_block(&self, block: &Block) -> StorageResult<()> {
         let mut blocks = self.blocks.lock().unwrap_or_else(|e| e.into_inner());
+        // Reject overwrites of committed blocks — immutability guarantee
+        if blocks.contains_key(&block.height) {
+            return Err(crate::storage::errors::StorageError::Other(format!(
+                "block at height {} already committed",
+                block.height
+            )));
+        }
         let mut latest = self.latest_height.lock().unwrap_or_else(|e| e.into_inner());
         if block.height > *latest {
             *latest = block.height;

@@ -325,8 +325,16 @@ impl SecurityToken {
         if caller != self.issuer_did {
             return Err("only issuer can mint".into());
         }
-        self.total_supply += amount;
-        *self.balances.entry(to.to_string()).or_insert(0) += amount;
+        self.total_supply = self
+            .total_supply
+            .checked_add(amount)
+            .ok_or("overflow: total supply would exceed u64::MAX")?;
+        *self.balances.entry(to.to_string()).or_insert(0) = self
+            .balances
+            .get(&to.to_string())
+            .unwrap_or(&0)
+            .checked_add(amount)
+            .ok_or("overflow: balance would exceed u64::MAX")?;
         Ok(())
     }
 
