@@ -26,7 +26,7 @@ fail() { echo -e "  ${RED}[FAIL]${NC} $1"; }
 skip() { echo -e "  ${YELLOW}[SKIP]${NC} $1"; }
 
 # Headers for permissive ACL mode
-HEADERS=(-H "Content-Type: application/json" -H "X-Org-Id: sandbox" -H "X-Msp-Role: Admin")
+HEADERS=(-H "Content-Type: application/json" -H "X-Org-Id: sandbox" -H "X-Msp-Role: admin")
 
 echo -e "${CYAN}=== Cerulean Sandbox Seeder ===${NC}"
 echo -e "  Target: ${CYAN}$API${NC}"
@@ -46,14 +46,24 @@ fi
 
 echo -e "${CYAN}2. Creating wallets${NC}"
 
+MINER_ADDR=""
 WALLETS=("alice" "bob" "carlos" "diana" "sandbox-miner")
 for name in "${WALLETS[@]}"; do
-    resp=$(curl -sf -X POST "$API/wallets/create" "${HEADERS[@]}" \
+    resp=$(curl -s -X POST "$API/wallets/create" "${HEADERS[@]}" \
         -d "{\"owner\": \"$name\"}" 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then
-        ok "Wallet: $name"
+    if echo "$resp" | grep -q '"success":true'; then
+        addr=$(echo "$resp" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4)
+        ok "Wallet: $name ($addr)"
+        if [[ "$name" == "sandbox-miner" ]]; then
+            MINER_ADDR="$addr"
+        fi
     else
         skip "Wallet: $name (may already exist)"
+        # Try to get existing wallet address for miner
+        if [[ "$name" == "sandbox-miner" && -z "$MINER_ADDR" ]]; then
+            wallets=$(curl -s "$API/wallets" "${HEADERS[@]}" 2>/dev/null || echo "")
+            MINER_ADDR=$(echo "$wallets" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
     fi
 done
 
@@ -61,15 +71,19 @@ done
 
 echo -e "${CYAN}3. Mining demo blocks${NC}"
 
-for i in $(seq 1 5); do
-    resp=$(curl -sf -X POST "$API/blocks/mine" "${HEADERS[@]}" \
-        -d '{"miner_address": "sandbox-miner"}' 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then
-        ok "Block $i mined"
-    else
-        fail "Block $i failed"
-    fi
-done
+if [[ -z "$MINER_ADDR" ]]; then
+    skip "No miner address available — skipping mining"
+else
+    for i in $(seq 1 5); do
+        resp=$(curl -s -X POST "$API/mine" "${HEADERS[@]}" \
+            -d "{\"miner_address\": \"$MINER_ADDR\"}" 2>/dev/null || echo "")
+        if echo "$resp" | grep -q '"success":true'; then
+            ok "Block $i mined"
+        else
+            fail "Block $i — $(echo "$resp" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)"
+        fi
+    done
+fi
 
 # ── Identities (DIDs) ───────────────────────────────────────────────────────
 
