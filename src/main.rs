@@ -47,6 +47,7 @@ mod staking;
 mod state_reconstructor;
 mod state_snapshot;
 mod storage;
+mod stress;
 mod tls;
 mod transaction;
 mod transaction_validation;

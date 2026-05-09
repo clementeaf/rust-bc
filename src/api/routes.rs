@@ -5,7 +5,7 @@ use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
     events, forensic, gateway, governance, identity, msp, oracle, organizations, pin, private_data,
-    proposals, regulatory, snapshots, transactions, utilities,
+    proposals, regulatory, snapshots, stress, transactions, utilities,
 };
 
 /// API routes configuration
@@ -139,7 +139,8 @@ impl ApiRoutes {
             .service(contact::submit_contact)
             .service(contact::list_contacts)
             .service(regulatory::run_checks)
-            .service(regulatory::compliance_report);
+            .service(regulatory::compliance_report)
+            .service(stress::stress_report);
     }
 
     fn identity_routes() -> Scope {

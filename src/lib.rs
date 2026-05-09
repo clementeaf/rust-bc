@@ -61,6 +61,7 @@ pub mod pin;
 pub mod pki;
 pub mod private_data;
 pub mod regulatory;
+pub mod stress;
 pub mod testnet;
 pub mod tls;
 pub mod tokenomics;

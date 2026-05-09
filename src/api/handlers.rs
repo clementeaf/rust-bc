@@ -25,6 +25,7 @@ pub mod private_data;
 pub mod proposals;
 pub mod regulatory;
 pub mod snapshots;
+pub mod stress;
 pub mod transactions;
 pub mod utilities;
 pub mod validation;
