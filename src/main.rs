@@ -26,6 +26,7 @@ mod forensic;
 mod gateway;
 mod governance;
 mod identity;
+mod intelligence;
 mod metrics;
 mod middleware;
 mod models;
