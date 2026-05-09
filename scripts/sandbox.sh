@@ -69,6 +69,12 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
+# ── Seed Data ────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${CYAN}Seeding demo data...${NC}"
+./scripts/seed-sandbox.sh http://localhost:9600 || echo -e "${YELLOW}Seed script failed (non-fatal).${NC}"
+
 # ── Quick Tunnels ─────────────────────────────────────────────────────────────
 
 echo ""

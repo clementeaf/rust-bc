@@ -6,6 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-10
+
+**Oracle Maturation**
+
+- External connector wired in `main.rs` — `ORACLE_SOURCES` env var activates real HTTP price feeds
+- New env var `ORACLE_CONNECTOR_SYMBOL` (default `BTC/USD`) selects the feed symbol
+- API responses now include `age_ms` and `is_stale` fields for every price feed
+- New endpoint: `GET /oracle/status` — node count, feed count, stale/fresh breakdown, pending reports
+
+**Pentest Suite Expanded (15 → 20 scenarios)**
+
+Strengthened existing tests (previously descriptive, now exercise real code):
+- PEN-003: Replay attack — `MemoryStore` rejects duplicate block height
+- PEN-004: Double-spend — `schedule_batch` detects WAW conflict, separates into sequential waves
+
+New attack scenarios:
+- PEN-016: Path traversal in channel names (`../`, null bytes) — HashMap keys are literal, no leakage
+- PEN-017: Oracle price manipulation (20x outlier) — filtered by median, consensus unaffected
+- PEN-018: Governance vote with zero stake — `VoteStore` rejects `ZeroPower`
+- PEN-019: Credential forgery with untrusted issuer — detected, distinguishable by DID
+- PEN-020: Oversized payload (100KB ISO 20022 message) — no panic, size limits recommended at boundary
+
+**Sandbox Seed Data**
+
+- `scripts/seed-sandbox.sh` — pre-loads 5 wallets, 5 blocks, 5 identities, 3 credentials, 1 governance proposal, 1 contact entry
+- Auto-runs after node health check in `scripts/sandbox.sh`
+- Idempotent: safe to run multiple times
+
+Tests: 1,604 passed, 0 failures.
+
 ### 2026-05-09
 
 **Adversarial Pentest Suite**

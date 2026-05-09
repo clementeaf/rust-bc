@@ -124,6 +124,7 @@ impl ApiRoutes {
         cfg.service(oracle::get_oracle_feed)
             .service(oracle::list_oracle_feeds)
             .service(oracle::list_oracle_nodes)
+            .service(oracle::oracle_status)
             .service(forensic::forensic_timeline)
             .service(forensic::forensic_security)
             .service(forensic::forensic_export)

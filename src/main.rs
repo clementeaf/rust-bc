@@ -1033,6 +1033,21 @@ async fn async_main_inner() -> std::io::Result<()> {
     let demo_config = oracle_demo::DemoFeedConfig::from_env();
     oracle_demo::spawn_demo_feed(demo_config, app_state.oracle_registry.clone());
 
+    // Oracle external connector: real price feeds from HTTP APIs.
+    // Activated by ORACLE_SOURCES env var (comma-separated URLs).
+    if let Some(connector_config) = oracle_connector::ConnectorConfig::from_env() {
+        let symbol = std::env::var("ORACLE_CONNECTOR_SYMBOL").unwrap_or_else(|_| "BTC/USD".into());
+        log::info!(
+            "Oracle external connector enabled: {} source(s) for {symbol}",
+            connector_config.sources.len()
+        );
+        oracle_connector::spawn_oracle_poller(
+            connector_config,
+            app_state.oracle_registry.clone(),
+            symbol,
+        );
+    }
+
     // Tarea periódica para crear snapshots cada 1000 bloques
     if pruning_manager.is_some() && snapshot_manager.is_some() {
         let blockchain_for_snapshot = blockchain_arc.clone();

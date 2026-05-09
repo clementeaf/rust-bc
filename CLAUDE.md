@@ -134,10 +134,13 @@ Services initialized at startup (all use in-memory backends by default):
 
 - `src/intelligence/` — Anomaly detection (z-score), risk scoring (6-rule AML), pattern recognition (velocity, structuring, round-trip, dormant activation). HTTP: `POST /intelligence/anomaly`, `POST /intelligence/risk`, `POST /intelligence/patterns`.
 - `src/oracle_demo.rs` — Simulated market feeds (BTC/ETH/CLP) for sandbox. `ORACLE_DEMO=true` env var.
+- `src/oracle_connector.rs` — External HTTP price feeds with multi-source aggregation, spread detection, JSON path extraction. Activated by `ORACLE_SOURCES` env var. Wired in `main.rs` via `spawn_oracle_poller`.
+- `src/oracle_system.rs` — Oracle registry: reputation, outlier filtering, median aggregation, HMAC signatures, staleness detection. HTTP: `GET /oracle/feeds`, `GET /oracle/feeds/{symbol}`, `GET /oracle/nodes`, `GET /oracle/status`.
+- `src/oracle_collateral.rs` — Bonding/collateral/dispute/slashing for oracle operators.
 - `src/regulatory/` — 21 compliance checks (Ley 21.663, ISO 20022, ERC-3643, retention, intelligence, forensic). Report generation with SHA-256 hash. HTTP: `GET /regulatory/checks`, `GET /regulatory/report`.
 - `src/stress.rs` — Per-module stress tests (8 modules: storage, crypto, anomaly, risk, compliance, governance, forensic, patterns). HTTP: `GET /stress/report?ops=N`.
 - `src/compliance/` — ISO 20022 (7 message types), ISO 3166 (193 countries), ISO 4217 (64 currencies), ISO 8601 (dates/durations), ERC-3643 (security tokens with `checked_add` overflow protection). HTTP: `POST /compliance/validate/*`, `GET /compliance/countries`, `GET /compliance/currencies`.
-- `src/forensic_pentest.rs` — 15 adversarial attack scenarios (tampering, forgery, double-spend, equivocation, ACL bypass, channel crossing, identity spoofing, overflow, rollback, etc.). 0 critical vulnerabilities. HTTP: `GET /pentest/report`.
+- `src/forensic_pentest.rs` — 20 adversarial attack scenarios (tampering, forgery, replay, double-spend, equivocation, ACL bypass, channel crossing, identity spoofing, overflow, rollback, path traversal, oracle manipulation, governance abuse, credential forgery, oversized payload). All exercise real code paths. 0 critical vulnerabilities. HTTP: `GET /pentest/report`.
 
 ### Block explorer — Cerulean Ledger UI
 
@@ -259,6 +262,11 @@ All `.md` presentation docs in `docs/camara/` have corresponding `.pdf` via pand
 | `CSIRT_WEBHOOK_URL` | — | POST security events to this URL (enables CSIRT/SIEM integration) |
 | `CSIRT_WEBHOOK_SECRET` | — | Shared secret sent as `X-Webhook-Secret` header |
 | `CSIRT_WEBHOOK_TIMEOUT_SECS` | 10 | HTTP timeout for webhook requests |
+| `ORACLE_DEMO` | *(false)* | Set to `true` to enable simulated price feeds (BTC/ETH/CLP) |
+| `ORACLE_SOURCES` | — | Comma-separated HTTP URLs for real external price feeds |
+| `ORACLE_CONNECTOR_SYMBOL` | `BTC/USD` | Symbol for the external oracle connector feed |
+| `ORACLE_POLL_INTERVAL_SECS` | 60 | Polling interval for external oracle sources |
+| `ORACLE_MIN_SOURCES` | 1 | Minimum agreeing sources for valid oracle reading |
 
 ## Global Claude configuration (`~/.claude/`)
 
