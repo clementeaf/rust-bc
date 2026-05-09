@@ -1,3 +1,4 @@
+pub mod auto;
 pub mod service;
 
 use serde::{Deserialize, Serialize};
