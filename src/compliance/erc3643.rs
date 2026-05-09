@@ -78,15 +78,11 @@ impl IdentityRegistry {
     }
 
     pub fn has_valid_claim(&self, did: &str, claim_type: ClaimType, now: u64) -> bool {
-        self.identities
-            .lock()
-            .unwrap()
-            .get(did)
-            .is_some_and(|id| {
-                id.claims
-                    .iter()
-                    .any(|c| c.claim_type == claim_type && !c.is_expired(now))
-            })
+        self.identities.lock().unwrap().get(did).is_some_and(|id| {
+            id.claims
+                .iter()
+                .any(|c| c.claim_type == claim_type && !c.is_expired(now))
+        })
     }
 
     pub fn freeze(&self, did: &str) -> bool {

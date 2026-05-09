@@ -18,8 +18,16 @@ use super::iso4217;
 pub enum MessageType {
     /// pacs.008 — FI to FI Customer Credit Transfer
     Pacs008,
+    /// pacs.002 — FI to FI Payment Status Report
+    Pacs002,
+    /// pacs.004 — Payment Return
+    Pacs004,
     /// pain.001 — Customer Credit Transfer Initiation
     Pain001,
+    /// pain.002 — Customer Payment Status Report
+    Pain002,
+    /// camt.052 — Bank to Customer Account Report (intraday)
+    Camt052,
     /// camt.053 — Bank to Customer Statement
     Camt053,
 }
@@ -113,6 +121,64 @@ pub struct StatementEntry {
 pub enum CreditDebit {
     Credit,
     Debit,
+}
+
+/// pacs.002 — FI to FI Payment Status Report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pacs002 {
+    pub message_id: String,
+    pub creation_date: String,
+    pub original_message_id: String,
+    pub status: PaymentStatus,
+    pub reason: Option<String>,
+}
+
+/// pacs.004 — Payment Return.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pacs004 {
+    pub message_id: String,
+    pub creation_date: String,
+    pub original_message_id: String,
+    pub return_amount: CurrencyAmount,
+    pub return_reason: String,
+    pub debtor_agent_bic: String,
+    pub creditor_agent_bic: String,
+}
+
+/// pain.002 — Customer Payment Status Report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pain002 {
+    pub message_id: String,
+    pub creation_date: String,
+    pub original_message_id: String,
+    pub statuses: Vec<InstructionStatus>,
+}
+
+/// Status of a single payment instruction within pain.002.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstructionStatus {
+    pub instruction_id: String,
+    pub status: PaymentStatus,
+    pub reason: Option<String>,
+}
+
+/// Payment status codes (subset of ISO 20022 ExternalPaymentTransactionStatus).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PaymentStatus {
+    Accepted,
+    Pending,
+    Rejected,
+    Cancelled,
+}
+
+/// camt.052 — Bank to Customer Account Report (intraday).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Camt052 {
+    pub message_id: String,
+    pub creation_date: String,
+    pub account_iban: String,
+    pub balance: CurrencyAmount,
+    pub entries: Vec<StatementEntry>,
 }
 
 // ── Validation ───────────────────────────────────────────────────────────────
@@ -214,6 +280,55 @@ pub fn validate_camt053(msg: &Camt053) -> Result<(), ValidationError> {
     validate_iban(&msg.account_iban)?;
     validate_amount(&msg.opening_balance)?;
     validate_amount(&msg.closing_balance)?;
+    for e in &msg.entries {
+        validate_amount(&e.amount)?;
+    }
+    Ok(())
+}
+
+/// Validate a pacs.002 message.
+pub fn validate_pacs002(msg: &Pacs002) -> Result<(), ValidationError> {
+    if msg.message_id.is_empty() {
+        return Err(ValidationError::MissingField("message_id".into()));
+    }
+    if msg.original_message_id.is_empty() {
+        return Err(ValidationError::MissingField("original_message_id".into()));
+    }
+    Ok(())
+}
+
+/// Validate a pacs.004 message.
+pub fn validate_pacs004(msg: &Pacs004) -> Result<(), ValidationError> {
+    if msg.message_id.is_empty() {
+        return Err(ValidationError::MissingField("message_id".into()));
+    }
+    if msg.original_message_id.is_empty() {
+        return Err(ValidationError::MissingField("original_message_id".into()));
+    }
+    validate_amount(&msg.return_amount)?;
+    validate_bic(&msg.debtor_agent_bic)?;
+    validate_bic(&msg.creditor_agent_bic)?;
+    Ok(())
+}
+
+/// Validate a pain.002 message.
+pub fn validate_pain002(msg: &Pain002) -> Result<(), ValidationError> {
+    if msg.message_id.is_empty() {
+        return Err(ValidationError::MissingField("message_id".into()));
+    }
+    if msg.original_message_id.is_empty() {
+        return Err(ValidationError::MissingField("original_message_id".into()));
+    }
+    Ok(())
+}
+
+/// Validate a camt.052 message.
+pub fn validate_camt052(msg: &Camt052) -> Result<(), ValidationError> {
+    if msg.message_id.is_empty() {
+        return Err(ValidationError::MissingField("message_id".into()));
+    }
+    validate_iban(&msg.account_iban)?;
+    validate_amount(&msg.balance)?;
     for e in &msg.entries {
         validate_amount(&e.amount)?;
     }
@@ -454,5 +569,125 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let restored: Pacs008 = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.message_id, "MSG001");
+    }
+
+    // ── pacs.002 ──
+
+    #[test]
+    fn pacs002_valid() {
+        let msg = Pacs002 {
+            message_id: "STS001".into(),
+            creation_date: "2026-05-08".into(),
+            original_message_id: "MSG001".into(),
+            status: PaymentStatus::Accepted,
+            reason: None,
+        };
+        assert!(validate_pacs002(&msg).is_ok());
+    }
+
+    #[test]
+    fn pacs002_missing_original() {
+        let msg = Pacs002 {
+            message_id: "STS001".into(),
+            creation_date: "2026-05-08".into(),
+            original_message_id: "".into(),
+            status: PaymentStatus::Rejected,
+            reason: Some("insufficient funds".into()),
+        };
+        assert!(validate_pacs002(&msg).is_err());
+    }
+
+    // ── pacs.004 ──
+
+    #[test]
+    fn pacs004_valid() {
+        let msg = Pacs004 {
+            message_id: "RET001".into(),
+            creation_date: "2026-05-08".into(),
+            original_message_id: "MSG001".into(),
+            return_amount: sample_amount("CLP"),
+            return_reason: "duplicate payment".into(),
+            debtor_agent_bic: "BCHICLRM".into(),
+            creditor_agent_bic: "NACNARBAXXX".into(),
+        };
+        assert!(validate_pacs004(&msg).is_ok());
+    }
+
+    #[test]
+    fn pacs004_invalid_bic() {
+        let msg = Pacs004 {
+            message_id: "RET001".into(),
+            creation_date: "2026-05-08".into(),
+            original_message_id: "MSG001".into(),
+            return_amount: sample_amount("CLP"),
+            return_reason: "error".into(),
+            debtor_agent_bic: "BAD".into(),
+            creditor_agent_bic: "NACNARBAXXX".into(),
+        };
+        assert!(matches!(
+            validate_pacs004(&msg),
+            Err(ValidationError::InvalidBic(_))
+        ));
+    }
+
+    // ── pain.002 ──
+
+    #[test]
+    fn pain002_valid() {
+        let msg = Pain002 {
+            message_id: "PSTS001".into(),
+            creation_date: "2026-05-08".into(),
+            original_message_id: "PAY001".into(),
+            statuses: vec![InstructionStatus {
+                instruction_id: "INST001".into(),
+                status: PaymentStatus::Accepted,
+                reason: None,
+            }],
+        };
+        assert!(validate_pain002(&msg).is_ok());
+    }
+
+    // ── camt.052 ──
+
+    #[test]
+    fn camt052_valid() {
+        let msg = Camt052 {
+            message_id: "RPT001".into(),
+            creation_date: "2026-05-08".into(),
+            account_iban: "CL9300000000123456789012".into(),
+            balance: sample_amount("CLP"),
+            entries: vec![],
+        };
+        assert!(validate_camt052(&msg).is_ok());
+    }
+
+    #[test]
+    fn camt052_invalid_iban() {
+        let msg = Camt052 {
+            message_id: "RPT001".into(),
+            creation_date: "2026-05-08".into(),
+            account_iban: "bad".into(),
+            balance: sample_amount("CLP"),
+            entries: vec![],
+        };
+        assert!(matches!(
+            validate_camt052(&msg),
+            Err(ValidationError::InvalidIban(_))
+        ));
+    }
+
+    #[test]
+    fn payment_status_serde_roundtrip() {
+        let statuses = vec![
+            PaymentStatus::Accepted,
+            PaymentStatus::Pending,
+            PaymentStatus::Rejected,
+            PaymentStatus::Cancelled,
+        ];
+        for s in statuses {
+            let json = serde_json::to_string(&s).unwrap();
+            let restored: PaymentStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored, s);
+        }
     }
 }
