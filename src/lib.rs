@@ -8,6 +8,7 @@ pub mod multisig_contracts;
 pub mod network_security;
 pub mod oracle_collateral;
 pub mod oracle_connector;
+pub mod oracle_demo;
 pub mod oracle_system;
 pub mod plugin_contracts;
 pub mod smart_contract;

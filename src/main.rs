@@ -34,6 +34,7 @@ mod msp;
 mod network;
 mod network_security;
 mod oracle_connector;
+mod oracle_demo;
 mod oracle_system;
 mod ordering;
 mod pin;
@@ -1024,6 +1025,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         ))),
         contact_store: Arc::new(api::handlers::contact::ContactStore::new()),
     };
+
+    // Oracle demo feed: simulated price data for sandbox demos.
+    let demo_config = oracle_demo::DemoFeedConfig::from_env();
+    oracle_demo::spawn_demo_feed(demo_config, app_state.oracle_registry.clone());
 
     // Tarea periódica para crear snapshots cada 1000 bloques
     if pruning_manager.is_some() && snapshot_manager.is_some() {
