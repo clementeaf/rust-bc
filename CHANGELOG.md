@@ -8,6 +8,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-09
 
+**Pre-Launch Modules (5/5 Complete)**
+
+Intelligence layer (`src/intelligence/`):
+- Anomaly detection: rolling z-score with configurable threshold and window
+- Risk scoring: 6 rules (watchlist, KYC, amount, frequency, identity age, country)
+- Pattern recognition: velocity spike, structuring, round-trip, dormant activation
+
+Oracle E2E (`src/oracle_demo.rs`):
+- Simulated BTC/USD, ETH/USD, CLP/USD feeds with deterministic pseudo-random walk
+- Background poller wired into OracleRegistry via `ORACLE_DEMO=true`
+- Queryable via `GET /oracle/feeds`
+
+Regulatory sandbox (`src/regulatory/`):
+- 21 compliance checks across 10 categories
+- Automated report with SHA-256 content hash
+- API: `GET /regulatory/checks`, `GET /regulatory/report`
+
+Forensic audit — replay and integrity:
+- `replay_blocks()`: sequential height verification, gap detection
+- `verify_chain_integrity()`: hash linkage check, tampering detection
+
+Per-module stress testing (`src/stress.rs`):
+- 5 targeted tests: storage, crypto, anomaly, risk, ISO 20022 validation
+- Per-module ops/sec, p50/p99 latency, Pass/Degraded/Fail classification
+- API: `GET /stress/report?ops=1000`
+
+**Contact Form Backend**
+
+- `POST /api/v1/contact` — stores name, email, org, message
+- `GET /api/v1/contact` — admin-only listing
+- Landing CTA replaced with inline form posting to own node
+
 **Landing Page Redesign — Non-Technical, Identity-Driven**
 
 Complete rewrite of `block-explorer-vite/src/pages/Landing.tsx`:
