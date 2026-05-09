@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 
 interface NetworkStats {
@@ -76,19 +76,21 @@ export default function Landing() {
               inmutables y verificables por cualquiera.
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
-              <Link
-                to="/demo"
+              <a
+                href="/api/v1/health"
+                target="_blank"
+                rel="noreferrer"
                 className="bg-main-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold
                            hover:bg-main-600 transition-colors cursor-pointer inline-block"
               >
-                Ver demo en vivo
-              </Link>
+                Ver API en vivo
+              </a>
               <Link
                 to="/dashboard"
                 className="text-neutral-500 px-5 py-2.5 rounded-lg text-sm font-semibold
                            hover:text-neutral-700 transition-colors cursor-pointer inline-block"
               >
-                Explorar la red
+                Dashboard
               </Link>
             </div>
           </div>
@@ -231,26 +233,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CTA ────────────────────────────────────────────────────────── */}
-      <section className="border-t border-neutral-100 px-6 py-14">
-        <div className="max-w-screen-xl mx-auto text-center">
-          <h2 className="text-2xl font-bold text-neutral-900 mb-3">
-            Pruebe Cerulean con su caso de uso
-          </h2>
-          <p className="text-neutral-400 text-sm mb-6 max-w-md mx-auto">
-            Sin costo, sin compromiso. Demostracion personalizada en menos de 30 minutos.
-          </p>
-          <Link
-            to="/demo"
-            className="bg-neutral-900 text-white px-8 py-3 rounded-lg text-sm font-semibold
-                       hover:bg-neutral-800 transition-colors cursor-pointer inline-block"
-          >
-            Solicitar demostracion
-          </Link>
-        </div>
-      </section>
+      {/* ── Contacto ──────────────────────────────────────────────────── */}
+      <ContactSection />
 
-      {/* ── Footer ─────────────────────────────────────────────────────── */}
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-neutral-100 px-6 py-3">
         <div className="max-w-screen-xl mx-auto flex items-center justify-between text-[11px] text-neutral-300">
           <span>Cerulean Ledger</span>
@@ -258,5 +244,128 @@ export default function Landing() {
         </div>
       </footer>
     </div>
+  )
+}
+
+function ContactSection() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [org, setOrg] = useState('')
+  const [message, setMessage] = useState('')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const formRef = useRef<HTMLFormElement>(null)
+
+  const canSend = name.trim() && email.trim() && message.trim() && status !== 'sending'
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!canSend) return
+    setStatus('sending')
+    try {
+      const res = await fetch('/api/v1/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Org-Id': 'landing',
+          'X-Msp-Role': 'client',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          organization: org.trim() || null,
+          message: message.trim(),
+        }),
+      })
+      if (res.ok) {
+        setStatus('sent')
+        setName('')
+        setEmail('')
+        setOrg('')
+        setMessage('')
+      } else {
+        setStatus('error')
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  if (status === 'sent') {
+    return (
+      <section className="border-t border-neutral-100 px-6 py-14">
+        <div className="max-w-screen-xl mx-auto text-center">
+          <p className="text-lg font-bold text-neutral-900 mb-2">Mensaje recibido</p>
+          <p className="text-sm text-neutral-500">Nos pondremos en contacto pronto.</p>
+          <button
+            onClick={() => setStatus('idle')}
+            className="mt-4 text-xs text-main-500 hover:underline cursor-pointer"
+          >
+            Enviar otro mensaje
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="border-t border-neutral-100 px-6 py-14">
+      <div className="max-w-screen-xl mx-auto">
+        <div className="max-w-lg mx-auto">
+          <h2 className="text-2xl font-bold text-neutral-900 mb-2 text-center">
+            Solicite una demostracion
+          </h2>
+          <p className="text-sm text-neutral-400 mb-6 text-center">
+            Sin costo, sin compromiso. Le contactamos en menos de 24 horas.
+          </p>
+
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Nombre"
+                className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+              />
+            </div>
+            <input
+              type="text"
+              value={org}
+              onChange={(e) => setOrg(e.target.value)}
+              placeholder="Organizacion (opcional)"
+              className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+            />
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="En que podemos ayudarle?"
+              rows={3}
+              className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={!canSend}
+              className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                canSend
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-800 cursor-pointer'
+                  : 'bg-neutral-100 text-neutral-300 cursor-not-allowed'
+              }`}
+            >
+              {status === 'sending' ? 'Enviando...' : 'Enviar mensaje'}
+            </button>
+            {status === 'error' && (
+              <p className="text-xs text-red-500 text-center">Error al enviar. Intente nuevamente.</p>
+            )}
+          </form>
+        </div>
+      </div>
+    </section>
   )
 }

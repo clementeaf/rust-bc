@@ -92,4 +92,6 @@ pub struct AppState {
     pub pin_store: Option<Arc<dyn PinStore>>,
     /// Oracle registry — price feeds and oracle node management.
     pub oracle_registry: Arc<std::sync::Mutex<crate::oracle_system::OracleRegistry>>,
+    /// Contact form submissions.
+    pub contact_store: Arc<crate::api::handlers::contact::ContactStore>,
 }

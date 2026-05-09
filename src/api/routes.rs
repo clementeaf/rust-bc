@@ -3,8 +3,8 @@ use actix_web::{web, Scope};
 #[cfg(feature = "evm")]
 use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, audit, blocks, chain, chaincode, channels, compliance, credentials, discovery, events,
-    forensic, gateway, governance, identity, msp, oracle, organizations, pin, private_data,
+    acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
+    events, forensic, gateway, governance, identity, msp, oracle, organizations, pin, private_data,
     proposals, snapshots, transactions, utilities,
 };
 
@@ -135,7 +135,9 @@ impl ApiRoutes {
             .service(compliance::validate_camt053)
             .service(compliance::validate_camt052)
             .service(compliance::list_countries)
-            .service(compliance::list_currencies);
+            .service(compliance::list_currencies)
+            .service(contact::submit_contact)
+            .service(contact::list_contacts);
     }
 
     fn identity_routes() -> Scope {

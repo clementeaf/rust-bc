@@ -7,6 +7,7 @@ pub mod chain;
 pub mod chaincode;
 pub mod channels;
 pub mod compliance;
+pub mod contact;
 pub mod credentials;
 pub mod discovery;
 pub mod events;

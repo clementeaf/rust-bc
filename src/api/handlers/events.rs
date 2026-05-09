@@ -534,6 +534,7 @@ mod tests {
             oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::oracle_system::OracleRegistry::new(66, 5000),
             )),
+            contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
         }
     }
 
@@ -749,6 +750,7 @@ mod tests {
             oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::oracle_system::OracleRegistry::new(66, 5000),
             )),
+            contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
         }
     }
 

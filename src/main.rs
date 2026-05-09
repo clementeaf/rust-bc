@@ -1021,6 +1021,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         oracle_registry: Arc::new(std::sync::Mutex::new(oracle_system::OracleRegistry::new(
             66, 300_000,
         ))),
+        contact_store: Arc::new(api::handlers::contact::ContactStore::new()),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques
