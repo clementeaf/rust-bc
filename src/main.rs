@@ -41,6 +41,7 @@ mod pin;
 mod pki;
 mod private_data;
 mod pruning;
+mod regulatory;
 mod smart_contracts;
 mod staking;
 mod state_reconstructor;
