@@ -7,13 +7,20 @@ interface NetworkStats {
   status: string
 }
 
+interface OracleFeed {
+  symbol: string
+  price: number
+  is_stale: boolean
+}
+
 export default function Landing() {
   const [stats, setStats] = useState<NetworkStats | null>(null)
+  const [oracle, setOracle] = useState<OracleFeed | null>(null)
   const [activeUse, setActiveUse] = useState(0)
 
   useEffect(() => { document.title = 'Cerulean Ledger' }, [])
 
-  // Fetch live network stats
+  // Fetch live network stats + oracle feed
   useEffect(() => {
     const load = async () => {
       try {
@@ -26,6 +33,15 @@ export default function Landing() {
           status: d.status,
         })
       } catch { /* offline */ }
+
+      try {
+        const res = await fetch('/api/v1/oracle/feeds')
+        const json = await res.json()
+        if (json.data?.length > 0) {
+          const btc = json.data.find((f: OracleFeed) => f.symbol.includes('BTC')) || json.data[0]
+          setOracle(btc)
+        }
+      } catch { /* no oracle */ }
     }
     load()
     const interval = setInterval(load, 10000)
@@ -104,6 +120,12 @@ export default function Landing() {
               </div>
               <span>Bloque #{stats.height}</span>
               <span>Peers: {stats.peers}</span>
+              {oracle && (
+                <span className="flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${oracle.is_stale ? 'bg-amber-400' : 'bg-blue-400 animate-pulse'}`} />
+                  {oracle.symbol}: ${(oracle.price / 100).toLocaleString()}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -192,8 +214,8 @@ export default function Landing() {
             {[
               { n: '18,700', label: 'TX/s motor' },
               { n: '14', label: 'ms latencia (p50)' },
-              { n: '1,532', label: 'tests automatizados' },
-              { n: '58', label: 'componentes en produccion' },
+              { n: '1,604', label: 'tests automatizados' },
+              { n: '20', label: 'ataques adversariales' },
               { n: '193', label: 'paises ISO 3166' },
             ].map((m) => (
               <div key={m.label}>
@@ -222,6 +244,7 @@ export default function Landing() {
                 { label: 'Ley 21.663', sub: 'Ciberseguridad' },
                 { label: 'FIPS 204', sub: 'Post-cuantica' },
                 { label: 'ISO 20022', sub: 'Financiero' },
+                { label: '20/20', sub: 'Pentest adversarial' },
               ].map((c) => (
                 <div key={c.label} className="px-3">
                   <p className="font-bold text-xs text-neutral-600">{c.label}</p>
