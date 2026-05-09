@@ -141,7 +141,7 @@ Services initialized at startup (all use in-memory backends by default):
 Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`.
 
 Routes:
-- `/` — Landing page (full-width, no sidebar)
+- `/` — Landing page (hero with live network pulse, thesis, verticals selector, numbers, audit quote, CTA)
 - `/dashboard` — Network stats, blocks, hub cards
 - `/demo` — 5-step credential verification demo (flagship)
 - All other pages use sidebar Layout

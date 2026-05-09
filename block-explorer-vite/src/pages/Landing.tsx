@@ -1,241 +1,260 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
-const tags = [
-  {
-    label: 'DLT',
-    desc: 'Distributed Ledger Technology — un libro de registros compartido entre multiples participantes, donde la informacion se valida de forma colectiva y no depende de una entidad central.',
-    detail: 'Cerulean Ledger usa consenso BFT + DAG: cada nodo valida de forma independiente, y la red converge sin necesitar un coordinador central.',
-    metric: '2,741 tests automatizados verifican la integridad de la red',
-  },
-  {
-    label: 'Post-Cuantica',
-    desc: 'Las computadoras cuanticas podran romper la criptografia actual. Cerulean Ledger usa firmas de nueva generacion (FIPS 204) que ya estan preparadas para ese escenario.',
-    detail: 'Cada transaccion se firma con ML-DSA-65 (3,309 bytes) o Ed25519 (64 bytes). Ambos algoritmos coexisten en la misma red.',
-    metric: 'Estandar NIST FIPS 204 — aprobado agosto 2024',
-  },
-  {
-    label: 'Identidad Soberana',
-    desc: 'Personas y organizaciones gestionan su propia identidad digital. Nadie mas la controla, nadie mas la puede revocar. Tu identidad es tuya.',
-    detail: 'Formato: did:cerulean:identificador. Las credenciales (titulos, certificados) se emiten entre DIDs y se verifican en milisegundos.',
-    metric: 'Verificacion criptografica en <50ms vs 3-15 dias habiles manual',
-  },
-  {
-    label: 'Wasm + EVM',
-    desc: 'Permite ejecutar logica de negocio directamente en la red, usando las mismas herramientas del ecosistema Ethereum y el rendimiento de WebAssembly.',
-    detail: 'Contratos Solidity se ejecutan via revm (la misma EVM de Reth/Foundry). Chaincode Wasm corre en Wasmtime con gas metering.',
-    metric: 'Compatible con MetaMask, Hardhat y todo el ecosistema Ethereum',
-  },
-]
-
-const rivals = [
-  {
-    label: 'Fabric',
-    items: [
-      { feature: 'Criptografia', them: 'ECDSA', us: 'ML-DSA-65 + Ed25519' },
-      { feature: 'Consenso', them: 'Raft (solo crash)', us: 'BFT + DAG (bizantino)' },
-      { feature: 'Identidad (DID)', them: 'Via Indy (externo)', us: 'Nativo' },
-      { feature: 'Credenciales', them: '—', us: 'Emision + verificacion' },
-      { feature: 'Smart contracts', them: 'Go / Java / Node', us: 'Wasm + EVM (revm)' },
-      { feature: 'Nodos', them: 'Solo consorcio', us: 'Cualquier entidad' },
-    ],
-  },
-  {
-    label: 'IOTA',
-    items: [
-      { feature: 'Criptografia', them: 'Ed25519', us: 'ML-DSA-65 + Ed25519' },
-      { feature: 'Consenso', them: 'Tangle (probabilistico)', us: 'BFT + DAG (deterministico)' },
-      { feature: 'Canales privados', them: '—', us: 'Aislamiento completo' },
-      { feature: 'Credenciales', them: '—', us: 'Emision + verificacion' },
-      { feature: 'Smart contracts', them: 'MoveVM', us: 'Wasm + EVM (revm)' },
-      { feature: 'Nodos', them: 'IOTA Foundation', us: 'Cualquier entidad' },
-    ],
-  },
-  {
-    label: 'Hedera',
-    items: [
-      { feature: 'Criptografia', them: 'ECDSA', us: 'ML-DSA-65 + Ed25519' },
-      { feature: 'Consenso', them: 'Hashgraph (aBFT)', us: 'BFT + DAG' },
-      { feature: 'Identidad (DID)', them: '—', us: 'Nativo' },
-      { feature: 'Canales privados', them: 'HashSphere (pago)', us: 'Nativo (sin costo)' },
-      { feature: 'Smart contracts', them: 'EVM (~15 TPS)', us: 'Wasm + EVM (revm)' },
-      { feature: 'Nodos', them: 'Solo Consejo (31 empresas)', us: 'Cualquier entidad' },
-    ],
-  },
-]
-
-type RightTab = 'conceptos' | 'comparativa'
+interface NetworkStats {
+  height: number
+  peers: string
+  status: string
+}
 
 export default function Landing() {
-  const [selected, setSelected] = useState(0)
-  const [selectedRival, setSelectedRival] = useState(0)
-  const [rightTab, setRightTab] = useState<RightTab>('conceptos')
+  const [stats, setStats] = useState<NetworkStats | null>(null)
+  const [activeUse, setActiveUse] = useState(0)
 
   useEffect(() => { document.title = 'Cerulean Ledger' }, [])
 
+  // Fetch live network stats
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/v1/health')
+        const json = await res.json()
+        const d = json.data
+        setStats({
+          height: d.blockchain.height,
+          peers: d.checks.peers === 'none' ? '0' : d.checks.peers,
+          status: d.status,
+        })
+      } catch { /* offline */ }
+    }
+    load()
+    const interval = setInterval(load, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const uses = [
+    {
+      title: 'Credenciales',
+      headline: 'Un titulo verificable en segundos, valido por decadas',
+      body: 'Las instituciones emiten credenciales digitales firmadas con criptografia post-cuantica. Cualquier persona verifica su autenticidad desde el celular, sin llamar a nadie. El titulo de hoy seguira siendo verificable cuando los computadores cuanticos sean una realidad.',
+      audience: 'Universidades · Colegios profesionales · RRHH',
+    },
+    {
+      title: 'Votacion',
+      headline: 'Cada voto sellado. Ningun resultado alterable.',
+      body: 'La votacion queda registrada en una red distribuida donde ningun participante — ni siquiera el administrador — puede modificar el resultado. El escrutinio es publico y verificable sin exponer la identidad de los votantes.',
+      audience: 'Municipios · Cooperativas · Juntas directivas',
+    },
+    {
+      title: 'Trazabilidad',
+      headline: 'La cadena de custodia que no depende de la confianza',
+      body: 'Multiples organizaciones comparten un registro comun donde cada una ve solo su parte. Cada punto de control queda sellado. Ante una disputa, la evidencia es matematica, no testimonial.',
+      audience: 'Mineria · Agroindustria · Farmaceutica',
+    },
+    {
+      title: 'Finanzas',
+      headline: 'Conciliacion instantanea entre instituciones',
+      body: 'Un registro compartido e inmutable entre bancos o reguladores. Compatible con ISO 20022, ISO 4217 y ERC-3643 para security tokens. El auditor verifica en minutos lo que antes tomaba semanas.',
+      audience: 'Banca · Fintech · Reguladores',
+    },
+  ]
+
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Hero */}
-      <section className="flex-1 flex items-center px-6 max-w-screen-xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 w-full">
-          {/* Left — value proposition */}
-          <div className="text-left flex flex-col justify-center">
-            <p className="text-3xl sm:text-4xl font-bold text-main-500 tracking-tight mb-2">Cerulean Ledger</p>
-            <p className="text-sm text-neutral-500 mb-4">
-              Seguridad resistente a computacion cuantica
-            </p>
-            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 tracking-tight leading-tight">
-              Infraestructura DLT con soberania tecnologica
+    <div className="min-h-screen flex flex-col bg-[#fafbfc]">
+
+      {/* ── Hero ───────────────────────────────────────────────────────── */}
+      <section className="px-6 pt-20 pb-16">
+        <div className="max-w-screen-xl mx-auto">
+          <div className="max-w-2xl">
+            <p className="text-main-500 font-semibold text-xs uppercase tracking-widest mb-4">Cerulean Ledger</p>
+            <h1 className="text-4xl sm:text-5xl font-bold text-neutral-900 tracking-tight leading-[1.15]">
+              La confianza deja de ser<br />una promesa
             </h1>
-            <p className="text-neutral-500 text-base mt-4 leading-relaxed">
-              Registro distribuido con criptografia post-cuantica, identidad descentralizada
-              y canales privados. Codigo abierto, escrito en Rust.
+            <p className="text-neutral-500 text-base mt-5 leading-relaxed max-w-lg">
+              Infraestructura de verificacion para instituciones que necesitan
+              garantizar — no prometer — que sus registros son autenticos,
+              inmutables y verificables por cualquiera.
             </p>
-            <div className="flex gap-3 mt-8">
+            <div className="flex flex-wrap gap-3 mt-8">
               <Link
-                to="/services"
-                className="bg-main-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold
-                           hover:bg-main-600 transition-colors shadow-sm hover:shadow-md cursor-pointer inline-block"
+                to="/demo"
+                className="bg-main-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold
+                           hover:bg-main-600 transition-colors cursor-pointer inline-block"
               >
-                Ver servicios
+                Ver demo en vivo
               </Link>
               <Link
-                to="/tesseract"
-                className="bg-neutral-100 text-neutral-600 px-5 py-2.5 rounded-xl text-sm font-semibold
-                           hover:bg-neutral-200 transition-colors cursor-pointer inline-block"
+                to="/dashboard"
+                className="text-neutral-500 px-5 py-2.5 rounded-lg text-sm font-semibold
+                           hover:text-neutral-700 transition-colors cursor-pointer inline-block"
               >
-                Tesseract
+                Explorar la red
               </Link>
             </div>
           </div>
 
-          {/* Right — switchable module */}
-          <div className="hidden lg:flex flex-col justify-center min-h-[340px]">
-            {/* Module tabs */}
-            <div className="flex gap-1 mb-4 relative z-20">
-              {(['conceptos', 'comparativa'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setRightTab(tab)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    rightTab === tab
-                      ? 'bg-main-500 text-white'
-                      : 'text-neutral-400 hover:text-neutral-600'
-                  }`}
-                >
-                  {tab === 'conceptos' ? 'Conceptos' : 'Comparativa'}
-                </button>
-              ))}
+          {/* Live network pulse */}
+          {stats && (
+            <div className="mt-12 flex items-center gap-6 text-xs text-neutral-400">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${stats.status === 'healthy' ? 'bg-green-400 animate-pulse' : 'bg-neutral-300'}`} />
+                <span>Red activa</span>
+              </div>
+              <span>Bloque #{stats.height}</span>
+              <span>Peers: {stats.peers}</span>
             </div>
-
-            {/* Content area — relative container for the drawer overlay */}
-            <div className="flex-1 flex flex-col relative">
-
-            {/* Conceptos module */}
-            {rightTab === 'conceptos' && (
-              <div className="flex-1 flex flex-col">
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((t, i) => (
-                    <button
-                      key={t.label}
-                      onClick={() => setSelected(i)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer ${
-                        selected === i
-                          ? 'bg-main-500 text-white'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4 flex-1 flex flex-col justify-between">
-                  <div>
-                    <p className="text-neutral-700 text-sm leading-relaxed">{tags[selected].desc}</p>
-                    <p className="text-neutral-500 text-xs leading-relaxed mt-3">{tags[selected].detail}</p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-neutral-100">
-                    <p className="text-main-600 text-xs font-semibold">{tags[selected].metric}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Comparativa module */}
-            {rightTab === 'comparativa' && (
-              <div className="flex-1 flex flex-col">
-                <div className="flex flex-wrap gap-2">
-                  {rivals.map((r, i) => (
-                    <button
-                      key={r.label}
-                      onClick={() => setSelectedRival(i)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer ${
-                        selectedRival === i
-                          ? 'bg-main-500 text-white'
-                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                      }`}
-                    >
-                      vs {r.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 bg-white border border-neutral-200 rounded-2xl px-5 py-4 flex-1">
-                  <div className="space-y-2.5">
-                    {rivals[selectedRival].items.map((item) => (
-                      <div key={item.feature} className="flex items-start gap-3">
-                        <p className="text-neutral-700 text-xs font-medium w-28 shrink-0 pt-0.5">{item.feature}</p>
-                        <div className="flex-1 flex gap-3">
-                          <p className="text-main-600 text-xs font-semibold flex-1">{item.us}</p>
-                          <p className="text-neutral-600 text-xs flex-1">{item.them}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-2 border-t border-neutral-100 flex justify-between text-[10px] text-neutral-300 uppercase tracking-wider">
-                    <span></span>
-                    <span className="flex gap-6">
-                      <span className="text-main-500">Cerulean</span>
-                      <span>{rivals[selectedRival].label}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            </div>{/* close content area relative */}
-          </div>
+          )}
         </div>
       </section>
 
-      {/* Pillars */}
-      <section className="border-t border-neutral-200 bg-surface-alt px-6 py-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-5">
+      {/* ── Tesis ──────────────────────────────────────────────────────── */}
+      <section className="px-6 py-14">
+        <div className="max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
-            { title: 'Criptografia post-cuantica', desc: 'ML-DSA-65 (FIPS 204) + Ed25519.', color: 'bg-emerald-500' },
-            { title: 'Identidad soberana', desc: 'DIDs + credenciales verificables.', color: 'bg-violet-500' },
-            { title: 'Canales privados', desc: 'Aislamiento por organizacion.', color: 'bg-blue-500' },
-            { title: 'Smart contracts', desc: 'Wasm + EVM con ejecucion paralela.', color: 'bg-amber-500' },
-          ].map((p) => (
-            <div key={p.title} className="flex items-start gap-2.5">
-              <div className={`w-2 h-2 rounded-full mt-1.5 ${p.color} shrink-0`} />
-              <div>
-                <p className="text-neutral-900 font-semibold text-sm">{p.title}</p>
-                <p className="text-neutral-500 text-xs leading-relaxed mt-1">{p.desc}</p>
-              </div>
+            {
+              title: 'Integridad por diseno',
+              body: 'Los registros no son protegidos por politicas ni por personas. Son protegidos por matematicas. Alterar un dato requiere romper criptografia que hoy no se puede romper — y manana tampoco.',
+            },
+            {
+              title: 'Privacidad sin sacrificio',
+              body: 'Cada organizacion opera en su propio espacio aislado. Comparte lo que necesita, oculta lo que no. La verificacion es publica; los datos son privados.',
+            },
+            {
+              title: 'Soberania operacional',
+              body: 'Corre en tu infraestructura. No dependes de una nube, un token cotizado, ni una empresa que puede desaparecer. Tu red, tus reglas, tus datos.',
+            },
+          ].map((t) => (
+            <div key={t.title}>
+              <h3 className="font-bold text-sm text-neutral-900 mb-2">{t.title}</h3>
+              <p className="text-sm text-neutral-500 leading-relaxed">{t.body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-neutral-200 px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between text-[11px] text-neutral-400">
-          <span>Cerulean Ledger</span>
-          <div className="flex items-center gap-4">
-            <span>Rust</span>
-            <span>BFT + DAG</span>
-            <span>Open source</span>
+      {/* ── Usos ───────────────────────────────────────────────────────── */}
+      <section className="bg-white border-y border-neutral-100 px-6 py-14">
+        <div className="max-w-screen-xl mx-auto">
+          <div className="flex flex-wrap gap-2 mb-8">
+            {uses.map((u, i) => (
+              <button
+                key={u.title}
+                onClick={() => setActiveUse(i)}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                  activeUse === i
+                    ? 'bg-neutral-900 text-white'
+                    : 'text-neutral-400 hover:text-neutral-600'
+                }`}
+              >
+                {u.title}
+              </button>
+            ))}
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+            <div>
+              <h2 className="text-2xl font-bold text-neutral-900 leading-tight mb-4">
+                {uses[activeUse].headline}
+              </h2>
+              <p className="text-neutral-500 text-sm leading-relaxed mb-4">
+                {uses[activeUse].body}
+              </p>
+              <p className="text-xs text-neutral-300">{uses[activeUse].audience}</p>
+            </div>
+
+            <div className="bg-neutral-50 rounded-xl p-6 space-y-3">
+              {[
+                { label: 'Registrar', desc: 'La institucion emite el dato firmado digitalmente.' },
+                { label: 'Sellar', desc: 'Consenso distribuido lo incorpora a un bloque inmutable.' },
+                { label: 'Verificar', desc: 'Cualquier autorizado comprueba autenticidad al instante.' },
+              ].map((step, i) => (
+                <div key={step.label} className="flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-500 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-700">{step.label}</p>
+                    <p className="text-xs text-neutral-400">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Numeros ────────────────────────────────────────────────────── */}
+      <section className="px-6 py-14">
+        <div className="max-w-screen-xl mx-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+            {[
+              { n: '18,700', label: 'TX/s motor' },
+              { n: '14', label: 'ms latencia (p50)' },
+              { n: '1,532', label: 'tests automatizados' },
+              { n: '58', label: 'componentes en produccion' },
+              { n: '193', label: 'paises ISO 3166' },
+            ].map((m) => (
+              <div key={m.label}>
+                <p className="text-2xl font-bold text-neutral-900">{m.n}</p>
+                <p className="text-[10px] text-neutral-400 uppercase tracking-wide mt-0.5">{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Validacion ─────────────────────────────────────────────────── */}
+      <section className="border-t border-neutral-100 px-6 py-10">
+        <div className="max-w-screen-xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+            <div className="flex-1">
+              <p className="text-sm text-neutral-700 leading-relaxed">
+                <span className="font-semibold">Auditado por la Camara Blockchain de Chile.</span>{' '}
+                Cuatro fases de evaluacion — motor, nivel transaccional, contratos inteligentes,
+                seguridad y encriptacion. Resultado:{' '}
+                <span className="text-main-600 font-semibold">"Supera las expectativas. El core es muy bueno."</span>
+              </p>
+            </div>
+            <div className="shrink-0 flex flex-wrap gap-4 text-center">
+              {[
+                { label: 'Ley 21.663', sub: 'Ciberseguridad' },
+                { label: 'FIPS 204', sub: 'Post-cuantica' },
+                { label: 'ISO 20022', sub: 'Financiero' },
+              ].map((c) => (
+                <div key={c.label} className="px-3">
+                  <p className="font-bold text-xs text-neutral-600">{c.label}</p>
+                  <p className="text-[9px] text-neutral-400">{c.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ────────────────────────────────────────────────────────── */}
+      <section className="border-t border-neutral-100 px-6 py-14">
+        <div className="max-w-screen-xl mx-auto text-center">
+          <h2 className="text-2xl font-bold text-neutral-900 mb-3">
+            Pruebe Cerulean con su caso de uso
+          </h2>
+          <p className="text-neutral-400 text-sm mb-6 max-w-md mx-auto">
+            Sin costo, sin compromiso. Demostracion personalizada en menos de 30 minutos.
+          </p>
+          <Link
+            to="/demo"
+            className="bg-neutral-900 text-white px-8 py-3 rounded-lg text-sm font-semibold
+                       hover:bg-neutral-800 transition-colors cursor-pointer inline-block"
+          >
+            Solicitar demostracion
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Footer ─────────────────────────────────────────────────────── */}
+      <footer className="border-t border-neutral-100 px-6 py-3">
+        <div className="max-w-screen-xl mx-auto flex items-center justify-between text-[11px] text-neutral-300">
+          <span>Cerulean Ledger</span>
+          <span>Rust · PQC · Open source</span>
         </div>
       </footer>
     </div>

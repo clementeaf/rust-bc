@@ -6,6 +6,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-09
+
+**Landing Page Redesign — Non-Technical, Identity-Driven**
+
+Complete rewrite of `block-explorer-vite/src/pages/Landing.tsx`:
+- Hero: "La confianza deja de ser una promesa" — original concept, not borrowed
+- Live network pulse: fetches `/api/v1/health` every 10s, shows block height + peers
+- Three-column thesis: integrity by design, privacy without sacrifice, operational sovereignty
+- Four verticals as interactive selector with per-use headline and 3-step mini-flow
+- Hard numbers: 18,700 TX/s, 14ms p50, 1,532 tests, 58 components, 193 ISO countries
+- Real social proof: Cámara Blockchain Chile audit quote (not fabricated logos)
+- Subtle visual identity: `#fafbfc` background, clean typography, generous spacing
+- No comparisons, no competitor mentions, no copied patterns
+
+**Oracle, Forensic, Compliance — HTTP API Endpoints**
+
+- Oracle: `GET /oracle/feeds/{symbol}`, `GET /oracle/feeds`, `GET /oracle/nodes`
+- Forensic: `GET /forensic/timeline`, `GET /forensic/security`, `POST /forensic/export`
+- Compliance: `POST /compliance/validate/{pacs008,pacs002,pacs004,pain001,pain002,camt053,camt052}`, `GET /compliance/countries`, `GET /compliance/currencies`
+- `oracle_registry` added to AppState
+
+**ISO Compliance — Full Standard Coverage**
+
+- ISO 20022: 7 message types (pacs.008/002/004, pain.001/002, camt.053/052)
+- ISO 3166: expanded to 193 countries
+- ISO 4217: expanded to 64 currencies with 3-decimal support
+- ISO 8601: date, datetime, duration validators
+- ERC-3643: security tokens with identity registry, compliance module, issuer controls
+
+**Auto-Discovery, Pricing**
+
+- Gossip-based peer exchange (`src/discovery/auto.rs`)
+- Pricing structure draft (`docs/commercial/PRICING.md`)
+
+**Cerulean Voto — Vote Privacy**
+
+- `POST /vote` returns tally only (no individual votes)
+- `GET /votes` restricted to admin role (403 for others)
+
+Tests: 1,532 passed, 0 failures.
+
 ### 2026-05-08
 
 **CSIRT Webhook Notifier & Security Events**
