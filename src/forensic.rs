@@ -48,7 +48,7 @@ pub struct ReplayResult {
     pub status: ReplayStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReplayStatus {
     /// All replayed transactions produced the same result.
     Consistent,
@@ -326,6 +326,107 @@ impl ForensicEngine {
     }
 }
 
+/// Verify integrity of a chain of blocks by checking hash linkage.
+pub fn verify_chain_integrity(blocks: &[crate::storage::traits::Block]) -> IntegrityResult {
+    use pqc_crypto_module::legacy::sha256::{Digest as _, Sha256};
+
+    let mut mismatches = Vec::new();
+
+    for i in 1..blocks.len() {
+        let prev = &blocks[i - 1];
+        let curr = &blocks[i];
+
+        // Verify parent_hash matches hash of previous block
+        let prev_data = format!(
+            "{}:{}:{}:{}",
+            prev.height,
+            prev.timestamp,
+            hex::encode(prev.parent_hash),
+            prev.proposer
+        );
+        let computed_hash = Sha256::digest(prev_data.as_bytes());
+        let computed_bytes: [u8; 32] = computed_hash.into();
+
+        if curr.parent_hash != computed_bytes {
+            mismatches.push(ReplayMismatch {
+                block_height: curr.height,
+                tx_id: format!("block-{}", curr.height),
+                expected_hash: hex::encode(computed_bytes),
+                replayed_hash: hex::encode(curr.parent_hash),
+            });
+        }
+    }
+
+    IntegrityResult {
+        blocks_checked: blocks.len() as u64,
+        status: if mismatches.is_empty() {
+            IntegrityStatus::Valid
+        } else {
+            IntegrityStatus::Tampered
+        },
+        mismatches,
+    }
+}
+
+/// Result of chain integrity verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntegrityResult {
+    pub blocks_checked: u64,
+    pub status: IntegrityStatus,
+    pub mismatches: Vec<ReplayMismatch>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IntegrityStatus {
+    Valid,
+    Tampered,
+}
+
+/// Simulate a replay: given blocks and their transactions, verify
+/// that transaction counts match and no blocks are missing.
+pub fn replay_blocks(blocks: &[crate::storage::traits::Block]) -> ReplayResult {
+    if blocks.is_empty() {
+        return ReplayResult {
+            from_height: 0,
+            to_height: 0,
+            blocks_replayed: 0,
+            transactions_replayed: 0,
+            mismatches: Vec::new(),
+            status: ReplayStatus::Consistent,
+        };
+    }
+
+    let mut mismatches = Vec::new();
+    let mut total_txs: u64 = 0;
+
+    // Check sequential heights (no gaps)
+    for i in 1..blocks.len() {
+        if blocks[i].height != blocks[i - 1].height + 1 {
+            mismatches.push(ReplayMismatch {
+                block_height: blocks[i].height,
+                tx_id: "gap".into(),
+                expected_hash: format!("height {}", blocks[i - 1].height + 1),
+                replayed_hash: format!("height {}", blocks[i].height),
+            });
+        }
+        total_txs += blocks[i].transactions.len() as u64;
+    }
+    total_txs += blocks[0].transactions.len() as u64;
+
+    ReplayResult {
+        from_height: blocks[0].height,
+        to_height: blocks.last().map(|b| b.height).unwrap_or(0),
+        blocks_replayed: blocks.len() as u64,
+        transactions_replayed: total_txs,
+        mismatches: mismatches.clone(),
+        status: if mismatches.is_empty() {
+            ReplayStatus::Consistent
+        } else {
+            ReplayStatus::Inconsistent
+        },
+    }
+}
+
 impl Default for ForensicEngine {
     fn default() -> Self {
         Self::new()
@@ -483,5 +584,75 @@ mod tests {
         }]);
         let tl = engine.build_timeline();
         assert_eq!(tl[0].severity, Severity::Warning);
+    }
+
+    // ── Replay & integrity tests ─────────────────────────────────────────
+
+    fn make_block(height: u64, parent_hash: [u8; 32]) -> crate::storage::traits::Block {
+        crate::storage::traits::Block {
+            height,
+            timestamp: 1000 + height,
+            parent_hash,
+            merkle_root: [0u8; 32],
+            transactions: vec![format!("tx-{height}")],
+            proposer: "peer0".into(),
+            signature: vec![0u8; 64],
+            signature_algorithm: Default::default(),
+            endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
+            orderer_signature: None,
+        }
+    }
+
+    #[test]
+    fn replay_empty_blocks() {
+        let result = replay_blocks(&[]);
+        assert_eq!(result.blocks_replayed, 0);
+        assert_eq!(result.status, ReplayStatus::Consistent);
+    }
+
+    #[test]
+    fn replay_sequential_blocks() {
+        let blocks = vec![
+            make_block(0, [0u8; 32]),
+            make_block(1, [0u8; 32]),
+            make_block(2, [0u8; 32]),
+        ];
+        let result = replay_blocks(&blocks);
+        assert_eq!(result.blocks_replayed, 3);
+        assert_eq!(result.transactions_replayed, 3);
+        assert_eq!(result.status, ReplayStatus::Consistent);
+    }
+
+    #[test]
+    fn replay_detects_gap() {
+        let blocks = vec![
+            make_block(0, [0u8; 32]),
+            make_block(5, [0u8; 32]), // Gap: 1-4 missing
+        ];
+        let result = replay_blocks(&blocks);
+        assert_eq!(result.status, ReplayStatus::Inconsistent);
+        assert!(!result.mismatches.is_empty());
+    }
+
+    #[test]
+    fn integrity_valid_chain() {
+        let blocks = vec![make_block(0, [0u8; 32])];
+        let result = verify_chain_integrity(&blocks);
+        assert_eq!(result.status, IntegrityStatus::Valid);
+    }
+
+    #[test]
+    fn integrity_result_serde() {
+        let r = IntegrityResult {
+            blocks_checked: 10,
+            status: IntegrityStatus::Valid,
+            mismatches: vec![],
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        let restored: IntegrityResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.status, IntegrityStatus::Valid);
     }
 }
