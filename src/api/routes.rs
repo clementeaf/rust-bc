@@ -3,9 +3,9 @@ use actix_web::{web, Scope};
 #[cfg(feature = "evm")]
 use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, audit, blocks, chain, chaincode, channels, credentials, discovery, events, gateway,
-    governance, identity, msp, organizations, pin, private_data, proposals, snapshots,
-    transactions, utilities,
+    acl, audit, blocks, chain, chaincode, channels, compliance, credentials, discovery, events,
+    forensic, gateway, governance, identity, msp, oracle, organizations, pin, private_data,
+    proposals, snapshots, transactions, utilities,
 };
 
 /// API routes configuration
@@ -120,6 +120,22 @@ impl ApiRoutes {
             .service(governance::close_governance_voting)
             .service(pin::generate_pin)
             .service(pin::verify_pin);
+        // Oracle, forensic, compliance
+        cfg.service(oracle::get_oracle_feed)
+            .service(oracle::list_oracle_feeds)
+            .service(oracle::list_oracle_nodes)
+            .service(forensic::forensic_timeline)
+            .service(forensic::forensic_security)
+            .service(forensic::forensic_export)
+            .service(compliance::validate_pacs008)
+            .service(compliance::validate_pacs002)
+            .service(compliance::validate_pacs004)
+            .service(compliance::validate_pain001)
+            .service(compliance::validate_pain002)
+            .service(compliance::validate_camt053)
+            .service(compliance::validate_camt052)
+            .service(compliance::list_countries)
+            .service(compliance::list_currencies);
     }
 
     fn identity_routes() -> Scope {

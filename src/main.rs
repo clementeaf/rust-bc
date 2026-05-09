@@ -14,6 +14,7 @@ mod chain_validation;
 mod chaincode;
 mod channel;
 mod checkpoint;
+mod compliance;
 mod consensus;
 mod crypto;
 mod discovery;
@@ -21,6 +22,7 @@ mod endorsement;
 mod events;
 #[cfg(feature = "evm")]
 mod evm_compat;
+mod forensic;
 mod gateway;
 mod governance;
 mod identity;
@@ -30,6 +32,8 @@ mod models;
 mod msp;
 mod network;
 mod network_security;
+mod oracle_connector;
+mod oracle_system;
 mod ordering;
 mod pin;
 mod pki;
@@ -1014,6 +1018,9 @@ async fn async_main_inner() -> std::io::Result<()> {
             reg
         }),
         pin_store: Some(Arc::new(pin::store::MemoryPinStore::new())),
+        oracle_registry: Arc::new(std::sync::Mutex::new(oracle_system::OracleRegistry::new(
+            66, 300_000,
+        ))),
     };
 
     // Tarea periódica para crear snapshots cada 1000 bloques

@@ -245,6 +245,9 @@ mod tests {
             vote_store: None,
             param_registry: None,
             pin_store: None,
+            oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::oracle_system::OracleRegistry::new(66, 5000),
+            )),
         })
     }
 

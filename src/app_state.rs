@@ -90,4 +90,6 @@ pub struct AppState {
     pub param_registry: Option<Arc<ParamRegistry>>,
     /// PIN store — DID-to-hashed-PIN mappings.
     pub pin_store: Option<Arc<dyn PinStore>>,
+    /// Oracle registry — price feeds and oracle node management.
+    pub oracle_registry: Arc<std::sync::Mutex<crate::oracle_system::OracleRegistry>>,
 }
