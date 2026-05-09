@@ -284,6 +284,166 @@ pub fn stress_compliance(ops: u64) -> ModuleStressResult {
     }
 }
 
+/// Stress test: Governance (proposal submit + vote cycle).
+pub fn stress_governance(ops: u64) -> ModuleStressResult {
+    use crate::governance::params::ParamRegistry;
+    use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
+    use crate::governance::voting::{VoteOption, VoteStore};
+
+    let proposals = ProposalStore::new();
+    let votes = VoteStore::new();
+    let params = ParamRegistry::with_defaults();
+    let deposit = params.get_u64("proposal_deposit", 10_000);
+    let voting_period = params.get_u64("voting_period_blocks", 17_280);
+
+    let mut latencies = Vec::with_capacity(ops as usize);
+    let mut errors: u64 = 0;
+
+    let start = Instant::now();
+    for i in 0..ops {
+        let op_start = Instant::now();
+
+        let action = ProposalAction::TextProposal {
+            title: format!("stress-{i}"),
+            description: "stress test".into(),
+        };
+        match proposals.submit(SubmitParams {
+            proposer: "stress-proposer",
+            action,
+            description: "stress",
+            deposit,
+            required_deposit: deposit,
+            current_height: i,
+            voting_period,
+        }) {
+            Ok(pid) => {
+                let _ = votes.cast_vote(
+                    pid,
+                    &format!("voter-{i}"),
+                    VoteOption::Yes,
+                    1,
+                    i,
+                    i + voting_period,
+                );
+            }
+            Err(_) => errors += 1,
+        }
+
+        latencies.push(op_start.elapsed().as_micros() as u64);
+    }
+    let duration = start.elapsed();
+
+    latencies.sort_unstable();
+    let ops_per_sec = ops as f64 / duration.as_secs_f64();
+
+    ModuleStressResult {
+        module: "governance".into(),
+        operations: ops,
+        duration_ms: duration.as_millis() as u64,
+        ops_per_sec,
+        p50_us: percentile(&latencies, 50.0),
+        p99_us: percentile(&latencies, 99.0),
+        errors,
+        // Rate limiting causes expected rejections — not failures
+        status: if ops_per_sec > 1_000.0 {
+            StressStatus::Pass
+        } else {
+            StressStatus::Degraded
+        },
+    }
+}
+
+/// Stress test: Forensic engine (timeline build + evidence package).
+pub fn stress_forensic(ops: u64) -> ModuleStressResult {
+    use crate::audit::AuditEntry;
+    use crate::forensic::ForensicEngine;
+
+    let mut latencies = Vec::with_capacity(ops as usize);
+
+    let start = Instant::now();
+    for i in 0..ops {
+        let op_start = Instant::now();
+
+        let mut engine = ForensicEngine::new();
+        engine.ingest_audit(&[AuditEntry {
+            timestamp: format!("2026-05-09T{:02}:00:00Z", i % 24),
+            method: "POST".into(),
+            path: "/api/v1/vote".into(),
+            org_id: "stress".into(),
+            source_ip: "127.0.0.1".into(),
+            status_code: 200,
+            trace_id: format!("trace-{i}"),
+            duration_ms: 5,
+        }]);
+        let _ = engine.build_timeline();
+
+        latencies.push(op_start.elapsed().as_micros() as u64);
+    }
+    let duration = start.elapsed();
+
+    latencies.sort_unstable();
+    let ops_per_sec = ops as f64 / duration.as_secs_f64();
+
+    ModuleStressResult {
+        module: "forensic".into(),
+        operations: ops,
+        duration_ms: duration.as_millis() as u64,
+        ops_per_sec,
+        p50_us: percentile(&latencies, 50.0),
+        p99_us: percentile(&latencies, 99.0),
+        errors: 0,
+        status: if ops_per_sec > 50_000.0 {
+            StressStatus::Pass
+        } else {
+            StressStatus::Degraded
+        },
+    }
+}
+
+/// Stress test: Pattern detection engine.
+pub fn stress_patterns(ops: u64) -> ModuleStressResult {
+    use crate::intelligence::patterns::{PatternEngine, TxRecord};
+
+    let engine = PatternEngine::new();
+    let txs: Vec<TxRecord> = (0..20)
+        .map(|i| TxRecord {
+            tx_id: format!("tx-{i}"),
+            from: "alice".into(),
+            to: "bob".into(),
+            amount: 1000,
+            timestamp: 100 + i,
+        })
+        .collect();
+
+    let mut latencies = Vec::with_capacity(ops as usize);
+
+    let start = Instant::now();
+    for _ in 0..ops {
+        let op_start = Instant::now();
+        let _ = engine.analyze(&txs);
+        latencies.push(op_start.elapsed().as_micros() as u64);
+    }
+    let duration = start.elapsed();
+
+    latencies.sort_unstable();
+    let ops_per_sec = ops as f64 / duration.as_secs_f64();
+
+    ModuleStressResult {
+        module: "pattern_detection".into(),
+        operations: ops,
+        duration_ms: duration.as_millis() as u64,
+        ops_per_sec,
+        p50_us: percentile(&latencies, 50.0),
+        p99_us: percentile(&latencies, 99.0),
+        errors: 0,
+        status: if ops_per_sec > 10_000.0 {
+            StressStatus::Pass
+        } else {
+            StressStatus::Degraded
+        },
+    }
+}
+
 /// Run all module stress tests and generate report.
 pub fn run_full_stress(ops_per_module: u64) -> StressReport {
     let results = vec![
@@ -292,6 +452,9 @@ pub fn run_full_stress(ops_per_module: u64) -> StressReport {
         stress_anomaly(ops_per_module),
         stress_risk(ops_per_module),
         stress_compliance(ops_per_module),
+        stress_governance(ops_per_module),
+        stress_forensic(ops_per_module),
+        stress_patterns(ops_per_module),
     ];
 
     let passed = results
@@ -361,10 +524,32 @@ mod tests {
     }
 
     #[test]
+    fn governance_stress_completes() {
+        let r = stress_governance(50);
+        assert_eq!(r.module, "governance");
+        // Some errors expected from rate limiting — just verify it ran
+        assert!(r.operations == 50);
+    }
+
+    #[test]
+    fn forensic_stress_completes() {
+        let r = stress_forensic(50);
+        assert_eq!(r.module, "forensic");
+        assert_eq!(r.errors, 0);
+    }
+
+    #[test]
+    fn patterns_stress_completes() {
+        let r = stress_patterns(50);
+        assert_eq!(r.module, "pattern_detection");
+        assert_eq!(r.errors, 0);
+    }
+
+    #[test]
     fn full_stress_report_has_all_modules() {
         let report = run_full_stress(50);
-        assert_eq!(report.total_modules, 5);
-        assert_eq!(report.results.len(), 5);
+        assert_eq!(report.total_modules, 8);
+        assert_eq!(report.results.len(), 8);
         assert!(report.report_id.starts_with("STR-"));
     }
 

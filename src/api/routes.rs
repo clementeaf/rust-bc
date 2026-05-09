@@ -4,8 +4,8 @@ use actix_web::{web, Scope};
 use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
-    events, forensic, gateway, governance, identity, msp, oracle, organizations, pin, private_data,
-    proposals, regulatory, snapshots, stress, transactions, utilities,
+    events, forensic, gateway, governance, identity, intelligence, msp, oracle, organizations, pin,
+    private_data, proposals, regulatory, snapshots, stress, transactions, utilities,
 };
 
 /// API routes configuration
@@ -127,6 +127,11 @@ impl ApiRoutes {
             .service(forensic::forensic_timeline)
             .service(forensic::forensic_security)
             .service(forensic::forensic_export)
+            .service(forensic::forensic_replay)
+            .service(forensic::forensic_integrity)
+            .service(intelligence::detect_anomalies)
+            .service(intelligence::evaluate_risk)
+            .service(intelligence::detect_patterns)
             .service(compliance::validate_pacs008)
             .service(compliance::validate_pacs002)
             .service(compliance::validate_pacs004)

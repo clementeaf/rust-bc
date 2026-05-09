@@ -2,6 +2,8 @@
 //!   GET  /api/v1/forensic/timeline       — full event timeline
 //!   GET  /api/v1/forensic/security       — security events only
 //!   POST /api/v1/forensic/export         — signed evidence package
+//!   GET  /api/v1/forensic/replay         — replay blocks and check consistency
+//!   GET  /api/v1/forensic/integrity      — verify hash chain integrity
 
 use actix_web::{get, post, web, HttpResponse};
 use serde::Deserialize;
@@ -92,4 +94,74 @@ pub async fn forensic_export(
     let package = engine.build_evidence_package(&body.description, &body.created_by, None);
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(package, trace)))
+}
+
+#[derive(Deserialize)]
+pub struct ReplayQuery {
+    pub from: Option<u64>,
+    pub to: Option<u64>,
+}
+
+/// GET /api/v1/forensic/replay — replay blocks and verify consistency
+#[get("/forensic/replay")]
+pub async fn forensic_replay(
+    state: web::Data<AppState>,
+    query: web::Query<ReplayQuery>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+
+    let stores = state.store.read().unwrap();
+    let store = match stores.get("default") {
+        Some(s) => s.clone(),
+        None => {
+            return Ok(HttpResponse::Ok().json(ApiResponse::success(
+                crate::forensic::replay_blocks(&[]),
+                trace,
+            )))
+        }
+    };
+
+    let from = query.from.unwrap_or(0);
+    let to = query.to.unwrap_or(from + 100);
+    let mut blocks = Vec::new();
+    for h in from..=to {
+        if let Ok(b) = store.read_block(h) {
+            blocks.push(b);
+        }
+    }
+
+    let result = crate::forensic::replay_blocks(&blocks);
+    Ok(HttpResponse::Ok().json(ApiResponse::success(result, trace)))
+}
+
+/// GET /api/v1/forensic/integrity — verify hash chain integrity
+#[get("/forensic/integrity")]
+pub async fn forensic_integrity(
+    state: web::Data<AppState>,
+    query: web::Query<ReplayQuery>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+
+    let stores = state.store.read().unwrap();
+    let store = match stores.get("default") {
+        Some(s) => s.clone(),
+        None => {
+            return Ok(HttpResponse::Ok().json(ApiResponse::success(
+                crate::forensic::verify_chain_integrity(&[]),
+                trace,
+            )))
+        }
+    };
+
+    let from = query.from.unwrap_or(0);
+    let to = query.to.unwrap_or(from + 100);
+    let mut blocks = Vec::new();
+    for h in from..=to {
+        if let Ok(b) = store.read_block(h) {
+            blocks.push(b);
+        }
+    }
+
+    let result = crate::forensic::verify_chain_integrity(&blocks);
+    Ok(HttpResponse::Ok().json(ApiResponse::success(result, trace)))
 }
