@@ -73,7 +73,8 @@ fi
 
 # ── Build & Start ─────────────────────────────────────────────────────────────
 
-echo -e "${CYAN}Building sandbox containers...${NC}"
+export BUILD_VERSION=$(git rev-parse --short HEAD 2>/dev/null || echo "dev")
+echo -e "${CYAN}Building sandbox containers (${BUILD_VERSION})...${NC}"
 docker compose -f "$COMPOSE_FILE" build
 
 echo -e "${CYAN}Starting sandbox...${NC}"
@@ -147,18 +148,26 @@ if [[ -z "$EXPLORER_URL" || -z "$VOTO_URL" || -z "$API_URL" ]]; then
     API_URL=$(extract_url "$TUNNEL_DIR/api.log")
 fi
 
-echo -e "${GREEN}============================================${NC}"
-echo -e "${GREEN} Cerulean Sandbox Live${NC}"
-echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN}╔═══════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║       Cerulean Sandbox Live               ║${NC}"
+echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Block Explorer:  ${CYAN}${EXPLORER_URL:-pending...}${NC}"
 echo -e "  Cerulean Voto:   ${CYAN}${VOTO_URL:-pending...}${NC}"
 echo -e "  API (raw):       ${CYAN}${API_URL:-pending...}${NC}"
 echo ""
-echo -e "  Local ports:     explorer :5173  |  voto :5174  |  api :9600"
+echo -e "  Local services:"
+echo -e "    Explorer:    ${CYAN}http://localhost:5173${NC}"
+echo -e "    Voto:        ${CYAN}http://localhost:5174${NC}"
+echo -e "    API:         ${CYAN}http://localhost:9600${NC}"
+echo -e "    Prometheus:  ${CYAN}http://localhost:9090${NC}"
+echo -e "    Grafana:     ${CYAN}http://localhost:3000${NC}  (admin/admin)"
+echo ""
+echo -e "  Version: ${CYAN}${BUILD_VERSION}${NC}"
 echo ""
 echo -e "${YELLOW}  Press Ctrl+C to stop all tunnels.${NC}"
 echo -e "${YELLOW}  Run ./scripts/sandbox.sh stop to clean up containers.${NC}"
+echo -e "${YELLOW}  Run ./scripts/sandbox-backup.sh to snapshot data.${NC}"
 echo ""
 
 # Keep alive — wait for any tunnel to exit

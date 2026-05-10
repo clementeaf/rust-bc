@@ -56,6 +56,8 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 USER root
 
+ARG BUILD_VERSION=dev
+ENV BUILD_VERSION=${BUILD_VERSION}
 ENV API_PORT=8080
 ENV P2P_PORT=8081
 ENV DB_NAME=blockchain

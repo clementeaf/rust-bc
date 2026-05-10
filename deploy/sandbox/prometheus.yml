@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  - job_name: 'cerulean-sandbox'
+    static_configs:
+      - targets: ['node:8080']
+        labels:
+          environment: 'sandbox'
+    metrics_path: '/metrics'
