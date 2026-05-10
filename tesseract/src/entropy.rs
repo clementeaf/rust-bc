@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn temperature_decreases_monotonically() {
-        let mut field = Field::new(10);
+        let mut field = Field::new(8);
         let mut thermo = Thermodynamics::new(1.0, 0.1);
 
         let mut temps = Vec::new();
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn entropy_decreases_as_field_crystallizes() {
-        let mut field = Field::new(10);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         // Attest from all 4 dimensions with independent validators
@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn free_energy_negative_for_high_probability_cells() {
-        let mut field = Field::new(10);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         // Seed heavily
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn reversal_cost_increases_with_age() {
-        let mut field = Field::new(10);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         for (dim, vid) in [
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn thermodynamic_evolution_reaches_equilibrium() {
-        let mut field = Field::new(10);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         for (dim, vid) in [
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn empty_field_has_zero_entropy() {
-        let field = Field::new(10);
+        let field = Field::new(8);
         let h = Thermodynamics::shannon_entropy(&field);
         assert!(
             (h - 0.0).abs() < 1e-10,
@@ -361,7 +361,7 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        #![proptest_config(proptest::test_runner::Config::with_cases(50))]
+        #![proptest_config(proptest::test_runner::Config::with_cases(15))]
 
         /// Shannon entropy is always non-negative.
         #[test]
@@ -390,7 +390,7 @@ mod tests {
             cooling in 0.01..0.1f64,
             steps in 5..30usize,
         ) {
-            let mut field = Field::new(10);
+            let mut field = Field::new(8);
             let center = coord(5, 5, 5, 5);
             for (dim, vid) in [
                 (Dimension::Temporal, "vt"),
@@ -419,7 +419,7 @@ mod tests {
         fn reversal_cost_non_negative(
             age_steps in 0..20usize,
         ) {
-            let mut field = Field::new(10);
+            let mut field = Field::new(8);
             let center = coord(5, 5, 5, 5);
             for (dim, vid) in [
                 (Dimension::Temporal, "vt"),

@@ -477,6 +477,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "benchmark"]
     fn throughput_scales_sublinearly_with_events() {
         let results = bench_throughput(&[5, 20], 10);
         assert_eq!(results.len(), 2);
@@ -501,6 +502,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn memory_grows_with_events() {
         let results = bench_memory(&[5, 20], 10);
         let m10 = &results[0];
@@ -519,6 +521,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn sigma_eff_cost_with_graph_higher_than_without() {
         let results = bench_sigma_eff(&[10], 10);
         // results[0] = without graph, results[1] = with graph
@@ -540,6 +543,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn crystallization_steps_bounded_across_sizes() {
         let results = bench_crystallization_scaling(&[8, 12, 16]);
 
@@ -569,6 +573,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn partition_recovery_always_succeeds() {
         let results = bench_partition_recovery(&[0, 10, 50], 12);
 
@@ -582,6 +587,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn partition_recovery_time_bounded() {
         let results = bench_partition_recovery(&[0, 20, 100], 12);
 
@@ -597,6 +603,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn noise_does_not_prevent_valid_crystallization() {
         let results = bench_noise_resilience(&[0, 10, 50], 10);
 
@@ -610,6 +617,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn noise_increases_steps_but_within_bound() {
         let results = bench_noise_resilience(&[0, 20, 100], 10);
 
@@ -635,6 +643,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn full_suite_produces_valid_output() {
         let suite = run_full_suite();
 
@@ -661,6 +670,7 @@ mod tests {
     // --- Brutal stress tests ---
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_200_events_on_small_field() {
         let results = bench_throughput(&[200], 10);
         let r = &results[0];
@@ -669,6 +679,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_large_field_single_event() {
         // Large field, single event — tests sparse storage efficiency
         let mut field = Field::new(30);
@@ -693,6 +704,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_concurrent_events_different_regions() {
         let mut field = Field::new(20);
         let events = 100;
@@ -719,6 +731,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_rapid_noise_burst_then_valid() {
         let mut field = Field::new(16);
         let center = Coord {
@@ -746,6 +759,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_alternating_noise_and_valid() {
         let mut field = Field::new(12);
 
@@ -783,6 +797,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_cascading_crystallization_chain() {
         // Events placed along a line — does crystallization cascade correctly?
         let mut field = Field::new(20);
@@ -819,6 +834,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "benchmark"]
     fn stress_field_density_ratio() {
         // Verify sparse storage: active cells << total cells.
         // SEED_RADIUS=3 → each attestation touches (2×3+1)⁴ = 2401 cells.

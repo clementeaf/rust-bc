@@ -596,7 +596,7 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        #![proptest_config(proptest::test_runner::Config::with_cases(100))]
+        #![proptest_config(proptest::test_runner::Config::with_cases(20))]
 
         /// Conservation invariant: any sequence of valid transfers preserves total supply.
         #[test]

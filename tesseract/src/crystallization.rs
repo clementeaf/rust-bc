@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn unified_criterion_rejects_low_p_cell() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let coord = coord(5, 5, 5, 5);
         // Only one attestation — low probability, low sigma
         field.attest(coord, "event1", Dimension::Temporal, "val_t");
@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn missing_sigma_blocks_crystallization() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
         // Only 2 dimensions attested
         field.attest(center, "event1", Dimension::Temporal, "val_t");
@@ -349,7 +349,7 @@ mod tests {
         // Attack: one entity "sybil" attests on all 4 dimensions.
         // Since the same validator_id appears on multiple dimensions,
         // it is NOT exclusive on any — σ should be 0 or at most 1.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         for dim in Dimension::ALL {
@@ -372,7 +372,7 @@ mod tests {
     fn sybil_two_validators_across_four_dims_limited_sigma() {
         // Attack: 2 Sybil IDs each covering 2 dimensions.
         // Neither is exclusive on any dimension.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         field.attest(center, "fake", Dimension::Temporal, "sybil_a");
@@ -395,7 +395,7 @@ mod tests {
         // "Attack" with 4 separate IDs, each exclusive to one dim.
         // This DOES achieve σ=4 — but it requires 4 independent keys.
         // The cost of this attack = compromising 4 separate identities.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         field.attest(center, "event", Dimension::Temporal, "key_t");
@@ -417,7 +417,7 @@ mod tests {
     fn collusion_three_of_four_dims_insufficient() {
         // 3 colluding parties, each exclusive on one dimension.
         // Missing the 4th → σ=3, crystallization blocked.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         field.attest(center, "collusion_event", Dimension::Temporal, "colluder_t");
@@ -441,7 +441,7 @@ mod tests {
     fn mixed_honest_and_sybil_validators() {
         // 2 honest exclusive validators + 1 Sybil spanning 2 dims.
         // Only the 2 honest dims contribute to σ.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         // Honest: exclusive on their dimension
@@ -474,7 +474,7 @@ mod tests {
     fn security_scales_multiplicatively() {
         // Demonstrate: adding each independent dimension compounds security.
         // σ=1 → one axis, σ=2 → two axes, etc. Attack probability = p^σ.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);
 
         let dims_and_ids = [

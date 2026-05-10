@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn genesis_sets_balances() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 500, 0)]);
 
         assert_eq!(ledger.balance("alice"), 1000);
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn transfer_moves_balance() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
         let receipt = ledger
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn overdraft_rejected() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 100, 0), ("bob", 0, 0)]);
 
         let result = ledger.transfer(TransferRequest {
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn chain_of_transfers_conserves() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0), ("carol", 0, 0)]);
 
         // alice → bob → carol
@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn receipt_proves_conservation_cryptographically() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
         let r1 = ledger
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn balance_proof_is_valid() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 500, 0)]);
 
         let proof = ledger.balance_proof("alice", 42).unwrap();
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn crystallization_after_settle() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[("alice", 1000, 0), ("bob", 0, 0)]);
 
         let receipt = ledger
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn many_transfers_never_break_conservation() {
-        let mut ledger = TesseractLedger::new(16);
+        let mut ledger = TesseractLedger::new(8);
         ledger.genesis(&[
             ("a", 1000, 0),
             ("b", 1000, 0),

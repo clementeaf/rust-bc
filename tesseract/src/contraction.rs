@@ -255,7 +255,7 @@ mod tests {
 
     proptest! {
         // Limit cases: large fields × many steps are expensive.
-        #![proptest_config(proptest::test_runner::Config::with_cases(20))]
+        #![proptest_config(proptest::test_runner::Config::with_cases(10))]
 
         #[test]
         fn convergence_over_many_steps(

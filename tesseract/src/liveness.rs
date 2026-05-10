@@ -69,7 +69,7 @@ use crate::{Coord, Dimension, Field};
 /// crystallize on the attest() call itself (p=1.0 from 4 overlapping
 /// seeds). Peripheral cells within SEED_RADIUS crystallize within
 /// ~10-20 evolve steps. 50 is a conservative envelope.
-pub const LIVENESS_BOUND: usize = 50;
+pub const LIVENESS_BOUND: usize = 30;
 
 /// Minimum σ for liveness guarantee.
 /// Below this, the system correctly refuses to crystallize (insufficient evidence).
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn valid_event_crystallizes_within_bound() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         attest_full(&mut field, center);
 
@@ -199,7 +199,7 @@ mod tests {
     fn center_crystallizes_immediately() {
         // At the attestation center, p=1.0 after 4 overlapping seeds
         // → should crystallize on the attest() call itself
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         attest_full(&mut field, center);
 
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn crystallizes_after_delayed_attestations() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         let (crystallized, _total, step) = check_liveness_with_delay(
@@ -238,7 +238,7 @@ mod tests {
 
     #[test]
     fn large_delay_still_crystallizes() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         let (crystallized, _, _) = check_liveness_with_delay(
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn valid_event_survives_noise() {
-        let mut field = Field::new(14);
+        let mut field = Field::new(8);
         let center = coord(7, 7, 7, 7);
 
         // Inject noise BEFORE valid event
@@ -280,11 +280,11 @@ mod tests {
 
     #[test]
     fn noise_itself_does_not_crystallize() {
-        let mut field = Field::new(14);
+        let mut field = Field::new(8);
         let noise_center = coord(3, 3, 3, 3);
 
         // Only noise — single-dimension attestations
-        inject_noise(&mut field, noise_center, 50, 4);
+        inject_noise(&mut field, noise_center, 20, 4);
 
         // Evolve extensively
         for _ in 0..100 {
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn crystallizes_after_partition_heals() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         // Partition: only 2 dimensions available initially
@@ -335,7 +335,7 @@ mod tests {
 
     #[test]
     fn sigma_recovers_after_reconnection() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         // Start with 3 dimensions — σ=3, won't crystallize
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn insufficient_dimensions_correctly_blocks() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         // Only 1 dimension — attacker cannot force crystallization
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn two_dimensions_correctly_blocks() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         field.attest(center, "event", Dimension::Temporal, "val_t");
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn valid_event_survives_moderate_curvature_pressure() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
 
         // Curvature pressure limits HOW MANY cells crystallize, not WHETHER
@@ -433,7 +433,7 @@ mod tests {
         // Verify T_max derivation: at center with 4 attestations,
         // probability hits 1.0 immediately. Peripheral cells take longer
         // but should be within LIVENESS_BOUND.
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         attest_full(&mut field, center);
 
@@ -457,7 +457,7 @@ mod tests {
         // injecting noise to keep probability below threshold.
         // But valid attestations have σ=4 → amplified by A=4.0.
         // Noise has σ=1 → amplified by A=1.0. Valid wins.
-        let mut field = Field::new(14);
+        let mut field = Field::new(8);
         let center = coord(7, 7, 7, 7);
 
         // Continuous noise injection

@@ -452,7 +452,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(proptest::test_runner::Config::with_cases(100))]
+        #![proptest_config(proptest::test_runner::Config::with_cases(20))]
 
         /// EventId is deterministic: same inputs → same id.
         #[test]

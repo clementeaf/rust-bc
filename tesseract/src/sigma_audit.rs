@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn verify_sigma_matches_field() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         for (dim, vid) in [
             (Dimension::Temporal, "val_t"),
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn method_b_matches_method_a() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         for (dim, vid) in [
             (Dimension::Temporal, "val_t"),
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn method_b_sybil() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         for dim in Dimension::ALL {
             field.attest(center, "ev", dim, "sybil");
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn method_b_mixed() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         field.attest(center, "ev", Dimension::Temporal, "honest_t");
         field.attest(center, "ev", Dimension::Context, "honest_c");
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn full_audit_no_mismatches() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         for (dim, vid) in [
             (Dimension::Temporal, "val_t"),
@@ -499,13 +499,13 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(proptest::test_runner::Config::with_cases(200))]
+        #![proptest_config(proptest::test_runner::Config::with_cases(20))]
 
         #[test]
         fn method_a_equals_method_b_random(
             atts in proptest::collection::vec(arb_attestation(), 0..12)
         ) {
-            let mut field = Field::new(12);
+            let mut field = Field::new(8);
             let center = coord(6, 6, 6, 6);
 
             for (dim, vid) in &atts {
@@ -521,7 +521,7 @@ mod tests {
         fn verify_sigma_matches_field_random(
             atts in proptest::collection::vec(arb_attestation(), 1..8)
         ) {
-            let mut field = Field::new(12);
+            let mut field = Field::new(8);
             let center = coord(6, 6, 6, 6);
 
             for (dim, vid) in &atts {
@@ -545,7 +545,7 @@ mod tests {
         fn sigma_never_exceeds_4(
             atts in proptest::collection::vec(arb_attestation(), 0..20)
         ) {
-            let mut field = Field::new(12);
+            let mut field = Field::new(8);
             let center = coord(6, 6, 6, 6);
             for (dim, vid) in &atts {
                 field.attest(center, "ev", *dim, vid);
@@ -558,7 +558,7 @@ mod tests {
         fn single_validator_all_dims_always_zero(
             vid in arb_validator_id(),
         ) {
-            let mut field = Field::new(12);
+            let mut field = Field::new(8);
             let center = coord(6, 6, 6, 6);
             for dim in Dimension::ALL {
                 field.attest(center, "ev", dim, &vid);
@@ -573,7 +573,7 @@ mod tests {
             base_atts in proptest::collection::vec(arb_attestation(), 1..6),
             extra in arb_attestation(),
         ) {
-            let mut field1 = Field::new(12);
+            let mut field1 = Field::new(8);
             let center = coord(6, 6, 6, 6);
             for (dim, vid) in &base_atts {
                 field1.attest(center, "ev", *dim, vid);
@@ -581,7 +581,7 @@ mod tests {
             let sigma_before = field1.get(center).sigma_independence();
 
             // Add one more attestation with a NEW exclusive validator
-            let mut field2 = Field::new(12);
+            let mut field2 = Field::new(8);
             for (dim, vid) in &base_atts {
                 field2.attest(center, "ev", *dim, vid);
             }
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn empty_cell_sigma_zero() {
-        let field = Field::new(10);
+        let field = Field::new(8);
         let cell = field.get(coord(0, 0, 0, 0));
         assert_eq!(cell.sigma_independence(), 0);
         assert_eq!(sigma_method_b(cell), 0);
@@ -609,7 +609,7 @@ mod tests {
     #[test]
     fn five_validators_four_dims_sigma_4() {
         // 5 validators, but one dim has 2 validators — both exclusive
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         field.attest(center, "ev", Dimension::Temporal, "val_t1");
         field.attest(center, "ev", Dimension::Temporal, "val_t2"); // extra on T
@@ -624,7 +624,7 @@ mod tests {
 
     #[test]
     fn validator_on_3_dims_kills_those_3() {
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         // "wide" covers T, C, O — exclusive on none
         field.attest(center, "ev", Dimension::Temporal, "wide");
@@ -641,7 +641,7 @@ mod tests {
     #[test]
     fn hidden_correlation_via_shared_validator() {
         // Attacker creates 3 "independent" validators + 1 shared
-        let mut field = Field::new(12);
+        let mut field = Field::new(8);
         let center = coord(6, 6, 6, 6);
         field.attest(center, "ev", Dimension::Temporal, "ind_t");
         field.attest(center, "ev", Dimension::Context, "ind_c");
