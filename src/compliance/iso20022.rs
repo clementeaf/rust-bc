@@ -47,6 +47,8 @@ pub enum ValidationError {
     InvalidAmount,
     #[error("invalid BIC: {0}")]
     InvalidBic(String),
+    #[error("control characters in field '{field}': disallowed byte at position {position}")]
+    ControlCharacter { field: String, position: usize },
 }
 
 /// Amount with currency — ISO 20022 `ActiveCurrencyAndAmount`.
@@ -183,6 +185,20 @@ pub struct Camt052 {
 
 // ── Validation ───────────────────────────────────────────────────────────────
 
+/// Reject strings containing control characters (null bytes, \x01-\x1F except \t \n \r).
+fn reject_control_chars(value: &str, field: &str) -> Result<(), ValidationError> {
+    if let Some(pos) = value
+        .bytes()
+        .position(|b| b < 0x20 && b != b'\t' && b != b'\n' && b != b'\r')
+    {
+        return Err(ValidationError::ControlCharacter {
+            field: field.to_string(),
+            position: pos,
+        });
+    }
+    Ok(())
+}
+
 fn validate_currency(code: &str) -> Result<(), ValidationError> {
     if iso4217::is_valid_currency(code) {
         Ok(())
@@ -247,6 +263,13 @@ fn validate_party(party: &Party) -> Result<(), ValidationError> {
 pub fn validate_pacs008(msg: &Pacs008) -> Result<(), ValidationError> {
     if msg.message_id.is_empty() {
         return Err(ValidationError::MissingField("message_id".into()));
+    }
+    // Reject control characters in text fields
+    reject_control_chars(&msg.message_id, "message_id")?;
+    reject_control_chars(&msg.debtor.name, "debtor.name")?;
+    reject_control_chars(&msg.creditor.name, "creditor.name")?;
+    if let Some(ref info) = msg.remittance_info {
+        reject_control_chars(info, "remittance_info")?;
     }
     validate_amount(&msg.settlement_amount)?;
     validate_party(&msg.debtor)?;
