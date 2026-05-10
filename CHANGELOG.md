@@ -8,6 +8,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-10
 
+**Enterprise Sandbox**
+
+- Prometheus + Grafana added to sandbox compose (pre-provisioned dashboard at `:3000`)
+- Resource governance: memory/CPU limits on all containers (node 512M, frontends 128M)
+- Rich seed data: 7 wallets, 8 blocks, wallet transfers, 2 orgs, 2 channels, 7 DIDs, 5 credentials, governance proposals with votes
+- Version tracking: `BUILD_VERSION` from git SHA injected at build time
+- Nginx error fallback: branded 502/503 page with 5s auto-retry when node is starting
+- SSE event stream proxy through nginx (unbuffered, long-lived connections)
+- Multi-org demo: org1 (Universidad de Chile) + org2 (Banco Central), channels `academic` + `financial`
+- Backup/restore script: `scripts/sandbox-backup.sh` snapshots RocksDB volume as tarball
+
+**Oracle System Hardening**
+
+- Fix: `aggregate_reports` now filters by symbol (was mixing all pending reports)
+- Fix: HMAC signature always verified (removed test-mode bypass for timestamps < 100M)
+- Fix: constant-time comparison via `Mac::verify_slice` (prevents timing attacks)
+- Fix: external connector uses fixed-point pricing (×10^8) for sub-1 tokens (CLP/USD)
+- Fix: `retain` only clears processed symbol's reports (other symbols persist)
+
 **Pentest Suite Expanded (20 → 33 scenarios)**
 
 Network layer attacks (PEN-021 to PEN-023):

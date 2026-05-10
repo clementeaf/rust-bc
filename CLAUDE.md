@@ -353,12 +353,25 @@ cd deploy && ./generate-tls.sh
 ## Sandbox (public demo)
 
 ```bash
-# One-command launcher: node + explorer + voto + Cloudflare tunnels
+# One-command launcher: node + explorer + voto + observability + Cloudflare tunnels
 ./scripts/sandbox.sh          # Start (gives public URLs)
 ./scripts/sandbox.sh stop     # Stop everything
+./scripts/sandbox.sh reset    # Wipe data + re-seed fresh
+./scripts/sandbox-backup.sh   # Snapshot RocksDB volume
+./scripts/sandbox-backup.sh restore <tarball>  # Restore from backup
 ```
 
-Uses `docker-compose.sandbox.yml` (single node, PQC, permissive ACL, RocksDB). See `SANDBOX.md` for custom domain setup.
+Uses `docker-compose.sandbox.yml` (single node, PQC, permissive ACL, RocksDB, Prometheus, Grafana). See `SANDBOX.md` for custom domain setup.
+
+| Service | Port | Notes |
+|---|---|---|
+| Node API | :9600 | PQC, RocksDB, 512M memory cap |
+| Explorer | :5173 | Branded 502 fallback, SSE proxy |
+| Voto | :5174 | Branded 502 fallback |
+| Prometheus | :9090 | Scrapes node /metrics every 10s |
+| Grafana | :3000 | Pre-provisioned dashboard (admin/admin) |
+
+Seed data (`scripts/seed-sandbox.sh`): 2 orgs, 2 channels, 7 wallets, 8 blocks, transfers, 7 DIDs, 5 credentials, governance proposals with votes.
 
 ## Operator tooling
 
