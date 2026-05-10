@@ -323,14 +323,15 @@ impl OracleRegistry {
         if prices.is_empty() {
             return 0;
         }
-        let sum: u64 = prices.iter().sum();
-        sum / prices.len() as u64
+        // Use u128 to avoid overflow when summing large prices
+        let sum: u128 = prices.iter().map(|&p| p as u128).sum();
+        (sum / prices.len() as u128) as u64
     }
 
     /// Check if price deviates too much from median
     fn is_outlier(&self, price: u64, median: u64) -> bool {
         let deviation = price.abs_diff(median);
-        let threshold = (median * self.outlier_threshold_percent) / 100;
+        let threshold = (median / 100).saturating_mul(self.outlier_threshold_percent);
         deviation > threshold
     }
 

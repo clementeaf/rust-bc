@@ -52,6 +52,7 @@ pub mod events;
 pub mod evm_compat;
 pub mod forensic;
 pub mod forensic_pentest;
+mod fuzz_tests;
 pub mod gateway;
 pub mod governance;
 pub mod intelligence;

@@ -35,6 +35,30 @@ if [[ "${1:-}" == "stop" ]]; then
     exit 0
 fi
 
+if [[ "${1:-}" == "reset" ]]; then
+    echo -e "${CYAN}Resetting sandbox (wipe data + re-seed)...${NC}"
+    docker compose -f "$COMPOSE_FILE" down -v
+    pkill -f "cloudflared.*tunnel" 2>/dev/null || true
+    echo -e "${CYAN}Volumes removed. Restarting fresh...${NC}"
+    docker compose -f "$COMPOSE_FILE" up -d
+    echo -e "${CYAN}Waiting for node health...${NC}"
+    for i in $(seq 1 30); do
+        if curl -sf http://localhost:9600/api/v1/health > /dev/null 2>&1; then
+            echo -e "${GREEN}Node healthy.${NC}"
+            break
+        fi
+        if [[ $i -eq 30 ]]; then
+            echo -e "${RED}Node failed to start.${NC}"
+            exit 1
+        fi
+        sleep 2
+    done
+    echo -e "${CYAN}Seeding fresh data...${NC}"
+    ./scripts/seed-sandbox.sh http://localhost:9600
+    echo -e "${GREEN}Sandbox reset complete.${NC}"
+    exit 0
+fi
+
 # ── Preflight ─────────────────────────────────────────────────────────────────
 
 if ! command -v docker &>/dev/null; then
