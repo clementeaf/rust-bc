@@ -235,6 +235,9 @@ pub struct PeerLiveness {
     pub latest_height: u64,
 }
 
+/// Default maximum number of tracked peers (prevents Sybil resource exhaustion).
+pub const DEFAULT_MAX_PEERS: usize = 500;
+
 /// Thread-safe membership table that tracks peer liveness.
 #[derive(Debug, Clone)]
 pub struct MembershipTable {
@@ -242,6 +245,8 @@ pub struct MembershipTable {
     #[allow(dead_code)]
     /// Timeout in ms before a silent peer is marked suspect.
     pub timeout_ms: u64,
+    /// Maximum peers to track. New peers are rejected when at capacity.
+    pub max_peers: usize,
 }
 
 impl MembershipTable {
@@ -249,6 +254,17 @@ impl MembershipTable {
         Self {
             inner: Arc::new(Mutex::new(HashMap::new())),
             timeout_ms,
+            max_peers: DEFAULT_MAX_PEERS,
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Create a membership table with a custom peer capacity.
+    pub fn with_capacity(timeout_ms: u64, max_peers: usize) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(HashMap::new())),
+            timeout_ms,
+            max_peers,
         }
     }
 
@@ -272,6 +288,9 @@ impl MembershipTable {
     }
 
     /// Full alive record including org_id, height, and sequence.
+    ///
+    /// Returns `false` if the table is at capacity and the peer is unknown
+    /// (Sybil protection). Existing peers are always updated.
     pub fn record_alive_full(
         &self,
         peer_address: &str,
@@ -279,8 +298,14 @@ impl MembershipTable {
         sequence: u64,
         now_ms: u64,
         latest_height: u64,
-    ) {
+    ) -> bool {
         let mut table = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Reject new peers when at capacity (Sybil protection)
+        if !table.contains_key(peer_address) && table.len() >= self.max_peers {
+            return false;
+        }
+
         let entry = table
             .entry(peer_address.to_string())
             .or_insert(PeerLiveness {
@@ -299,6 +324,7 @@ impl MembershipTable {
                 entry.org_id = org_id.to_string();
             }
         }
+        true
     }
 
     #[allow(dead_code)]

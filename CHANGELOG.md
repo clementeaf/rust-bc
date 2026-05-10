@@ -8,6 +8,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-10
 
+**Pentest Suite Expanded (20 → 33 scenarios)**
+
+Network layer attacks (PEN-021 to PEN-023):
+- Sybil peer flooding: `MembershipTable` now enforces `MAX_PEERS` cap (default 500), rejects excess
+- Malformed P2P messages: serde rejects garbage/truncated/oversized payloads without panic
+- Eclipse attack: DAG rejects blocks referencing non-existent parents
+
+EVM adversarial tests (PEN-025, PEN-026, PEN-031, PEN-032):
+- Reentrancy: revm enforces 1024 call depth + gas limit
+- Storage collision: address-scoped storage isolation verified
+- Delegatecall abuse: separate contracts cannot modify each other's state remotely
+- Gas bomb: infinite loop + memory expansion halts cleanly at gas limit
+
+Consensus attacks (PEN-027, PEN-028):
+- Nothing-at-stake: equivocation detector catches dual-fork proposals, slashing applies
+- Long-range reorg: BFT commit QC provides finality; without QC, fork choice acknowledged
+
+Economic attacks (PEN-024, PEN-029, PEN-030, PEN-033):
+- Front-running sandwich: MVCC conflict detector separates overlapping txs into waves
+- Validator grinding: stake-weighted round-robin gives no advantage to address splitting
+- Fee suppression: `MIN_BASE_FEE` floor prevents zero-fee exploitation
+- Proposer-MEV: deterministic scheduling + multi-org endorsement prevents extraction
+
+Infrastructure:
+- `MembershipTable::with_capacity()` constructor for custom peer limits
+- `record_alive_full()` now returns `bool` (false = rejected at capacity)
+
+Tests: 1,629+ passed, 0 critical vulnerabilities.
+
+---
+
 **Oracle Maturation**
 
 - External connector wired in `main.rs` — `ORACLE_SOURCES` env var activates real HTTP price feeds

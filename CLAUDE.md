@@ -109,7 +109,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/consensus/` — DAG, fork choice, validator scheduling, HotStuff-inspired BFT layer (`bft/`), `ConsensusBackend` trait for Raft/BFT selection (`CONSENSUS_MODE` env var), DPoS validator selection (`dpos.rs`: stake-weighted committee, proportional leader rotation). `ConsensusEngine` supports BFT mode via `with_bft()`. `DagBlock` carries optional `commit_qc`.
 - `src/identity/` — DID + key management + pluggable signing (`SigningProvider` trait with Ed25519 and ML-DSA-65 implementations)
 - `src/tls.rs`, `src/pki.rs` — mutual TLS, certificate provisioning
-- `src/network/mod.rs` — P2P node, peer discovery, BFT message types (`BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange`)
+- `src/network/mod.rs` — P2P node, peer discovery, BFT message types (`BftProposal`, `BftVote`, `BftQuorumCertificate`, `BftViewChange`). `MembershipTable` with `MAX_PEERS` cap (default 500) for Sybil protection.
 - `src/transaction/parallel.rs` — conflict detector (RAW/WAW/WAR) + wave scheduler; groups non-conflicting txs for concurrent execution
 - `src/transaction/executor.rs` — wave-parallel block executor: MVCC validate per wave, apply writes in deterministic order, `to_legacy_results()` adapter
 - `src/tokenomics/economics.rs` — NOTA supply cap (100M), halving rewards, capped issuance, 80/20 fee burn/proposer split, EIP-1559 dynamic base fee, epoch-based `process_block()` state machine
@@ -140,7 +140,7 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/regulatory/` — 21 compliance checks (Ley 21.663, ISO 20022, ERC-3643, retention, intelligence, forensic). Report generation with SHA-256 hash. HTTP: `GET /regulatory/checks`, `GET /regulatory/report`.
 - `src/stress.rs` — Per-module stress tests (8 modules: storage, crypto, anomaly, risk, compliance, governance, forensic, patterns). HTTP: `GET /stress/report?ops=N`.
 - `src/compliance/` — ISO 20022 (7 message types), ISO 3166 (193 countries), ISO 4217 (64 currencies), ISO 8601 (dates/durations), ERC-3643 (security tokens with `checked_add` overflow protection). HTTP: `POST /compliance/validate/*`, `GET /compliance/countries`, `GET /compliance/currencies`.
-- `src/forensic_pentest.rs` — 20 adversarial attack scenarios (tampering, forgery, replay, double-spend, equivocation, ACL bypass, channel crossing, identity spoofing, overflow, rollback, path traversal, oracle manipulation, governance abuse, credential forgery, oversized payload). All exercise real code paths. 0 critical vulnerabilities. HTTP: `GET /pentest/report`.
+- `src/forensic_pentest.rs` — 33 adversarial attack scenarios across 7 categories (integrity, cryptography, access control, consensus/BFT, network P2P, EVM, economic). Covers: tampering, forgery, replay, double-spend, equivocation, ACL bypass, channel crossing, identity spoofing, overflow, rollback, path traversal, oracle manipulation, governance abuse, credential forgery, oversized payload, Sybil flooding, malformed P2P, eclipse attack, front-running, reentrancy, storage collision, nothing-at-stake, long-range reorg, validator grinding, fee suppression, delegatecall abuse, gas bomb, proposer-MEV. All exercise real code paths. 0 critical vulnerabilities. HTTP: `GET /pentest/report`.
 
 ### Block explorer — Cerulean Ledger UI
 
