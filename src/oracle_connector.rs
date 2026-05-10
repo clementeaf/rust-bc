@@ -275,7 +275,9 @@ pub fn spawn_oracle_poller(
                     let connector_id = "external-connector";
                     let _ = reg.register_oracle(connector_id.to_string());
 
-                    let price = reading.value as u64;
+                    // Store as fixed-point with 8 decimal places (satoshi-style)
+                    // to avoid truncation of sub-1 prices (e.g. CLP/USD = 0.00105)
+                    let price = (reading.value * 100_000_000.0) as u64;
                     let timestamp = reading.timestamp * 1000; // convert to ms
                     let signature = crate::oracle_system::OracleRegistry::generate_signature(
                         connector_id,

@@ -98,17 +98,21 @@ mod tests {
             oracle_id in "[a-z0-9-]{1,32}",
             symbol in "[A-Z/]{1,10}",
             price in any::<u64>(),
-            timestamp in 0u64..50000u64,
             confidence in 0u8..=100u8,
         ) {
             let mut registry = crate::oracle_system::OracleRegistry::new(66, 5000);
             let _ = registry.register_oracle(oracle_id.clone());
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let sig = crate::oracle_system::OracleRegistry::generate_signature(&oracle_id, price, ts);
             let _ = registry.submit_price_report(
                 &oracle_id,
                 symbol,
                 price,
-                timestamp,
-                vec![1, 2, 3], // arbitrary sig (test mode skips verification for small timestamps)
+                ts,
+                sig,
                 confidence,
             );
         }
@@ -119,19 +123,24 @@ mod tests {
             prices in prop::collection::vec(1u64..u64::MAX, 1..10),
         ) {
             let mut registry = crate::oracle_system::OracleRegistry::new(66, 5000);
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
             for (i, price) in prices.iter().enumerate() {
                 let id = format!("oracle-{i}");
                 let _ = registry.register_oracle(id.clone());
+                let sig = crate::oracle_system::OracleRegistry::generate_signature(&id, *price, ts);
                 let _ = registry.submit_price_report(
                     &id,
                     "TEST".into(),
                     *price,
-                    1000,
-                    vec![1],
+                    ts,
+                    sig,
                     95,
                 );
             }
-            let _ = registry.aggregate_reports("TEST", 2000);
+            let _ = registry.aggregate_reports("TEST", ts);
         }
     }
 
