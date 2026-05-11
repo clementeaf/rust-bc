@@ -8,6 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Chaincode Sandbox — Static validation gate before deployment**
+
+- `src/chaincode/sandbox.rs` — Wasm static analysis: well-formedness (wasmparser), import whitelist (6 allowed host functions), memory limits (max 16 pages / 1 MB)
+- Auto-detects WAT text vs binary Wasm
+- `SandboxReport` struct with per-check results, wasm size, validation duration
+- `SandboxReportStore` in-memory for persisting reports per chaincode version
+- Gate in `install_chaincode`: rejects Wasm that fails sandbox with 400 + failure details
+- `GET /api/v1/chaincode/{id}/sandbox-report?version=...` — query validation report
+- Dependencies: `wasmparser = "0.236"`, `wat = "1.246"`
+- 10 unit tests (valid, malformed, forbidden imports, oversized memory, boundary, store)
+
 **Audit — Action-level domain events (ISO 27001 compliance)**
 
 - `AuditEntry.action` field with 16 semantic action types (`AuditAction` enum: `BlockMined`, `DidRegistered`, `ChaincodeInstalled`, etc.)

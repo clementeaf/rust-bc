@@ -88,6 +88,7 @@ impl ApiRoutes {
             .service(chaincode::commit_chaincode)
             .service(chaincode::simulate_chaincode)
             .service(chaincode::invoke_chaincode)
+            .service(chaincode::get_sandbox_report)
             .service(discovery::get_endorsers)
             .service(discovery::get_channel_peers)
             .service(discovery::post_register_peer)

@@ -3,6 +3,7 @@ pub mod executor;
 pub mod external;
 pub mod invoker;
 pub mod resolver;
+pub mod sandbox;
 pub mod simulation;
 pub mod upgrade;
 

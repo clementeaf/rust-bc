@@ -93,6 +93,9 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
             rust_bc::oracle_system::OracleRegistry::new(66, 5000),
         )),
         contact_store: std::sync::Arc::new(rust_bc::api::handlers::contact::ContactStore::new()),
+        sandbox_report_store: std::sync::Arc::new(
+            rust_bc::chaincode::sandbox::SandboxReportStore::new(),
+        ),
     }
 }
 

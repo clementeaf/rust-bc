@@ -61,6 +61,8 @@ rustls-post-quantum = "0.2"
 # Heavy optional dependencies (feature-gated)
 rocksdb = { version = "0.22", optional = true }
 wasmtime = { version = "36", optional = true }
+wasmparser = "0.236"
+wat = "1.246"
 raft = { version = "0.7", default-features = false, features = ["default-logger", "prost-codec"], optional = true }
 prost = { version = "0.11", optional = true }
 revm = { version = "38", optional = true }

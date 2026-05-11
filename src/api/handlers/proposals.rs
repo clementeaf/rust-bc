@@ -207,6 +207,9 @@ mod tests {
                 crate::oracle_system::OracleRegistry::new(66, 5000),
             )),
             contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
+            sandbox_report_store: std::sync::Arc::new(
+                crate::chaincode::sandbox::SandboxReportStore::new(),
+            ),
         })
     }
 

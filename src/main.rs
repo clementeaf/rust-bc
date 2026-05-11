@@ -1027,6 +1027,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             66, 300_000,
         ))),
         contact_store: Arc::new(api::handlers::contact::ContactStore::new()),
+        sandbox_report_store: Arc::new(chaincode::sandbox::SandboxReportStore::new()),
     };
 
     // Oracle demo feed: simulated price data for sandbox demos.

@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 
@@ -117,6 +117,24 @@ pub async fn install_chaincode(
             reason: e.to_string(),
         })?;
 
+    // Run sandbox validation before accepting the chaincode.
+    let sandbox_report =
+        crate::chaincode::sandbox::validate(&query.chaincode_id, &query.version, &body);
+    state.sandbox_report_store.store(sandbox_report.clone());
+
+    if !sandbox_report.passed {
+        let reasons: Vec<&str> = sandbox_report
+            .checks
+            .iter()
+            .filter(|c| !c.passed)
+            .map(|c| c.detail.as_str())
+            .collect();
+        return Err(ApiError::ValidationError {
+            field: "wasm_bytes".to_string(),
+            reason: format!("sandbox validation failed: {}", reasons.join("; ")),
+        });
+    }
+
     log::info!(
         "Chaincode {} v{} installed, sha256: {}",
         query.chaincode_id,
@@ -172,6 +190,29 @@ pub async fn install_chaincode(
 ///
 /// Records the approving org (taken from the `X-Org-Id` header) in the
 /// chaincode definition's approvals map.  If the endorsement policy is
+/// GET /api/v1/chaincode/{id}/sandbox-report?version=...
+///
+/// Returns the sandbox validation report for a chaincode version.
+#[get("/chaincode/{id}/sandbox-report")]
+pub async fn get_sandbox_report(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    query: web::Query<InstallQuery>,
+) -> ApiResult<HttpResponse> {
+    let chaincode_id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+
+    match state
+        .sandbox_report_store
+        .get(&chaincode_id, &query.version)
+    {
+        Some(report) => Ok(HttpResponse::Ok().json(ApiResponse::success(report, trace_id))),
+        None => Err(ApiError::NotFound {
+            resource: format!("sandbox report for {chaincode_id}:{}", query.version),
+        }),
+    }
+}
+
 /// satisfied by the accumulated approvals, the definition status advances
 /// to `Approved`.
 #[post("/chaincode/{id}/approve")]
@@ -660,6 +701,9 @@ mod tests {
                 crate::oracle_system::OracleRegistry::new(66, 5000),
             )),
             contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
+            sandbox_report_store: std::sync::Arc::new(
+                crate::chaincode::sandbox::SandboxReportStore::new(),
+            ),
         })
     }
 
