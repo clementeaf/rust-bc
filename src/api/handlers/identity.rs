@@ -117,6 +117,15 @@ pub async fn store_write_identity(
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::DidRegistered,
+        req.headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("did={}", body.did)),
+    );
     Ok(HttpResponse::Created().json(ApiResponse::success(body.into_inner(), trace_id)))
 }
 

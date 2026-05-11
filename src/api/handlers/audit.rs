@@ -1,11 +1,12 @@
 //! Audit trail endpoints:
-//!   GET /api/v1/audit/requests      — list audit entries
+//!   GET /api/v1/audit/requests      — list audit entries (filterable by action)
 //!   GET /api/v1/audit/export        — export as CSV
 
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::audit::AuditAction;
 use crate::app_state::AppState;
 
 #[derive(Deserialize)]
@@ -13,6 +14,8 @@ pub struct AuditQuery {
     pub from: Option<String>,
     pub to: Option<String>,
     pub org_id: Option<String>,
+    /// Filter by action type (e.g., "block_mined", "did_registered", "http_request").
+    pub action: Option<AuditAction>,
     pub limit: Option<usize>,
 }
 
@@ -33,6 +36,7 @@ pub async fn list_audit_entries(
             query.from.as_deref(),
             query.to.as_deref(),
             query.org_id.as_deref(),
+            query.action.as_ref(),
             query.limit.unwrap_or(1000),
         )
         .map_err(|e| ApiError::StorageError {
