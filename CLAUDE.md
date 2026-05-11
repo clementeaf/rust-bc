@@ -65,7 +65,8 @@ The original in-memory `Blockchain` struct plus a file-backed `BlockStorage`. Lo
 Clean trait-based persistence introduced in Fases I–VI:
 - `traits.rs` — `BlockStore` trait + data types (`Block`, `Transaction`, `IdentityRecord`, `Credential`). A blanket `impl<T: BlockStore> BlockStore for Arc<T>` lets `Arc<MemoryStore>` be used as `Box<dyn BlockStore>`.
 - `memory.rs` — `MemoryStore`: HashMap-backed, used as default and in tests.
-- `adapters.rs` — `RocksDbBlockStore`: Column Families (`blocks`, `transactions`, `identities`, `credentials`, `meta`, `tx_by_block`). On open, static names are merged with `RocksDB::list_cf` so extra families on disk (e.g. `private_*`) are opened. Secondary index `tx_by_block` uses key `{012-padded-height}:{tx_id}` for prefix scans.
+- `adapters.rs` — `RocksDbBlockStore`: Column Families (`blocks`, `transactions`, `identities`, `credentials`, `meta`, `tx_by_block`, `audit_log`, `sandbox_reports`, `oracle_records`). On open, static names are merged with `RocksDB::list_cf` so extra families on disk (e.g. `private_*`) are opened. Secondary index `tx_by_block` uses key `{012-padded-height}:{tx_id}` for prefix scans. `flush_wal()` for graceful shutdown.
+- `migrations.rs` — Schema migration system: version tracked in `meta` CF, migration registry runs pending steps on startup. `LATEST_VERSION = 2`. Add new migrations by incrementing version + registering a function.
 - `errors.rs` — `StorageError` enum.
 - `comprehensive_tests.rs` — cross-store integration tests.
 

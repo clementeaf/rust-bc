@@ -13,6 +13,8 @@ pub mod comprehensive_tests;
 pub mod couchdb;
 pub mod errors;
 pub mod memory;
+#[cfg(feature = "rocksdb-storage")]
+pub mod migrations;
 pub mod snapshot;
 pub mod traits;
 pub mod world_state;

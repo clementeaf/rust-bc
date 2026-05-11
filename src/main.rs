@@ -743,6 +743,15 @@ async fn async_main_inner() -> std::io::Result<()> {
         let path = env::var("STORAGE_PATH").unwrap_or_else(|_| "./data/blocks".to_string());
         match RocksDbBlockStore::new(&path) {
             Ok(store) => {
+                // Run schema migrations before serving requests.
+                match storage::migrations::run_pending(&store) {
+                    Ok(n) if n > 0 => log::info!("{n} schema migration(s) applied"),
+                    Err(e) => {
+                        log::error!("Schema migration failed: {e}");
+                        return Err(std::io::Error::other(format!("migration failed: {e}")));
+                    }
+                    _ => {}
+                }
                 log::info!("Storage backend: RocksDB at {path}");
                 Some(Arc::new(store))
             }

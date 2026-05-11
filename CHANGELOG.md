@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Schema Migrations — Versioned RocksDB upgrades on startup**
+
+- `src/storage/migrations.rs` — migration system: schema version in `meta` CF, migration registry with `(version, fn)` entries, runs pending on startup
+- Fresh databases stamped at `LATEST_VERSION` (v2) without running migrations
+- Existing databases migrate incrementally (v1→v2 verifies new CFs exist)
+- Idempotent: crash mid-migration re-runs same step on next startup
+- Wired in `main.rs` — migrations run before serving requests, fatal on failure
+- 6 unit tests: fresh DB, v1→v2, idempotent, version survives reopen, sorted order
+
 **Graceful Shutdown — Real WAL flush and full task cleanup**
 
 - `RocksDbBlockStore::flush_wal()` — flushes WAL + memtables to SST files before exit
