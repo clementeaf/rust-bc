@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Consolidation — AppState test builder, cross-subsystem tests, legacy deprecation docs**
+
+- `AppState::test_default()` — single constructor with all memory-backed defaults for tests. Replaces ~50-line duplicated constructors across 6 handler test files + unused imports cleaned up.
+- `tests/cross_subsystem.rs` — 7 integration tests crossing module boundaries: identity→credential→audit, chaincode→sandbox→audit, legal oracle→audit, credential→ZKP verification, credential revocation→ZKP invalidation, multi-org audit isolation
+- Legacy storage (`src/blockchain.rs`) documented as DEPRECATED with migration path in CLAUDE.md. 17 production refs remain in `api_legacy.rs` — both systems operate independently without conflicts.
+
 **Consolidation — Stubs replaced, honest labeling, real HTTP, RocksDB persistence**
 
 - Identity handlers: `create_identity` generates real DID + Ed25519 keypair + persists to store; `get_identity` reads from store; `rotate_key` updates record; `verify_signature` performs real Ed25519 verification

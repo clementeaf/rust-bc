@@ -87,19 +87,10 @@ mod tests {
     use crate::msp::CrlStore;
     use actix_web::{test, App};
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::{Arc, Mutex};
 
-    use crate::airdrop::AirdropManager;
     use crate::app_state::AppState;
-    use crate::billing::BillingManager;
-    use crate::blockchain::Blockchain;
-    use crate::cache::BalanceCache;
-    use crate::metrics::MetricsCollector;
-    use crate::models::{Mempool, WalletManager};
-    use crate::smart_contracts::ContractManager;
-    use crate::staking::StakingManager;
     use crate::storage::errors::StorageResult;
-    use crate::transaction_validation::TransactionValidator;
 
     struct MemCrl(Mutex<HashMap<String, Vec<String>>>);
     impl CrlStore for MemCrl {
@@ -123,57 +114,9 @@ mod tests {
 
     fn make_state(crl: Arc<dyn CrlStore>) -> web::Data<AppState> {
         std::env::set_var("ACL_MODE", "permissive");
-        web::Data::new(AppState {
-            blockchain: Arc::new(Mutex::new(Blockchain::new(1))),
-            wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
-            block_storage: None,
-            node: None,
-            mempool: Arc::new(Mutex::new(Mempool::new())),
-            balance_cache: Arc::new(BalanceCache::new()),
-            billing_manager: Arc::new(BillingManager::new()),
-            contract_manager: Arc::new(RwLock::new(ContractManager::new())),
-            staking_manager: Arc::new(StakingManager::new(None, None, None)),
-            airdrop_manager: Arc::new(AirdropManager::new(100, 10, "w".to_string())),
-            pruning_manager: None,
-            checkpoint_manager: None,
-            transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
-            metrics: Arc::new(MetricsCollector::new()),
-            store: Arc::new(RwLock::new(HashMap::new())),
-            org_registry: None,
-            policy_store: None,
-            crl_store: Some(crl),
-            private_data_store: None,
-            collection_registry: None,
-            chaincode_package_store: None,
-            chaincode_definition_store: None,
-            gateway: None,
-            discovery_service: None,
-            event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
-            acl_provider: None,
-            ordering_backend: None,
-            world_state: None,
-            audit_store: None,
-            proposal_store: None,
-            vote_store: None,
-            param_registry: None,
-            pin_store: None,
-            oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::oracle_system::OracleRegistry::new(66, 5000),
-            )),
-            contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
-            sandbox_report_store: std::sync::Arc::new(
-                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
-            ),
-            legal_oracle_store: std::sync::Arc::new(
-                crate::legal_oracle::MemoryOracleRecordStore::new(),
-            ),
-            legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::legal_oracle::legal::LegalOracle::new(300),
-            )),
-        })
+        let mut state = AppState::test_default();
+        state.crl_store = Some(crl);
+        web::Data::new(state)
     }
 
     #[actix_web::test]

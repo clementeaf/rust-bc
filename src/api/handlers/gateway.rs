@@ -125,84 +125,19 @@ pub async fn gateway_submit(
 mod tests {
     use super::*;
     use actix_web::{test, App};
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::Arc;
 
-    use crate::airdrop::AirdropManager;
-    use crate::billing::BillingManager;
-    use crate::blockchain::Blockchain;
-    use crate::cache::BalanceCache;
     use crate::endorsement::policy_store::MemoryPolicyStore;
     use crate::endorsement::registry::MemoryOrgRegistry;
     use crate::gateway::Gateway;
-    use crate::metrics::MetricsCollector;
-    use crate::models::{Mempool, WalletManager};
     use crate::ordering::service::OrderingService;
-    use crate::smart_contracts::ContractManager;
-    use crate::staking::StakingManager;
     use crate::storage::memory::MemoryStore;
-    use crate::storage::traits::BlockStore;
-    use crate::transaction_validation::{TransactionValidator, ValidationConfig};
 
     fn base_state(gateway: Option<Arc<Gateway>>) -> web::Data<AppState> {
         std::env::set_var("ACL_MODE", "permissive");
-        let mut store_map = std::collections::HashMap::new();
-        store_map.insert(
-            "default".to_string(),
-            Arc::new(MemoryStore::new()) as Arc<dyn BlockStore>,
-        );
-        web::Data::new(AppState {
-            blockchain: Arc::new(Mutex::new(Blockchain::new(1))),
-            wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
-            block_storage: None,
-            node: None,
-            mempool: Arc::new(Mutex::new(Mempool::new())),
-            balance_cache: Arc::new(BalanceCache::new()),
-            billing_manager: Arc::new(BillingManager::new()),
-            contract_manager: Arc::new(RwLock::new(ContractManager::new())),
-            staking_manager: Arc::new(StakingManager::new(None, None, None)),
-            airdrop_manager: Arc::new(AirdropManager::new(100, 10, "w".to_string())),
-            pruning_manager: None,
-            checkpoint_manager: None,
-            transaction_validator: Arc::new(Mutex::new(TransactionValidator::new(
-                ValidationConfig::default(),
-            ))),
-            metrics: Arc::new(MetricsCollector::new()),
-            store: Arc::new(RwLock::new(store_map)),
-            org_registry: None,
-            policy_store: None,
-            crl_store: None,
-            private_data_store: None,
-            collection_registry: None,
-            chaincode_package_store: None,
-            chaincode_definition_store: None,
-            gateway,
-            discovery_service: None,
-            event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: std::sync::Arc::new(std::sync::RwLock::new(
-                std::collections::HashMap::new(),
-            )),
-            acl_provider: None,
-            ordering_backend: None,
-            world_state: None,
-            audit_store: None,
-            proposal_store: None,
-            vote_store: None,
-            param_registry: None,
-            pin_store: None,
-            oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::oracle_system::OracleRegistry::new(66, 5000),
-            )),
-            contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
-            sandbox_report_store: std::sync::Arc::new(
-                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
-            ),
-            legal_oracle_store: std::sync::Arc::new(
-                crate::legal_oracle::MemoryOracleRecordStore::new(),
-            ),
-            legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::legal_oracle::legal::LegalOracle::new(300),
-            )),
-        })
+        let mut state = AppState::test_default();
+        state.gateway = gateway;
+        web::Data::new(state)
     }
 
     fn make_state_with_gateway() -> web::Data<AppState> {

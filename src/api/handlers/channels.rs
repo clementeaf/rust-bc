@@ -348,55 +348,9 @@ mod tests {
         for (id, s) in stores {
             store_map.insert(id.to_string(), s);
         }
-        AppState {
-            blockchain: Arc::new(Mutex::new(Blockchain::new(1))),
-            wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
-            block_storage: None::<Arc<BlockStorage>>,
-            node: None,
-            mempool: Arc::new(Mutex::new(Mempool::new())),
-            balance_cache: Arc::new(BalanceCache::new()),
-            billing_manager: Arc::new(BillingManager::new()),
-            contract_manager: Arc::new(RwLock::new(ContractManager::new())),
-            staking_manager: Arc::new(StakingManager::new(None, None, None)),
-            airdrop_manager: Arc::new(AirdropManager::new(100, 10, "w".to_string())),
-            pruning_manager: None::<Arc<PruningManager>>,
-            checkpoint_manager: None::<Arc<Mutex<CheckpointManager>>>,
-            transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
-            metrics: Arc::new(MetricsCollector::new()),
-            store: Arc::new(RwLock::new(store_map)),
-            org_registry: None,
-            policy_store: None,
-            crl_store: None,
-            private_data_store: None,
-            collection_registry: None,
-            chaincode_package_store: None,
-            chaincode_definition_store: None,
-            gateway: None,
-            discovery_service: None,
-            event_bus: Arc::new(crate::events::EventBus::new()),
-            channel_configs: Arc::new(RwLock::new(HashMap::new())),
-            acl_provider: None,
-            ordering_backend: None,
-            world_state: None,
-            audit_store: None,
-            proposal_store: None,
-            vote_store: None,
-            param_registry: None,
-            pin_store: None,
-            oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::oracle_system::OracleRegistry::new(66, 5000),
-            )),
-            contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
-            sandbox_report_store: std::sync::Arc::new(
-                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
-            ),
-            legal_oracle_store: std::sync::Arc::new(
-                crate::legal_oracle::MemoryOracleRecordStore::new(),
-            ),
-            legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
-                crate::legal_oracle::legal::LegalOracle::new(300),
-            )),
-        }
+        let mut state = AppState::test_default();
+        state.store = Arc::new(RwLock::new(store_map));
+        state
     }
 
     // ── get_channel_store ─────────────────────────────────────────────────────

@@ -58,8 +58,8 @@ cargo fmt
 
 The project is a blockchain node with an HTTP API. Two parallel storage systems coexist:
 
-### Legacy system (`src/blockchain.rs`, `src/block_storage.rs`, `src/models.rs`)
-The original in-memory `Blockchain` struct plus a file-backed `BlockStorage`. Loaded at startup and kept in `AppState`. Not integrated with the new storage layer.
+### Legacy system (`src/blockchain.rs`, `src/block_storage.rs`, `src/models.rs`) — DEPRECATED
+The original in-memory `Blockchain` struct plus a file-backed `BlockStorage`. Loaded at startup and kept in `AppState`. **Not integrated with the new storage layer.** Still used by `api_legacy.rs` for mining, balance calculation, and transaction processing (17 production references). The new `BlockStore` trait handles identity, credentials, channels, and block persistence. Migration path: gradually move mining/balance logic to services backed by `BlockStore`, then remove `Blockchain` struct. Not urgent — both systems operate independently without conflicts.
 
 ### New storage layer (`src/storage/`)
 Clean trait-based persistence introduced in Fases I–VI:

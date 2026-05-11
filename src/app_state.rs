@@ -101,3 +101,66 @@ pub struct AppState {
     /// Legal oracle service.
     pub legal_oracle: Arc<std::sync::Mutex<crate::legal_oracle::legal::LegalOracle>>,
 }
+
+impl AppState {
+    /// Create an AppState with all memory-backed defaults for testing.
+    ///
+    /// All `Option` fields are `None`, all stores use in-memory implementations.
+    /// Callers can override specific fields after construction.
+    #[cfg(test)]
+    pub fn test_default() -> Self {
+        use crate::storage::MemoryStore;
+
+        let default_store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
+        let mut store_map = HashMap::new();
+        store_map.insert("default".to_string(), default_store);
+
+        Self {
+            blockchain: Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),
+            wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
+            block_storage: None,
+            node: None,
+            mempool: Arc::new(Mutex::new(Mempool::new())),
+            balance_cache: Arc::new(BalanceCache::new()),
+            billing_manager: Arc::new(BillingManager::new()),
+            contract_manager: Arc::new(RwLock::new(ContractManager::new())),
+            staking_manager: Arc::new(StakingManager::new(None, None, None)),
+            airdrop_manager: Arc::new(AirdropManager::new(100, 10, "test-wallet".to_string())),
+            pruning_manager: None,
+            checkpoint_manager: None,
+            transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
+            metrics: Arc::new(MetricsCollector::new()),
+            store: Arc::new(RwLock::new(store_map)),
+            org_registry: None,
+            policy_store: None,
+            crl_store: None,
+            private_data_store: None,
+            collection_registry: None,
+            chaincode_package_store: None,
+            chaincode_definition_store: None,
+            gateway: None,
+            discovery_service: None,
+            event_bus: Arc::new(EventBus::new()),
+            channel_configs: Arc::new(RwLock::new(HashMap::new())),
+            acl_provider: None,
+            ordering_backend: None,
+            world_state: None,
+            audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
+            proposal_store: None,
+            vote_store: None,
+            param_registry: None,
+            pin_store: None,
+            oracle_registry: Arc::new(std::sync::Mutex::new(
+                crate::oracle_system::OracleRegistry::new(66, 5000),
+            )),
+            contact_store: Arc::new(crate::api::handlers::contact::ContactStore::new()),
+            sandbox_report_store: Arc::new(
+                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
+            ),
+            legal_oracle_store: Arc::new(crate::legal_oracle::MemoryOracleRecordStore::new()),
+            legal_oracle: Arc::new(std::sync::Mutex::new(
+                crate::legal_oracle::legal::LegalOracle::new(300),
+            )),
+        }
+    }
+}
