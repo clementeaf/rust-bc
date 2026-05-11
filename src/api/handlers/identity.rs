@@ -12,7 +12,7 @@ use chrono::Utc;
 #[post("/identity/create")]
 async fn create_identity(
     state: web::Data<AppState>,
-    body: web::Json<CreateIdentityRequest>,
+    _body: web::Json<CreateIdentityRequest>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();

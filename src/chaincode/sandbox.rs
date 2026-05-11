@@ -211,12 +211,18 @@ fn check_memory(wasm_bytes: &[u8]) -> CheckResult {
     }
 }
 
-/// In-memory store for sandbox reports, keyed by `chaincode_id:version`.
-pub struct SandboxReportStore {
+/// Trait for persisting and querying sandbox reports.
+pub trait SandboxReportStore: Send + Sync {
+    fn store_report(&self, report: &SandboxReport);
+    fn get_report(&self, chaincode_id: &str, version: &str) -> Option<SandboxReport>;
+}
+
+/// In-memory implementation.
+pub struct MemorySandboxReportStore {
     reports: Mutex<HashMap<String, SandboxReport>>,
 }
 
-impl SandboxReportStore {
+impl MemorySandboxReportStore {
     pub fn new() -> Self {
         Self {
             reports: Mutex::new(HashMap::new()),
@@ -226,26 +232,31 @@ impl SandboxReportStore {
     fn key(chaincode_id: &str, version: &str) -> String {
         format!("{chaincode_id}:{version}")
     }
+}
 
-    pub fn store(&self, report: SandboxReport) {
+impl Default for MemorySandboxReportStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SandboxReportStore for MemorySandboxReportStore {
+    fn store_report(&self, report: &SandboxReport) {
         self.reports
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(Self::key(&report.chaincode_id, &report.version), report);
+            .insert(
+                Self::key(&report.chaincode_id, &report.version),
+                report.clone(),
+            );
     }
 
-    pub fn get(&self, chaincode_id: &str, version: &str) -> Option<SandboxReport> {
+    fn get_report(&self, chaincode_id: &str, version: &str) -> Option<SandboxReport> {
         self.reports
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .get(&Self::key(chaincode_id, version))
             .cloned()
-    }
-}
-
-impl Default for SandboxReportStore {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -345,19 +356,19 @@ mod tests {
 
     #[test]
     fn report_store_roundtrip() {
-        let store = SandboxReportStore::new();
+        let store = MemorySandboxReportStore::new();
         let report = validate("mycc", "1.0", VALID_EMPTY);
-        store.store(report.clone());
+        store.store_report(&report);
 
-        let retrieved = store.get("mycc", "1.0").unwrap();
+        let retrieved = store.get_report("mycc", "1.0").unwrap();
         assert_eq!(retrieved.chaincode_id, "mycc");
         assert_eq!(retrieved.passed, report.passed);
     }
 
     #[test]
     fn report_store_returns_none_for_missing() {
-        let store = SandboxReportStore::new();
-        assert!(store.get("nonexistent", "1.0").is_none());
+        let store = MemorySandboxReportStore::new();
+        assert!(store.get_report("nonexistent", "1.0").is_none());
     }
 
     #[test]

@@ -59,6 +59,12 @@ const CF_COLLECTIONS: &str = "collections";
 const CF_CHAINCODE_DEFINITIONS: &str = "chaincode_definitions";
 /// Key history: key = `{state_key}\x00{version:012}`, value = JSON HistoryEntry
 const CF_KEY_HISTORY: &str = "key_history";
+/// Audit log: key = `{timestamp}:{trace_id}`, value = JSON AuditEntry
+const CF_AUDIT_LOG: &str = "audit_log";
+/// Sandbox reports: key = `{chaincode_id}:{version}`, value = JSON SandboxReport
+const CF_SANDBOX_REPORTS: &str = "sandbox_reports";
+/// Legal oracle records: key = record id, value = JSON OracleRecord
+const CF_ORACLE_RECORDS: &str = "oracle_records";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -81,6 +87,9 @@ const ALL_CFS: &[&str] = &[
     CF_ENDORSEMENT_POLICIES,
     CF_COLLECTIONS,
     CF_CHAINCODE_DEFINITIONS,
+    CF_AUDIT_LOG,
+    CF_SANDBOX_REPORTS,
+    CF_ORACLE_RECORDS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -1175,6 +1184,161 @@ impl crate::chaincode::ChaincodeDefinitionStore for RocksDbBlockStore {
             }
             None => Ok(None),
         }
+    }
+}
+
+// ── AuditStore on RocksDB ────────────────────────────────────────────────────
+
+impl crate::audit::AuditStore for RocksDbBlockStore {
+    fn append(&self, entry: &crate::audit::AuditEntry) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_AUDIT_LOG)
+            .ok_or_else(|| StorageError::RocksDbError("missing audit_log CF".to_string()))?;
+        let key = format!("{}:{}", entry.timestamp, entry.trace_id);
+        let value = serde_json::to_vec(entry)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn query(
+        &self,
+        from: Option<&str>,
+        to: Option<&str>,
+        org_id: Option<&str>,
+        action: Option<&crate::audit::AuditAction>,
+        limit: usize,
+    ) -> StorageResult<Vec<crate::audit::AuditEntry>> {
+        let cf = self
+            .db
+            .cf_handle(CF_AUDIT_LOG)
+            .ok_or_else(|| StorageError::RocksDbError("missing audit_log CF".to_string()))?;
+
+        let mode = match from {
+            Some(f) => IteratorMode::From(f.as_bytes(), Direction::Forward),
+            None => IteratorMode::Start,
+        };
+
+        let mut results = Vec::new();
+        for item in self.db.iterator_cf(&cf, mode) {
+            let (key_bytes, val_bytes) =
+                item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let key_str = String::from_utf8_lossy(&key_bytes);
+            // Key format: "{timestamp}:{trace_id}" — extract timestamp prefix
+            let ts = key_str.split(':').next().unwrap_or("");
+            if let Some(t) = to {
+                if ts > t {
+                    break;
+                }
+            }
+            let entry: crate::audit::AuditEntry = serde_json::from_slice(&val_bytes)
+                .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+            if let Some(org) = org_id {
+                if entry.org_id != org {
+                    continue;
+                }
+            }
+            if let Some(act) = action {
+                if &entry.action != act {
+                    continue;
+                }
+            }
+            results.push(entry);
+            if results.len() >= limit {
+                break;
+            }
+        }
+        Ok(results)
+    }
+}
+
+// ── SandboxReportStore on RocksDB ────────────────────────────────────────────
+
+impl crate::chaincode::sandbox::SandboxReportStore for RocksDbBlockStore {
+    fn store_report(&self, report: &crate::chaincode::sandbox::SandboxReport) {
+        let cf = match self.db.cf_handle(CF_SANDBOX_REPORTS) {
+            Some(cf) => cf,
+            None => return,
+        };
+        let key = format!("{}:{}", report.chaincode_id, report.version);
+        if let Ok(value) = serde_json::to_vec(report) {
+            let _ = self.db.put_cf(&cf, key.as_bytes(), &value);
+        }
+    }
+
+    fn get_report(
+        &self,
+        chaincode_id: &str,
+        version: &str,
+    ) -> Option<crate::chaincode::sandbox::SandboxReport> {
+        let cf = self.db.cf_handle(CF_SANDBOX_REPORTS)?;
+        let key = format!("{chaincode_id}:{version}");
+        let bytes = self.db.get_cf(&cf, key.as_bytes()).ok()??;
+        serde_json::from_slice(&bytes).ok()
+    }
+}
+
+// ── OracleRecordStore on RocksDB ─────────────────────────────────────────────
+
+impl crate::legal_oracle::OracleRecordStore for RocksDbBlockStore {
+    fn store(
+        &self,
+        record: &crate::legal_oracle::OracleRecord,
+    ) -> Result<(), crate::legal_oracle::OracleError> {
+        let cf = self.db.cf_handle(CF_ORACLE_RECORDS).ok_or_else(|| {
+            crate::legal_oracle::OracleError::Storage("missing oracle_records CF".to_string())
+        })?;
+        let value = serde_json::to_vec(record)
+            .map_err(|e| crate::legal_oracle::OracleError::Storage(e.to_string()))?;
+        self.db
+            .put_cf(&cf, record.id.as_bytes(), &value)
+            .map_err(|e| crate::legal_oracle::OracleError::Storage(e.to_string()))?;
+        Ok(())
+    }
+
+    fn get(
+        &self,
+        id: &str,
+    ) -> Result<Option<crate::legal_oracle::OracleRecord>, crate::legal_oracle::OracleError> {
+        let cf = self.db.cf_handle(CF_ORACLE_RECORDS).ok_or_else(|| {
+            crate::legal_oracle::OracleError::Storage("missing oracle_records CF".to_string())
+        })?;
+        match self.db.get_cf(&cf, id.as_bytes()) {
+            Ok(Some(bytes)) => {
+                let record = serde_json::from_slice(&bytes)
+                    .map_err(|e| crate::legal_oracle::OracleError::Storage(e.to_string()))?;
+                Ok(Some(record))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(crate::legal_oracle::OracleError::Storage(e.to_string())),
+        }
+    }
+
+    fn list(
+        &self,
+        source: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<crate::legal_oracle::OracleRecord>, crate::legal_oracle::OracleError> {
+        let cf = self.db.cf_handle(CF_ORACLE_RECORDS).ok_or_else(|| {
+            crate::legal_oracle::OracleError::Storage("missing oracle_records CF".to_string())
+        })?;
+        let mut results = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            let (_key, val) =
+                item.map_err(|e| crate::legal_oracle::OracleError::Storage(e.to_string()))?;
+            let record: crate::legal_oracle::OracleRecord = serde_json::from_slice(&val)
+                .map_err(|e| crate::legal_oracle::OracleError::Storage(e.to_string()))?;
+            if source.is_none_or(|s| record.source == s) {
+                results.push(record);
+            }
+            if results.len() >= limit {
+                break;
+            }
+        }
+        Ok(results)
     }
 }
 

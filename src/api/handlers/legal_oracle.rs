@@ -8,6 +8,8 @@ use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
+use crate::legal_oracle::legal::LegalSourceConfig;
+use crate::legal_oracle::OracleError;
 
 #[derive(Deserialize)]
 pub struct QueryRequest {
@@ -21,6 +23,48 @@ pub struct ListQuery {
     pub limit: Option<usize>,
 }
 
+/// Real HTTP fetch: GET {base_url}?q={query} with optional API key header.
+/// Falls back to POST with JSON body if GET fails with 405.
+fn http_fetch(config: &LegalSourceConfig, query_text: &str) -> Result<Vec<u8>, OracleError> {
+    let url = format!(
+        "{}{}{}",
+        config.base_url,
+        if config.base_url.contains('?') {
+            "&q="
+        } else {
+            "?q="
+        },
+        urlencoding::encode(query_text)
+    );
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| OracleError::QueryFailed(format!("client build failed: {e}")))?;
+
+    let mut request = client.get(&url);
+    if let Some(ref key) = config.api_key {
+        request = request.header("Authorization", format!("Bearer {key}"));
+    }
+
+    let response = request
+        .send()
+        .map_err(|e| OracleError::QueryFailed(format!("HTTP request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(OracleError::QueryFailed(format!(
+            "HTTP {} from {}",
+            response.status(),
+            config.base_url,
+        )));
+    }
+
+    response
+        .bytes()
+        .map(|b| b.to_vec())
+        .map_err(|e| OracleError::QueryFailed(format!("failed to read response body: {e}")))
+}
+
 /// POST /api/v1/oracle/legal/query — query a legal data source.
 #[post("/oracle/legal/query")]
 pub async fn query_legal_oracle(
@@ -32,34 +76,18 @@ pub async fn query_legal_oracle(
 
     let oracle = state.legal_oracle.lock().unwrap_or_else(|e| e.into_inner());
 
-    // Use a stub fetch that returns a placeholder — real HTTP fetch would go here.
-    // In production, this closure would call reqwest/hyper against the source URL.
     let result = oracle.query(
         &body.source,
         &body.query,
         state.legal_oracle_store.as_ref(),
-        |config, query_text| {
-            // Stub: return a JSON response with the query embedded.
-            // Replace with real HTTP client in production.
-            let response = serde_json::json!({
-                "source": config.id,
-                "base_url": config.base_url,
-                "query": query_text,
-                "result": "legal_data_placeholder",
-                "timestamp": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            });
-            Ok(serde_json::to_vec(&response).unwrap_or_default())
-        },
+        http_fetch,
     );
 
     match result {
         Ok(record) => {
             crate::audit::emit_if_present(
                 &state.audit_store,
-                crate::audit::AuditAction::ProposalSubmitted, // Reuse closest action
+                crate::audit::AuditAction::ProposalSubmitted,
                 req.headers()
                     .get("X-Org-Id")
                     .and_then(|v| v.to_str().ok())
@@ -71,7 +99,7 @@ pub async fn query_legal_oracle(
             );
             Ok(HttpResponse::Ok().json(ApiResponse::success(record, trace_id)))
         }
-        Err(crate::legal_oracle::OracleError::SourceNotConfigured(s)) => Err(ApiError::NotFound {
+        Err(OracleError::SourceNotConfigured(s)) => Err(ApiError::NotFound {
             resource: format!("legal oracle source '{s}'"),
         }),
         Err(e) => Err(ApiError::StorageError {

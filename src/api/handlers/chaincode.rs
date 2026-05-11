@@ -120,7 +120,7 @@ pub async fn install_chaincode(
     // Run sandbox validation before accepting the chaincode.
     let sandbox_report =
         crate::chaincode::sandbox::validate(&query.chaincode_id, &query.version, &body);
-    state.sandbox_report_store.store(sandbox_report.clone());
+    state.sandbox_report_store.store_report(&sandbox_report);
 
     if !sandbox_report.passed {
         let reasons: Vec<&str> = sandbox_report
@@ -204,7 +204,7 @@ pub async fn get_sandbox_report(
 
     match state
         .sandbox_report_store
-        .get(&chaincode_id, &query.version)
+        .get_report(&chaincode_id, &query.version)
     {
         Some(report) => Ok(HttpResponse::Ok().json(ApiResponse::success(report, trace_id))),
         None => Err(ApiError::NotFound {
@@ -702,7 +702,7 @@ mod tests {
             )),
             contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
             sandbox_report_store: std::sync::Arc::new(
-                crate::chaincode::sandbox::SandboxReportStore::new(),
+                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
             ),
             legal_oracle_store: std::sync::Arc::new(
                 crate::legal_oracle::MemoryOracleRecordStore::new(),

@@ -388,7 +388,7 @@ mod tests {
             )),
             contact_store: std::sync::Arc::new(crate::api::handlers::contact::ContactStore::new()),
             sandbox_report_store: std::sync::Arc::new(
-                crate::chaincode::sandbox::SandboxReportStore::new(),
+                crate::chaincode::sandbox::MemorySandboxReportStore::new(),
             ),
             legal_oracle_store: std::sync::Arc::new(
                 crate::legal_oracle::MemoryOracleRecordStore::new(),

@@ -94,7 +94,7 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         )),
         contact_store: std::sync::Arc::new(rust_bc::api::handlers::contact::ContactStore::new()),
         sandbox_report_store: std::sync::Arc::new(
-            rust_bc::chaincode::sandbox::SandboxReportStore::new(),
+            rust_bc::chaincode::sandbox::MemorySandboxReportStore::new(),
         ),
         legal_oracle_store: std::sync::Arc::new(
             rust_bc::legal_oracle::MemoryOracleRecordStore::new(),
@@ -149,7 +149,7 @@ fn make_state_no_store() -> AppState {
         )),
         contact_store: std::sync::Arc::new(rust_bc::api::handlers::contact::ContactStore::new()),
         sandbox_report_store: std::sync::Arc::new(
-            rust_bc::chaincode::sandbox::SandboxReportStore::new(),
+            rust_bc::chaincode::sandbox::MemorySandboxReportStore::new(),
         ),
         legal_oracle_store: std::sync::Arc::new(
             rust_bc::legal_oracle::MemoryOracleRecordStore::new(),

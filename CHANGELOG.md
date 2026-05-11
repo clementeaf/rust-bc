@@ -8,11 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
-**Consolidation — Replace stubs, honest labeling**
+**Consolidation — Stubs replaced, honest labeling, real HTTP, RocksDB persistence**
 
 - Identity handlers: `create_identity` generates real DID + Ed25519 keypair + persists to store; `get_identity` reads from store; `rotate_key` updates record; `verify_signature` performs real Ed25519 verification
-- Credential handlers: `issue_credential` persists to store with real metadata; `get_credential` reads from store; `verify_credential` checks status + expiry + revocation; `revoke_credential` updates status in store with audit event
-- ZKP module renamed to "commitment-based attribute verification" — docs now honestly state the verifier sees the claim value, not zero-knowledge. Module kept as `zkp.rs` for API compatibility.
+- Credential handlers: `issue_credential` persists to store; `get_credential` reads from store; `verify_credential` checks status + expiry + revocation; `revoke_credential` updates status with audit event
+- ZKP module renamed to "commitment-based attribute verification" — docs honestly state verifier sees claim value
+- Legal oracle: stub fetch replaced with real `reqwest::blocking` HTTP client (15s timeout, Bearer auth, error handling)
+- RocksDB persistence for 3 new stores: `AuditStore` (CF `audit_log`), `SandboxReportStore` (CF `sandbox_reports`), `OracleRecordStore` (CF `oracle_records`). All use existing Column Family pattern in `adapters.rs`. `SandboxReportStore` refactored from concrete struct to trait (`MemorySandboxReportStore` + `RocksDbBlockStore` impl).
 
 **ZKP for Sovereign Identity — Commitment-based attribute verification**
 
