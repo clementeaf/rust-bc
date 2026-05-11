@@ -322,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn thermodynamic_evolution_reaches_equilibrium() {
         let mut field = Field::new(8);
         let center = coord(5, 5, 5, 5);

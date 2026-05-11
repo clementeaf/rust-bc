@@ -1044,185 +1044,57 @@ impl Field {
     /// One evolution step. Processes dirty cells + their existing neighbors.
     /// If no dirty set, processes all (first step after seeding).
     /// Does NOT create new cells — field growth happens only via seeding.
+    /// Evolve the field: enforce curvature capacity constraints.
+    ///
+    /// Crystallization is INSTANT (happens in `attest()` when σ=4).
+    /// This method only enforces capacity limits — regions that exceed
+    /// their budget have weakest cells de-crystallized.
+    ///
+    /// Returns number of cells that changed state (de-crystallized).
     pub fn evolve(&mut self) -> usize {
-        // Collect coords to process from dirty set (or all if empty/first run)
-        let mut to_process: Vec<Coord> = Vec::new();
-        let source_coords: Vec<Coord> = if self.dirty.is_empty() {
-            self.cells.keys().copied().collect()
-        } else {
-            self.dirty.drain().collect()
-        };
-        let mut seen = HashMap::with_capacity(source_coords.len() * 9);
+        self.dirty.clear();
 
-        for coord in &source_coords {
-            if self.cells.contains_key(coord) && seen.insert(*coord, true).is_none() {
-                to_process.push(*coord);
+        if self.curvature_budget.is_empty() {
+            return 0;
+        }
+
+        let mut changes = 0;
+        let regions: Vec<usize> = self.curvature_budget.keys().copied().collect();
+        for region in regions {
+            let capacity = self.curvature_budget[&region];
+            let load = self.curvature_load(region);
+
+            if load <= capacity {
+                continue;
             }
-            for n in self.neighbors(*coord) {
-                if self.cells.contains_key(&n) && seen.insert(n, true).is_none() {
-                    to_process.push(n);
+
+            let excess_ratio = (load - capacity) / load;
+
+            // Collect crystallized cells sorted by binding energy (weakest first)
+            let mut region_crystals: Vec<(Coord, f64)> = self
+                .cells
+                .iter()
+                .filter(|(coord, cell)| coord.o == region && cell.crystallized)
+                .map(|(coord, _)| (*coord, self.binding_energy(*coord)))
+                .collect();
+            region_crystals.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+            // De-crystallize weakest until load ≤ capacity
+            let mut current_load = load;
+            for (coord, _be) in &region_crystals {
+                if current_load <= capacity {
+                    break;
+                }
+                if let Some(cell) = self.cells.get_mut(coord) {
+                    cell.crystallized = false;
+                    cell.probability = (cell.probability - excess_ratio).max(EPSILON);
+                    current_load -= 1.0;
+                    changes += 1;
                 }
             }
         }
 
-        // Calculate new probabilities
-        let updates: Vec<(Coord, f64)> = to_process
-            .iter()
-            .filter(|coord| !self.get(**coord).crystallized)
-            .map(|coord| {
-                let cell_p = self.get(*coord).probability;
-                let neighbors = self.neighbors(*coord);
-                let neighbor_avg: f64 = neighbors
-                    .iter()
-                    .map(|n| self.get(*n).probability)
-                    .sum::<f64>()
-                    / 8.0;
-
-                let delta = (neighbor_avg - cell_p) * INFLUENCE_FACTOR;
-                let support = self.orthogonal_support(*coord);
-                let (amp, res) = match support {
-                    0 | 1 => (1.0, 0.0),
-                    2 => (1.5, 0.02),
-                    3 => (2.5, 0.05),
-                    4 => (4.0, 0.10),
-                    _ => (1.0, 0.0),
-                };
-                let new_p = (cell_p + delta * amp + res).clamp(0.0, 1.0);
-                (*coord, new_p)
-            })
-            .collect();
-
-        // Apply updates — track which cells actually changed
-        let mut new_crystallizations = 0;
-        let mut newly_crystallized: Vec<Coord> = Vec::new();
-        for (coord, new_p) in updates {
-            if new_p < EPSILON {
-                if let Some(cell) = self.cells.get(&coord) {
-                    if cell.influences.is_empty() {
-                        self.cells.remove(&coord);
-                        self.dirty.insert(coord);
-                        continue;
-                    }
-                }
-            }
-
-            let cell = self.cells.entry(coord).or_insert_with(|| Cell {
-                probability: 0.0,
-                crystallized: false,
-                influences: Vec::new(),
-                attestations: HashMap::new(),
-                evidence_root: [0u8; 32],
-                evidence_count: 0,
-                cached_sigma: 0,
-            });
-            let old_p = cell.probability;
-            cell.probability = new_p;
-
-            let changed = (new_p - old_p).abs() > 1e-6;
-
-            if !cell.crystallized && new_p >= CRYSTALLIZATION_THRESHOLD {
-                // Legacy threshold check passed — also check σ-independence
-                // for cells with attestations (unified criterion).
-                let has_attestations = !cell.attestations.is_empty();
-                let sigma_ok = if has_attestations {
-                    cell.cached_sigma >= 4
-                } else {
-                    true
-                };
-                if sigma_ok {
-                    cell.crystallized = true;
-                    cell.probability = 1.0;
-                    new_crystallizations += 1;
-                    newly_crystallized.push(coord);
-                }
-            }
-
-            // Mark dirty if probability changed meaningfully
-            if changed || new_crystallizations > 0 {
-                self.dirty.insert(coord);
-            }
-        }
-
-        // Crystallization cascade: only from NEWLY crystallized cells.
-        // Cascading from all crystals every step causes runaway growth.
-        if new_crystallizations > 0 {
-            self.apply_cascade_from(&newly_crystallized);
-        }
-
-        // --- Curvature pressure (progressive decay) ---
-        //
-        // When a region's crystallized load exceeds its geometric capacity,
-        // the field applies decay pressure. This is NOT rejection — it is
-        // the space itself unable to sustain the deformation.
-        //
-        // DEFINITIONS:
-        //
-        // 1. "Weakest" = lowest binding energy.
-        //    BE(x) = (crystallized_neighbors/8) × (orthogonal_support/4)
-        //    Range [0.0, 1.0]. Measures how deeply embedded a cell is
-        //    in the surrounding lattice. Like atomic binding energy.
-        //
-        // 2. Decay is PROGRESSIVE, not instant.
-        //    Each step, over-capacity cells receive decay pressure:
-        //      decay(x) = excess_ratio × (1 - BE(x))
-        //    Strong cells (high BE) resist. Weak cells (low BE) decay fast.
-        //    When probability drops below Θ → un-crystallizes.
-        //    Probability doesn't go to zero — residue remains.
-        //    Cell can RE-EMERGE if competing deformations also decay.
-        //
-        // 3. Over-capacity criterion:
-        //    excess = load(region) - capacity(region)
-        //    excess_ratio = excess / load    ∈ (0, 1)
-        //    When excess_ratio = 0: no pressure.
-        //    When excess_ratio → 1: extreme pressure (nearly all must go).
-        //
-        if !self.curvature_budget.is_empty() {
-            let regions: Vec<usize> = self.curvature_budget.keys().copied().collect();
-            for region in regions {
-                let capacity = self.curvature_budget[&region];
-                let load = self.curvature_load(region);
-
-                if load <= capacity {
-                    continue;
-                }
-
-                let excess_ratio = (load - capacity) / load;
-
-                // Collect crystallized cells with their binding energy
-                let region_crystals: Vec<(Coord, f64)> = self
-                    .cells
-                    .iter()
-                    .filter(|(coord, cell)| coord.o == region && cell.crystallized)
-                    .map(|(coord, _)| (*coord, self.binding_energy(*coord)))
-                    .collect();
-
-                // Sort by binding energy: weakest first
-                let mut sorted_crystals = region_crystals;
-                sorted_crystals.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-                // Progressively decay from weakest until load ≤ capacity.
-                // Each decayed cell reduces load by 1. Decay is definitive
-                // per step but the cell retains probability residue —
-                // it can re-crystallize on a future step if conditions change
-                // (e.g., a competitor also decayed, freeing capacity).
-                let mut current_load = load;
-                for (coord, _be) in &sorted_crystals {
-                    if current_load <= capacity {
-                        break;
-                    }
-
-                    if let Some(cell) = self.cells.get_mut(coord) {
-                        cell.crystallized = false;
-                        // Residue: probability drops but doesn't vanish.
-                        // The deformation happened — it just can't stabilize.
-                        cell.probability = (cell.probability - excess_ratio).max(EPSILON);
-                        current_load -= 1.0;
-                    }
-                }
-            }
-        }
-
-        new_crystallizations
+        changes
     }
 
     /// Iterate over all active (stored) cells.
@@ -1286,17 +1158,9 @@ impl Field {
     }
 }
 
-/// Evolve a field to equilibrium.
-pub fn evolve_to_equilibrium(field: &mut Field, stable_for: usize) {
-    let mut stable = 0;
-    for _ in 1..=MAX_ITERATIONS {
-        if field.evolve() == 0 {
-            stable += 1;
-        } else {
-            stable = 0;
-        }
-        if stable >= stable_for {
-            break;
-        }
-    }
+/// Legacy compatibility: crystallization is now instant (in `attest()`).
+/// This function only enforces curvature capacity if configured.
+/// The `_stable_for` parameter is ignored — kept for API compatibility.
+pub fn evolve_to_equilibrium(field: &mut Field, _stable_for: usize) {
+    field.evolve();
 }

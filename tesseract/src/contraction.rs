@@ -191,6 +191,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn evolution_converges_over_many_steps() {
         let (mut f1, mut f2) = make_field_pair(10, 0.1);
 

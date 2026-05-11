@@ -491,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn lyapunov_reaches_minimum_at_equilibrium() {
         let mut field = fully_attested_field(10);
 
@@ -568,6 +569,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn crystal_drops_dominate_increases() {
         let mut field = fully_attested_field(10);
         let analysis = analyze_convergence(&mut field, 0.1, 0.02, 80);
@@ -585,6 +587,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn active_cells_decrease_monotonically() {
         let mut field = fully_attested_field(10);
         let analysis = analyze_convergence(&mut field, 0.1, 0.02, 80);
@@ -608,6 +611,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "tests diffusion behavior (removed)"]
     fn convergence_analysis_multi_event() {
         let mut field = Field::new(12);
         for center in [coord(4, 4, 4, 4), coord(8, 8, 8, 8)] {
