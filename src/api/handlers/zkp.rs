@@ -1,6 +1,9 @@
-//! ZKP identity endpoints:
-//!   POST /api/v1/identity/zkp/prove   — generate a zero-knowledge proof
-//!   POST /api/v1/identity/zkp/verify  — verify a zero-knowledge presentation
+//! Commitment-based attribute verification endpoints:
+//!   POST /api/v1/identity/zkp/prove   — generate a commitment proof over a credential claim
+//!   POST /api/v1/identity/zkp/verify  — verify a commitment presentation
+//!
+//! Note: this is NOT zero-knowledge — the verifier sees the claim value.
+//! See `identity::zkp` module docs for details.
 
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;

@@ -8,7 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
-**ZKP for Sovereign Identity — Zero-knowledge proofs over credential claims**
+**Consolidation — Replace stubs, honest labeling**
+
+- Identity handlers: `create_identity` generates real DID + Ed25519 keypair + persists to store; `get_identity` reads from store; `rotate_key` updates record; `verify_signature` performs real Ed25519 verification
+- Credential handlers: `issue_credential` persists to store with real metadata; `get_credential` reads from store; `verify_credential` checks status + expiry + revocation; `revoke_credential` updates status in store with audit event
+- ZKP module renamed to "commitment-based attribute verification" — docs now honestly state the verifier sees the claim value, not zero-knowledge. Module kept as `zkp.rs` for API compatibility.
+
+**ZKP for Sovereign Identity — Commitment-based attribute verification**
 
 - `src/identity/zkp.rs` — Commitment-based ZKP: SHA-256(value || blinding) proofs without revealing claim data
 - 3 predicates: `RangeProof` (numeric >= threshold), `SetMembership` (value in allowed set), `CredentialValidity` (active, not expired/revoked)

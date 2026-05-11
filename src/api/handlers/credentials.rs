@@ -7,104 +7,183 @@ use crate::app_state::AppState;
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
 
-/// POST /credentials/issue - Issue a credential
+/// POST /credentials/issue - Issue a credential and persist to store.
 #[post("/credentials/issue")]
 async fn issue_credential(
-    _req: HttpRequest,
+    state: web::Data<AppState>,
     body: web::Json<IssueCredentialRequest>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
+    let credential_id = uuid::Uuid::new_v4().to_string();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
 
-    // TODO: Generate Ed25519 proof
-    // TODO: Create VerifiableCredential
-    // TODO: Store in blockchain
+    // Persist to store
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
+    let record = crate::storage::traits::Credential {
+        id: credential_id.clone(),
+        issuer_did: body.issuer_did.clone(),
+        subject_did: body.subject_did.clone(),
+        cred_type: "VerifiableCredential".to_string(),
+        issued_at: now,
+        expires_at: body.expires_at.map(|dt| dt.timestamp() as u64).unwrap_or(0),
+        revoked_at: None,
+        claims: body.claims.clone(),
+        signature: String::new(),
+        status: "active".to_string(),
+    };
+    store
+        .write_credential(&record)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::CredentialStored,
+        req.headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("credential_id={credential_id}")),
+    );
 
     let response = IssueCredentialResponse {
-        credential_id: uuid::Uuid::new_v4().to_string(),
+        credential_id,
         issuer_did: body.issuer_did.clone(),
         subject_did: body.subject_did.clone(),
         issued_at: Utc::now(),
         proof: ProofResponse {
             verification_method: format!("{}#key-0", body.issuer_did),
-            signature_value: "signature_placeholder".to_string(),
+            signature_value: String::new(),
             created: Utc::now(),
         },
     };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
+    Ok(HttpResponse::Created().json(ApiResponse::success(response, trace_id)))
 }
 
-/// GET /credentials/{id} - Fetch credential
+/// GET /credentials/{id} - Fetch credential from store.
 #[get("/credentials/{id}")]
-async fn get_credential(_req: HttpRequest, path: web::Path<String>) -> ApiResult<HttpResponse> {
+async fn get_credential(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
     let id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
 
-    // TODO: Query storage for credential
+    let cred = store.read_credential(&id).map_err(|_| ApiError::NotFound {
+        resource: format!("credential {id}"),
+    })?;
 
     let response = CredentialResponse {
-        id,
-        issuer_did: "did:bc:issuer".to_string(),
-        subject_did: "did:bc:subject".to_string(),
-        claims: serde_json::json!({}),
-        issued_at: Utc::now(),
-        expires_at: None,
+        id: cred.id,
+        issuer_did: cred.issuer_did,
+        subject_did: cred.subject_did,
+        claims: cred.claims,
+        issued_at: chrono::DateTime::from_timestamp(cred.issued_at as i64, 0)
+            .unwrap_or_else(Utc::now),
+        expires_at: if cred.expires_at > 0 {
+            chrono::DateTime::from_timestamp(cred.expires_at as i64, 0)
+        } else {
+            None
+        },
         proof: ProofResponse {
-            verification_method: "did:bc:issuer#key-0".to_string(),
-            signature_value: "signature_placeholder".to_string(),
+            verification_method: String::new(),
+            signature_value: cred.signature,
             created: Utc::now(),
         },
     };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
-/// POST /credentials/{id}/verify - Verify credential
+/// POST /credentials/{id}/verify - Verify credential (check status + expiry).
 #[post("/credentials/{id}/verify")]
 async fn verify_credential(
-    _req: HttpRequest,
+    state: web::Data<AppState>,
     path: web::Path<String>,
     _body: web::Json<VerifyCredentialRequest>,
-) -> ApiResult<HttpResponse> {
-    let _id = path.into_inner();
-    let trace_id = uuid::Uuid::new_v4().to_string();
-
-    // TODO: Lookup credential + issuer DID
-    // TODO: Verify Ed25519 signature + timestamp + expiration
-
-    let response = VerifyCredentialResponse {
-        valid: true,
-        issuer_did: "did:bc:issuer".to_string(),
-        subject_did: "did:bc:subject".to_string(),
-        verified_at: Utc::now(),
-    };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
-}
-
-/// POST /credentials/{id}/revoke - Revoke credential
-#[post("/credentials/{id}/revoke")]
-async fn revoke_credential(
-    _req: HttpRequest,
-    path: web::Path<String>,
-    _body: web::Json<RevokeCredentialRequest>,
+    req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let id = path.into_inner();
     let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
 
-    // TODO: Mark in revocation registry
+    let cred = store.read_credential(&id).map_err(|_| ApiError::NotFound {
+        resource: format!("credential {id}"),
+    })?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let valid = cred.status == "active"
+        && cred.revoked_at.is_none()
+        && (cred.expires_at == 0 || now <= cred.expires_at);
+
+    let response = VerifyCredentialResponse {
+        valid,
+        issuer_did: cred.issuer_did,
+        subject_did: cred.subject_did,
+        verified_at: Utc::now(),
+    };
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+/// POST /credentials/{id}/revoke - Revoke credential in store.
+#[post("/credentials/{id}/revoke")]
+async fn revoke_credential(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    _body: web::Json<RevokeCredentialRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
+
+    let mut cred = store.read_credential(&id).map_err(|_| ApiError::NotFound {
+        resource: format!("credential {id}"),
+    })?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    cred.revoked_at = Some(now);
+    cred.status = "revoked".to_string();
+    store
+        .write_credential(&cred)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::CredentialRevoked,
+        req.headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("credential_id={id}")),
+    );
 
     let response = RevokeCredentialResponse {
         credential_id: id,
         revoked: true,
         revoked_at: Utc::now(),
     };
-
-    let api_response = crate::api::errors::ApiResponse::success(response, trace_id);
-    Ok(HttpResponse::Ok().json(api_response))
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
 // ── Store-backed credential endpoints ────────────────────────────────────────
@@ -158,8 +237,7 @@ pub async fn store_get_credential(
     }
 }
 
-/// GET /api/v1/store/credentials/by-subject/{subject_did} — devuelve todos los
-/// Credentials cuyo `subject_did` coincide con el parámetro de ruta.
+/// GET /api/v1/store/credentials/by-subject/{subject_did}
 #[get("/store/credentials/by-subject/{subject_did}")]
 pub async fn store_get_credentials_by_subject(
     state: web::Data<AppState>,
@@ -179,8 +257,7 @@ pub async fn store_get_credentials_by_subject(
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
-/// GET /api/v1/store/credentials/by-issuer/{issuer_did} — devuelve todos los
-/// Credentials cuyo `issuer_did` coincide con el parámetro de ruta.
+/// GET /api/v1/store/credentials/by-issuer/{issuer_did}
 #[get("/store/credentials/by-issuer/{issuer_did}")]
 pub async fn store_get_credentials_by_issuer(
     state: web::Data<AppState>,

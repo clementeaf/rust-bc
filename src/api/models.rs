@@ -61,7 +61,10 @@ pub struct RotateKeyResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifySignatureRequest {
     pub message: String,
-    pub signature: String, // base64 encoded
+    pub signature: String, // hex encoded
+    /// Ed25519 public key (hex encoded, 32 bytes).
+    #[serde(default)]
+    pub public_key: String,
 }
 
 /// Signature verification response

@@ -1,13 +1,19 @@
-//! Zero-knowledge proof system for identity attributes.
+//! Commitment-based attribute verification for identity credentials.
 //!
-//! Proves predicates over credential claims without revealing underlying data:
-//! - **RangeProof**: value >= threshold (e.g., age >= 18)
-//! - **SetMembership**: value in allowed set (e.g., nationality in [CL, AR, BR])
+//! **Important:** This is NOT a zero-knowledge proof system. The verifier
+//! receives the claim value inside the proof envelope to check the predicate.
+//! The commitment ensures integrity (tamper detection), not privacy.
+//!
+//! For true ZKP (where the verifier learns nothing beyond predicate satisfaction),
+//! replace this module with a Bulletproofs or PLONK implementation.
+//!
+//! Supported predicates:
+//! - **RangeProof**: numeric value >= threshold (e.g., age >= 18)
+//! - **SetMembership**: string value in allowed set (e.g., nationality in [CL, AR, BR])
 //! - **CredentialValidity**: credential is active and not expired/revoked
 //!
-//! Uses commitment-based proofs: SHA-256(claim_value || blinding_factor).
-//! The verifier checks the commitment against the predicate without learning
-//! the claim value. The trait system allows swapping to Bulletproofs or PLONK.
+//! Scheme: SHA-256(claim_value || blinding_factor) commitment with predicate
+//! verification. The blinding factor prevents pre-image attacks on the commitment.
 
 use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
@@ -43,16 +49,15 @@ pub struct ZkPresentation {
 }
 
 /// Proof data for the commitment-based scheme.
+///
+/// **Not zero-knowledge:** both `blinding_factor` and `claim_value` are
+/// revealed to the verifier. This provides integrity (commitment binds the
+/// value) but not privacy. For privacy, replace with Bulletproofs/Schnorr.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZkProof {
-    /// The blinding factor used (hex-encoded, 32 bytes).
-    /// In a real ZKP this would NOT be revealed — here it's included
-    /// so the verifier can reconstruct the commitment for validation.
-    /// A production system would use Bulletproofs or Schnorr proofs instead.
+    /// The blinding factor (hex-encoded, 32 bytes).
     pub blinding_factor: String,
-    /// The actual claim value (only sent to verifier in the proof envelope).
-    /// The verifier checks the predicate and commitment but does NOT store
-    /// or forward this value — it's ephemeral.
+    /// The actual claim value — visible to the verifier.
     pub claim_value: String,
 }
 
