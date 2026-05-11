@@ -157,8 +157,9 @@ Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`.
 
 Routes:
 - `/` — Landing page (hero with live network pulse, thesis, verticals selector, numbers, audit quote, CTA)
+- `/integridad` — Institutional integrity dashboard (flagship): 8 horizontal service cards with detail drawers, integrity report table, security events timeline, vertical control cards, stress performance grid. Auto-refresh 30s. Print-friendly.
 - `/dashboard` — Network stats, blocks, hub cards
-- `/demo` — 5-step credential verification demo (flagship)
+- `/demo` — 5-step credential verification demo
 - `/compliance` — Audit trail with action/org filters, summary indicators, auto-refresh
 - `/chaincode-health` — Sandbox report viewer per chaincode version
 - All other pages use sidebar Layout

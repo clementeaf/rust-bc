@@ -15,28 +15,34 @@ interface NavGroup {
 
 const groups: NavGroup[] = [
   {
+    title: 'Integridad',
+    items: [
+      { to: '/integridad', label: 'Panel de Integridad', desc: 'Estado de servicios, cumplimiento y seguridad', highlight: true },
+    ],
+  },
+  {
     title: 'Demos',
     items: [
       { to: '/demo', label: 'Verificacion RRHH', desc: 'Flujo guiado: emitir y verificar credenciales', highlight: true },
     ],
   },
-  {
-    title: 'Red',
-    items: [
-      { to: '/dashboard', label: 'Dashboard', desc: 'Estado de la cadena, bloques, peers' },
-      { to: '/mining', label: 'Mineria', desc: 'Crear nuevos bloques' },
-      { to: '/channels', label: 'Canales', desc: 'Redes aisladas (estilo Fabric)' },
-    ],
-  },
-  {
-    title: 'Tokens',
-    items: [
-      { to: '/wallets', label: 'Wallets', desc: 'Crear y consultar cuentas' },
-      { to: '/transactions', label: 'Transacciones', desc: 'Enviar tokens y ver mempool' },
-      { to: '/staking', label: 'Staking', desc: 'Bloquear tokens para validar' },
-      { to: '/airdrop', label: 'Airdrop', desc: 'Recompensas a nodos elegibles' },
-    ],
-  },
+  // {
+  //   title: 'Red',
+  //   items: [
+  //     { to: '/dashboard', label: 'Dashboard', desc: 'Estado de la cadena, bloques, peers' },
+  //     { to: '/mining', label: 'Mineria', desc: 'Crear nuevos bloques' },
+  //     { to: '/channels', label: 'Canales', desc: 'Redes aisladas (estilo Fabric)' },
+  //   ],
+  // },
+  // {
+  //   title: 'Tokens',
+  //   items: [
+  //     { to: '/wallets', label: 'Wallets', desc: 'Crear y consultar cuentas' },
+  //     { to: '/transactions', label: 'Transacciones', desc: 'Enviar tokens y ver mempool' },
+  //     { to: '/staking', label: 'Staking', desc: 'Bloquear tokens para validar' },
+  //     { to: '/airdrop', label: 'Airdrop', desc: 'Recompensas a nodos elegibles' },
+  //   ],
+  // },
   {
     title: 'Identidad',
     items: [
@@ -74,10 +80,10 @@ export default function Layout(): ReactElement {
     .find((i) => (i.to === '/dashboard' ? location.pathname === '/dashboard' : location.pathname.startsWith(i.to)))
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Top bar */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-neutral-200">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -109,13 +115,13 @@ export default function Layout(): ReactElement {
         </div>
       </header>
 
-      <div className="flex flex-1 max-w-screen-2xl mx-auto w-full">
+      <div className="flex flex-1 w-full min-h-0">
         {/* Sidebar */}
         <aside
           className={`
             fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-neutral-200 pt-16 pb-4 px-3
             transform transition-transform duration-200 ease-in-out overflow-y-auto
-            lg:static lg:translate-x-0 lg:pt-4
+            lg:static lg:translate-x-0 lg:pt-4 lg:flex-shrink-0
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
           `}
         >
@@ -167,7 +173,7 @@ export default function Layout(): ReactElement {
         )}
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto">
           <Outlet />
         </main>
       </div>

@@ -417,3 +417,183 @@ export const getSandboxReport = (chaincodeId: string, version: string) =>
   client
     .get(`/chaincode/${encodeURIComponent(chaincodeId)}/sandbox-report`, { params: { version } })
     .then((r) => unwrap<SandboxReport>(r.data));
+
+// ── Health & Version ─────────────────────────────────────────────────────────
+
+export interface HealthChecks {
+  storage: string;
+  peers: string;
+  ordering: string;
+}
+
+export interface BlockchainHealth {
+  height: number;
+  last_block_hash: string;
+  validators_count: number;
+}
+
+export interface HealthResponse {
+  status: string;
+  uptime_seconds: number;
+  blockchain: BlockchainHealth;
+  checks: HealthChecks | null;
+}
+
+export interface VersionResponse {
+  api_version: string;
+  rust_bc_version: string;
+  blockchain_height: number;
+}
+
+export const getHealth = () =>
+  client.get('/health').then((r) => unwrap<HealthResponse>(r.data));
+
+export const getVersion = () =>
+  client.get('/version').then((r) => unwrap<VersionResponse>(r.data));
+
+// ── Regulatory & Compliance Checks ───────────────────────────────────────────
+
+export interface CheckResult {
+  id: string;
+  category: string;
+  description: string;
+  status: 'Pass' | 'Fail' | 'NotApplicable';
+  evidence: string;
+}
+
+export interface ComplianceSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  not_applicable: number;
+  pass_rate_pct: number;
+}
+
+export interface RegulatoryChecks {
+  summary: ComplianceSummary;
+  checks: CheckResult[];
+}
+
+export interface ComplianceReport {
+  report_id: string;
+  generated_at: string;
+  platform: string;
+  version: string;
+  summary: ComplianceSummary;
+  checks: CheckResult[];
+  report_hash: string;
+}
+
+export const getRegulatoryChecks = () =>
+  client.get('/regulatory/checks').then((r) => unwrap<RegulatoryChecks>(r.data));
+
+export const getRegulatoryReport = () =>
+  client.get('/regulatory/report').then((r) => unwrap<ComplianceReport>(r.data));
+
+// ── Pentest Report ───────────────────────────────────────────────────────────
+
+export interface PentestResult {
+  id: string;
+  category: string;
+  scenario: string;
+  attack_vector: string;
+  expected_behavior: string;
+  actual_behavior: string;
+  status: 'Blocked' | 'Detected' | 'Vulnerable';
+  severity: 'Critical' | 'High' | 'Medium' | 'Low' | 'Info';
+  evidence: string;
+}
+
+export interface PentestReport {
+  report_id: string;
+  generated_at: string;
+  total_scenarios: number;
+  blocked: number;
+  detected: number;
+  vulnerable: number;
+  results: PentestResult[];
+}
+
+export const getPentestReport = () =>
+  client.get('/pentest/report', { timeout: 30000 }).then((r) => unwrap<PentestReport>(r.data));
+
+// ── Stress Report ────────────────────────────────────────────────────────────
+
+export interface ModuleStressResult {
+  module: string;
+  operations: number;
+  duration_ms: number;
+  ops_per_sec: number;
+  p50_us: number;
+  p99_us: number;
+  errors: number;
+  status: 'Pass' | 'Degraded' | 'Fail';
+}
+
+export interface StressReport {
+  report_id: string;
+  generated_at: string;
+  total_modules: number;
+  passed: number;
+  degraded: number;
+  failed: number;
+  results: ModuleStressResult[];
+}
+
+export const getStressReport = (ops?: number) =>
+  client
+    .get('/stress/report', { params: ops ? { ops } : undefined, timeout: 60000 })
+    .then((r) => unwrap<StressReport>(r.data));
+
+// ── Forensic ─────────────────────────────────────────────────────────────────
+
+export interface ForensicEvent {
+  timestamp: string;
+  event_type: string;
+  severity: string;
+  description: string;
+  source: string;
+}
+
+export interface SeveritySummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface ForensicSecurityResponse {
+  events: ForensicEvent[];
+  summary: SeveritySummary;
+}
+
+export interface IntegrityResult {
+  blocks_checked: number;
+  status: 'Valid' | 'Tampered';
+  mismatches: { height: number; field: string; expected: string; actual: string }[];
+}
+
+export const getForensicSecurity = (params?: {
+  from?: string;
+  to?: string;
+  org_id?: string;
+  limit?: number;
+}) =>
+  client.get('/forensic/security', { params }).then((r) => unwrap<ForensicSecurityResponse>(r.data));
+
+export const getForensicIntegrity = (params?: { from?: number; to?: number }) =>
+  client.get('/forensic/integrity', { params }).then((r) => unwrap<IntegrityResult>(r.data));
+
+// ── Oracle Status ────────────────────────────────────────────────────────────
+
+export interface OracleStatus {
+  node_count: number;
+  feed_count: number;
+  stale_feeds: number;
+  fresh_feeds: number;
+  pending_reports: number;
+  max_data_age_ms: number;
+}
+
+export const getOracleStatus = () =>
+  client.get('/oracle/status').then((r) => unwrap<OracleStatus>(r.data));

@@ -8,6 +8,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Institutional Integrity Dashboard — Flagship monitoring panel**
+
+- New page `/integridad` — real-time platform integrity dashboard for institutional stakeholders
+- 8 horizontal service cards: Security (pentest), Forensic (hash chain), Compliance (21 regulatory checks), Cryptography (PQC/KAT), Storage (RocksDB), Consensus (BFT/validators), Oracles (feed freshness), Intelligence (AML/risk)
+- Each card opens a slide-in drawer with full service detail (scenarios, checks, metrics, validators)
+- Tabbed right panel: integrity report table + security events timeline
+- Stress test performance grid (8 modules: ops/s, p99 latency, status)
+- Vertical control cards linking to Credentials, Governance, Finance, Contracts subsystems
+- Print CSS for PDF export of integrity reports
+- API client: 10 new typed functions (health, version, regulatory, pentest, stress, forensic, oracle status)
+- Layout: `h-screen` fixed layout, sidebar sticky with internal scroll, no page-level scrollbar
+- Sidebar: new "Integridad" group as primary navigation item
+- Zero new dependencies, zero backend changes — all data from existing 44 monitoring endpoints
+
+---
+
 **Production Readiness — Load testing scripts and audit engagement package**
 
 - `tools/k6/load-test.js` — k6 load test suite: 4 scenarios (default, spike, soak, stress), 8 weighted API actions (health, stats, blocks, mempool, audit, identity, wallet+mine), p95 < 500ms and error rate < 1% thresholds, JSON reports
