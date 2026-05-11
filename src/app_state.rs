@@ -96,4 +96,8 @@ pub struct AppState {
     pub contact_store: Arc<crate::api::handlers::contact::ContactStore>,
     /// Chaincode sandbox validation reports.
     pub sandbox_report_store: Arc<crate::chaincode::sandbox::SandboxReportStore>,
+    /// Legal oracle record store.
+    pub legal_oracle_store: Arc<dyn crate::legal_oracle::OracleRecordStore>,
+    /// Legal oracle service.
+    pub legal_oracle: Arc<std::sync::Mutex<crate::legal_oracle::legal::LegalOracle>>,
 }

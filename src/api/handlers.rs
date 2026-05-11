@@ -18,6 +18,7 @@ pub mod gateway;
 pub mod governance;
 pub mod identity;
 pub mod intelligence;
+pub mod legal_oracle;
 pub mod msp;
 pub mod oracle;
 pub mod organizations;

@@ -4,8 +4,9 @@ use actix_web::{web, Scope};
 use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
-    events, forensic, gateway, governance, identity, intelligence, msp, oracle, organizations,
-    pentest, pin, private_data, proposals, regulatory, snapshots, stress, transactions, utilities,
+    events, forensic, gateway, governance, identity, intelligence, legal_oracle, msp, oracle,
+    organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
+    transactions, utilities,
 };
 
 /// API routes configuration
@@ -125,7 +126,11 @@ impl ApiRoutes {
         cfg.service(oracle::get_oracle_feed)
             .service(oracle::list_oracle_feeds)
             .service(oracle::list_oracle_nodes)
-            .service(oracle::oracle_status)
+            .service(oracle::oracle_status);
+        // Legal oracle
+        cfg.service(legal_oracle::query_legal_oracle)
+            .service(legal_oracle::list_legal_oracle_records)
+            .service(legal_oracle::get_legal_oracle_record)
             .service(forensic::forensic_timeline)
             .service(forensic::forensic_security)
             .service(forensic::forensic_export)

@@ -96,6 +96,12 @@ fn make_state(store: Arc<MemoryStore>) -> AppState {
         sandbox_report_store: std::sync::Arc::new(
             rust_bc::chaincode::sandbox::SandboxReportStore::new(),
         ),
+        legal_oracle_store: std::sync::Arc::new(
+            rust_bc::legal_oracle::MemoryOracleRecordStore::new(),
+        ),
+        legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
+            rust_bc::legal_oracle::legal::LegalOracle::new(300),
+        )),
     }
 }
 
@@ -138,6 +144,19 @@ fn make_state_no_store() -> AppState {
         vote_store: None,
         param_registry: None,
         pin_store: None,
+        oracle_registry: std::sync::Arc::new(std::sync::Mutex::new(
+            rust_bc::oracle_system::OracleRegistry::new(66, 5000),
+        )),
+        contact_store: std::sync::Arc::new(rust_bc::api::handlers::contact::ContactStore::new()),
+        sandbox_report_store: std::sync::Arc::new(
+            rust_bc::chaincode::sandbox::SandboxReportStore::new(),
+        ),
+        legal_oracle_store: std::sync::Arc::new(
+            rust_bc::legal_oracle::MemoryOracleRecordStore::new(),
+        ),
+        legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
+            rust_bc::legal_oracle::legal::LegalOracle::new(300),
+        )),
     }
 }
 

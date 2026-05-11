@@ -196,6 +196,12 @@ mod tests {
             sandbox_report_store: std::sync::Arc::new(
                 crate::chaincode::sandbox::SandboxReportStore::new(),
             ),
+            legal_oracle_store: std::sync::Arc::new(
+                crate::legal_oracle::MemoryOracleRecordStore::new(),
+            ),
+            legal_oracle: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::legal_oracle::legal::LegalOracle::new(300),
+            )),
         })
     }
 

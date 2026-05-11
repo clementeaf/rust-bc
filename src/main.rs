@@ -28,6 +28,7 @@ mod gateway;
 mod governance;
 mod identity;
 mod intelligence;
+mod legal_oracle;
 mod metrics;
 mod middleware;
 mod models;
@@ -1028,6 +1029,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         ))),
         contact_store: Arc::new(api::handlers::contact::ContactStore::new()),
         sandbox_report_store: Arc::new(chaincode::sandbox::SandboxReportStore::new()),
+        legal_oracle_store: Arc::new(legal_oracle::MemoryOracleRecordStore::new()),
+        legal_oracle: Arc::new(std::sync::Mutex::new(
+            legal_oracle::legal::LegalOracle::new(300),
+        )),
     };
 
     // Oracle demo feed: simulated price data for sandbox demos.

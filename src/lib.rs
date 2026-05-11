@@ -56,6 +56,7 @@ mod fuzz_tests;
 pub mod gateway;
 pub mod governance;
 pub mod intelligence;
+pub mod legal_oracle;
 pub mod light_client;
 pub mod msp;
 pub mod ordering;

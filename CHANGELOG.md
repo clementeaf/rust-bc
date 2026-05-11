@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Legal Oracle — Off-chain legal data queries with on-chain records**
+
+- `src/legal_oracle/mod.rs` — `OracleRecord` (source, query, response_hash, timestamp, signature, summary), `OracleRecordStore` trait + `MemoryOracleRecordStore`, SHA-256 response hashing
+- `src/legal_oracle/legal.rs` — `LegalOracle` service: configurable sources, injectable fetch function, TTL cache, response hash verification, JSON summary extraction
+- Endpoints: `POST /oracle/legal/query`, `GET /oracle/legal/records`, `GET /oracle/legal/records/{id}`
+- Audit event emitted on each query
+- 15 unit tests (store CRUD, cache hit/miss, hash verification, fetch errors, summary extraction)
+
 **Forensic Dashboard — Compliance UI in block explorer**
 
 - Compliance page (`/compliance`): audit events table with action/org filters, 5 summary indicators (total, blocks mined, DID mutations, chaincode deploys, failed requests), auto-refresh 10s, color-coded action badges
