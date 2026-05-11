@@ -8,6 +8,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**ZKP for Sovereign Identity — Zero-knowledge proofs over credential claims**
+
+- `src/identity/zkp.rs` — Commitment-based ZKP: SHA-256(value || blinding) proofs without revealing claim data
+- 3 predicates: `RangeProof` (numeric >= threshold), `SetMembership` (value in allowed set), `CredentialValidity` (active, not expired/revoked)
+- `prove_range()`, `prove_set_membership()`, `prove_credential_validity()` generate `ZkPresentation`
+- `verify_presentation()` validates commitment integrity + predicate satisfaction; rejects tampered proofs
+- Endpoints: `POST /identity/zkp/prove`, `POST /identity/zkp/verify`
+- Audit events on each verification (result only, no claim data revealed)
+- 13 unit tests covering all predicates, boundary cases, and tamper detection
+
 **Legal Oracle — Off-chain legal data queries with on-chain records**
 
 - `src/legal_oracle/mod.rs` — `OracleRecord` (source, query, response_hash, timestamp, signature, summary), `OracleRecordStore` trait + `MemoryOracleRecordStore`, SHA-256 response hashing

@@ -6,7 +6,7 @@ use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
     events, forensic, gateway, governance, identity, intelligence, legal_oracle, msp, oracle,
     organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
-    transactions, utilities,
+    transactions, utilities, zkp,
 };
 
 /// API routes configuration
@@ -122,6 +122,8 @@ impl ApiRoutes {
             .service(governance::close_governance_voting)
             .service(pin::generate_pin)
             .service(pin::verify_pin);
+        // ZKP identity
+        cfg.service(zkp::prove_zkp).service(zkp::verify_zkp);
         // Oracle, forensic, compliance
         cfg.service(oracle::get_oracle_feed)
             .service(oracle::list_oracle_feeds)

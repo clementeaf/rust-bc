@@ -11,6 +11,7 @@ pub mod hsm;
 pub mod keys;
 pub mod pqc_policy;
 pub mod signing;
+pub mod zkp;
 
 /// Identity configuration
 #[derive(Clone, Debug)]

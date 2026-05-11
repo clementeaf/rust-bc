@@ -32,3 +32,4 @@ pub mod stress;
 pub mod transactions;
 pub mod utilities;
 pub mod validation;
+pub mod zkp;
