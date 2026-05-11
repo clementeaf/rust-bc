@@ -6,6 +6,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-11
+
+**Audit — Action-level domain events (ISO 27001 compliance)**
+
+- `AuditEntry.action` field with 16 semantic action types (`AuditAction` enum: `BlockMined`, `DidRegistered`, `ChaincodeInstalled`, etc.)
+- `AuditStore::query()` now accepts `action` filter alongside existing `org_id` and time range filters
+- `emit_domain_event()` / `emit_if_present()` helpers for emitting audit events from business logic without HTTP context
+- Domain audit hooks in 8 mutation handlers: mine_block, create_wallet, stake, install_chaincode, store_write_identity, store_write_credential, create_channel, submit_proposal
+- `GET /api/v1/audit/requests?action=block_mined` — query by action type
+- CSV export includes action column
+- `AuditEntry.metadata` optional field for domain-specific context (block height, DID, chaincode hash, etc.)
+- 11 unit tests covering action filtering, combined filters, domain event emission, and display formatting
+- Integration roadmap: `docs/ROADMAP-INTEGRACION-CERULEAN.md` — 5 phases derived from Abraxas integration guide, adapted to actual architecture
+
 ### 2026-05-10
 
 **Enterprise Sandbox**

@@ -35,6 +35,7 @@ fn build_engine(state: &AppState, query: &TimelineQuery) -> ForensicEngine {
             query.from.as_deref(),
             query.to.as_deref(),
             query.org_id.as_deref(),
+            None,
             query.limit.unwrap_or(10_000),
         ) {
             engine.ingest_audit(&entries);

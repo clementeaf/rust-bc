@@ -148,6 +148,13 @@ pub async fn create_wallet(
         }
     }
 
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::WalletCreated,
+        api_key.as_deref().unwrap_or("unknown"),
+        Some(format!("address={}", wallet.address)),
+    );
+
     let response = ApiResponse::success(wallet);
     Ok(HttpResponse::Created().json(response))
 }
@@ -477,6 +484,16 @@ pub async fn mine_block(
         validator,
         consensus: consensus.to_string(),
     };
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::BlockMined,
+        &req.miner_address,
+        Some(format!(
+            "height={},hash={}",
+            latest.index, response_data.hash
+        )),
+    );
 
     let response = ApiResponse::success(response_data);
     Ok(HttpResponse::Created().json(response))
@@ -1825,6 +1842,13 @@ pub async fn stake(
             drop(mempool);
 
             // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
+
+            crate::audit::emit_if_present(
+                &state.audit_store,
+                crate::audit::AuditAction::TokenStaked,
+                &req.address,
+                Some(format!("amount={}", req.amount)),
+            );
 
             let response: ApiResponse<String> = ApiResponse::success(format!(
                 "Staked {} tokens successfully. Transaction added to mempool.",

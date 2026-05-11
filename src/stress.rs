@@ -367,6 +367,7 @@ pub fn stress_forensic(ops: u64) -> ModuleStressResult {
         let mut engine = ForensicEngine::new();
         engine.ingest_audit(&[AuditEntry {
             timestamp: format!("2026-05-09T{:02}:00:00Z", i % 24),
+            action: crate::audit::AuditAction::HttpRequest,
             method: "POST".into(),
             path: "/api/v1/vote".into(),
             org_id: "stress".into(),
@@ -374,6 +375,7 @@ pub fn stress_forensic(ops: u64) -> ModuleStressResult {
             status_code: 200,
             trace_id: format!("trace-{i}"),
             duration_ms: 5,
+            metadata: None,
         }]);
         let _ = engine.build_timeline();
 

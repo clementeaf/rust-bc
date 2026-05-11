@@ -442,6 +442,7 @@ mod tests {
     fn sample_audit(ts: &str, status: u16, trace: &str) -> AuditEntry {
         AuditEntry {
             timestamp: ts.to_string(),
+            action: crate::audit::AuditAction::HttpRequest,
             method: "POST".to_string(),
             path: "/api/v1/vote".to_string(),
             org_id: "org1".to_string(),
@@ -449,6 +450,7 @@ mod tests {
             status_code: status,
             trace_id: trace.to_string(),
             duration_ms: 12,
+            metadata: None,
         }
     }
 

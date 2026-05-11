@@ -165,6 +165,17 @@ pub async fn create_channel(
         .unwrap_or_else(|e| e.into_inner())
         .insert(channel_id.clone(), vec![genesis_config]);
 
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::ChannelCreated,
+        http_req
+            .headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("channel_id={channel_id}")),
+    );
+
     Ok(HttpResponse::Created().json(ApiResponse::success(
         ChannelCreatedResponse { channel_id },
         trace_id,
