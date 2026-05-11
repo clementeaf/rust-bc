@@ -166,6 +166,9 @@ pub struct Cell {
     pub evidence_root: [u8; 32],
     /// Total evidence items (influences.len() + sum of attestation counts).
     pub evidence_count: u32,
+    /// Cached sigma-independence value. Recomputed only when attestations change.
+    #[serde(default)]
+    pub cached_sigma: u8,
 }
 
 impl Cell {
@@ -177,7 +180,13 @@ impl Cell {
             attestations: HashMap::new(),
             evidence_root: [0u8; 32],
             evidence_count: 0,
+            cached_sigma: 0,
         }
+    }
+
+    /// Recompute and cache sigma_independence. Call after modifying attestations.
+    pub fn refresh_sigma(&mut self) {
+        self.cached_sigma = self.sigma_independence() as u8;
     }
 
     /// Recompute `evidence_root` and `evidence_count` from current influences
@@ -402,6 +411,7 @@ pub fn resolve(a: &Cell, b: &Cell) -> Cell {
         attestations,
         evidence_root: [0u8; 32],
         evidence_count: 0,
+        cached_sigma: 0,
     };
 
     // ── Gap 6 fix: derive probability from evidence, don't trust claimed p ──
@@ -425,12 +435,15 @@ pub fn resolve(a: &Cell, b: &Cell) -> Cell {
         result.probability = 0.0;
     }
 
+    // Refresh sigma cache after evidence merge
+    result.refresh_sigma();
+
     // ── Gap 5 fix: re-verify crystallization from evidence ──
     // Don't trust claimed k=true. Recheck against actual evidence.
     if result.crystallized {
         let justified = if !result.attestations.is_empty() {
             // Attestation model: require σ-independence ≥ 4
-            result.sigma_independence() >= 4
+            result.cached_sigma >= 4
         } else if !result.influences.is_empty() {
             // Legacy model: require p ≥ threshold
             result.probability >= CRYSTALLIZATION_THRESHOLD
@@ -623,10 +636,13 @@ impl Field {
                             }
                         }
 
+                        // Refresh sigma cache after attestation mutation
+                        cell.refresh_sigma();
+
                         // Crystallization now requires σ-independence = 4
                         if !cell.crystallized
                             && cell.probability >= CRYSTALLIZATION_THRESHOLD
-                            && cell.sigma_independence() >= 4
+                            && cell.cached_sigma >= 4
                         {
                             cell.crystallized = true;
                             cell.probability = 1.0;
@@ -912,9 +928,9 @@ impl Field {
     pub fn orthogonal_support(&self, coord: Coord) -> usize {
         let cell = self.get(coord);
 
-        // New model: use σ-independence from attestations
+        // New model: use cached σ-independence from attestations
         if !cell.attestations.is_empty() {
-            return cell.sigma_independence();
+            return cell.cached_sigma as usize;
         }
 
         // Legacy fallback: source-diversity among neighbors
@@ -1097,6 +1113,7 @@ impl Field {
                 attestations: HashMap::new(),
                 evidence_root: [0u8; 32],
                 evidence_count: 0,
+                cached_sigma: 0,
             });
             let old_p = cell.probability;
             cell.probability = new_p;
@@ -1108,7 +1125,7 @@ impl Field {
                 // for cells with attestations (unified criterion).
                 let has_attestations = !cell.attestations.is_empty();
                 let sigma_ok = if has_attestations {
-                    cell.sigma_independence() >= 4
+                    cell.cached_sigma >= 4
                 } else {
                     true
                 };
