@@ -1187,7 +1187,7 @@ async fn async_main_inner() -> std::io::Result<()> {
     let bootstrap_nodes_clone = bootstrap_nodes.clone();
 
     // Start pull-based state sync loop (catches up from peers with higher block height).
-    let _pull_sync_handle =
+    let pull_sync_handle =
         node_for_server.start_pull_sync_loop(crate::network::gossip::PULL_INTERVAL_MS);
 
     // Start Raft tick loop if raft backend is configured.
@@ -1447,7 +1447,7 @@ async fn async_main_inner() -> std::io::Result<()> {
 
     // Anti-entropy: periodically sync with peers to recover from missed gossip
     let node_for_antientropy = node_arc.clone();
-    let _antientropy_handle = tokio::spawn(async move {
+    let antientropy_handle = tokio::spawn(async move {
         // Wait for network to stabilize
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
@@ -1464,9 +1464,9 @@ async fn async_main_inner() -> std::io::Result<()> {
     // Wait for the API server to finish OR a termination signal (Ctrl-C /
     // SIGTERM).  On signal we:
     //   1. Stop accepting new HTTP connections and drain in-flight requests.
-    //   2. Abort background tasks (cleanup, discovery, P2P server, snapshot,
-    //      purge, raft tick, pull-sync, TLS reload).
-    //   3. Flush RocksDB WAL (if applicable) before exiting.
+    //   2. Abort ALL background tasks.
+    //   3. Flush RocksDB WAL + memtables to ensure all writes are persisted.
+    //   4. Log each phase for operator visibility.
     let http_server_handle = api_handle.handle();
 
     let shutdown_signal = async {
@@ -1492,23 +1492,34 @@ async fn async_main_inner() -> std::io::Result<()> {
             result?;
         }
         _ = shutdown_signal => {
-            log::info!("Shutdown signal received — stopping gracefully...");
+            let shutdown_start = std::time::Instant::now();
+            log::info!("Shutdown signal received — stopping gracefully (15s max)...");
 
-            // 1. Stop HTTP server (drain in-flight requests with a 10s timeout).
+            // 1. Stop HTTP server (drain in-flight requests).
             http_server_handle.stop(true).await;
-            log::info!("HTTP server stopped");
+            log::info!("[shutdown] HTTP server stopped ({:.1}s)", shutdown_start.elapsed().as_secs_f64());
 
-            // 2. Abort background tasks.
+            // 2. Abort ALL background tasks.
             cleanup_handle.abort();
             discovery_handle.abort();
             server_handle.abort();
-            log::info!("Background tasks stopped");
+            pull_sync_handle.abort();
+            antientropy_handle.abort();
+            log::info!("[shutdown] Background tasks aborted ({:.1}s)", shutdown_start.elapsed().as_secs_f64());
 
-            // 3. Flush RocksDB WAL if using RocksDB stores.
-            //    The store map lives behind an Arc<RwLock<HashMap>> in AppState;
-            //    dropping the RocksDbBlockStore triggers DB::flush on Drop.
-            //    We log completion so operators know data was persisted.
-            log::info!("Shutdown complete");
+            // 3. Flush RocksDB WAL + memtables.
+            #[cfg(feature = "rocksdb-storage")]
+            if let Some(ref db) = shared_rocksdb {
+                match db.flush_wal() {
+                    Ok(()) => log::info!("[shutdown] RocksDB WAL + memtables flushed"),
+                    Err(e) => log::error!("[shutdown] RocksDB flush failed: {e}"),
+                }
+            }
+
+            log::info!(
+                "[shutdown] Complete in {:.1}s",
+                shutdown_start.elapsed().as_secs_f64()
+            );
         }
     }
 

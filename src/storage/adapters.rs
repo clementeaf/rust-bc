@@ -128,6 +128,20 @@ impl RocksDbBlockStore {
         Ok(RocksDbBlockStore { db })
     }
 
+    /// Flush the WAL (Write-Ahead Log) to ensure all pending writes are
+    /// persisted to SST files on disk. Call this before shutdown to prevent
+    /// data loss.
+    pub fn flush_wal(&self) -> StorageResult<()> {
+        self.db
+            .flush_wal(true)
+            .map_err(|e| StorageError::RocksDbError(format!("WAL flush failed: {e}")))?;
+        // Also flush memtables to SST files for full durability.
+        self.db
+            .flush()
+            .map_err(|e| StorageError::RocksDbError(format!("memtable flush failed: {e}")))?;
+        Ok(())
+    }
+
     #[allow(dead_code)]
     /// Open (or create) a per-channel RocksDB database.
     ///
@@ -2185,5 +2199,28 @@ mod tests {
         let (store, _dir) = tmp_store();
         let history = store.get_history("nonexistent").unwrap();
         assert!(history.is_empty());
+    }
+
+    // ── flush_wal tests ──────────────────────────────────────────────────────
+
+    #[test]
+    fn flush_wal_succeeds_on_empty_db() {
+        let (store, _dir) = tmp_store();
+        assert!(store.flush_wal().is_ok());
+    }
+
+    #[test]
+    fn flush_wal_persists_pending_writes() {
+        let (store, dir) = tmp_store();
+        let block = sample_block(0);
+        store.write_block(&block).unwrap();
+
+        // Flush WAL
+        store.flush_wal().unwrap();
+
+        // Reopen and verify data survived
+        drop(store);
+        let store2 = RocksDbBlockStore::new(dir.path()).unwrap();
+        assert!(store2.block_exists(0).unwrap());
     }
 }

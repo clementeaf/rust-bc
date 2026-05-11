@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Graceful Shutdown — Real WAL flush and full task cleanup**
+
+- `RocksDbBlockStore::flush_wal()` — flushes WAL + memtables to SST files before exit
+- Shutdown handler now aborts 5 background tasks (was 3): added pull_sync, antientropy
+- Per-phase shutdown logging with elapsed time for operator visibility
+- 2 unit tests: flush on empty DB, flush persists writes across reopen
+
 **Consolidation — AppState test builder, cross-subsystem tests, legacy deprecation docs**
 
 - `AppState::test_default()` — single constructor with all memory-backed defaults for tests. Replaces ~50-line duplicated constructors across 6 handler test files + unused imports cleaned up.
