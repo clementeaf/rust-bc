@@ -139,26 +139,35 @@ Not required to run the node.
 
 ## Tesseract prototype (`tesseract/`)
 
-Standalone Rust library — a 4D probability field with deterministic convergence. Not a blockchain.
+Standalone Rust library — a 4D attestation space with instant geometric crystallization. Not a blockchain.
 
-**What it is:** Events enter a 4D field, accumulate evidence from independent dimensions, and crystallize into permanent facts. Nodes resolve conflicts deterministically via `resolve()` — no voting, no leader.
+**What it is:** Events are attested by validators bound to 4 orthogonal dimensions. When all 4 dimensions have independent attestations (σ=4), the event crystallizes instantly into a permanent fact. No voting, no leader, no iterative convergence.
 
-### Four rules (all implemented, tested)
+**Key difference from threshold schemes:** σ-independence requires validators to be STRUCTURALLY exclusive to one dimension. Controlling one entire dimension still can't forge crystallization — you need 3 more independent categories.
 
-| Rule | Module | Crypto backing |
-|------|--------|---------------|
-| Causality | `causality.rs` | SHA-256 ancestry hashes |
-| Conservation | `conservation.rs` + `proof.rs` | Pedersen commitments on Ristretto255 |
-| Entropy | `entropy.rs` + `proof.rs` | SHA-256 hash-chain seals |
-| Gravity | `gravity.rs` | Computed from causal graph (no storage) |
+### Core model
+
+| Concept | Implementation |
+|---------|---------------|
+| 4D coordinate space | `Coord { t, c, o, v }` — Temporal, Context, Origin, Verification |
+| σ-independence | `Cell.sigma_independence()` — cached, O(1) in hot path |
+| Instant crystallization | In `attest()` when σ=4 and p≥threshold |
+| Deterministic merge | `resolve(a, b) -> Cell` — idempotent, commutative, associative |
+| Curvature capacity | `evolve()` — only enforces region limits (no diffusion) |
 
 ### Convergence layer
 
 - `Cell.evidence_root` / `evidence_count` — deterministic SHA-256 over sorted evidence
-- `resolve(a, b) -> Cell` — pure merge (idempotent, commutative, associative)
+- `resolve(a, b) -> Cell` — pure merge; re-derives probability from evidence, re-verifies crystallization
 - `Cell.equivocating_validators()` — detects and excludes contradictory attestations from sigma
 - `ConservedField.spent_nonces` — cross-node double-spend detection via `(coord, nonce) → tx_hash`
-- Boundary protocol carries influences; `resolve()` merges evidence as union, re-verifies crystallization, caps probability to evidence weights
+
+### P2P gossip (`p2p.rs`)
+
+- Push gossip: `AttestEvent` with TTL-based propagation (default TTL=3)
+- Pull anti-entropy: periodic seen-set exchange fills gaps after partitions
+- Peer liveness: ping/pong + automatic reconnection with exponential backoff
+- Dedup: composite key `event_id:dimension:validator_id:coord`
 
 ### Key modules
 

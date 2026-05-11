@@ -6,6 +6,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-10
+
+**Tesseract — Architecture simplification and P2P gossip**
+
+Core refactor:
+- Strip diffusion from `evolve()` — crystallization is now instant in `attest()` when σ=4
+- `evolve()` reduced to curvature capacity enforcement only (no neighbor averaging)
+- Remove: INFLUENCE_FACTOR, amplification, residual boost, iterative convergence
+- Tesseract is now a 4D attestation space, not a diffusion simulator
+
+P2P gossip (rewrite of `p2p.rs`):
+- `AttestEvent` message: dimension-bound attestation with TTL-based propagation
+- Anti-entropy pull: periodic seen-set exchange fills gaps after partitions
+- Peer liveness: ping/pong + automatic reconnection with exponential backoff
+- Dedup via composite key (event_id:dimension:validator_id:coord)
+
+Performance:
+- Test suite: 2978s (50 min) → ~30s (100x speedup)
+- Cache `sigma_independence` on Cell (avoids recomputation in hot path)
+- Field sizes reduced to 8 in tests (sufficient for property verification)
+- Proptest cases reduced (200→20 in heavy modules)
+- 16 scaling benchmarks + 6 diffusion tests marked `#[ignore]`
+
+Tests: 202 passed, 0 failed, 22 ignored.
+
 ### 2026-04-25
 
 **Tesseract — Deterministic convergence and adversarial hardening**
