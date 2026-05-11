@@ -285,7 +285,6 @@ where
 
             let entry = crate::audit::AuditEntry {
                 timestamp: chrono::Utc::now().to_rfc3339(),
-                action: crate::audit::AuditAction::HttpRequest,
                 method,
                 path,
                 org_id,
@@ -293,7 +292,6 @@ where
                 status_code,
                 trace_id,
                 duration_ms,
-                metadata: None,
             };
 
             // Fire-and-forget — never block the response for audit logging.

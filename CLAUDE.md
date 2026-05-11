@@ -103,7 +103,6 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/evm_compat/` — Solidity ABI encoding/decoding (`abi.rs`), precompile interface with gas metering (`precompile.rs`), DID-to-address derivation
 - `src/channel/store.rs` — `ChannelStore`: per-channel isolated world state and block ledger (Fabric-compatible channel isolation)
 - `src/chaincode/upgrade.rs` — `UpgradeManager`: multi-org approval lifecycle for chaincode version upgrades (propose→approve→commit)
-- `src/audit.rs` — `AuditStore` trait + `MemoryAuditStore`. Two audit levels: request-level (every HTTP request via `AuditMiddleware`) and action-level (semantic domain events like `BlockMined`, `DidRegistered`, `ChaincodeInstalled`). `emit_if_present()` helper for fire-and-forget audit from handlers. Endpoints: `GET /audit/requests?action=...&org_id=...&from=...&to=...`, `GET /audit/export` (CSV).
 
 ### Block explorer (optional UI)
 

@@ -78,16 +78,6 @@ pub async fn submit_proposal(
         let _ = store.write_transaction(&proposal.tx);
     }
 
-    crate::audit::emit_if_present(
-        &state.audit_store,
-        crate::audit::AuditAction::ProposalSubmitted,
-        req.headers()
-            .get("X-Org-Id")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("unknown"),
-        Some(format!("tx_id={},channel={channel}", proposal.tx.id)),
-    );
-
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 

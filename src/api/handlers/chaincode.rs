@@ -146,20 +146,6 @@ pub async fn install_chaincode(
         }
     }
 
-    crate::audit::emit_if_present(
-        &state.audit_store,
-        crate::audit::AuditAction::ChaincodeInstalled,
-        http_req
-            .headers()
-            .get("X-Org-Id")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("unknown"),
-        Some(format!(
-            "cc_id={},version={},sha256={}",
-            query.chaincode_id, query.version, hash
-        )),
-    );
-
     let response = InstallResponse {
         chaincode_id: query.chaincode_id.clone(),
         version: query.version.clone(),
