@@ -8,6 +8,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Production Readiness — Load testing scripts and audit engagement package**
+
+- `tools/k6/load-test.js` — k6 load test suite: 4 scenarios (default, spike, soak, stress), 8 weighted API actions (health, stats, blocks, mempool, audit, identity, wallet+mine), p95 < 500ms and error rate < 1% thresholds, JSON reports
+- `docs/SECURITY-AUDIT-ENGAGEMENT.md` — complete engagement package for external auditor: scope (10 components prioritized), architecture summary, crypto inventory (8 algorithms), 6 known risks, internal security work summary, key files for review, environment setup
+
 **Schema Migrations — Versioned RocksDB upgrades on startup**
 
 - `src/storage/migrations.rs` — migration system: schema version in `meta` CF, migration registry with `(version, fn)` entries, runs pending on startup
