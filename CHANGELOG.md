@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Forensic Dashboard — Compliance UI in block explorer**
+
+- Compliance page (`/compliance`): audit events table with action/org filters, 5 summary indicators (total, blocks mined, DID mutations, chaincode deploys, failed requests), auto-refresh 10s, color-coded action badges
+- ChaincodeHealth page (`/chaincode-health`): sandbox report viewer per chaincode version, pass/fail summary card, per-check detail (well-formedness, import whitelist, memory limits)
+- API client: `getAuditEvents()`, `getSandboxReport()` with types `AuditEntry`, `SandboxReport`
+- Sidebar: new "Compliance" nav group with Audit Trail and Chaincode Health items
+
 **Chaincode Sandbox — Static validation gate before deployment**
 
 - `src/chaincode/sandbox.rs` — Wasm static analysis: well-formedness (wasmparser), import whitelist (6 allowed host functions), memory limits (max 16 pages / 1 MB)

@@ -56,6 +56,13 @@ const groups: NavGroup[] = [
       { to: '/contracts', label: 'Contratos', desc: 'Contratos desplegados (Wasm)' },
     ],
   },
+  {
+    title: 'Compliance',
+    items: [
+      { to: '/compliance', label: 'Audit Trail', desc: 'Eventos de dominio y requests (ISO 27001)' },
+      { to: '/chaincode-health', label: 'Chaincode Health', desc: 'Reportes de validacion sandbox' },
+    ],
+  },
 ]
 
 export default function Layout(): ReactElement {

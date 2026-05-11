@@ -371,3 +371,49 @@ export const getVotes = (proposalId: number) =>
 
 export const tallyVotes = (proposalId: number) =>
   client.get(`/governance/proposals/${proposalId}/tally`).then((r) => unwrap<TallyResult>(r.data));
+
+// ── Audit ───────────────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+  timestamp: string;
+  action: string;
+  method: string;
+  path: string;
+  org_id: string;
+  source_ip: string;
+  status_code: number;
+  trace_id: string;
+  duration_ms: number;
+  metadata?: string | null;
+}
+
+export const getAuditEvents = (params?: {
+  action?: string;
+  org_id?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}) =>
+  client.get('/audit/requests', { params }).then((r) => unwrap<AuditEntry[]>(r.data));
+
+// ── Sandbox ─────────────────────────────────────────────────────────────────
+
+export interface SandboxCheckResult {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface SandboxReport {
+  chaincode_id: string;
+  version: string;
+  passed: boolean;
+  checks: SandboxCheckResult[];
+  wasm_size_bytes: number;
+  duration_ms: number;
+}
+
+export const getSandboxReport = (chaincodeId: string, version: string) =>
+  client
+    .get(`/chaincode/${encodeURIComponent(chaincodeId)}/sandbox-report`, { params: { version } })
+    .then((r) => unwrap<SandboxReport>(r.data));
