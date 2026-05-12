@@ -64,6 +64,15 @@ data/
 # Claude Code project memory
 memory/
 
+# Environment files (secrets)
+.env
+.env.local
+.env.production
+
+# Caddy data (TLS certs)
+caddy-data/
+caddy-config/
+
 # Node modules (all subprojects)
 **/node_modules/
 

@@ -235,8 +235,7 @@ export default function Landing() {
               <p className="text-sm text-neutral-700 leading-relaxed">
                 <span className="font-semibold">Auditado por la Camara Blockchain de Chile.</span>{' '}
                 Cuatro fases de evaluacion — motor, nivel transaccional, contratos inteligentes,
-                seguridad y encriptacion. Resultado:{' '}
-                <span className="text-main-600 font-semibold">"Supera las expectativas. El core es muy bueno."</span>
+                seguridad y encriptacion.
               </p>
             </div>
             <div className="shrink-0 flex flex-wrap gap-4 text-center">

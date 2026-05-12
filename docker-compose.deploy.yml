@@ -1,47 +1,81 @@
-# Cerulean Ledger — Sandbox Compose (Enterprise Edition)
+# Cerulean Ledger — Deploy Compose (Demo/Review)
 #
-# Single-node demo with frontends, observability, and resource governance.
-# Designed for Cloudflare Tunnel exposure or local evaluation.
+# Secured single-node deployment with TLS termination via Caddy.
+# All services are internal except Caddy (80/443).
+#
+# Required env vars (set in .env or export before running):
+#   DEPLOY_DOMAIN        — e.g. cerulean.example.com
+#   JWT_SECRET           — random 32+ char string
+#   HMAC_SECRET          — random 32+ char string
+#   GRAFANA_PASSWORD     — Grafana admin password
 #
 # Usage:
-#   docker compose -f docker-compose.sandbox.yml build
-#   docker compose -f docker-compose.sandbox.yml up -d
+#   cp .env.deploy.example .env
+#   # Edit .env with real values
+#   docker compose -f docker-compose.deploy.yml build
+#   docker compose -f docker-compose.deploy.yml up -d
 #
-# Services exposed:
-#   :9600  — Cerulean node API (PQC, permissive ACL, RocksDB)
-#   :5175  — Block Explorer (Cerulean Ledger UI)
-#   :5174  — Cerulean Voto (electronic voting UI)
-#   :9090  — Prometheus (metrics)
-#   :3000  — Grafana (dashboards, admin/admin)
+# Endpoints (all behind TLS):
+#   https://${DEPLOY_DOMAIN}           — Block Explorer
+#   https://${DEPLOY_DOMAIN}/voto      — Cerulean Voto
+#   https://${DEPLOY_DOMAIN}/api/      — Node API
+#   https://${DEPLOY_DOMAIN}/grafana   — Grafana
+#   https://${DEPLOY_DOMAIN}/prometheus — Prometheus (basic auth via Caddy)
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: cerulean-deploy-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DEPLOY_DOMAIN: "${DEPLOY_DOMAIN:?Set DEPLOY_DOMAIN in .env}"
+    depends_on:
+      node:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    networks:
+      - cerulean-deploy
+
   node:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         BUILD_VERSION: "${BUILD_VERSION:-dev}"
-    container_name: cerulean-sandbox-node
+    container_name: cerulean-deploy-node
     restart: unless-stopped
-    ports:
-      - "9600:8080"
+    expose:
+      - "8080"
     environment:
       BIND_ADDR: "0.0.0.0"
       API_PORT: "8080"
       P2P_PORT: "8081"
       RUST_LOG: "info"
-      NETWORK_ID: "cerulean-sandbox"
-      ORG_ID: "sandbox"
+      NETWORK_ID: "cerulean-demo"
+      ORG_ID: "cerulean"
       NODE_ROLE: "peer_and_orderer"
       STORAGE_BACKEND: "rocksdb"
       STORAGE_PATH: "/app/data/rocksdb"
-      ACL_MODE: "permissive"
+      ACL_MODE: "strict"
       SIGNING_ALGORITHM: "ml-dsa-65"
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env}"
+      CHECKPOINT_HMAC_SECRET: "${HMAC_SECRET:?Set HMAC_SECRET in .env}"
       ORACLE_DEMO: "true"
       ORACLE_DEMO_INTERVAL_SECS: "15"
       BUILD_VERSION: "${BUILD_VERSION:-dev}"
     volumes:
-      - sandbox-data:/app/data
+      - deploy-data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
       interval: 10s
@@ -56,16 +90,16 @@ services:
         reservations:
           memory: 128M
     networks:
-      - cerulean-sandbox
+      - cerulean-deploy
 
   explorer:
     build:
       context: ./block-explorer-vite
       dockerfile: Dockerfile
-    container_name: cerulean-sandbox-explorer
+    container_name: cerulean-deploy-explorer
     restart: unless-stopped
-    ports:
-      - "5175:80"
+    expose:
+      - "80"
     depends_on:
       node:
         condition: service_healthy
@@ -75,16 +109,16 @@ services:
           memory: 128M
           cpus: '0.25'
     networks:
-      - cerulean-sandbox
+      - cerulean-deploy
 
   voto:
     build:
       context: ./cerulean-voto
       dockerfile: Dockerfile
-    container_name: cerulean-sandbox-voto
+    container_name: cerulean-deploy-voto
     restart: unless-stopped
-    ports:
-      - "5174:80"
+    expose:
+      - "80"
     depends_on:
       node:
         condition: service_healthy
@@ -94,14 +128,14 @@ services:
           memory: 128M
           cpus: '0.25'
     networks:
-      - cerulean-sandbox
+      - cerulean-deploy
 
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: cerulean-sandbox-prometheus
+    container_name: cerulean-deploy-prometheus
     restart: unless-stopped
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
     volumes:
       - ./deploy/sandbox/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
@@ -113,18 +147,20 @@ services:
           memory: 128M
           cpus: '0.25'
     networks:
-      - cerulean-sandbox
+      - cerulean-deploy
 
   grafana:
     image: grafana/grafana:11.1.0
-    container_name: cerulean-sandbox-grafana
+    container_name: cerulean-deploy-grafana
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "https://${DEPLOY_DOMAIN}/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/etc/grafana/provisioning/dashboards/sandbox.json"
     volumes:
       - ./deploy/sandbox/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
@@ -138,11 +174,13 @@ services:
           memory: 256M
           cpus: '0.5'
     networks:
-      - cerulean-sandbox
+      - cerulean-deploy
 
 volumes:
-  sandbox-data:
+  deploy-data:
+  caddy-data:
+  caddy-config:
 
 networks:
-  cerulean-sandbox:
+  cerulean-deploy:
     driver: bridge
