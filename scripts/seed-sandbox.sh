@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
-# Cerulean Ledger — Sandbox Seed Data (Enterprise Edition)
+# Cerulean Ledger — Sandbox Seed Data
 #
-# Pre-loads the sandbox node with rich demo data:
-# - Multiple organizations and channels
-# - Wallets with inter-wallet transfers
-# - Identities and verifiable credentials
-# - Oracle feeds (activated via ORACLE_DEMO)
-# - Governance proposals with votes
-# - Channel-isolated state
+# Pre-loads the sandbox node with demo data for institutional demo.
+# Compatible with bash 3+ (macOS) and bash 5+ (Linux/Docker).
 #
 # Usage:
 #   ./scripts/seed-sandbox.sh              # Uses localhost:9600
@@ -31,16 +26,27 @@ fail() { echo -e "  ${RED}[FAIL]${NC} $1"; }
 skip() { echo -e "  ${YELLOW}[SKIP]${NC} $1"; }
 
 # Headers for permissive ACL mode
-H=(-H "Content-Type: application/json" -H "X-Org-Id: org1" -H "X-Msp-Role: admin")
-H2=(-H "Content-Type: application/json" -H "X-Org-Id: org2" -H "X-Msp-Role: admin")
+H1="-H Content-Type:application/json -H X-Org-Id:org1 -H X-Msp-Role:admin"
+H2="-H Content-Type:application/json -H X-Org-Id:org2 -H X-Msp-Role:admin"
+
+post() {
+    curl -sf -X POST $H1 "$@" 2>/dev/null || echo ""
+}
+
+NOW=$(date +%s)
+MINER_ADDR=""
+COUNTS_WALLETS=0
+COUNTS_IDS=0
+COUNTS_CREDS=0
+COUNTS_BLOCKS=0
 
 echo -e "${CYAN}╔═══════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║   Cerulean Sandbox Seeder (Enterprise)    ║${NC}"
+echo -e "${CYAN}║   Cerulean Sandbox Seeder                 ║${NC}"
 echo -e "${CYAN}╚═══════════════════════════════════════════╝${NC}"
 echo -e "  Target: ${CYAN}$API${NC}"
 echo ""
 
-# ── Health check ─────────────────────────────────────────────────────────────
+# ── 1. Health check ──────────────────────────────────────────────────────────
 
 echo -e "${CYAN}1. Health check${NC}"
 if curl -sf "$API/health" > /dev/null 2>&1; then
@@ -50,216 +56,128 @@ else
     exit 1
 fi
 
-# ── Organizations ──────────────────────────────────────────────────────────────
+# ── 2. Organizations ─────────────────────────────────────────────────────────
 
-echo -e "${CYAN}2. Registering organizations${NC}"
-
-for org in '{"org_id":"org1","name":"Universidad de Chile","msp_id":"Org1MSP"}' \
-           '{"org_id":"org2","name":"Banco Central","msp_id":"Org2MSP"}'; do
-    org_id=$(echo "$org" | grep -o '"org_id":"[^"]*"' | cut -d'"' -f4)
-    resp=$(curl -s -X POST "$API/organizations" "${H[@]}" -d "$org" 2>/dev/null || echo "")
-    if echo "$resp" | grep -q "success.*true\|already"; then
-        ok "Organization: $org_id"
-    else
-        skip "Organization: $org_id (may exist)"
-    fi
+echo -e "${CYAN}2. Organizations${NC}"
+for org_json in \
+    '{"org_id":"org1","name":"Universidad de Chile","msp_id":"Org1MSP"}' \
+    '{"org_id":"org2","name":"Banco Central","msp_id":"Org2MSP"}'; do
+    resp=$(post "$API/organizations" -d "$org_json")
+    org_name=$(echo "$org_json" | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
+    if [ -n "$resp" ]; then ok "$org_name"; else skip "$org_name (may exist)"; fi
 done
 
-# ── Channels ──────────────────────────────────────────────────────────────────
+# ── 3. Channels ──────────────────────────────────────────────────────────────
 
-echo -e "${CYAN}3. Creating channels${NC}"
-
-for ch in "academic" "financial"; do
-    resp=$(curl -s -X POST "$API/channels" "${H[@]}" \
-        -d "{\"channel_id\":\"$ch\",\"org_ids\":[\"org1\",\"org2\"]}" 2>/dev/null || echo "")
-    if echo "$resp" | grep -q "success\|created\|exists"; then
-        ok "Channel: $ch"
-    else
-        skip "Channel: $ch"
-    fi
+echo -e "${CYAN}3. Channels${NC}"
+for ch in academic financial; do
+    resp=$(post "$API/channels" -d "{\"channel_id\":\"$ch\",\"org_ids\":[\"org1\",\"org2\"]}")
+    if [ -n "$resp" ]; then ok "$ch"; else skip "$ch"; fi
 done
 
-# ── Wallets ──────────────────────────────────────────────────────────────────
+# ── 4. Wallets + mining ─────────────────────────────────────────────────────
 
-echo -e "${CYAN}4. Creating wallets${NC}"
-
-declare -A WALLET_ADDRS
-WALLETS=("alice" "bob" "carlos" "diana" "sandbox-miner" "banco-central" "tesoreria")
-for name in "${WALLETS[@]}"; do
-    resp=$(curl -s -X POST "$API/wallets/create" "${H[@]}" \
-        -d "{\"owner\": \"$name\"}" 2>/dev/null || echo "")
-    if echo "$resp" | grep -q '"success":true'; then
+echo -e "${CYAN}4. Wallets${NC}"
+for name in alice bob carlos diana sandbox-miner banco-central tesoreria; do
+    resp=$(post "$API/wallets/create" -d "{}")
+    if echo "$resp" | grep -q '"address"'; then
         addr=$(echo "$resp" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4)
         ok "Wallet: $name ($addr)"
-        WALLET_ADDRS[$name]="$addr"
+        COUNTS_WALLETS=$((COUNTS_WALLETS + 1))
+        if [ "$name" = "sandbox-miner" ]; then MINER_ADDR="$addr"; fi
     else
-        skip "Wallet: $name (may already exist)"
-        # Try to extract from list
-        if [[ "$name" == "sandbox-miner" ]]; then
-            wallets=$(curl -s "$API/wallets" "${H[@]}" 2>/dev/null || echo "")
-            WALLET_ADDRS[$name]=$(echo "$wallets" | grep -o '"address":"[^"]*"' | head -1 | cut -d'"' -f4)
-        fi
+        skip "Wallet: $name"
     fi
 done
 
-MINER_ADDR="${WALLET_ADDRS[sandbox-miner]:-}"
-
-# ── Mine blocks ──────────────────────────────────────────────────────────────
-
-echo -e "${CYAN}5. Mining demo blocks${NC}"
-
-if [[ -z "$MINER_ADDR" ]]; then
-    skip "No miner address available — skipping mining"
-else
-    for i in $(seq 1 8); do
-        resp=$(curl -s -X POST "$API/mine" "${H[@]}" \
-            -d "{\"miner_address\": \"$MINER_ADDR\"}" 2>/dev/null || echo "")
-        if echo "$resp" | grep -q '"success":true'; then
-            ok "Block $i mined"
-        else
-            fail "Block $i"
+echo -e "${CYAN}5. Mining blocks${NC}"
+if [ -n "$MINER_ADDR" ]; then
+    for i in 1 2 3 4 5 6 7 8; do
+        resp=$(post "$API/mine" -d "{\"miner_address\":\"$MINER_ADDR\"}")
+        if [ -n "$resp" ]; then
+            COUNTS_BLOCKS=$((COUNTS_BLOCKS + 1))
         fi
     done
-fi
-
-# ── Transfers ─────────────────────────────────────────────────────────────────
-
-echo -e "${CYAN}6. Wallet transfers${NC}"
-
-ALICE="${WALLET_ADDRS[alice]:-}"
-BOB="${WALLET_ADDRS[bob]:-}"
-CARLOS="${WALLET_ADDRS[carlos]:-}"
-
-if [[ -n "$ALICE" && -n "$BOB" ]]; then
-    for i in 1 2 3; do
-        resp=$(curl -s -X POST "$API/transactions" "${H[@]}" \
-            -d "{\"from\":\"$ALICE\",\"to\":\"$BOB\",\"amount\":$((i * 10)),\"fee\":1}" 2>/dev/null || echo "")
-        if echo "$resp" | grep -q "success\|accepted\|queued"; then
-            ok "Transfer: alice → bob ($((i*10)) NOTA)"
-        else
-            skip "Transfer $i"
-        fi
-    done
-fi
-
-if [[ -n "$BOB" && -n "$CARLOS" ]]; then
-    resp=$(curl -s -X POST "$API/transactions" "${H[@]}" \
-        -d "{\"from\":\"$BOB\",\"to\":\"$CARLOS\",\"amount\":5,\"fee\":1}" 2>/dev/null || echo "")
-    if echo "$resp" | grep -q "success\|accepted\|queued"; then
-        ok "Transfer: bob → carlos (5 NOTA)"
-    else
-        skip "Transfer bob→carlos"
-    fi
-fi
-
-# ── Identities (DIDs) ───────────────────────────────────────────────────────
-
-echo -e "${CYAN}7. Creating identities${NC}"
-
-IDENTITIES=("universidad-chile" "registro-civil" "servicio-salud" "banco-central-did" "alice-persona" "bob-empresa" "carlos-auditor")
-for name in "${IDENTITIES[@]}"; do
-    resp=$(curl -sf -X POST "$API/identity/create" "${H[@]}" \
-        -d "{\"name\": \"$name\"}" 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then
-        ok "Identity: $name"
-    else
-        skip "Identity: $name"
-    fi
-done
-
-# ── Credentials ──────────────────────────────────────────────────────────────
-
-echo -e "${CYAN}8. Issuing credentials${NC}"
-
-CREDS=(
-    '{"id":"cred-titulo-001","issuer_did":"did:cerulean:universidad-chile","subject_did":"did:cerulean:alice-persona","cred_type":"TituloProfesional","issued_at":1715200000,"expires_at":1746736000,"claims":{"carrera":"Ingenieria Civil Informatica","universidad":"Universidad de Chile","anno":"2024"},"signature":"demo-sig-001"}'
-    '{"id":"cred-salud-001","issuer_did":"did:cerulean:servicio-salud","subject_did":"did:cerulean:alice-persona","cred_type":"CertificadoVacunacion","issued_at":1715200000,"expires_at":1746736000,"claims":{"vacuna":"COVID-19","dosis":"3","fecha":"2024-03-15"},"signature":"demo-sig-002"}'
-    '{"id":"cred-empresa-001","issuer_did":"did:cerulean:registro-civil","subject_did":"did:cerulean:bob-empresa","cred_type":"RegistroEmpresa","issued_at":1715200000,"expires_at":1746736000,"claims":{"rut":"76.123.456-7","razon_social":"Innovaciones Blockchain SpA","tipo":"SpA"},"signature":"demo-sig-003"}'
-    '{"id":"cred-audit-001","issuer_did":"did:cerulean:banco-central-did","subject_did":"did:cerulean:carlos-auditor","cred_type":"LicenciaAuditoria","issued_at":1715200000,"expires_at":1746736000,"claims":{"tipo":"auditor_externo","nivel":"senior","registro":"AUD-2024-789"},"signature":"demo-sig-004"}'
-    '{"id":"cred-kyc-001","issuer_did":"did:cerulean:banco-central-did","subject_did":"did:cerulean:bob-empresa","cred_type":"KYC","issued_at":1715200000,"expires_at":1746736000,"claims":{"nivel":"enhanced","pep":false,"aml_score":"low"},"signature":"demo-sig-005"}'
-)
-
-for cred in "${CREDS[@]}"; do
-    cred_id=$(echo "$cred" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-    resp=$(curl -sf -X POST "$API/store/credentials" "${H[@]}" \
-        -d "$cred" 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then
-        ok "Credential: $cred_id"
-    else
-        skip "Credential: $cred_id"
-    fi
-done
-
-# ── Governance proposals + votes ─────────────────────────────────────────────
-
-echo -e "${CYAN}9. Governance demo (proposals + votes)${NC}"
-
-# Proposal 1: block time change
-resp=$(curl -sf -X POST "$API/governance/proposals" "${H[@]}" \
-    -d '{
-        "proposer": "alice-persona",
-        "action": {"ParamChange": {"changes": [["block_time_ms", {"Integer": 5000}]]}},
-        "description": "Reducir tiempo de bloque a 5 segundos para mejorar UX",
-        "deposit": 0
-    }' 2>/dev/null || echo "")
-if [[ -n "$resp" ]]; then
-    ok "Proposal 1: Block time reduction"
+    ok "$COUNTS_BLOCKS blocks mined"
 else
-    skip "Proposal 1"
+    skip "No miner address — skipping"
 fi
 
-# Proposal 2: PQC enforcement
-resp=$(curl -sf -X POST "$API/governance/proposals" "${H[@]}" \
-    -d '{
-        "proposer": "carlos-auditor",
-        "action": {"ParamChange": {"changes": [["require_pqc_signatures", {"Bool": true}]]}},
-        "description": "Activar firma post-cuantica obligatoria para todos los validadores",
-        "deposit": 0
-    }' 2>/dev/null || echo "")
-if [[ -n "$resp" ]]; then
-    ok "Proposal 2: PQC enforcement"
-else
-    skip "Proposal 2"
-fi
+# ── 5. Identities (DIDs) ────────────────────────────────────────────────────
 
-# Vote on proposal 1
-for voter in "alice-persona" "bob-empresa" "carlos-auditor"; do
-    resp=$(curl -sf -X POST "$API/governance/proposals/1/vote" "${H[@]}" \
-        -d "{\"voter\":\"$voter\",\"option\":\"Yes\",\"power\":1000}" 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then
-        ok "Vote: $voter → Yes on proposal 1"
+echo -e "${CYAN}6. Identities${NC}"
+for did_slug in universidad-chile registro-civil servicio-salud banco-central alice-persona bob-empresa carlos-auditor; do
+    resp=$(post "$API/store/identities" -d "{\"did\":\"did:cerulean:$did_slug\",\"created_at\":$NOW,\"updated_at\":$NOW,\"status\":\"active\"}")
+    if [ -n "$resp" ]; then
+        ok "did:cerulean:$did_slug"
+        COUNTS_IDS=$((COUNTS_IDS + 1))
     else
-        skip "Vote: $voter"
+        skip "$did_slug"
     fi
 done
 
-# ── Channel state (isolated world state demo) ────────────────────────────────
+# ── 6. Credentials (signed documents) ───────────────────────────────────────
 
-echo -e "${CYAN}10. Channel world state${NC}"
+echo -e "${CYAN}7. Documents & credentials${NC}"
 
-# Write to academic channel
-resp=$(curl -sf -X POST "$API/channels/academic/state" "${H[@]}" \
-    -d '{"key":"enrollment:2024:alice","value":"active"}' 2>/dev/null || echo "")
-if [[ -n "$resp" ]]; then ok "Channel state: academic/enrollment:alice"; else skip "academic state"; fi
+seed_cred() {
+    local id="$1" issuer="$2" subject="$3" ctype="$4" claims="$5" expires="${6:-0}"
+    resp=$(post "$API/store/credentials" -d "{\"id\":\"$id\",\"issuer_did\":\"did:cerulean:$issuer\",\"subject_did\":\"did:cerulean:$subject\",\"cred_type\":\"$ctype\",\"issued_at\":$NOW,\"expires_at\":$expires,\"claims\":$claims,\"status\":\"active\"}")
+    if [ -n "$resp" ]; then
+        ok "$ctype ($id)"
+        COUNTS_CREDS=$((COUNTS_CREDS + 1))
+    else
+        skip "$id"
+    fi
+}
 
-resp=$(curl -sf -X POST "$API/channels/financial/state" "${H2[@]}" \
-    -d '{"key":"balance:org2:reserve","value":"50000000"}' 2>/dev/null || echo "")
-if [[ -n "$resp" ]]; then ok "Channel state: financial/balance:org2"; else skip "financial state"; fi
+seed_cred "doc-titulo-001" "universidad-chile" "alice-persona" \
+    "Titulo Profesional" '{"grado":"Ingenieria Civil Informatica","institucion":"Universidad de Chile","mencion":"Cum Laude"}' 0
 
-# ── Contact form entry ───────────────────────────────────────────────────────
+seed_cred "doc-contrato-001" "universidad-chile" "alice-persona" \
+    "Contrato de Trabajo" '{"cargo":"Investigadora Asociada","departamento":"Ciencias de la Computacion","tipo":"Indefinido"}' 0
 
-echo -e "${CYAN}11. Sample contact entries${NC}"
+seed_cred "doc-salud-001" "servicio-salud" "alice-persona" \
+    "Certificado de Vacunacion" '{"esquema":"Completo","dosis":3,"vacuna":"COVID-19"}' 1810000000
 
-CONTACTS=(
-    '{"name":"Demo Visitor","email":"demo@cerulean.cl","org":"Cerulean Labs","message":"Interesados en piloto para trazabilidad de documentos academicos."}'
-    '{"name":"Maria Fernandez","email":"mfernandez@bancocentral.cl","org":"Banco Central","message":"Consulta sobre integracion con sistema RTGS via ISO 20022."}'
-)
+seed_cred "doc-kyc-001" "banco-central" "bob-empresa" \
+    "Verificacion KYC" '{"nivel":"Enhanced Due Diligence","pais":"CL","razon_social":"Bob Empresa SpA"}' 1800000000
 
-for contact in "${CONTACTS[@]}"; do
-    name=$(echo "$contact" | grep -o '"name":"[^"]*"' | cut -d'"' -f4)
-    resp=$(curl -sf -X POST "$API/contact" "${H[@]}" -d "$contact" 2>/dev/null || echo "")
-    if [[ -n "$resp" ]]; then ok "Contact: $name"; else skip "Contact: $name"; fi
+seed_cred "doc-sociedad-001" "registro-civil" "carlos-auditor" \
+    "Constitucion de Sociedad" '{"tipo":"SpA","nombre":"Cerulean Consulting SpA","capital":"10.000.000 CLP","socios":"Carlos Auditor, Maria Fernandez"}' 0
+
+seed_cred "doc-poder-001" "registro-civil" "bob-empresa" \
+    "Poder Notarial" '{"otorgante":"Bob Empresa SpA","apoderado":"Carlos Auditor","alcance":"Representacion legal amplia"}' 1820000000
+
+seed_cred "doc-audit-001" "banco-central" "carlos-auditor" \
+    "Licencia de Auditor" '{"tipo":"Auditor Financiero","alcance":"Nacional","registro":"AUD-2024-789"}' 1800000000
+
+# ── 7. Governance ────────────────────────────────────────────────────────────
+
+echo -e "${CYAN}8. Governance${NC}"
+
+# Proposal 1
+resp=$(post "$API/governance/proposals" -d '{"proposer":"ciudadano","description":"Reducir tiempo de bloque a 2 segundos para mejorar experiencia de usuario","deposit":10000,"action":{"type":"text","title":"Reducir block time a 2 segundos","description":"Propuesta para mejorar UX en la plataforma"}}')
+if [ -n "$resp" ]; then ok "Proposal: Block time reduction"; else skip "Proposal 1"; fi
+
+# Proposal 2
+resp=$(post "$API/governance/proposals" -d '{"proposer":"auditor","description":"Activar firma post-cuantica obligatoria para todos los nodos validadores","deposit":10000,"action":{"type":"text","title":"Activar PQC obligatorio","description":"Migrar a ML-DSA-65 como unico algoritmo de firma"}}')
+if [ -n "$resp" ]; then ok "Proposal: PQC enforcement"; else skip "Proposal 2"; fi
+
+# Votes on proposal 1
+for voter in alice bob carlos; do
+    resp=$(post "$API/governance/proposals/1/vote" -d "{\"voter\":\"$voter\",\"option\":\"Yes\"}")
+    if [ -n "$resp" ]; then ok "Vote: $voter → Yes on #1"; else skip "Vote: $voter"; fi
 done
+
+# ── 8. Channel state ─────────────────────────────────────────────────────────
+
+echo -e "${CYAN}9. Channel state${NC}"
+resp=$(post "$API/channels/academic/state" -d '{"key":"enrollment:2024:alice","value":"active"}')
+if [ -n "$resp" ]; then ok "academic/enrollment:alice"; else skip "academic state"; fi
+
+resp=$(curl -sf -X POST $H2 "$API/channels/financial/state" -d '{"key":"balance:org2:reserve","value":"50000000"}' 2>/dev/null || echo "")
+if [ -n "$resp" ]; then ok "financial/balance:org2"; else skip "financial state"; fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
 
@@ -268,21 +186,12 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║         Seed Complete                     ║${NC}"
 echo -e "${GREEN}╚═══════════════════════════════════════════╝${NC}"
 echo ""
-
-# Show final stats
-HEALTH=$(curl -sf "$API/health" 2>/dev/null || echo "{}")
-BLOCKS=$(echo "$HEALTH" | grep -o '"block_height":[0-9]*' | cut -d: -f2 || echo "?")
-VERSION=$(echo "$HEALTH" | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "?")
-echo -e "  Version:      ${CYAN}${VERSION:-?}${NC}"
-echo -e "  Blocks:       ${CYAN}${BLOCKS:-?}${NC}"
-echo -e "  Wallets:      ${CYAN}${#WALLETS[@]}${NC}"
-echo -e "  Identities:   ${CYAN}${#IDENTITIES[@]}${NC}"
-echo -e "  Credentials:  ${CYAN}${#CREDS[@]}${NC}"
-echo -e "  Orgs:         ${CYAN}2${NC} (org1, org2)"
+echo -e "  Wallets:      ${CYAN}${COUNTS_WALLETS}${NC}"
+echo -e "  Blocks:       ${CYAN}${COUNTS_BLOCKS}${NC}"
+echo -e "  Identities:   ${CYAN}${COUNTS_IDS}${NC}"
+echo -e "  Credentials:  ${CYAN}${COUNTS_CREDS}${NC}"
+echo -e "  Proposals:    ${CYAN}2${NC}"
 echo -e "  Channels:     ${CYAN}2${NC} (academic, financial)"
 echo ""
-echo -e "  Explorer:     ${CYAN}http://localhost:5173${NC}"
-echo -e "  Voto:         ${CYAN}http://localhost:5174${NC}"
 echo -e "  API:          ${CYAN}$API${NC}"
-echo -e "  Prometheus:   ${CYAN}http://localhost:9090${NC}"
-echo -e "  Grafana:      ${CYAN}http://localhost:3000${NC} (admin/admin)"
+echo ""
