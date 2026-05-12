@@ -491,6 +491,19 @@ impl BlockStore for RocksDbBlockStore {
         }
     }
 
+    fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>> {
+        let cf = self.cf_identities()?;
+        let iter = self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start);
+        let mut results = Vec::new();
+        for item in iter {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let rec: IdentityRecord = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            results.push(rec);
+        }
+        Ok(results)
+    }
+
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         let value = serde_json::to_vec(credential)
             .map_err(|e| StorageError::SerializationError(e.to_string()))?;

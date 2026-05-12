@@ -94,6 +94,10 @@ impl BlockStore for MemoryStore {
             .ok_or_else(|| StorageError::IdentityNotFound(did.to_string()))
     }
 
+    fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>> {
+        Ok(self.identities.lock().unwrap().values().cloned().collect())
+    }
+
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         self.credentials
             .lock()

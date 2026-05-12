@@ -50,6 +50,7 @@ impl ApiRoutes {
         cfg.service(transactions::store_write_transaction)
             .service(transactions::store_get_transaction)
             .service(identity::store_write_identity)
+            .service(identity::store_list_identities)
             .service(identity::store_get_identity)
             .service(credentials::store_write_credential)
             .service(credentials::store_get_credential)
@@ -187,6 +188,7 @@ impl ApiRoutes {
     fn store_identities_routes() -> Scope {
         web::scope("")
             .service(identity::store_write_identity)
+            .service(identity::store_list_identities)
             .service(identity::store_get_identity)
     }
 

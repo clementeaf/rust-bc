@@ -6,7 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-05-11
+### 2026-05-12
+
+**Digital Identity module — Document signing with legal validity**
+
+- `/identity` rewritten as institutional digital identity module: identities list + signed documents panel + document detail drawer
+- Documents presented as contracts, titles, certificates — not technical credentials
+- Each document shows: signer, date, status (Vigente/Expirado/Revocado), content, and cryptographic proof (ML-DSA-65, SHA-256, blockchain seal)
+- Backend: `list_identities()` added to `BlockStore` trait, `MemoryStore`, and `RocksDbBlockStore`; `GET /api/v1/store/identities` endpoint
+- `/demo` (RRHH verification) redesigned: horizontal step indicator, single active card, compact layout without scrollbar
+- Layout: sidebar groups Red and Tokens hidden for institutional focus
+- API client: `listIdentities()` function, `Credential` type extended with `claims` and `status` fields
+
+---
 
 **Identity & Governance Hardening — Zero-panic, bounded, validated**
 

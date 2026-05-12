@@ -176,6 +176,9 @@ pub trait BlockStore: Send + Sync {
     /// Read an identity record by DID
     fn read_identity(&self, did: &str) -> StorageResult<IdentityRecord>;
 
+    /// List all identity records
+    fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>>;
+
     /// Write a credential
     fn write_credential(&self, credential: &Credential) -> StorageResult<()>;
 
@@ -274,6 +277,9 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     }
     fn read_identity(&self, did: &str) -> StorageResult<IdentityRecord> {
         (**self).read_identity(did)
+    }
+    fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>> {
+        (**self).list_identities()
     }
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         (**self).write_credential(credential)

@@ -124,6 +124,8 @@ export interface Credential {
   issued_at: number;
   expires_at: number;
   revoked_at: number | null;
+  claims?: Record<string, unknown>;
+  status?: string;
 }
 
 // ── API calls ───────────────────────────────────────────────────────────────
@@ -240,6 +242,9 @@ export const createIdentity = (did: string, status: string) => {
     })
     .then((r) => unwrap<IdentityRecord>(r.data));
 };
+
+export const listIdentities = () =>
+  client.get('/store/identities').then((r) => unwrap<IdentityRecord[]>(r.data));
 
 export const getIdentity = (did: string) =>
   client.get(`/store/identities/${encodeURIComponent(did)}`).then((r) => unwrap<IdentityRecord>(r.data));
