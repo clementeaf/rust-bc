@@ -243,8 +243,8 @@ export const createIdentity = (did: string, status: string) => {
     .then((r) => unwrap<IdentityRecord>(r.data));
 };
 
-export const listIdentities = () =>
-  client.get('/store/identities').then((r) => unwrap<IdentityRecord[]>(r.data));
+export const listIdentities = (limit = 500, offset = 0) =>
+  client.get('/store/identities', { params: { limit, offset } }).then((r) => unwrap<IdentityRecord[]>(r.data));
 
 export const getIdentity = (did: string) =>
   client.get(`/store/identities/${encodeURIComponent(did)}`).then((r) => unwrap<IdentityRecord>(r.data));
@@ -272,8 +272,8 @@ export const createCredential = (
 export const getCredential = (credId: string) =>
   client.get(`/store/credentials/${encodeURIComponent(credId)}`).then((r) => unwrap<Credential>(r.data));
 
-export const listCredentials = () =>
-  client.get('/store/credentials').then((r) => unwrap<Credential[]>(r.data));
+export const listCredentials = (limit = 500, offset = 0) =>
+  client.get('/store/credentials', { params: { limit, offset } }).then((r) => unwrap<Credential[]>(r.data));
 
 export const getCredentialsBySubject = (subjectDid: string) =>
   client

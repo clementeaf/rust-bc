@@ -253,22 +253,33 @@ pub async fn store_get_identity(
     }
 }
 
-/// GET /api/v1/store/identities — list all identity records.
+/// Pagination query params for list endpoints.
+#[derive(serde::Deserialize)]
+pub struct PaginationQuery {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+/// GET /api/v1/store/identities?limit=100&offset=0 — list identity records with pagination.
 #[get("/store/identities")]
 pub async fn store_list_identities(
     state: web::Data<AppState>,
     req: HttpRequest,
+    query: web::Query<PaginationQuery>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;
     let store = get_channel_store(&state, _channel)?;
-    let identities = store
+    let all = store
         .list_identities()
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
-    Ok(HttpResponse::Ok().json(ApiResponse::success(identities, trace_id)))
+    let limit = query.limit.unwrap_or(100).min(1000);
+    let offset = query.offset.unwrap_or(0);
+    let page: Vec<_> = all.into_iter().skip(offset).take(limit).collect();
+    Ok(HttpResponse::Ok().json(ApiResponse::success(page, trace_id)))
 }
 
 #[cfg(test)]

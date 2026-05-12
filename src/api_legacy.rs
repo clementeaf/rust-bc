@@ -1,5 +1,9 @@
 // Standard library
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
+
+/// Guard to prevent concurrent mining requests from queueing up.
+static MINING_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 
 // External crates
 use actix_web::web::Bytes;
@@ -278,6 +282,24 @@ pub async fn mine_block(
     req: web::Json<MineBlockRequest>,
     http_req: HttpRequest,
 ) -> ActixResult<HttpResponse> {
+    // Reject concurrent mine requests — only one block at a time
+    if MINING_IN_PROGRESS
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        let response: ApiResponse<String> =
+            ApiResponse::error("mining already in progress — try again shortly".to_string());
+        return Ok(HttpResponse::ServiceUnavailable().json(response));
+    }
+    // Ensure flag is cleared on all exit paths
+    struct MiningGuard;
+    impl Drop for MiningGuard {
+        fn drop(&mut self) {
+            MINING_IN_PROGRESS.store(false, Ordering::SeqCst);
+        }
+    }
+    let _guard = MiningGuard;
+
     if let Err(resp) = enforce_acl_legacy(&state, "peer/Propose", &http_req) {
         return Ok(resp);
     }

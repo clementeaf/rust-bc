@@ -301,22 +301,26 @@ pub async fn store_get_credentials_by_issuer(
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
-/// GET /api/v1/store/credentials — list all credentials.
+/// GET /api/v1/store/credentials?limit=100&offset=0 — list credentials with pagination.
 #[get("/store/credentials")]
 pub async fn store_list_credentials(
     state: web::Data<AppState>,
     req: HttpRequest,
+    query: web::Query<super::identity::PaginationQuery>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;
     let store = get_channel_store(&state, _channel)?;
-    let creds = store
+    let all = store
         .list_credentials()
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
-    Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
+    let limit = query.limit.unwrap_or(100).min(1000);
+    let offset = query.offset.unwrap_or(0);
+    let page: Vec<_> = all.into_iter().skip(offset).take(limit).collect();
+    Ok(HttpResponse::Ok().json(ApiResponse::success(page, trace_id)))
 }
 
 #[cfg(test)]

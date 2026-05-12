@@ -38,15 +38,15 @@ fn p2p_response_buffer_size() -> usize {
     std::env::var("P2P_RESPONSE_BUFFER_BYTES")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(256 * 1024)
+        .unwrap_or(4 * 1024 * 1024) // 4 MB (was 256 KB)
 }
 
-/// Buffer for the per-connection message handler.  Default 64 KB.
+/// Buffer for the per-connection message handler.  Default 1 MB.
 fn p2p_handler_buffer_size() -> usize {
     std::env::var("P2P_HANDLER_BUFFER_BYTES")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(64 * 1024)
+        .unwrap_or(1024 * 1024) // 1 MB (was 64 KB)
 }
 
 /// Buffer for pull-based state sync responses.  Default 4 MB.
