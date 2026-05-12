@@ -23,10 +23,23 @@ pub struct RateLimitConfig {
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
+        // Allow higher limits via env vars for load testing
+        let rpm = std::env::var("RATE_LIMIT_RPM")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(100);
+        let rph = std::env::var("RATE_LIMIT_RPH")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3000);
+        let rps = std::env::var("RATE_LIMIT_RPS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(20);
         RateLimitConfig {
-            requests_per_minute: 100,
-            requests_per_hour: 3000,
-            requests_per_second: 20,
+            requests_per_minute: rpm,
+            requests_per_hour: rph,
+            requests_per_second: rps,
         }
     }
 }
@@ -200,9 +213,8 @@ where
                 // Evict stale IPs when table grows too large
                 if limits_guard.len() > MAX_TRACKED_IPS {
                     let cutoff = Instant::now() - Duration::from_secs(120);
-                    limits_guard.retain(|_, info| {
-                        info.minute_requests.last().is_some_and(|&t| t > cutoff)
-                    });
+                    limits_guard
+                        .retain(|_, info| info.minute_requests.last().is_some_and(|&t| t > cutoff));
                 }
 
                 let rate_limit_info = limits_guard

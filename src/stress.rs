@@ -1376,4 +1376,260 @@ mod tests {
             "no equivocation detected across 320K proposals"
         );
     }
+
+    // ── ROCKSDB TORTURE — real disk I/O under concurrent load ────────────────
+
+    /// RocksDB: 16 threads × 10,000 identity writes+reads = 160K disk ops
+    #[test]
+    fn torture_rocksdb_identity_160k() {
+        use crate::storage::adapters::RocksDbBlockStore;
+        use crate::storage::traits::{BlockStore, IdentityRecord};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = Arc::new(RocksDbBlockStore::new(dir.path()).unwrap());
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                std::thread::spawn(move || {
+                    let mut errors = 0u64;
+                    for i in 0..10_000u64 {
+                        let did = format!("did:cerulean:rocks-t{t}-{i}");
+                        let rec = IdentityRecord {
+                            did: did.clone(),
+                            created_at: i,
+                            updated_at: i,
+                            status: "active".into(),
+                        };
+                        if s.write_identity(&rec).is_err() {
+                            errors += 1;
+                        }
+                        if s.read_identity(&did).is_err() {
+                            errors += 1;
+                        }
+                    }
+                    errors
+                })
+            })
+            .collect();
+
+        let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_errors, 0,
+            "RocksDB identity torture: {total_errors} errors in 160K ops"
+        );
+
+        // Verify data survives (read after all writes)
+        assert!(store.read_identity("did:cerulean:rocks-t0-0").is_ok());
+        assert!(store.read_identity("did:cerulean:rocks-t15-9999").is_ok());
+    }
+
+    /// RocksDB: 16 threads × 10,000 credential writes+reads = 160K disk ops
+    #[test]
+    fn torture_rocksdb_credential_160k() {
+        use crate::storage::adapters::RocksDbBlockStore;
+        use crate::storage::traits::{BlockStore, Credential, IdentityRecord};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = Arc::new(RocksDbBlockStore::new(dir.path()).unwrap());
+
+        // Pre-register issuer
+        store
+            .write_identity(&IdentityRecord {
+                did: "did:cerulean:rocks-issuer".into(),
+                created_at: 0,
+                updated_at: 0,
+                status: "active".into(),
+            })
+            .unwrap();
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                std::thread::spawn(move || {
+                    let mut errors = 0u64;
+                    for i in 0..10_000u64 {
+                        let id = format!("rocks-cred-t{t}-{i}");
+                        let cred = Credential {
+                            id: id.clone(),
+                            issuer_did: "did:cerulean:rocks-issuer".into(),
+                            subject_did: format!("did:cerulean:rocks-subj-{i}"),
+                            cred_type: "RocksTest".into(),
+                            issued_at: i,
+                            expires_at: 0,
+                            revoked_at: None,
+                            claims: serde_json::json!({"t": t, "i": i}),
+                            signature: String::new(),
+                            status: "active".into(),
+                        };
+                        if s.write_credential(&cred).is_err() {
+                            errors += 1;
+                        }
+                        if s.read_credential(&id).is_err() {
+                            errors += 1;
+                        }
+                    }
+                    errors
+                })
+            })
+            .collect();
+
+        let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_errors, 0,
+            "RocksDB credential torture: {total_errors} errors in 160K ops"
+        );
+    }
+
+    /// RocksDB: 16 threads × 10,000 block writes = 160K blocks on disk
+    #[test]
+    fn torture_rocksdb_blocks_160k() {
+        use crate::storage::adapters::RocksDbBlockStore;
+        use crate::storage::traits::{Block, BlockStore};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = Arc::new(RocksDbBlockStore::new(dir.path()).unwrap());
+        let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                let errs = Arc::clone(&errors);
+                std::thread::spawn(move || {
+                    for i in 0..10_000u64 {
+                        let height = t * 10_000 + i;
+                        let block = Block {
+                            height,
+                            timestamp: 1000 + height,
+                            parent_hash: [0u8; 32],
+                            merkle_root: [0u8; 32],
+                            transactions: vec![format!("tx-{height}")],
+                            proposer: format!("rocks-t{t}"),
+                            signature: vec![0u8; 64],
+                            signature_algorithm: Default::default(),
+                            endorsements: vec![],
+                            secondary_signature: None,
+                            secondary_signature_algorithm: None,
+                            hash_algorithm: Default::default(),
+                            orderer_signature: None,
+                        };
+                        if s.write_block(&block).is_err() {
+                            errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        for t in threads {
+            t.join().unwrap();
+        }
+        let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(
+            total_errors, 0,
+            "RocksDB block torture: {total_errors} errors in 160K ops"
+        );
+
+        // Verify persistence
+        assert!(store.read_block(0).is_ok());
+        assert!(store.read_block(159_999).is_ok());
+        let height = store.get_latest_height().unwrap();
+        assert!(height >= 159_999, "latest height {height} < 159999");
+    }
+
+    /// RocksDB: mixed workload — identity + credential + block writes concurrently
+    #[test]
+    fn torture_rocksdb_mixed_48_threads() {
+        use crate::storage::adapters::RocksDbBlockStore;
+        use crate::storage::traits::{Block, BlockStore, Credential, IdentityRecord};
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = Arc::new(RocksDbBlockStore::new(dir.path()).unwrap());
+        let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
+        // 16 threads: identities
+        let mut threads: Vec<std::thread::JoinHandle<()>> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                let e = Arc::clone(&errors);
+                std::thread::spawn(move || {
+                    for i in 0..5_000u64 {
+                        let rec = IdentityRecord {
+                            did: format!("did:cerulean:rmix-t{t}-{i}"),
+                            created_at: i,
+                            updated_at: i,
+                            status: "active".into(),
+                        };
+                        if s.write_identity(&rec).is_err() {
+                            e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        // 16 threads: credentials
+        threads.extend((0..16).map(|t| {
+            let s = Arc::clone(&store);
+            let e = Arc::clone(&errors);
+            std::thread::spawn(move || {
+                for i in 0..5_000u64 {
+                    let cred = Credential {
+                        id: format!("rmix-cred-t{t}-{i}"),
+                        issuer_did: "did:cerulean:rmix-issuer".into(),
+                        subject_did: format!("did:cerulean:rmix-subj-{i}"),
+                        cred_type: "RocksMixed".into(),
+                        issued_at: i,
+                        expires_at: 0,
+                        revoked_at: None,
+                        claims: serde_json::Value::Null,
+                        signature: String::new(),
+                        status: "active".into(),
+                    };
+                    if s.write_credential(&cred).is_err() {
+                        e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            })
+        }));
+
+        // 16 threads: blocks
+        threads.extend((0..16).map(|t| {
+            let s = Arc::clone(&store);
+            let e = Arc::clone(&errors);
+            std::thread::spawn(move || {
+                for i in 0..5_000u64 {
+                    let height = 200_000 + t * 5_000 + i;
+                    let block = Block {
+                        height,
+                        timestamp: height,
+                        parent_hash: [0u8; 32],
+                        merkle_root: [0u8; 32],
+                        transactions: vec![],
+                        proposer: format!("rmix-t{t}"),
+                        signature: vec![0u8; 64],
+                        signature_algorithm: Default::default(),
+                        endorsements: vec![],
+                        secondary_signature: None,
+                        secondary_signature_algorithm: None,
+                        hash_algorithm: Default::default(),
+                        orderer_signature: None,
+                    };
+                    if s.write_block(&block).is_err() {
+                        e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            })
+        }));
+
+        for t in threads {
+            t.join().unwrap();
+        }
+
+        let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(
+            total_errors, 0,
+            "RocksDB mixed torture: {total_errors} errors across 48 threads × 5K ops"
+        );
+    }
 }
