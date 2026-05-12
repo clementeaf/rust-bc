@@ -721,4 +721,336 @@ mod tests {
         let restored: ModuleStressResult = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.module, "storage");
     }
+
+    // ── TORTURE TESTS — concurrent multi-thread brutality ────────────────────
+
+    use std::sync::Arc;
+
+    /// 16 threads × 5,000 ops each = 80,000 concurrent identity writes/reads
+    #[test]
+    fn torture_identity_80k_concurrent() {
+        use crate::storage::memory::MemoryStore;
+        use crate::storage::traits::{BlockStore, IdentityRecord};
+
+        let store = Arc::new(MemoryStore::new());
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                std::thread::spawn(move || {
+                    let mut errors = 0u64;
+                    for i in 0..5_000u64 {
+                        let did = format!("did:cerulean:t{t}-{i}");
+                        let rec = IdentityRecord {
+                            did: did.clone(),
+                            created_at: i,
+                            updated_at: i,
+                            status: "active".into(),
+                        };
+                        if s.write_identity(&rec).is_err() {
+                            errors += 1;
+                        }
+                        if s.read_identity(&did).is_err() {
+                            errors += 1;
+                        }
+                    }
+                    errors
+                })
+            })
+            .collect();
+
+        let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_errors, 0,
+            "identity torture: {total_errors} errors in 80K ops"
+        );
+    }
+
+    /// 16 threads × 5,000 credential writes = 80,000 concurrent
+    #[test]
+    fn torture_credential_80k_concurrent() {
+        use crate::storage::memory::MemoryStore;
+        use crate::storage::traits::{BlockStore, Credential, IdentityRecord};
+
+        let store = Arc::new(MemoryStore::new());
+        // Pre-register issuer
+        store
+            .write_identity(&IdentityRecord {
+                did: "did:cerulean:torture-issuer".into(),
+                created_at: 0,
+                updated_at: 0,
+                status: "active".into(),
+            })
+            .unwrap();
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                std::thread::spawn(move || {
+                    let mut errors = 0u64;
+                    for i in 0..5_000u64 {
+                        let cred = Credential {
+                            id: format!("cred-t{t}-{i}"),
+                            issuer_did: "did:cerulean:torture-issuer".into(),
+                            subject_did: format!("did:cerulean:subj-{i}"),
+                            cred_type: "TortureTest".into(),
+                            issued_at: i,
+                            expires_at: 0,
+                            revoked_at: None,
+                            claims: serde_json::json!({"thread": t, "op": i}),
+                            signature: String::new(),
+                            status: "active".into(),
+                        };
+                        if s.write_credential(&cred).is_err() {
+                            errors += 1;
+                        }
+                        if s.read_credential(&cred.id).is_err() {
+                            errors += 1;
+                        }
+                    }
+                    errors
+                })
+            })
+            .collect();
+
+        let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_errors, 0,
+            "credential torture: {total_errors} errors in 80K ops"
+        );
+    }
+
+    /// 16 threads hammering governance: proposals + votes simultaneously
+    #[test]
+    fn torture_governance_concurrent_votes() {
+        use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
+        use crate::governance::voting::{VoteOption, VoteStore};
+
+        let proposals = Arc::new(ProposalStore::new());
+        let votes = Arc::new(VoteStore::new());
+
+        // Submit proposals from main thread (need sequential heights for rate limit)
+        for i in 0..100u64 {
+            let _ = proposals.submit(SubmitParams {
+                proposer: &format!("proposer-{}", i % 10),
+                action: ProposalAction::TextProposal {
+                    title: format!("torture-{i}"),
+                    description: "stress".into(),
+                },
+                description: "torture",
+                deposit: 10_000,
+                required_deposit: 10_000,
+                current_height: i * 200, // spacing for rate limit
+                voting_period: 100_000,
+            });
+        }
+
+        // 16 threads each casting 1,000 votes across random proposals
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let v = Arc::clone(&votes);
+                std::thread::spawn(move || {
+                    let mut cast = 0u64;
+                    for i in 0..1_000u64 {
+                        let proposal_id = (i % 100) + 1;
+                        let voter = format!("voter-t{t}-{i}");
+                        if v.cast_vote(proposal_id, &voter, VoteOption::Yes, 1, 10, 200_000)
+                            .is_ok()
+                        {
+                            cast += 1;
+                        }
+                    }
+                    cast
+                })
+            })
+            .collect();
+
+        let total_cast: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        // Should have many successful votes (duplicates rejected, but unique voter+proposal combos work)
+        assert!(total_cast > 0, "no votes cast in torture test");
+
+        // Tally should not panic
+        for pid in 1..=100u64 {
+            let tally = votes.tally(pid, 1_000_000, 33, 67);
+            assert!(tally.total_voted_power <= 16_000); // max 16 threads × 1000 votes but capped by unique voters
+        }
+    }
+
+    /// 16 threads × 10,000 block writes = 160,000 concurrent storage ops
+    #[test]
+    fn torture_storage_160k_concurrent() {
+        use crate::storage::memory::MemoryStore;
+        use crate::storage::traits::{Block, BlockStore};
+
+        let store = Arc::new(MemoryStore::new());
+        let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                let errs = Arc::clone(&errors);
+                std::thread::spawn(move || {
+                    for i in 0..10_000u64 {
+                        let height = t * 10_000 + i; // unique heights per thread
+                        let block = Block {
+                            height,
+                            timestamp: 1000 + height,
+                            parent_hash: [0u8; 32],
+                            merkle_root: [0u8; 32],
+                            transactions: vec![format!("tx-{height}")],
+                            proposer: format!("thread-{t}"),
+                            signature: vec![0u8; 64],
+                            signature_algorithm: Default::default(),
+                            endorsements: vec![],
+                            secondary_signature: None,
+                            secondary_signature_algorithm: None,
+                            hash_algorithm: Default::default(),
+                            orderer_signature: None,
+                        };
+                        if s.write_block(&block).is_err() {
+                            errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        for t in threads {
+            t.join().unwrap();
+        }
+        let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(
+            total_errors, 0,
+            "storage torture: {total_errors} errors in 160K ops"
+        );
+
+        // Verify some blocks are readable
+        assert!(store.read_block(0).is_ok());
+        assert!(store.read_block(159_999).is_ok());
+    }
+
+    /// Concurrent hash operations — 16 threads × 50,000 = 800,000 hashes
+    #[test]
+    fn torture_crypto_800k_concurrent() {
+        use pqc_crypto_module::legacy::sha256::{Digest as _, Sha256};
+
+        let threads: Vec<_> = (0..16)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    for i in 0..50_000u64 {
+                        let data = format!("torture-t{t}-{i}");
+                        let _ = Sha256::digest(data.as_bytes());
+                    }
+                })
+            })
+            .collect();
+
+        for t in threads {
+            t.join().unwrap();
+        }
+        // If we reach here without panic, crypto is thread-safe
+    }
+
+    /// Mixed workload: identity + credential + governance simultaneously
+    #[test]
+    fn torture_mixed_workload_48_threads() {
+        use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
+        use crate::governance::voting::{VoteOption, VoteStore};
+        use crate::storage::memory::MemoryStore;
+        use crate::storage::traits::{BlockStore, Credential, IdentityRecord};
+
+        let store = Arc::new(MemoryStore::new());
+        let proposals = Arc::new(ProposalStore::new());
+        let votes = Arc::new(VoteStore::new());
+
+        // Pre-seed proposals
+        for i in 0..50u64 {
+            let _ = proposals.submit(SubmitParams {
+                proposer: "seeder",
+                action: ProposalAction::TextProposal {
+                    title: format!("mixed-{i}"),
+                    description: "mixed workload".into(),
+                },
+                description: "mixed",
+                deposit: 10_000,
+                required_deposit: 10_000,
+                current_height: i * 200,
+                voting_period: 500_000,
+            });
+        }
+
+        let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
+        // 16 threads: identity writes
+        let mut threads: Vec<std::thread::JoinHandle<()>> = (0..16)
+            .map(|t| {
+                let s = Arc::clone(&store);
+                let e = Arc::clone(&errors);
+                std::thread::spawn(move || {
+                    for i in 0..2_000u64 {
+                        let rec = IdentityRecord {
+                            did: format!("did:cerulean:mix-id-t{t}-{i}"),
+                            created_at: i,
+                            updated_at: i,
+                            status: "active".into(),
+                        };
+                        if s.write_identity(&rec).is_err() {
+                            e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                })
+            })
+            .collect();
+
+        // 16 threads: credential writes
+        threads.extend((0..16).map(|t| {
+            let s = Arc::clone(&store);
+            let e = Arc::clone(&errors);
+            std::thread::spawn(move || {
+                for i in 0..2_000u64 {
+                    let cred = Credential {
+                        id: format!("mix-cred-t{t}-{i}"),
+                        issuer_did: "did:cerulean:mix-issuer".into(),
+                        subject_did: format!("did:cerulean:mix-subj-{i}"),
+                        cred_type: "MixedTest".into(),
+                        issued_at: i,
+                        expires_at: 0,
+                        revoked_at: None,
+                        claims: serde_json::Value::Null,
+                        signature: String::new(),
+                        status: "active".into(),
+                    };
+                    if s.write_credential(&cred).is_err() {
+                        e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+            })
+        }));
+
+        // 16 threads: voting
+        threads.extend((0..16).map(|t| {
+            let v = Arc::clone(&votes);
+            std::thread::spawn(move || {
+                for i in 0..2_000u64 {
+                    let _ = v.cast_vote(
+                        (i % 50) + 1,
+                        &format!("mix-voter-t{t}-{i}"),
+                        VoteOption::Yes,
+                        1,
+                        10,
+                        600_000,
+                    );
+                }
+            })
+        }));
+
+        for t in threads {
+            t.join().unwrap();
+        }
+
+        let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(
+            total_errors, 0,
+            "mixed torture: {total_errors} errors across 48 threads × 2K ops"
+        );
+    }
 }
