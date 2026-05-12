@@ -5,14 +5,15 @@
 # Compatible with bash 3+ (macOS) and bash 5+ (Linux/Docker).
 #
 # Usage:
-#   ./scripts/seed-sandbox.sh              # Uses localhost:9600
-#   ./scripts/seed-sandbox.sh <base-url>   # Custom API base URL
+#   ./scripts/seed-sandbox.sh                          # Uses localhost:9600
+#   ./scripts/seed-sandbox.sh http://host:port          # Positional arg
+#   API_URL=http://host:port ./scripts/seed-sandbox.sh  # Env var
 #
 # Idempotent: safe to run multiple times.
 
 set -euo pipefail
 
-BASE="${1:-http://localhost:9600}"
+BASE="${1:-${API_URL:-http://localhost:9600}}"
 API="$BASE/api/v1"
 
 GREEN='\033[0;32m'
