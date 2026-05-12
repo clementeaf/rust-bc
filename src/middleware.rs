@@ -98,21 +98,19 @@ impl RateLimitInfo {
 /**
  * Middleware de rate limiting
  */
+/// Maximum tracked IPs before evicting stale entries.
+const MAX_TRACKED_IPS: usize = 50_000;
+
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
     limits: Arc<Mutex<HashMap<String, RateLimitInfo>>>,
 }
 
 impl RateLimitMiddleware {
-    /**
-     * Crea un nuevo middleware de rate limiting
-     * @param config - Configuración de límites
-     * @returns RateLimitMiddleware configurado
-     */
     pub fn new(config: RateLimitConfig) -> Self {
         RateLimitMiddleware {
             config,
-            limits: Arc::new(Mutex::new(HashMap::new())),
+            limits: Arc::new(Mutex::new(HashMap::with_capacity(1024))),
         }
     }
 
@@ -198,6 +196,15 @@ where
 
             if !is_public {
                 let mut limits_guard = limits.lock().unwrap_or_else(|e| e.into_inner());
+
+                // Evict stale IPs when table grows too large
+                if limits_guard.len() > MAX_TRACKED_IPS {
+                    let cutoff = Instant::now() - Duration::from_secs(120);
+                    limits_guard.retain(|_, info| {
+                        info.minute_requests.last().is_some_and(|&t| t > cutoff)
+                    });
+                }
+
                 let rate_limit_info = limits_guard
                     .entry(ip.clone())
                     .or_insert_with(RateLimitInfo::new);

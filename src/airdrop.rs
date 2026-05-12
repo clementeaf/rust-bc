@@ -139,7 +139,7 @@ impl AirdropManager {
         let mut tracking = self.tracking.lock().unwrap_or_else(|e| e.into_inner());
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let entry = tracking
@@ -196,7 +196,7 @@ impl AirdropManager {
         if self.eligibility_config.require_active {
             let current_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             let time_since_last_activity =
                 current_time.saturating_sub(tracking.last_block_timestamp);
@@ -300,7 +300,7 @@ impl AirdropManager {
                 entry.claim_timestamp = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
-                        .unwrap()
+                        .unwrap_or_default()
                         .as_secs(),
                 );
                 entry.claim_transaction_id = Some(transaction_id);
@@ -379,7 +379,7 @@ impl AirdropManager {
             .unwrap_or_else(|e| e.into_inner());
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         pending.insert(node_address.to_string(), (transaction_id, timestamp));
     }
@@ -394,7 +394,7 @@ impl AirdropManager {
         let mut rate_limits = self.rate_limits.lock().unwrap_or_else(|e| e.into_inner());
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let timestamps = rate_limits.entry(identifier.to_string()).or_default();

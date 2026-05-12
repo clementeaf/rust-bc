@@ -1340,7 +1340,11 @@ async fn async_main_inner() -> std::io::Result<()> {
             return Err(std::io::Error::other(e.to_string()));
         }
     }
-    .workers(8)
+    .workers(
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(8),
+    )
     .run();
 
     // Tarea SIGHUP: recarga certificados TLS y detiene el servidor si los nuevos son válidos

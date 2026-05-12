@@ -58,7 +58,7 @@ impl Block {
     ) -> Block {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         let merkle_root = Self::calculate_merkle_root(&transactions);

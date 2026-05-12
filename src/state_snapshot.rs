@@ -226,7 +226,7 @@ impl StateSnapshot {
             block_hash: block.hash.clone(),
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             wallets: wallet_snapshots,
             contracts,

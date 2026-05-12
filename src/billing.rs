@@ -100,7 +100,7 @@ impl UsageStats {
     pub fn new() -> UsageStats {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         UsageStats {
             transactions_this_month: 0,
@@ -116,7 +116,7 @@ impl UsageStats {
     pub fn should_reset_daily(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         let days_since_reset = (now - self.last_reset) / 86400;
         days_since_reset > 0
@@ -130,7 +130,7 @@ impl UsageStats {
             self.requests_today = 0;
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs();
             self.last_reset = now;
         }
@@ -157,7 +157,7 @@ impl APIKeyInfo {
     pub fn new(tier: BillingTier) -> APIKeyInfo {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         let rate_limit = match tier {
             BillingTier::Free => 10,

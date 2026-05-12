@@ -219,6 +219,11 @@ impl BondingRegistry {
 
         if let Some(pool) = self.pools.get_mut(oracle_id) {
             pool.lock_collateral(amount)?;
+            // Cap pending bonds to prevent unbounded growth
+            if self.pending_bonds.len() >= 10_000 {
+                self.pending_bonds
+                    .retain(|b| b.status == BondingStatus::Pending);
+            }
             self.pending_bonds.push(BondingRequest {
                 oracle_id: oracle_id.to_string(),
                 amount,
@@ -330,6 +335,11 @@ impl BondingRegistry {
             voting_end_time: current_time + self.voting_period_ms,
         };
 
+        // Cap challenges to prevent unbounded growth
+        if self.challenges.len() >= 10_000 {
+            self.challenges
+                .retain(|c| c.status == ChallengeStatus::Voting);
+        }
         self.challenges.push(challenge);
         Ok(challenge_id)
     }

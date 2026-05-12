@@ -32,7 +32,7 @@ impl Validator {
     pub fn new(address: String, staked_amount: u64) -> Validator {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         Validator {
@@ -199,7 +199,7 @@ impl StakingManager {
         validator.unstaking_requested = true;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
         validator.unstaking_timestamp = Some(timestamp);
 
@@ -227,7 +227,7 @@ impl StakingManager {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs();
 
         if now < unstaking_timestamp + self.unstaking_period {

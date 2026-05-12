@@ -60,6 +60,11 @@ impl From<BridgeError> for RelayerError {
     }
 }
 
+/// Maximum pending relay jobs before rejecting new ones.
+const MAX_RELAY_QUEUE: usize = 10_000;
+/// Maximum completed/failed history entries before trimming.
+const MAX_RELAY_HISTORY: usize = 50_000;
+
 /// Bridge relayer that queues and processes cross-chain messages.
 pub struct Relayer {
     /// Pending jobs to relay.
@@ -87,7 +92,11 @@ impl Relayer {
 
     /// Queue an outbound message for relay to an external chain.
     pub fn queue_outbound(&self, message: BridgeMessage) {
-        self.queue.lock().unwrap().push_back(RelayJob {
+        let mut q = self.queue.lock().unwrap();
+        if q.len() >= MAX_RELAY_QUEUE {
+            return; // Drop under backpressure rather than OOM
+        }
+        q.push_back(RelayJob {
             message,
             direction: RelayDirection::Outbound,
             attempts: 0,
@@ -97,7 +106,11 @@ impl Relayer {
 
     /// Queue an inbound message (from external chain) for processing on rust-bc.
     pub fn queue_inbound(&self, message: BridgeMessage) {
-        self.queue.lock().unwrap().push_back(RelayJob {
+        let mut q = self.queue.lock().unwrap();
+        if q.len() >= MAX_RELAY_QUEUE {
+            return;
+        }
+        q.push_back(RelayJob {
             message,
             direction: RelayDirection::Inbound,
             attempts: 0,
@@ -149,13 +162,23 @@ impl Relayer {
 
         match result {
             Ok(id) => {
-                self.completed.lock().unwrap().push(id);
+                let mut c = self.completed.lock().unwrap();
+                if c.len() >= MAX_RELAY_HISTORY {
+                    let half = c.len() / 2;
+                    c.drain(..half);
+                }
+                c.push(id);
                 *self.status.lock().unwrap() = RelayerStatus::Idle;
                 Ok(id)
             }
             Err(e) => {
                 if job.attempts >= job.max_attempts {
-                    self.failed.lock().unwrap().push((msg_id, e.to_string()));
+                    let mut f = self.failed.lock().unwrap();
+                    if f.len() >= MAX_RELAY_HISTORY {
+                        let half = f.len() / 2;
+                        f.drain(..half);
+                    }
+                    f.push((msg_id, e.to_string()));
                     *self.status.lock().unwrap() = RelayerStatus::Error;
                     Err(RelayerError::MaxRetries(msg_id))
                 } else {

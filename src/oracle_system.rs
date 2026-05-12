@@ -287,6 +287,10 @@ impl OracleRegistry {
             signature,
             confidence,
         };
+        // Cap pending reports to prevent unbounded memory growth
+        if self.pending_reports.len() >= 10_000 {
+            self.pending_reports.remove(0);
+        }
         self.pending_reports.push(report);
 
         Ok(())
