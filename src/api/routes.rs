@@ -53,6 +53,7 @@ impl ApiRoutes {
             .service(identity::store_list_identities)
             .service(identity::store_get_identity)
             .service(credentials::store_write_credential)
+            .service(credentials::store_list_credentials)
             .service(credentials::store_get_credential)
             .service(credentials::store_get_credentials_by_subject)
             .service(credentials::store_get_credentials_by_issuer)
@@ -195,6 +196,7 @@ impl ApiRoutes {
     fn store_credentials_routes() -> Scope {
         web::scope("")
             .service(credentials::store_write_credential)
+            .service(credentials::store_list_credentials)
             .service(credentials::store_get_credential)
             .service(credentials::store_get_credentials_by_subject)
     }

@@ -63,10 +63,10 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    title: 'Compliance',
+    title: 'Cumplimiento',
     items: [
-      { to: '/compliance', label: 'Audit Trail', desc: 'Eventos de dominio y requests (ISO 27001)' },
-      { to: '/chaincode-health', label: 'Chaincode Health', desc: 'Reportes de validacion sandbox' },
+      { to: '/compliance', label: 'Registro de Operaciones', desc: 'Trazabilidad completa (ISO 27001)' },
+      { to: '/chaincode-health', label: 'Salud del Sistema', desc: 'Validacion de componentes desplegados' },
     ],
   },
 ]

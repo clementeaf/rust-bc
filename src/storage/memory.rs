@@ -115,6 +115,10 @@ impl BlockStore for MemoryStore {
             .ok_or_else(|| StorageError::CredentialNotFound(cred_id.to_string()))
     }
 
+    fn list_credentials(&self) -> StorageResult<Vec<Credential>> {
+        Ok(self.credentials.lock().unwrap().values().cloned().collect())
+    }
+
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()> {
         if blocks.is_empty() && txs.is_empty() {
             return Err(StorageError::BatchOperationFailed(

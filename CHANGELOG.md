@@ -8,6 +8,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-12
 
+**Institutional UI overhaul — All modules redesigned for flagship demo**
+
+- Governance: full-width proposal table + slide-in drawer with tally bar, vote buttons, crypto proof
+- Credentials: full-width document table + drawer with status banner, content, crypto proof
+- Compliance (Audit Trail): category-based filters (Identity, Documents, Governance, Blockchain, Errors), human-readable Spanish labels, domain events by default, sticky thead with internal scroll, drawer detail with ISO 27001 compliance info
+- System Health: auto-loading dashboard (replaces empty chaincode lookup) — overview cards, infrastructure checks, regulatory compliance bar, stress performance grid
+- Sidebar: "Compliance" → "Cumplimiento", "Audit Trail" → "Registro de Operaciones", "Chaincode Health" → "Salud del Sistema"
+- Global smooth transitions: 150ms cubic-bezier on all elements, fade-in animation on panel selection, backdrop fade on drawers
+- Backend: `list_credentials()` added to BlockStore trait, MemoryStore, RocksDbBlockStore; `GET /api/v1/store/credentials` endpoint
+- API client: `listCredentials()` function
+
+---
+
 **Digital Identity module — Document signing with legal validity**
 
 - `/identity` rewritten as institutional digital identity module: identities list + signed documents panel + document detail drawer

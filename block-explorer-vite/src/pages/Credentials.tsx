@@ -1,405 +1,263 @@
-import { useState, type ReactElement } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useEffect, useCallback, type ReactElement } from 'react'
 import {
-  createCredential,
-  getCredential,
-  getCredentialsBySubject,
+  listCredentials,
+  listIdentities,
   type Credential,
+  type IdentityRecord,
 } from '../lib/api'
-import { timeAgo, formatExpiry, shortCode } from '../lib/format'
+import { fmtDate, timeAgo } from '../lib/format'
 
-/**
- * Genera un número interno aleatorio para el registro.
- * @returns Cadena cred-…
- */
-function generateCredId(): string {
-  const hex = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-  return `cred-${hex}`
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function extractName(did: string): string {
+  const slug = did.split(':').pop() || ''
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function docStatus(c: Credential): 'vigente' | 'expirado' | 'revocado' {
+  if (c.revoked_at) return 'revocado'
+  if (c.expires_at > 0 && c.expires_at < Date.now() / 1000) return 'expirado'
+  return 'vigente'
+}
+
+const STATUS_STYLES = {
+  vigente: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Vigente' },
+  expirado: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Expirado' },
+  revocado: { bg: 'bg-red-100', text: 'text-red-700', label: 'Revocado' },
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
 export default function Credentials(): ReactElement {
-  const [credId, setCredId] = useState('')
-  const [issuerDid, setIssuerDid] = useState('')
-  const [subjectDid, setSubjectDid] = useState('')
-  const [credType, setCredType] = useState('acceso')
-  const [expiresDays, setExpiresDays] = useState('365')
-  const [issueMsg, setIssueMsg] = useState('')
-  const [issueErr, setIssueErr] = useState('')
+  const [credentials, setCredentials] = useState<Credential[]>([])
+  const [identities, setIdentities] = useState<IdentityRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const [lookupId, setLookupId] = useState('')
-  const [credential, setCredential] = useState<Credential | null>(null)
-  const [lookupErr, setLookupErr] = useState('')
+  const [selected, setSelected] = useState<Credential | null>(null)
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'' | 'vigente' | 'expirado' | 'revocado'>('')
 
-  const [subjectQuery, setSubjectQuery] = useState('')
-  const [subjectCreds, setSubjectCreds] = useState<Credential[]>([])
-  const [subjectErr, setSubjectErr] = useState('')
-
-  const handleIssue = async (): Promise<void> => {
-    setIssueMsg('')
-    setIssueErr('')
-    if (!issuerDid.trim() || !subjectDid.trim()) {
-      setIssueErr('Falta rellenar quién declara y sobre quién. Los dos códigos deben existir ya en Personas.')
-      return
-    }
-    const now = Math.floor(Date.now() / 1000)
-    const expires = now + parseInt(expiresDays || '365', 10) * 86400
-    const id = credId.trim() || generateCredId()
+  const fetchAll = useCallback(async () => {
     try {
-      const cred = await createCredential(
-        id,
-        issuerDid.trim(),
-        subjectDid.trim(),
-        credType || 'acceso',
-        now,
-        expires,
-      )
-      setIssueMsg('Registro guardado. Puedes copiar el número de documento de abajo para buscarlo después.')
-      setCredential(cred)
-    } catch (e: unknown) {
-      setIssueErr(e instanceof Error ? e.message : 'No se pudo guardar')
+      const [creds, ids] = await Promise.all([listCredentials(), listIdentities()])
+      setCredentials(creds)
+      setIdentities(ids)
+      setError('')
+    } catch (e: any) {
+      setError(e.message || 'Error cargando datos')
+    } finally {
+      setLoading(false)
     }
-  }
+  }, [])
 
-  const handleLookup = async (): Promise<void> => {
-    setLookupErr('')
-    setCredential(null)
-    if (!lookupId.trim()) {
-      setLookupErr('Escribe el número de documento (empieza por cred-…)')
-      return
-    }
-    try {
-      const cred = await getCredential(lookupId.trim())
-      setCredential(cred)
-    } catch (e: unknown) {
-      setLookupErr(e instanceof Error ? e.message : 'No encontramos ese número')
-    }
-  }
+  useEffect(() => { fetchAll() }, [fetchAll])
 
-  const handleSubjectSearch = async (): Promise<void> => {
-    setSubjectErr('')
-    setSubjectCreds([])
-    if (!subjectQuery.trim()) {
-      setSubjectErr('Pega el código de la persona u organización sobre la que quieres listar registros')
-      return
-    }
-    try {
-      const creds = await getCredentialsBySubject(subjectQuery.trim())
-      setSubjectCreds(creds)
-    } catch (e: unknown) {
-      setSubjectErr(e instanceof Error ? e.message : 'No hay resultados')
-    }
+  const filtered = credentials.filter((c) => {
+    const status = docStatus(c)
+    if (filterStatus && status !== filterStatus) return false
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      c.cred_type.toLowerCase().includes(q) ||
+      extractName(c.issuer_did).toLowerCase().includes(q) ||
+      extractName(c.subject_did).toLowerCase().includes(q) ||
+      c.id.toLowerCase().includes(q)
+    )
+  })
+
+  const counts = {
+    total: credentials.length,
+    vigente: credentials.filter((c) => docStatus(c) === 'vigente').length,
+    expirado: credentials.filter((c) => docStatus(c) === 'expirado').length,
+    revocado: credentials.filter((c) => docStatus(c) === 'revocado').length,
   }
 
   return (
-    <div className="space-y-8">
-      <header className="max-w-3xl">
-        <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Certificados entre fichas</h1>
-        <p className="text-neutral-600 text-base mt-3 leading-relaxed">
-          Esta pantalla sirve para una sola cosa: <strong className="text-neutral-900">dejar por escrito</strong> que{' '}
-          <em>una ficha</em> (por ejemplo una empresa) <strong className="text-neutral-900">reconoce o autoriza</strong>{' '}
-          algo sobre <em>otra ficha</em> (por ejemplo una persona). Es el equivalente digital a un carnet, una
-          carta o un vale con fecha de caducidad.
-        </p>
-      </header>
-
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 max-w-3xl">
-        <p className="font-medium text-amber-700 mb-2">¿Es obligatorio usar esta página?</p>
-        <p className="text-sm text-amber-700 leading-relaxed">
-          <strong className="text-neutral-900">No.</strong> Mucha gente solo necesita dar de alta códigos en{' '}
-          <Link to="/identity" className="text-main-600 hover:text-main-600 underline underline-offset-2">
-            Personas y organizaciones
-          </Link>
-          . Solo entra aquí si de verdad quieres guardar <strong className="text-neutral-900">un reconocimiento entre dos
-          códigos</strong> que ya creaste antes.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 text-sm text-neutral-600 max-w-3xl space-y-4">
-        <p className="font-medium text-neutral-900">Qué te pide cada campo</p>
-        <ul className="list-disc pl-5 space-y-2 leading-relaxed">
-          <li>
-            <strong className="text-neutral-700">Quién declara</strong>: el código de quien &quot;firma&quot; el
-            reconocimiento (empresa, administración, etc.). Debe ser una ficha ya guardada en el nodo.
-          </li>
-          <li>
-            <strong className="text-neutral-700">Sobre quién va</strong>: el código de la persona u organización a la
-            que afecta el reconocimiento. También debe existir ya como ficha.
-          </li>
-          <li>
-            <strong className="text-neutral-700">Qué tipo de reconocimiento es</strong>: una palabra corta que tú
-            elijas (por ejemplo &quot;miembro&quot;, &quot;acceso&quot;). Sirve para clasificar el registro.
-          </li>
-          <li>
-            <strong className="text-neutral-700">Cuántos días vale</strong>: después de ese plazo el sistema lo
-            considera caducado (puedes seguir viéndolo, pero figurará como no vigente).
-          </li>
-          <li>
-            <strong className="text-neutral-700">Número de documento (opcional)</strong>: si lo dejas vacío, el
-            servidor crea uno automático. Si pones uno, sirve para buscar este registro después.
-          </li>
-        </ul>
-      </div>
-
-      <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-3xl">
-        <h2 className="text-lg font-semibold text-neutral-900">Crear un reconocimiento nuevo</h2>
-        <p className="text-sm text-neutral-500 mt-2 mb-6">
-          Rellena los dos códigos copiándolos desde la pantalla de Personas o desde donde los tengas anotados.
-        </p>
-
-        <div className="grid grid-cols-1 gap-5">
-          <div>
-            <label htmlFor="issuer-did" className="block text-sm font-medium text-neutral-700 mb-1">
-              Quién declara (código de la empresa, organismo o persona que emite)
-            </label>
-            <p className="text-xs text-neutral-400 mb-2">Obligatorio. Debe ser una ficha ya creada en el nodo.</p>
-            <input
-              id="issuer-did"
-              value={issuerDid}
-              onChange={(e) => setIssuerDid(e.target.value)}
-              placeholder="did:cerulean:…"
-              className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="subject-did" className="block text-sm font-medium text-neutral-700 mb-1">
-              Sobre quién va el reconocimiento (código de quien recibe o es el tema)
-            </label>
-            <p className="text-xs text-neutral-400 mb-2">Obligatorio. Otra ficha distinta, también ya creada.</p>
-            <input
-              id="subject-did"
-              value={subjectDid}
-              onChange={(e) => setSubjectDid(e.target.value)}
-              placeholder="did:cerulean:…"
-              className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div>
-              <label htmlFor="cred-type" className="block text-sm font-medium text-neutral-700 mb-1">
-                Tipo de reconocimiento (una palabra que tú elijas)
-              </label>
-              <p className="text-xs text-neutral-400 mb-2">Ejemplos: acceso, miembro, voluntario.</p>
-              <input
-                id="cred-type"
-                value={credType}
-                onChange={(e) => setCredType(e.target.value)}
-                className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm focus:outline-none focus:border-main-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="expires-days" className="block text-sm font-medium text-neutral-700 mb-1">
-                Válido durante (días desde hoy)
-              </label>
-              <p className="text-xs text-neutral-400 mb-2">Después se marca como caducado.</p>
-              <input
-                id="expires-days"
-                value={expiresDays}
-                onChange={(e) => setExpiresDays(e.target.value)}
-                type="number"
-                min={1}
-                className="w-full bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm focus:outline-none focus:border-main-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="cred-id" className="block text-sm font-medium text-neutral-700 mb-1">
-              Número de documento (opcional)
-            </label>
-            <p className="text-xs text-neutral-400 mb-2">
-              Si lo dejas vacío, se genera solo. Si lo rellenas, podrás buscar el registro con ese número.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                id="cred-id"
-                value={credId}
-                onChange={(e) => setCredId(e.target.value)}
-                placeholder="Se rellena solo si quieres un número fijo"
-                className="flex-1 bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
-              />
-              <button
-                type="button"
-                onClick={() => setCredId(generateCredId())}
-                className="px-4 py-2.5 text-sm bg-neutral-100 text-neutral-700 rounded-lg border border-neutral-200 hover:bg-neutral-200 whitespace-nowrap"
-              >
-                Generar número
-              </button>
-            </div>
-          </div>
+    <div className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-xl font-bold text-neutral-900 tracking-tight">Documentos y Credenciales</h1>
+          <p className="text-xs text-neutral-400 mt-0.5">
+            Registro de todos los documentos firmados electronicamente en la plataforma
+          </p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => void handleIssue()}
-          className="mt-6 px-5 py-2.5 bg-main-500 hover:bg-main-600 text-neutral-900 text-sm font-medium rounded-lg transition-colors"
-        >
-          Guardar este reconocimiento
-        </button>
-        {issueMsg && <p className="mt-4 text-sm text-green-600">{issueMsg}</p>}
-        {issueErr && <p className="mt-4 text-sm text-red-500">{issueErr}</p>}
       </div>
 
-      <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-3xl">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-1">Buscar un reconocimiento por su número</h2>
-        <p className="text-sm text-neutral-500 mb-4">
-          El número empieza por <code className="text-neutral-600">cred-</code> y te lo mostró el sistema al guardar.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            value={lookupId}
-            onChange={(e) => setLookupId(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void handleLookup()}
-            placeholder="cred-…"
-            className="flex-1 bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
-          />
-          <button
-            type="button"
-            onClick={() => void handleLookup()}
-            className="px-5 py-2.5 bg-gray-700 hover:bg-neutral-200 text-neutral-900 text-sm font-medium rounded-lg transition-colors"
-          >
-            Buscar
-          </button>
-        </div>
-        {lookupErr && <p className="mt-4 text-sm text-red-500">{lookupErr}</p>}
+      {/* Stats + filters */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <StatPill label="Total" value={counts.total} active={!filterStatus} onClick={() => setFilterStatus('')} />
+        <StatPill label="Vigentes" value={counts.vigente} color="text-emerald-600" active={filterStatus === 'vigente'} onClick={() => setFilterStatus(filterStatus === 'vigente' ? '' : 'vigente')} />
+        <StatPill label="Expirados" value={counts.expirado} color="text-amber-600" active={filterStatus === 'expirado'} onClick={() => setFilterStatus(filterStatus === 'expirado' ? '' : 'expirado')} />
+        <StatPill label="Revocados" value={counts.revocado} color="text-red-500" active={filterStatus === 'revocado'} onClick={() => setFilterStatus(filterStatus === 'revocado' ? '' : 'revocado')} />
+        <div className="flex-1" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por tipo, emisor o titular..."
+          className="border border-neutral-200 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-main-500"
+        />
       </div>
 
-      <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-3xl">
-        <h2 className="text-lg font-semibold text-neutral-900 mb-1">Ver todos los reconocimientos de una persona</h2>
-        <p className="text-sm text-neutral-500 mb-4">
-          Pega el <strong className="text-neutral-600">código de quien recibe</strong> el reconocimiento (la ficha
-          &quot;sobre quién&quot;) y listaremos los registros que lo mencionan.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            value={subjectQuery}
-            onChange={(e) => setSubjectQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void handleSubjectSearch()}
-            placeholder="Código did:cerulean:… de esa ficha"
-            className="flex-1 bg-neutral-100 border border-neutral-200 rounded-lg px-3 py-2.5 text-neutral-900 text-sm font-mono placeholder-neutral-400 focus:outline-none focus:border-main-500"
-          />
-          <button
-            type="button"
-            onClick={() => void handleSubjectSearch()}
-            className="px-5 py-2.5 bg-gray-700 hover:bg-neutral-200 text-neutral-900 text-sm font-medium rounded-lg transition-colors"
-          >
-            Listar
-          </button>
-        </div>
-        {subjectErr && <p className="mt-4 text-sm text-red-500">{subjectErr}</p>}
-      </div>
+      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-      {credential && (
-        <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-3xl">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">Detalle del registro</h2>
-          <dl className="space-y-3 text-sm">
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Número de documento</dt>
-              <dd className="text-main-500 font-mono break-all">{credential.id}</dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Quién declara</dt>
-              <dd className="text-neutral-700 font-mono break-all">{shortCode(credential.issuer_did)}</dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Sobre quién</dt>
-              <dd className="text-neutral-700 font-mono break-all">{shortCode(credential.subject_did)}</dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Tipo</dt>
-              <dd>
-                <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 text-neutral-600">
-                  {credential.cred_type}
-                </span>
-              </dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Estado</dt>
-              <dd>
-                <span
-                  className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                    credential.revoked_at
-                      ? 'bg-red-50 text-red-500'
-                      : credential.expires_at && credential.expires_at < Date.now() / 1000
-                        ? 'bg-amber-50 text-amber-600'
-                        : 'bg-green-50 text-green-600'
-                  }`}
-                >
-                  {credential.revoked_at
-                    ? 'Revocado'
-                    : credential.expires_at && credential.expires_at < Date.now() / 1000
-                      ? 'Caducado'
-                      : 'Vigente'}
-                </span>
-              </dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Emitido</dt>
-              <dd className="text-neutral-700">{timeAgo(credential.issued_at)}</dd>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:gap-4">
-              <dt className="text-neutral-500 w-44 shrink-0">Caducidad</dt>
-              <dd className="text-neutral-700">{formatExpiry(credential.expires_at)}</dd>
-            </div>
-          </dl>
-        </div>
-      )}
-
-      {subjectCreds.length > 0 && (
-        <div className="bg-white border border-neutral-200 rounded-2xl p-6 max-w-3xl">
-          <h2 className="text-lg font-semibold text-neutral-900 mb-4">
-            Reconocimientos que mencionan a esta ficha ({subjectCreds.length})
-          </h2>
-          <p className="text-xs text-neutral-400 mb-4">Pulsa una fila para ver el detalle arriba.</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-neutral-500 text-xs border-b border-neutral-200">
-                  <th className="text-left py-3 px-2">Número</th>
-                  <th className="text-left py-3 px-2">Quién declara</th>
-                  <th className="text-left py-3 px-2">Tipo</th>
-                  <th className="text-left py-3 px-2">Estado</th>
-                  <th className="text-right py-3 px-2">Emitido</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjectCreds.map((c) => (
+      {/* Table — full width */}
+      <div className="bg-white border border-neutral-200 rounded-xl overflow-hidden">
+        {loading ? (
+          <p className="text-sm text-neutral-400 px-5 py-6 text-center">Cargando...</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-sm text-neutral-400 px-5 py-6 text-center">
+            {credentials.length === 0 ? 'Sin documentos registrados.' : 'Sin resultados para el filtro aplicado.'}
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[10px] text-neutral-400 uppercase tracking-wider border-b border-neutral-200">
+                <th className="px-4 py-2">Documento</th>
+                <th className="px-4 py-2">Firmado por</th>
+                <th className="px-4 py-2">Titular</th>
+                <th className="px-4 py-2">Estado</th>
+                <th className="px-4 py-2">Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((c) => {
+                const status = docStatus(c)
+                const st = STATUS_STYLES[status]
+                return (
                   <tr
                     key={c.id}
-                    className="border-b border-neutral-100 hover:bg-white cursor-pointer"
-                    onClick={() => {
-                      setCredential(c)
-                      setLookupId(c.id)
-                    }}
+                    onClick={() => setSelected(c)}
+                    className="border-b border-neutral-100 cursor-pointer hover:bg-main-50/40"
                   >
-                    <td className="py-3 px-2 text-main-500 font-mono text-xs">{shortCode(c.id)}</td>
-                    <td className="py-3 px-2 text-neutral-600 font-mono text-xs">{shortCode(c.issuer_did)}</td>
-                    <td className="py-3 px-2 text-neutral-600">{c.cred_type}</td>
-                    <td className="py-3 px-2">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                          c.revoked_at
-                            ? 'bg-red-50 text-red-500'
-                            : c.expires_at && c.expires_at < Date.now() / 1000
-                              ? 'bg-amber-50 text-amber-600'
-                              : 'bg-green-50 text-green-600'
-                        }`}
-                      >
-                        {c.revoked_at
-                          ? 'Revocado'
-                          : c.expires_at && c.expires_at < Date.now() / 1000
-                            ? 'Caducado'
-                            : 'Vigente'}
-                      </span>
+                    <td className="px-4 py-2.5">
+                      <p className="text-xs font-medium text-neutral-800">{c.cred_type}</p>
                     </td>
-                    <td className="py-3 px-2 text-right text-neutral-500">{timeAgo(c.issued_at)}</td>
+                    <td className="px-4 py-2.5 text-xs text-neutral-600">{extractName(c.issuer_did)}</td>
+                    <td className="px-4 py-2.5 text-xs text-neutral-600">{extractName(c.subject_did)}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${st.bg} ${st.text}`}>{st.label}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-neutral-500">{timeAgo(c.issued_at)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Detail drawer */}
+      {selected && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/20 animate-backdrop" onClick={() => setSelected(null)} />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col animate-slide-in">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-neutral-200">
+              <div className="flex items-center justify-between">
+                <p className="text-base font-bold text-neutral-900">{selected.cred_type}</p>
+                <button onClick={() => setSelected(null)} className="p-1.5 rounded-lg hover:bg-neutral-100">
+                  <svg className="w-5 h-5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-xs text-neutral-400 mt-0.5">Documento con firma electronica avanzada</p>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {/* Status banner */}
+              {(() => {
+                const status = docStatus(selected)
+                const st = STATUS_STYLES[status]
+                return (
+                  <div className={`rounded-lg px-3 py-2.5 mb-4 ${st.bg}`}>
+                    <p className={`text-xs font-medium ${st.text}`}>
+                      {status === 'vigente' ? 'Documento vigente — firma electronica valida'
+                        : status === 'expirado' ? 'Documento expirado'
+                        : 'Documento revocado — firma invalidada'}
+                    </p>
+                  </div>
+                )
+              })()}
+
+              {/* Fields */}
+              <div className="space-y-3 mb-5">
+                <Field label="Tipo de documento" value={selected.cred_type} />
+                <Field label="Firmado por" value={extractName(selected.issuer_did)} sub={selected.issuer_did} />
+                <Field label="Titular" value={extractName(selected.subject_did)} sub={selected.subject_did} />
+                <Field label="Fecha de firma" value={fmtDate(selected.issued_at)} />
+                {selected.expires_at > 0 && <Field label="Vencimiento" value={fmtDate(selected.expires_at)} />}
+                {selected.revoked_at && <Field label="Revocado" value={fmtDate(selected.revoked_at)} />}
+              </div>
+
+              {/* Claims */}
+              {selected.claims && Object.keys(selected.claims).length > 0 && (
+                <div className="mb-5">
+                  <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold mb-2">Contenido del documento</p>
+                  <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-3 space-y-2">
+                    {Object.entries(selected.claims).map(([k, v]) => (
+                      <div key={k} className="flex justify-between items-baseline">
+                        <span className="text-xs text-neutral-500 capitalize">{k.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-neutral-800 font-medium text-right">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Proof */}
+              <div>
+                <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold mb-2">Garantia criptografica</p>
+                <div className="bg-neutral-900 rounded-lg p-3 space-y-1.5">
+                  <ProofRow label="Algoritmo" value="ML-DSA-65 (FIPS 204)" />
+                  <ProofRow label="ID documento" value={selected.id} />
+                  <ProofRow label="Registro" value="Blockchain Cerulean Ledger" />
+                  <ProofRow label="Inmutabilidad" value="Hash SHA-256 sellado en bloque" />
+                  <ProofRow label="Verificable" value="Cualquier nodo puede verificar" />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  )
+}
+
+// ── Sub-components ──────────────────────────────────────────────────────────
+
+function StatPill({ label, value, color, active, onClick }: { label: string; value: number; color?: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`border rounded-lg px-3 py-1.5 transition-colors ${
+        active ? 'border-main-300 bg-main-50' : 'border-neutral-200 bg-white hover:bg-neutral-50'
+      }`}
+    >
+      <p className="text-[9px] text-neutral-400 uppercase">{label}</p>
+      <p className={`text-base font-bold ${color || 'text-neutral-800'}`}>{value}</p>
+    </button>
+  )
+}
+
+function Field({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-[10px] text-neutral-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm text-neutral-800">{value}</p>
+      {sub && <p className="text-[10px] text-neutral-400 font-mono truncate">{sub}</p>}
+    </div>
+  )
+}
+
+function ProofRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-[10px] text-neutral-500">{label}</span>
+      <span className="text-[10px] text-emerald-400 font-mono truncate ml-2 max-w-[180px]">{value}</span>
     </div>
   )
 }

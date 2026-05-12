@@ -301,6 +301,24 @@ pub async fn store_get_credentials_by_issuer(
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
+/// GET /api/v1/store/credentials — list all credentials.
+#[get("/store/credentials")]
+pub async fn store_list_credentials(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    enforce_channel_membership(&state, _channel, &req)?;
+    let store = get_channel_store(&state, _channel)?;
+    let creds = store
+        .list_credentials()
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

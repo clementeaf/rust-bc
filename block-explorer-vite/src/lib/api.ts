@@ -272,6 +272,9 @@ export const createCredential = (
 export const getCredential = (credId: string) =>
   client.get(`/store/credentials/${encodeURIComponent(credId)}`).then((r) => unwrap<Credential>(r.data));
 
+export const listCredentials = () =>
+  client.get('/store/credentials').then((r) => unwrap<Credential[]>(r.data));
+
 export const getCredentialsBySubject = (subjectDid: string) =>
   client
     .get(`/store/credentials/by-subject/${encodeURIComponent(subjectDid)}`)

@@ -532,6 +532,19 @@ impl BlockStore for RocksDbBlockStore {
         }
     }
 
+    fn list_credentials(&self) -> StorageResult<Vec<Credential>> {
+        let cf = self.cf_credentials()?;
+        let iter = self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start);
+        let mut results = Vec::new();
+        for item in iter {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let rec: Credential = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            results.push(rec);
+        }
+        Ok(results)
+    }
+
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()> {
         if blocks.is_empty() && txs.is_empty() {
             return Err(StorageError::BatchOperationFailed(

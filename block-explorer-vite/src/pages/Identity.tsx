@@ -212,7 +212,7 @@ export default function Identity(): ReactElement {
               <p className="text-xs text-neutral-400 mt-1">Veras los documentos firmados, contratos y certificados asociados</p>
             </div>
           ) : (
-            <>
+            <div key={selected.did} className="animate-fade-in">
               {/* Identity header */}
               <div className="flex items-center gap-3 mb-4 pb-3 border-b border-neutral-100">
                 <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -294,7 +294,7 @@ export default function Identity(): ReactElement {
                   })}
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -302,7 +302,7 @@ export default function Identity(): ReactElement {
       {/* Document detail drawer */}
       {openDoc && (
         <>
-          <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setOpenDoc(null)} />
+          <div className="fixed inset-0 z-50 bg-black/20 animate-backdrop" onClick={() => setOpenDoc(null)} />
           <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col animate-slide-in">
             {/* Drawer header */}
             <div className="px-5 py-4 border-b border-neutral-200">

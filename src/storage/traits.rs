@@ -185,6 +185,9 @@ pub trait BlockStore: Send + Sync {
     /// Read a credential by ID
     fn read_credential(&self, cred_id: &str) -> StorageResult<Credential>;
 
+    /// List all credentials
+    fn list_credentials(&self) -> StorageResult<Vec<Credential>>;
+
     /// Batch write operations (atomic)
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()>;
 
@@ -286,6 +289,9 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     }
     fn read_credential(&self, cred_id: &str) -> StorageResult<Credential> {
         (**self).read_credential(cred_id)
+    }
+    fn list_credentials(&self) -> StorageResult<Vec<Credential>> {
+        (**self).list_credentials()
     }
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()> {
         (**self).write_batch(blocks, txs)
