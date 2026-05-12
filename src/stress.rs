@@ -1053,4 +1053,327 @@ mod tests {
             "mixed torture: {total_errors} errors across 128 threads × 10K ops"
         );
     }
+
+    // ── DOMAIN-SPECIFIC TORTURE ─────────────────────────────────────────────
+
+    /// Oracle: register nodes + submit 50K signed price reports + aggregate
+    #[test]
+    fn torture_oracle_system_concurrent() {
+        use crate::oracle_system::OracleRegistry;
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+
+        let mut registry = OracleRegistry::new(3, 300_000);
+
+        // Register 100 oracle nodes
+        for i in 0..100 {
+            let _ = registry.register_oracle(format!("oracle-{i}"));
+        }
+
+        let base_ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+
+        let mut errors = 0u64;
+        for i in 0..50_000u64 {
+            let oracle_id = format!("oracle-{}", i % 100);
+            let price = 50_000 + (i % 100);
+            let ts = base_ts + i;
+
+            // Compute valid HMAC signature
+            let mut data = Vec::new();
+            data.extend_from_slice(oracle_id.as_bytes());
+            data.extend_from_slice(&price.to_le_bytes());
+            data.extend_from_slice(&ts.to_le_bytes());
+            let mut mac = HmacSha256::new_from_slice(b"oracle-system-hmac-key-v1").unwrap();
+            mac.update(&data);
+            let sig = mac.finalize().into_bytes().to_vec();
+
+            if registry
+                .submit_price_report(&oracle_id, "BTC/USD".to_string(), price, ts, sig, 95)
+                .is_err()
+            {
+                errors += 1;
+            }
+
+            if i % 100 == 99 {
+                let _ = registry.aggregate_reports("BTC/USD", 3);
+            }
+        }
+        assert_eq!(errors, 0, "oracle torture: {errors} errors in 50K reports");
+
+        let price = registry.get_price("BTC/USD");
+        assert!(price.is_ok(), "no BTC/USD price after 50K reports");
+    }
+
+    /// Sandbox Wasm validation: 64 threads × 1,000 validations = 64,000
+    #[test]
+    fn torture_sandbox_validation_64k() {
+        use crate::chaincode::sandbox::validate;
+
+        let valid_wasm = wat::parse_str("(module)").unwrap();
+
+        let threads: Vec<_> = (0..64)
+            .map(|t| {
+                let wasm = valid_wasm.clone();
+                std::thread::spawn(move || {
+                    let mut passed = 0u64;
+                    for i in 0..1_000u64 {
+                        let report = validate(&format!("cc-t{t}-{i}"), "1.0", &wasm);
+                        if report.passed {
+                            passed += 1;
+                        }
+                    }
+                    passed
+                })
+            })
+            .collect();
+
+        let total_passed: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_passed, 64_000,
+            "sandbox torture: only {total_passed}/64K passed"
+        );
+    }
+
+    /// ZKP: 64 threads × 5,000 prove+verify cycles = 320,000 cryptographic ops
+    #[test]
+    fn torture_zkp_320k_concurrent() {
+        use crate::identity::zkp::{prove_range, verify_presentation};
+
+        let threads: Vec<_> = (0..64)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    let mut errors = 0u64;
+                    for i in 0..5_000u64 {
+                        let value = 25 + (i % 50);
+                        let threshold = 18;
+                        match prove_range(&format!("cred-{t}-{i}"), "age", value, threshold) {
+                            Ok(presentation) => match verify_presentation(&presentation) {
+                                Ok(true) => {}
+                                _ => errors += 1,
+                            },
+                            Err(_) => errors += 1,
+                        }
+                    }
+                    errors
+                })
+            })
+            .collect();
+
+        let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert_eq!(
+            total_errors, 0,
+            "ZKP torture: {total_errors} errors in 320K prove+verify"
+        );
+    }
+
+    /// Governance full lifecycle: 64 threads doing propose → vote → tally in parallel
+    #[test]
+    fn torture_governance_full_lifecycle() {
+        use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
+        use crate::governance::voting::{VoteOption, VoteStore};
+
+        let proposals = Arc::new(ProposalStore::new());
+        let votes = Arc::new(VoteStore::new());
+
+        // Phase 1: 64 threads submit proposals concurrently (each with unique height)
+        let p = Arc::clone(&proposals);
+        let submit_threads: Vec<_> = (0..64)
+            .map(|t| {
+                let store = Arc::clone(&p);
+                std::thread::spawn(move || {
+                    let mut submitted = 0u64;
+                    for i in 0..100u64 {
+                        let height = (t * 10_000) + (i * 200);
+                        if store
+                            .submit(SubmitParams {
+                                proposer: &format!("org-{t}"),
+                                action: ProposalAction::TextProposal {
+                                    title: format!("prop-t{t}-{i}"),
+                                    description: "lifecycle torture".into(),
+                                },
+                                description: "torture",
+                                deposit: 10_000,
+                                required_deposit: 10_000,
+                                current_height: height,
+                                voting_period: 1_000_000,
+                            })
+                            .is_ok()
+                        {
+                            submitted += 1;
+                        }
+                    }
+                    submitted
+                })
+            })
+            .collect();
+
+        let total_submitted: u64 = submit_threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert!(total_submitted > 0, "no proposals submitted");
+
+        // Phase 2: 64 threads vote on all proposals
+        let all_proposals = proposals.list_all();
+        let proposal_ids: Vec<u64> = all_proposals.iter().map(|p| p.id).collect();
+        let ids = Arc::new(proposal_ids);
+
+        let vote_threads: Vec<_> = (0..64)
+            .map(|t| {
+                let v = Arc::clone(&votes);
+                let pids = Arc::clone(&ids);
+                std::thread::spawn(move || {
+                    let mut cast = 0u64;
+                    for (idx, &pid) in pids.iter().enumerate() {
+                        let voter = format!("voter-t{t}-p{idx}");
+                        let option = match t % 3 {
+                            0 => VoteOption::Yes,
+                            1 => VoteOption::No,
+                            _ => VoteOption::Abstain,
+                        };
+                        if v.cast_vote(pid, &voter, option, 100, 10, 2_000_000).is_ok() {
+                            cast += 1;
+                        }
+                    }
+                    cast
+                })
+            })
+            .collect();
+
+        let total_votes: u64 = vote_threads.into_iter().map(|t| t.join().unwrap()).sum();
+        assert!(total_votes > 0, "no votes cast in lifecycle torture");
+
+        // Phase 3: tally all proposals — must not panic
+        for &pid in ids.iter() {
+            let tally = votes.tally(pid, 10_000_000, 33, 67);
+            // Verify arithmetic didn't overflow
+            assert!(
+                tally.yes_power.checked_add(tally.no_power).is_some(),
+                "tally overflow on proposal {pid}"
+            );
+            assert!(
+                tally
+                    .total_voted_power
+                    .checked_add(tally.total_staked_power)
+                    .is_some(),
+                "total overflow on proposal {pid}"
+            );
+        }
+    }
+
+    /// Compliance: 64 threads running regulatory checks simultaneously
+    #[test]
+    fn torture_compliance_64_threads() {
+        use crate::regulatory::sandbox::run_compliance_checks;
+
+        let threads: Vec<_> = (0..64)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    let mut total_checks = 0usize;
+                    for _ in 0..100 {
+                        let results = run_compliance_checks();
+                        total_checks += results.len();
+                    }
+                    total_checks
+                })
+            })
+            .collect();
+
+        let total: usize = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        // 64 threads × 100 runs × 21 checks = 134,400
+        assert!(
+            total > 100_000,
+            "compliance torture: only {total} checks ran"
+        );
+    }
+
+    /// Forensic: 64 threads building timelines + evidence packages concurrently
+    #[test]
+    fn torture_forensic_concurrent() {
+        use crate::audit::AuditEntry;
+        use crate::forensic::ForensicEngine;
+
+        let threads: Vec<_> = (0..64)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    for i in 0..500u64 {
+                        let mut engine = ForensicEngine::new();
+                        // Ingest 50 audit entries per engine
+                        let entries: Vec<AuditEntry> = (0..50)
+                            .map(|j| AuditEntry {
+                                timestamp: format!("2026-05-12T{:02}:{:02}:00Z", j % 24, j % 60),
+                                action: crate::audit::AuditAction::HttpRequest,
+                                method: "POST".into(),
+                                path: format!("/api/v1/torture/t{t}/{i}/{j}"),
+                                org_id: format!("org-{}", t % 4),
+                                source_ip: "127.0.0.1".into(),
+                                status_code: if j % 10 == 0 { 403 } else { 200 },
+                                trace_id: format!("trace-{t}-{i}-{j}"),
+                                duration_ms: 5,
+                                metadata: None,
+                            })
+                            .collect();
+                        engine.ingest_audit(&entries);
+                        let _ = engine.build_timeline();
+                        let _ = engine.security_timeline();
+                        let _ = engine.severity_summary();
+                    }
+                })
+            })
+            .collect();
+
+        for t in threads {
+            t.join().unwrap();
+        }
+        // 64 threads × 500 engines × 50 entries = 1.6M audit events processed
+    }
+
+    /// Equivocation detector: 64 threads checking proposals for Byzantine behavior
+    #[test]
+    fn torture_equivocation_detector() {
+        use crate::consensus::equivocation::EquivocationDetector;
+
+        let detector = Arc::new(std::sync::Mutex::new(EquivocationDetector::new()));
+
+        let threads: Vec<_> = (0..64)
+            .map(|t| {
+                let d = Arc::clone(&detector);
+                std::thread::spawn(move || {
+                    let mut proofs_found = 0u64;
+                    for i in 0..5_000u64 {
+                        let height = i;
+                        let slot = i;
+                        let proposer = format!("validator-{}", t % 8);
+                        let mut hash = [0u8; 32];
+                        hash[0] = t as u8;
+                        hash[1] = (i % 256) as u8;
+
+                        let mut det = d.lock().unwrap_or_else(|e| e.into_inner());
+                        if det
+                            .check_proposal(
+                                height,
+                                slot,
+                                &proposer,
+                                hash,
+                                &[0u8; 64],
+                                Default::default(),
+                            )
+                            .is_some()
+                        {
+                            proofs_found += 1;
+                        }
+                    }
+                    proofs_found
+                })
+            })
+            .collect();
+
+        let total_proofs: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
+        // Many equivocation proofs expected (same proposer, same height/slot, different hashes)
+        assert!(
+            total_proofs > 0,
+            "no equivocation detected across 320K proposals"
+        );
+    }
 }
