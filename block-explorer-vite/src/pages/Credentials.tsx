@@ -30,7 +30,7 @@ const STATUS_STYLES = {
 
 export default function Credentials(): ReactElement {
   const [credentials, setCredentials] = useState<Credential[]>([])
-  const [identities, setIdentities] = useState<IdentityRecord[]>([])
+  const [_identities, setIdentities] = useState<IdentityRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 

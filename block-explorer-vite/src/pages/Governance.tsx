@@ -107,9 +107,6 @@ export default function Governance() {
     }
   };
 
-  const voting = proposals.filter((p) => p.status === 'Voting');
-  const closed = proposals.filter((p) => p.status !== 'Voting');
-
   return (
     <div className="flex flex-col">
       {/* Header */}
@@ -356,53 +353,6 @@ export default function Governance() {
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
-
-function ProposalSection({ title, count, loading, children }: { title: string; count: number; loading: boolean; children: React.ReactNode }) {
-  return (
-    <div className="bg-white border border-neutral-200 rounded-xl px-4 py-3">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] text-neutral-400 uppercase tracking-wider font-bold">{title}</p>
-        <span className="text-[10px] text-neutral-400">{count}</span>
-      </div>
-      {loading ? (
-        <p className="text-xs text-neutral-400 py-2">Cargando...</p>
-      ) : count === 0 ? (
-        <p className="text-xs text-neutral-400 py-2">Sin propuestas.</p>
-      ) : (
-        <div className="space-y-0.5">{children}</div>
-      )}
-    </div>
-  );
-}
-
-function ProposalRow({ proposal, tally, active, onClick }: { proposal: Proposal; tally?: TallyResult; active: boolean; onClick: () => void }) {
-  const st = STATUS_STYLES[proposal.status] || STATUS_STYLES.Cancelled;
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-        active ? 'bg-main-500 text-white' : 'hover:bg-neutral-50'
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <p className={`text-xs font-medium truncate flex-1 ${active ? 'text-white' : 'text-neutral-800'}`}>
-          {actionSummary(proposal.action)}
-        </p>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ml-2 flex-shrink-0 ${
-          active ? 'bg-white/20 text-white' : `${st.bg} ${st.text}`
-        }`}>
-          {st.label}
-        </span>
-      </div>
-      {tally && tally.total_voted_power > 0 && (
-        <div className="flex h-1 rounded-full overflow-hidden bg-neutral-200 mt-1.5">
-          {tally.yes_power > 0 && <div className={`${active ? 'bg-white/60' : 'bg-emerald-500'}`} style={{ width: `${pct(tally.yes_power, tally.total_voted_power)}%` }} />}
-          {tally.no_power > 0 && <div className={`${active ? 'bg-white/30' : 'bg-red-500'}`} style={{ width: `${pct(tally.no_power, tally.total_voted_power)}%` }} />}
-        </div>
-      )}
-    </button>
-  );
-}
 
 function StatusBadge({ status }: { status: string }) {
   const st = STATUS_STYLES[status] || STATUS_STYLES.Cancelled;
