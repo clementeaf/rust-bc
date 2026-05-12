@@ -251,38 +251,106 @@ function testForensicIntegrity() {
   errorRate.add(!ok);
 }
 
+function testSubmitProposal() {
+  const payload = JSON.stringify({
+    proposer: `k6-proposer-${__VU}`,
+    description: `Load test proposal from VU ${__VU} iter ${__ITER}`,
+    deposit: 10000,
+    action: { type: 'text', title: `k6-proposal-${Date.now()}`, description: 'Load test' },
+  });
+  const res = http.post(`${API}/governance/proposals`, payload, { headers: HEADERS });
+  if (isRateLimited(res)) return;
+  // 400 = governance rate limit (1 per 100 blocks per proposer) — expected, not an error
+  const ok = check(res, {
+    'proposal: not server error': (r) => r.status < 500,
+  });
+  errorRate.add(res.status >= 500);
+}
+
+function testCastVote() {
+  const payload = JSON.stringify({
+    voter: `k6-voter-${__VU}-${__ITER}`,
+    option: ['Yes', 'No', 'Abstain'][Math.floor(Math.random() * 3)],
+  });
+  // Vote on proposal 1 (seeded)
+  const res = http.post(`${API}/governance/proposals/1/vote`, payload, { headers: HEADERS });
+  if (isRateLimited(res)) return;
+  // 400 = already voted or proposal not found — not a server error
+  const ok = check(res, {
+    'vote: not server error': (r) => r.status < 500,
+  });
+  errorRate.add(!ok);
+}
+
+function testIssueCredential() {
+  // Create issuer identity first, then credential
+  const slug = `k6-issuer-${__VU}-${__ITER}-${Date.now()}`;
+  const now = Math.floor(Date.now() / 1000);
+  const issuerDid = `did:cerulean:${slug}`;
+
+  // Register issuer
+  http.post(`${API}/store/identities`, JSON.stringify({
+    did: issuerDid, created_at: now, updated_at: now, status: 'active',
+  }), { headers: HEADERS });
+
+  // Issue credential
+  const credPayload = JSON.stringify({
+    id: `k6-cred-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    issuer_did: issuerDid,
+    subject_did: `did:cerulean:k6-subject-${__VU}`,
+    cred_type: 'LoadTestCredential',
+    issued_at: now,
+    expires_at: 0,
+    claims: { test: true, vu: __VU },
+    status: 'active',
+  });
+  const res = http.post(`${API}/store/credentials`, credPayload, { headers: HEADERS });
+  if (isRateLimited(res)) return;
+  const ok = check(res, {
+    'credential: status 2xx': (r) => r.status >= 200 && r.status < 300,
+  });
+  errorRate.add(!ok);
+}
+
 // ── Main Loop ────────────────────────────────────────────────────────────────
 
 export default function () {
   const roll = Math.random();
 
-  if (roll < 0.15) {
+  // 40% reads, 40% mutations, 20% heavy ops — realistic institutional mix
+  if (roll < 0.08) {
     group('health', testHealth);
-  } else if (roll < 0.22) {
+  } else if (roll < 0.14) {
     group('stats', testStats);
-  } else if (roll < 0.29) {
+  } else if (roll < 0.20) {
     group('blocks', testBlocks);
-  } else if (roll < 0.35) {
+  } else if (roll < 0.25) {
     group('mempool', testMempool);
-  } else if (roll < 0.42) {
+  } else if (roll < 0.30) {
     group('audit', testAuditQuery);
-  } else if (roll < 0.50) {
+  } else if (roll < 0.35) {
+    group('identity-list', testListIdentities);
+  } else if (roll < 0.40) {
+    group('credential-list', testListCredentials);
+  } else if (roll < 0.48) {
     group('identity-create', testCreateIdentity);
   } else if (roll < 0.56) {
-    group('identity-list', testListIdentities);
+    group('credential-issue', testIssueCredential);
   } else if (roll < 0.62) {
-    group('credential-list', testListCredentials);
-  } else if (roll < 0.68) {
-    group('governance', testGovernance);
-  } else if (roll < 0.74) {
+    group('proposal-submit', testSubmitProposal);
+  } else if (roll < 0.70) {
+    group('vote-cast', testCastVote);
+  } else if (roll < 0.75) {
+    group('governance-read', testGovernance);
+  } else if (roll < 0.80) {
     group('governance-params', testGovernanceParams);
-  } else if (roll < 0.79) {
-    group('oracle-status', testOracleStatus);
   } else if (roll < 0.84) {
-    group('forensic', testForensicIntegrity);
+    group('oracle-status', testOracleStatus);
   } else if (roll < 0.88) {
+    group('forensic', testForensicIntegrity);
+  } else if (roll < 0.92) {
     group('regulatory', testRegulatoryChecks);
-  } else if (roll < 0.95) {
+  } else if (roll < 0.97) {
     group('wallet+mine', testCreateWalletAndMine);
   } else {
     group('wallet', () => {
