@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use rust_bc::consensus::bft::quorum::{QuorumValidator, SignatureVerifier};
+use rust_bc::consensus::bft::quorum::SignatureVerifier;
 use rust_bc::consensus::bft::round::{BftRound, RoundEvent, RoundState};
 use rust_bc::consensus::bft::types::{BftPhase, VoteMessage};
 use rust_bc::consensus::dpos::{select_committee, DposConfig, ValidatorStake};
@@ -52,6 +52,7 @@ fn make_endorsed(id: &str, key: &str, version: u64) -> EndorsedTransaction {
             creator_did: "did:bc:creator".into(),
             creator_signature: vec![0u8; 64],
             rwset: rw.clone(),
+            signature_algorithm: Default::default(),
         },
         endorsements: vec![Endorsement {
             signer_did: "did:bc:org1".into(),
@@ -59,6 +60,7 @@ fn make_endorsed(id: &str, key: &str, version: u64) -> EndorsedTransaction {
             signature: vec![1u8; 64],
             payload_hash: [0u8; 32],
             timestamp: 0,
+            signature_algorithm: Default::default(),
         }],
         rwset: rw,
     }

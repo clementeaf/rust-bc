@@ -101,6 +101,7 @@ fn build_endorsement_fixture(n_orgs: usize) -> EndorsementFixture {
             signature: sig.to_vec(),
             payload_hash: payload,
             timestamp: 0,
+            signature_algorithm: Default::default(),
         });
         org_ids.push(org_id);
     }
@@ -206,7 +207,11 @@ fn make_block(height: u64) -> Block {
         transactions: vec![format!("tx-{height}")],
         proposer: "bench-orderer".to_string(),
         signature: vec![0u8; 64],
+        signature_algorithm: Default::default(),
         endorsements: vec![],
+        secondary_signature: None,
+        secondary_signature_algorithm: None,
+        hash_algorithm: Default::default(),
         orderer_signature: None,
     }
 }

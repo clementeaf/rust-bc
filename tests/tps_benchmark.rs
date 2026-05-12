@@ -51,6 +51,7 @@ fn endorsed_tx(id: &str, reads: &[(&str, u64)], writes: &[(&str, &[u8])]) -> End
             creator_did: "did:test:creator".to_string(),
             creator_signature: vec![0u8; 64],
             rwset: rw.clone(),
+            signature_algorithm: Default::default(),
         },
         endorsements: vec![Endorsement {
             signer_did: "did:test:org1".to_string(),
@@ -58,6 +59,7 @@ fn endorsed_tx(id: &str, reads: &[(&str, u64)], writes: &[(&str, &[u8])]) -> End
             signature: vec![0u8; 64],
             payload_hash: [0u8; 32],
             timestamp: 0,
+            signature_algorithm: Default::default(),
         }],
         rwset: rw,
     }
