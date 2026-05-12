@@ -667,7 +667,9 @@ mod tests {
         )
         .await;
 
-        let wasm = vec![0u8; 512];
+        // Minimal valid Wasm module (magic + version + empty sections)
+        let wasm = wat::parse_str("(module)").expect("valid minimal wasm");
+        let wasm_len = wasm.len();
         let req = test::TestRequest::post()
             .uri("/api/v1/chaincode/install?chaincode_id=my_cc&version=1.0")
             .set_payload(wasm.clone())
@@ -677,7 +679,7 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["data"]["chaincode_id"], "my_cc");
         assert_eq!(body["data"]["version"], "1.0");
-        assert_eq!(body["data"]["size_bytes"], 512);
+        assert_eq!(body["data"]["size_bytes"], wasm_len);
 
         // Verify it was actually persisted
         let stored = pkg_store.get_package("my_cc", "1.0").unwrap();
