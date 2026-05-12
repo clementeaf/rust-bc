@@ -763,6 +763,26 @@ mod tests {
             total_errors, 0,
             "identity torture: {total_errors} errors in 1.6M ops"
         );
+
+        // Post-torture integrity: read back every 100th record across all threads
+        let mut integrity_errors = 0u64;
+        for t in 0..64u64 {
+            for i in (0..25_000u64).step_by(100) {
+                let did = format!("did:cerulean:t{t}-{i}");
+                match store.read_identity(&did) {
+                    Ok(rec) => {
+                        if rec.did != did || rec.created_at != i {
+                            integrity_errors += 1;
+                        }
+                    }
+                    Err(_) => integrity_errors += 1,
+                }
+            }
+        }
+        assert_eq!(
+            integrity_errors, 0,
+            "identity integrity: {integrity_errors} corrupted records"
+        );
     }
 
     /// 64 threads × 25,000 credential writes = 1,600,000 concurrent
@@ -816,6 +836,26 @@ mod tests {
         assert_eq!(
             total_errors, 0,
             "credential torture: {total_errors} errors in 1.6M ops"
+        );
+
+        // Post-torture integrity
+        let mut integrity_errors = 0u64;
+        for t in 0..64u64 {
+            for i in (0..25_000u64).step_by(100) {
+                let id = format!("cred-t{t}-{i}");
+                match store.read_credential(&id) {
+                    Ok(c) => {
+                        if c.id != id || c.issuer_did != "did:cerulean:torture-issuer" {
+                            integrity_errors += 1;
+                        }
+                    }
+                    Err(_) => integrity_errors += 1,
+                }
+            }
+        }
+        assert_eq!(
+            integrity_errors, 0,
+            "credential integrity: {integrity_errors} corrupted records"
         );
     }
 
@@ -923,9 +963,25 @@ mod tests {
             "storage torture: {total_errors} errors in 1.6M ops"
         );
 
-        // Verify blocks are readable at extremes
-        assert!(store.read_block(0).is_ok());
-        assert!(store.read_block(64 * 25_000 - 1).is_ok());
+        // Post-torture integrity: verify every 500th block
+        let mut integrity_errors = 0u64;
+        for t in 0..64u64 {
+            for i in (0..25_000u64).step_by(500) {
+                let height = t * 25_000 + i;
+                match store.read_block(height) {
+                    Ok(b) => {
+                        if b.height != height || b.proposer != format!("thread-{t}") {
+                            integrity_errors += 1;
+                        }
+                    }
+                    Err(_) => integrity_errors += 1,
+                }
+            }
+        }
+        assert_eq!(
+            integrity_errors, 0,
+            "storage integrity: {integrity_errors} corrupted blocks"
+        );
     }
 
     /// Concurrent hash operations — 64 threads × 100,000 = 6,400,000 hashes
