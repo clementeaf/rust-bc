@@ -184,22 +184,22 @@ impl VoteStore {
         if let Some(proposal_votes) = votes {
             for vote in proposal_votes.values() {
                 match vote.option {
-                    VoteOption::Yes => yes += vote.power,
-                    VoteOption::No => no += vote.power,
-                    VoteOption::Abstain => abstain += vote.power,
+                    VoteOption::Yes => yes = yes.saturating_add(vote.power),
+                    VoteOption::No => no = no.saturating_add(vote.power),
+                    VoteOption::Abstain => abstain = abstain.saturating_add(vote.power),
                 }
             }
         }
 
-        let total_voted = yes + no + abstain;
+        let total_voted = yes.saturating_add(no).saturating_add(abstain);
 
-        let quorum_reached =
-            total_staked_power > 0 && (total_voted * 100) / total_staked_power >= quorum_percent;
+        let quorum_reached = total_staked_power > 0
+            && total_voted.saturating_mul(100) / total_staked_power >= quorum_percent;
 
-        let yes_no_total = yes + no;
+        let yes_no_total = yes.saturating_add(no);
         let passed = quorum_reached
             && yes_no_total > 0
-            && (yes * 100) / yes_no_total >= pass_threshold_percent;
+            && yes.saturating_mul(100) / yes_no_total >= pass_threshold_percent;
 
         TallyResult {
             proposal_id,

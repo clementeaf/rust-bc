@@ -446,6 +446,132 @@ pub fn stress_patterns(ops: u64) -> ModuleStressResult {
     }
 }
 
+/// Stress test: Identity (DID creation + read cycle).
+pub fn stress_identity(ops: u64) -> ModuleStressResult {
+    use crate::storage::memory::MemoryStore;
+    use crate::storage::traits::{BlockStore, IdentityRecord};
+
+    let store = MemoryStore::new();
+    let mut latencies = Vec::with_capacity(ops as usize);
+    let mut errors: u64 = 0;
+
+    let start = Instant::now();
+    for i in 0..ops {
+        let op_start = Instant::now();
+
+        let did = format!("did:cerulean:stress-{i}");
+        let record = IdentityRecord {
+            did: did.clone(),
+            created_at: 1000 + i,
+            updated_at: 1000 + i,
+            status: "active".into(),
+        };
+
+        if store.write_identity(&record).is_err() {
+            errors += 1;
+        }
+        // Read back to exercise read path
+        if store.read_identity(&did).is_err() {
+            errors += 1;
+        }
+
+        latencies.push(op_start.elapsed().as_micros() as u64);
+    }
+    let duration = start.elapsed();
+
+    latencies.sort_unstable();
+    let ops_per_sec = ops as f64 / duration.as_secs_f64();
+
+    ModuleStressResult {
+        module: "identity".into(),
+        operations: ops,
+        duration_ms: duration.as_millis() as u64,
+        ops_per_sec,
+        p50_us: percentile(&latencies, 50.0),
+        p99_us: percentile(&latencies, 99.0),
+        errors,
+        status: if errors == 0 && ops_per_sec > 1_000.0 {
+            StressStatus::Pass
+        } else if errors == 0 {
+            StressStatus::Degraded
+        } else {
+            StressStatus::Fail
+        },
+    }
+}
+
+/// Stress test: Credential issuance + verification cycle.
+pub fn stress_credential(ops: u64) -> ModuleStressResult {
+    use crate::storage::memory::MemoryStore;
+    use crate::storage::traits::{BlockStore, Credential, IdentityRecord};
+
+    let store = MemoryStore::new();
+
+    // Pre-register issuer DID
+    let issuer_did = "did:cerulean:issuer-stress";
+    store
+        .write_identity(&IdentityRecord {
+            did: issuer_did.into(),
+            created_at: 1000,
+            updated_at: 1000,
+            status: "active".into(),
+        })
+        .unwrap();
+
+    let mut latencies = Vec::with_capacity(ops as usize);
+    let mut errors: u64 = 0;
+
+    let start = Instant::now();
+    for i in 0..ops {
+        let op_start = Instant::now();
+
+        let cred_id = format!("cred-stress-{i}");
+        let cred = Credential {
+            id: cred_id.clone(),
+            issuer_did: issuer_did.into(),
+            subject_did: format!("did:cerulean:subject-{i}"),
+            cred_type: "VerifiableCredential".into(),
+            issued_at: 1000 + i,
+            expires_at: 9_999_999,
+            revoked_at: None,
+            claims: serde_json::json!({"degree": "engineering", "index": i}),
+            signature: String::new(),
+            status: "active".into(),
+        };
+
+        if store.write_credential(&cred).is_err() {
+            errors += 1;
+        }
+        // Read back
+        if store.read_credential(&cred_id).is_err() {
+            errors += 1;
+        }
+
+        latencies.push(op_start.elapsed().as_micros() as u64);
+    }
+    let duration = start.elapsed();
+
+    latencies.sort_unstable();
+    let ops_per_sec = ops as f64 / duration.as_secs_f64();
+
+    ModuleStressResult {
+        module: "credential".into(),
+        operations: ops,
+        duration_ms: duration.as_millis() as u64,
+        ops_per_sec,
+        p50_us: percentile(&latencies, 50.0),
+        p99_us: percentile(&latencies, 99.0),
+        errors,
+        status: if errors == 0 && ops_per_sec > 1_000.0 {
+            StressStatus::Pass
+        } else if errors == 0 {
+            StressStatus::Degraded
+        } else {
+            StressStatus::Fail
+        },
+    }
+}
+
 /// Run all module stress tests and generate report.
 pub fn run_full_stress(ops_per_module: u64) -> StressReport {
     let results = vec![
@@ -455,6 +581,8 @@ pub fn run_full_stress(ops_per_module: u64) -> StressReport {
         stress_risk(ops_per_module),
         stress_compliance(ops_per_module),
         stress_governance(ops_per_module),
+        stress_identity(ops_per_module),
+        stress_credential(ops_per_module),
         stress_forensic(ops_per_module),
         stress_patterns(ops_per_module),
     ];
@@ -534,6 +662,22 @@ mod tests {
     }
 
     #[test]
+    fn identity_stress_completes() {
+        let r = stress_identity(200);
+        assert_eq!(r.module, "identity");
+        assert_eq!(r.errors, 0);
+        assert_eq!(r.operations, 200);
+    }
+
+    #[test]
+    fn credential_stress_completes() {
+        let r = stress_credential(200);
+        assert_eq!(r.module, "credential");
+        assert_eq!(r.errors, 0);
+        assert_eq!(r.operations, 200);
+    }
+
+    #[test]
     fn forensic_stress_completes() {
         let r = stress_forensic(50);
         assert_eq!(r.module, "forensic");
@@ -550,8 +694,8 @@ mod tests {
     #[test]
     fn full_stress_report_has_all_modules() {
         let report = run_full_stress(50);
-        assert_eq!(report.total_modules, 8);
-        assert_eq!(report.results.len(), 8);
+        assert_eq!(report.total_modules, 10);
+        assert_eq!(report.results.len(), 10);
         assert!(report.report_id.starts_with("STR-"));
     }
 

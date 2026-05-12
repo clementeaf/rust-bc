@@ -143,15 +143,44 @@ async fn verify_signature(
 
     // Verify signature using Ed25519
     let valid = {
-        let pub_bytes = hex::decode(&body.public_key).unwrap_or_default();
-        let sig_bytes = hex::decode(&body.signature).unwrap_or_default();
+        let pub_bytes = match hex::decode(&body.public_key) {
+            Ok(b) => b,
+            Err(_) => {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    crate::api::errors::ErrorDto {
+                        code: "INVALID_HEX".to_string(),
+                        message: "public_key is not valid hex".to_string(),
+                        field: Some("public_key".to_string()),
+                    },
+                    400,
+                )));
+            }
+        };
+        let sig_bytes = match hex::decode(&body.signature) {
+            Ok(b) => b,
+            Err(_) => {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    crate::api::errors::ErrorDto {
+                        code: "INVALID_HEX".to_string(),
+                        message: "signature is not valid hex".to_string(),
+                        field: Some("signature".to_string()),
+                    },
+                    400,
+                )));
+            }
+        };
 
         if pub_bytes.len() == 32 && sig_bytes.len() == 64 {
             use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
-            let vk =
-                VerifyingKey::from_bytes(pub_bytes.as_slice().try_into().unwrap_or(&[0u8; 32]));
-            match (vk, Signature::from_slice(&sig_bytes)) {
-                (Ok(vk), Ok(sig)) => vk.verify(body.message.as_bytes(), &sig).is_ok(),
+            match (
+                pub_bytes
+                    .as_slice()
+                    .try_into()
+                    .ok()
+                    .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),
+                Signature::from_slice(&sig_bytes).ok(),
+            ) {
+                (Some(vk), Some(sig)) => vk.verify(body.message.as_bytes(), &sig).is_ok(),
                 _ => false,
             }
         } else {

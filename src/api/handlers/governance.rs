@@ -68,12 +68,56 @@ struct TallyResponse {
     passed: bool,
 }
 
+// ── Size limits ─────────────────────────────────────────────────────────────
+
+const MAX_PROPOSER_LEN: usize = 256;
+const MAX_DESCRIPTION_LEN: usize = 4096;
+const MAX_TITLE_LEN: usize = 256;
+const MAX_VOTER_LEN: usize = 256;
+const MAX_PARAM_CHANGES: usize = 50;
+const MAX_PARAM_KEY_LEN: usize = 128;
+
 fn err_dto(msg: &str) -> ErrorDto {
     ErrorDto {
         code: "GOVERNANCE_ERROR".to_string(),
         message: msg.to_string(),
         field: None,
     }
+}
+
+fn err_field(field: &str, msg: &str) -> ErrorDto {
+    ErrorDto {
+        code: "VALIDATION_ERROR".to_string(),
+        message: msg.to_string(),
+        field: Some(field.to_string()),
+    }
+}
+
+/// Semantic validation for known governance parameters.
+fn validate_param_value(key: &str, value: u64) -> Option<ErrorDto> {
+    match (key, value) {
+        ("quorum_percent" | "pass_threshold_percent", v) if v == 0 || v > 100 => {
+            Some(err_field(key, "must be between 1 and 100"))
+        }
+        ("voting_period_blocks", 0) => Some(err_field(key, "must be greater than 0")),
+        _ => None,
+    }
+}
+
+fn validate_bounded(field: &str, value: &str, max: usize) -> Result<(), ErrorDto> {
+    if value.is_empty() {
+        return Err(err_field(field, "must not be empty"));
+    }
+    if value.len() > max {
+        return Err(err_field(
+            field,
+            &format!("exceeds maximum length of {max} bytes"),
+        ));
+    }
+    if value.contains('\0') {
+        return Err(err_field(field, "contains null bytes"));
+    }
+    Ok(())
 }
 
 /// Get current chain height from AppState.
@@ -144,6 +188,45 @@ pub async fn submit_governance_proposal(
     body: web::Json<SubmitProposalRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
+
+    // ── Input validation ──
+    if let Err(e) = validate_bounded("proposer", &body.proposer, MAX_PROPOSER_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
+    if let Err(e) = validate_bounded("description", &body.description, MAX_DESCRIPTION_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
+    match &body.action {
+        ProposalActionRequest::ParamChange { changes } => {
+            if changes.len() > MAX_PARAM_CHANGES {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    err_field(
+                        "changes",
+                        &format!("exceeds maximum of {MAX_PARAM_CHANGES} entries"),
+                    ),
+                    400,
+                )));
+            }
+            for c in changes {
+                if let Err(e) = validate_bounded("key", &c.key, MAX_PARAM_KEY_LEN) {
+                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+                }
+                // Semantic bounds for known governance parameters
+                if let Some(err) = validate_param_value(&c.key, c.value) {
+                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(err, 400)));
+                }
+            }
+        }
+        ProposalActionRequest::TextProposal { title, description } => {
+            if let Err(e) = validate_bounded("title", title, MAX_TITLE_LEN) {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+            }
+            if let Err(e) = validate_bounded("description", description, MAX_DESCRIPTION_LEN) {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+            }
+        }
+    }
+
     let store = match &state.proposal_store {
         Some(s) => s,
         None => {
@@ -155,7 +238,17 @@ pub async fn submit_governance_proposal(
             )
         }
     };
-    let registry = state.param_registry.as_ref().unwrap();
+    let registry = match &state.param_registry {
+        Some(r) => r,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
     let required_deposit = registry.get_u64("proposal_deposit", 10_000);
     let voting_period = registry.get_u64("voting_period_blocks", 17_280);
     let current_height = chain_height(&state);
@@ -286,6 +379,11 @@ pub async fn cast_governance_vote(
     let trace = uuid::Uuid::new_v4().to_string();
     let id = path.into_inner();
 
+    // ── Input validation ──
+    if let Err(e) = validate_bounded("voter", &body.voter, MAX_VOTER_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
+
     let vote_store = match &state.vote_store {
         Some(s) => s,
         None => {
@@ -298,7 +396,17 @@ pub async fn cast_governance_vote(
         }
     };
 
-    let proposal_store = state.proposal_store.as_ref().unwrap();
+    let proposal_store = match &state.proposal_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
     let proposal = match proposal_store.get(id) {
         Some(p) => p,
         None => {
@@ -337,7 +445,15 @@ pub async fn cast_governance_vote(
     ) {
         Ok(()) => {
             // Return tally (aggregates only) — never expose individual votes.
-            let registry = state.param_registry.as_ref().unwrap();
+            let registry =
+                match &state.param_registry {
+                    Some(r) => r,
+                    None => {
+                        return Ok(HttpResponse::ServiceUnavailable().json(
+                            ApiResponse::<()>::error(err_dto("governance not configured"), 503),
+                        ))
+                    }
+                };
             let quorum = registry.get_u64("quorum_percent", 33);
             let threshold = registry.get_u64("pass_threshold_percent", 67);
             let total_staked = total_staked_power(&state).max(1);
@@ -420,7 +536,17 @@ pub async fn tally_governance_votes(
         }
     };
 
-    let registry = state.param_registry.as_ref().unwrap();
+    let registry = match &state.param_registry {
+        Some(r) => r,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
     let quorum = registry.get_u64("quorum_percent", 33);
     let threshold = registry.get_u64("pass_threshold_percent", 67);
 
@@ -493,6 +619,15 @@ pub async fn delegate_vote(
     body: web::Json<DelegateRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
+
+    // ── Input validation ──
+    if let Err(e) = validate_bounded("delegator", &body.delegator, MAX_VOTER_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
+    if let Err(e) = validate_bounded("delegate", &body.delegate, MAX_VOTER_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
+
     let vote_store = match &state.vote_store {
         Some(s) => s,
         None => {
@@ -536,6 +671,11 @@ pub async fn veto_governance_proposal(
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
     let id = path.into_inner();
+
+    // ── Input validation ──
+    if let Err(e) = validate_bounded("caller", &body.caller, MAX_VOTER_LEN) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(e, 400)));
+    }
 
     let proposal_store = match &state.proposal_store {
         Some(s) => s,
@@ -602,8 +742,28 @@ pub async fn close_governance_voting(
         }
     };
 
-    let vote_store = state.vote_store.as_ref().unwrap();
-    let registry = state.param_registry.as_ref().unwrap();
+    let vote_store = match &state.vote_store {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
+    let registry = match &state.param_registry {
+        Some(r) => r,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("governance not configured"),
+                    503,
+                )),
+            )
+        }
+    };
     let current_height = chain_height(&state);
 
     let quorum = registry.get_u64("quorum_percent", 33);

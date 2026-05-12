@@ -172,7 +172,7 @@ impl ProposalStore {
             status: ProposalStatus::Voting,
             deposit,
             submitted_at: current_height,
-            voting_ends_at: current_height + voting_period,
+            voting_ends_at: current_height.saturating_add(voting_period),
             timelock_ends_at: None,
             finalized_at: None,
             description: description.to_string(),

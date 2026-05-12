@@ -21,9 +21,20 @@ async fn issue_credential(
         .unwrap_or_default()
         .as_secs();
 
-    // Persist to store
+    // Validate issuer DID exists
     let _channel = channel_id_from_req(&req);
     let store = get_channel_store(&state, _channel)?;
+    if store.read_identity(&body.issuer_did).is_err() {
+        return Err(ApiError::ValidationError {
+            field: "issuer_did".to_string(),
+            reason: format!(
+                "issuer DID '{}' not found — register identity before issuing credentials",
+                body.issuer_did
+            ),
+        });
+    }
+
+    // Persist to store
     let record = crate::storage::traits::Credential {
         id: credential_id.clone(),
         issuer_did: body.issuer_did.clone(),
@@ -200,6 +211,18 @@ pub async fn store_write_credential(
     let _channel = channel_id_from_req(&req);
     enforce_channel_membership(&state, _channel, &req)?;
     let store = get_channel_store(&state, _channel)?;
+
+    // Validate issuer DID exists
+    if store.read_identity(&body.issuer_did).is_err() {
+        return Err(ApiError::ValidationError {
+            field: "issuer_did".to_string(),
+            reason: format!(
+                "issuer DID '{}' not found — register identity before issuing credentials",
+                body.issuer_did
+            ),
+        });
+    }
+
     store
         .write_credential(&body)
         .map_err(|e| ApiError::StorageError {

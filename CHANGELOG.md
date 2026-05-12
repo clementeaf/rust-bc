@@ -8,6 +8,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-11
 
+**Identity & Governance Hardening — Zero-panic, bounded, validated**
+
+- Governance handlers: 6 `unwrap()` replaced with proper 503 error responses (zero panic paths)
+- Tally arithmetic: `saturating_add`/`saturating_mul` on all vote power accumulation (overflow-safe)
+- Voting period: `saturating_add` on `voting_ends_at` calculation
+- Identity: hex decode fallback removed — invalid hex returns 400 instead of silent bypass
+- Input limits: proposer/voter/delegate max 256B, description max 4KB, title max 256B, param changes max 50 entries
+- Empty string rejection: voter, proposer, delegator, delegate, veto caller all validated non-empty
+- Semantic param validation: quorum/threshold 1-100, voting_period > 0
+- Issuer DID existence check before credential issuance (both `issue_credential` and `store_write_credential`)
+- Stress tests: `stress_identity` (DID write+read cycle) and `stress_credential` (credential write+read cycle) added — 10 modules total
+- Pentest suite: 33 → 40 scenarios. New: oversized description, empty voter, quorum=0, credential without issuer, vote spam (1000 votes), delegation cycle, signature bypass via invalid hex. All BLOCKED.
+- Tests: 1687 passed, 0 critical vulnerabilities
+
+---
+
 **Institutional Integrity Dashboard — Flagship monitoring panel**
 
 - New page `/integridad` — real-time platform integrity dashboard for institutional stakeholders

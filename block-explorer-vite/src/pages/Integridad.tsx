@@ -490,7 +490,7 @@ function ServiceDrawer({ serviceName, onClose, services, pentest, integrity, reg
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg bg-white shadow-xl flex flex-col animate-slide-in">
