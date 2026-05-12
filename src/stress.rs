@@ -726,19 +726,19 @@ mod tests {
 
     use std::sync::Arc;
 
-    /// 16 threads × 5,000 ops each = 80,000 concurrent identity writes/reads
+    /// 64 threads × 25,000 ops each = 1,600,000 concurrent identity writes/reads
     #[test]
-    fn torture_identity_80k_concurrent() {
+    fn torture_identity_1_6m_concurrent() {
         use crate::storage::memory::MemoryStore;
         use crate::storage::traits::{BlockStore, IdentityRecord};
 
         let store = Arc::new(MemoryStore::new());
-        let threads: Vec<_> = (0..16)
+        let threads: Vec<_> = (0..64)
             .map(|t| {
                 let s = Arc::clone(&store);
                 std::thread::spawn(move || {
                     let mut errors = 0u64;
-                    for i in 0..5_000u64 {
+                    for i in 0..25_000u64 {
                         let did = format!("did:cerulean:t{t}-{i}");
                         let rec = IdentityRecord {
                             did: did.clone(),
@@ -761,13 +761,13 @@ mod tests {
         let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
         assert_eq!(
             total_errors, 0,
-            "identity torture: {total_errors} errors in 80K ops"
+            "identity torture: {total_errors} errors in 1.6M ops"
         );
     }
 
-    /// 16 threads × 5,000 credential writes = 80,000 concurrent
+    /// 64 threads × 25,000 credential writes = 1,600,000 concurrent
     #[test]
-    fn torture_credential_80k_concurrent() {
+    fn torture_credential_1_6m_concurrent() {
         use crate::storage::memory::MemoryStore;
         use crate::storage::traits::{BlockStore, Credential, IdentityRecord};
 
@@ -782,12 +782,12 @@ mod tests {
             })
             .unwrap();
 
-        let threads: Vec<_> = (0..16)
+        let threads: Vec<_> = (0..64)
             .map(|t| {
                 let s = Arc::clone(&store);
                 std::thread::spawn(move || {
                     let mut errors = 0u64;
-                    for i in 0..5_000u64 {
+                    for i in 0..25_000u64 {
                         let cred = Credential {
                             id: format!("cred-t{t}-{i}"),
                             issuer_did: "did:cerulean:torture-issuer".into(),
@@ -815,11 +815,11 @@ mod tests {
         let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
         assert_eq!(
             total_errors, 0,
-            "credential torture: {total_errors} errors in 80K ops"
+            "credential torture: {total_errors} errors in 1.6M ops"
         );
     }
 
-    /// 16 threads hammering governance: proposals + votes simultaneously
+    /// 64 threads hammering governance: proposals + votes simultaneously
     #[test]
     fn torture_governance_concurrent_votes() {
         use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
@@ -844,13 +844,13 @@ mod tests {
             });
         }
 
-        // 16 threads each casting 1,000 votes across random proposals
-        let threads: Vec<_> = (0..16)
+        // 64 threads each casting 5,000 votes across random proposals
+        let threads: Vec<_> = (0..64)
             .map(|t| {
                 let v = Arc::clone(&votes);
                 std::thread::spawn(move || {
                     let mut cast = 0u64;
-                    for i in 0..1_000u64 {
+                    for i in 0..5_000u64 {
                         let proposal_id = (i % 100) + 1;
                         let voter = format!("voter-t{t}-{i}");
                         if v.cast_vote(proposal_id, &voter, VoteOption::Yes, 1, 10, 200_000)
@@ -868,29 +868,29 @@ mod tests {
         // Should have many successful votes (duplicates rejected, but unique voter+proposal combos work)
         assert!(total_cast > 0, "no votes cast in torture test");
 
-        // Tally should not panic
+        // Tally should not panic across all proposals
         for pid in 1..=100u64 {
-            let tally = votes.tally(pid, 1_000_000, 33, 67);
-            assert!(tally.total_voted_power <= 16_000); // max 16 threads × 1000 votes but capped by unique voters
+            let tally = votes.tally(pid, 10_000_000, 33, 67);
+            assert!(tally.total_voted_power <= 320_000); // max 64 threads × 5000 votes capped by unique voters
         }
     }
 
-    /// 16 threads × 10,000 block writes = 160,000 concurrent storage ops
+    /// 64 threads × 25,000 block writes = 1,600,000 concurrent storage ops
     #[test]
-    fn torture_storage_160k_concurrent() {
+    fn torture_storage_1_6m_concurrent() {
         use crate::storage::memory::MemoryStore;
         use crate::storage::traits::{Block, BlockStore};
 
         let store = Arc::new(MemoryStore::new());
         let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
 
-        let threads: Vec<_> = (0..16)
+        let threads: Vec<_> = (0..64)
             .map(|t| {
                 let s = Arc::clone(&store);
                 let errs = Arc::clone(&errors);
                 std::thread::spawn(move || {
-                    for i in 0..10_000u64 {
-                        let height = t * 10_000 + i; // unique heights per thread
+                    for i in 0..25_000u64 {
+                        let height = t * 25_000 + i; // unique heights per thread
                         let block = Block {
                             height,
                             timestamp: 1000 + height,
@@ -920,23 +920,23 @@ mod tests {
         let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
         assert_eq!(
             total_errors, 0,
-            "storage torture: {total_errors} errors in 160K ops"
+            "storage torture: {total_errors} errors in 1.6M ops"
         );
 
-        // Verify some blocks are readable
+        // Verify blocks are readable at extremes
         assert!(store.read_block(0).is_ok());
-        assert!(store.read_block(159_999).is_ok());
+        assert!(store.read_block(64 * 25_000 - 1).is_ok());
     }
 
-    /// Concurrent hash operations — 16 threads × 50,000 = 800,000 hashes
+    /// Concurrent hash operations — 64 threads × 100,000 = 6,400,000 hashes
     #[test]
-    fn torture_crypto_800k_concurrent() {
+    fn torture_crypto_6_4m_concurrent() {
         use pqc_crypto_module::legacy::sha256::{Digest as _, Sha256};
 
-        let threads: Vec<_> = (0..16)
+        let threads: Vec<_> = (0..64)
             .map(|t| {
                 std::thread::spawn(move || {
-                    for i in 0..50_000u64 {
+                    for i in 0..100_000u64 {
                         let data = format!("torture-t{t}-{i}");
                         let _ = Sha256::digest(data.as_bytes());
                     }
@@ -952,7 +952,7 @@ mod tests {
 
     /// Mixed workload: identity + credential + governance simultaneously
     #[test]
-    fn torture_mixed_workload_48_threads() {
+    fn torture_mixed_workload_128_threads() {
         use crate::governance::proposals::{ProposalAction, ProposalStore, SubmitParams};
         use crate::governance::voting::{VoteOption, VoteStore};
         use crate::storage::memory::MemoryStore;
@@ -980,13 +980,13 @@ mod tests {
 
         let errors = Arc::new(std::sync::atomic::AtomicU64::new(0));
 
-        // 16 threads: identity writes
-        let mut threads: Vec<std::thread::JoinHandle<()>> = (0..16)
+        // 42 threads: identity writes
+        let mut threads: Vec<std::thread::JoinHandle<()>> = (0..42)
             .map(|t| {
                 let s = Arc::clone(&store);
                 let e = Arc::clone(&errors);
                 std::thread::spawn(move || {
-                    for i in 0..2_000u64 {
+                    for i in 0..10_000u64 {
                         let rec = IdentityRecord {
                             did: format!("did:cerulean:mix-id-t{t}-{i}"),
                             created_at: i,
@@ -1001,12 +1001,12 @@ mod tests {
             })
             .collect();
 
-        // 16 threads: credential writes
-        threads.extend((0..16).map(|t| {
+        // 42 threads: credential writes
+        threads.extend((0..42).map(|t| {
             let s = Arc::clone(&store);
             let e = Arc::clone(&errors);
             std::thread::spawn(move || {
-                for i in 0..2_000u64 {
+                for i in 0..10_000u64 {
                     let cred = Credential {
                         id: format!("mix-cred-t{t}-{i}"),
                         issuer_did: "did:cerulean:mix-issuer".into(),
@@ -1026,11 +1026,11 @@ mod tests {
             })
         }));
 
-        // 16 threads: voting
-        threads.extend((0..16).map(|t| {
+        // 44 threads: voting
+        threads.extend((0..44).map(|t| {
             let v = Arc::clone(&votes);
             std::thread::spawn(move || {
-                for i in 0..2_000u64 {
+                for i in 0..10_000u64 {
                     let _ = v.cast_vote(
                         (i % 50) + 1,
                         &format!("mix-voter-t{t}-{i}"),
@@ -1050,7 +1050,7 @@ mod tests {
         let total_errors = errors.load(std::sync::atomic::Ordering::Relaxed);
         assert_eq!(
             total_errors, 0,
-            "mixed torture: {total_errors} errors across 48 threads × 2K ops"
+            "mixed torture: {total_errors} errors across 128 threads × 10K ops"
         );
     }
 }
