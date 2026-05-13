@@ -68,6 +68,6 @@ EXPOSE 8080 8081
 VOLUME ["/app/data"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
+    CMD curl -f http://localhost:${API_PORT}/api/v1/health || curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
