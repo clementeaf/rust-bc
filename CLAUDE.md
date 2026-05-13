@@ -382,6 +382,40 @@ Uses `docker-compose.sandbox.yml` (single node, PQC, permissive ACL, RocksDB, Pr
 
 Seed data (`scripts/seed-sandbox.sh`): 2 orgs, 2 channels, 7 wallets, 8 blocks, transfers, 7 DIDs, 5 credentials, governance proposals with votes.
 
+## Production deployment (AWS)
+
+Architecture: frontends on S3/CloudFront, backend on EC2.
+
+| Component | Service | URL |
+|---|---|---|
+| Explorer | S3 + CloudFront | https://ceruleanledger.com |
+| Voto | S3 + CloudFront | https://voto.ceruleanledger.com |
+| Node API | EC2 (t3.medium) | proxied via CloudFront `/api/*` |
+| Grafana | EC2 | http://<ec2-ip>:3000 |
+
+Frontend deploy:
+```bash
+# Build and upload Explorer
+cd block-explorer-vite && npm run build
+aws s3 sync dist/ s3://ceruleanledger-explorer/ --delete
+
+# Build and upload Voto
+cd cerulean-voto && npm run build
+aws s3 sync dist/ s3://ceruleanledger-voto/ --delete
+
+# Invalidate CloudFront cache after deploy
+aws cloudfront create-invalidation --distribution-id E9QQPJR6KVMFH --paths "/*"
+aws cloudfront create-invalidation --distribution-id E2QW638B59JZ89 --paths "/*"
+```
+
+Backend deploy (EC2):
+```bash
+# Uses docker-compose.sandbox.yml (node + prometheus + grafana only)
+# Seed with: API_URL=http://localhost:9600 ./scripts/seed-sandbox.sh
+```
+
+Alternative deploy with TLS via Caddy: `docker-compose.deploy.yml` + `.env` (see `.env.deploy.example`).
+
 ## Operator tooling
 
 ```bash

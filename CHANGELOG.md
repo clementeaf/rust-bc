@@ -6,6 +6,40 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-13
+
+**Production deployment — S3/CloudFront + EC2 backend**
+
+- Frontend hosting migrated to S3 + CloudFront (Explorer + Voto)
+- Domain `ceruleanledger.com` registered with ACM SSL certificate
+- Explorer: `https://ceruleanledger.com`
+- Voto: `https://voto.ceruleanledger.com`
+- API proxied through CloudFront `/api/*` → EC2 node
+- EC2 runs only node + Prometheus + Grafana (t3.medium, us-east-1)
+
+**Deploy infrastructure**
+
+- `docker-compose.deploy.yml`: Caddy TLS, strict ACL, parameterized secrets
+- `deploy/Caddyfile`: reverse proxy with security headers
+- `.env.deploy.example`: secrets template (JWT, HMAC, Grafana password)
+- `.gitignore`: added `.env` files and Caddy data directories
+- Seed script accepts `API_URL` env var for remote seeding
+- Dockerfile healthcheck supports both HTTP and HTTPS modes
+
+**CI fixes**
+
+- Added `protoc` to performance-guardrails, security-audit, nightly-chaos, pre-lab-audit workflows
+- `cargo audit --ignore-yanked` for transitive yanked dependencies (keccak via revm)
+- Fixed `signature_algorithm` missing field in `full_benchmark.rs`, `tps_benchmark.rs`, `ordering_throughput.rs`
+
+**Benchmark report** (`docs/architecture/benchmarks/SANDBOX-BENCHMARK-REPORT.md`)
+
+- 10/10 stress modules passed (crypto: 6.6M ops/s, storage: 48K ops/s)
+- 40 pentest scenarios: 37 blocked, 3 detected, 0 vulnerable
+- Health latency: 20ms avg
+
+---
+
 ### 2026-05-12
 
 **Institutional UI overhaul — All modules redesigned for flagship demo**
