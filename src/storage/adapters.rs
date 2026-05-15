@@ -65,6 +65,10 @@ const CF_AUDIT_LOG: &str = "audit_log";
 const CF_SANDBOX_REPORTS: &str = "sandbox_reports";
 /// Legal oracle records: key = record id, value = JSON OracleRecord
 const CF_ORACLE_RECORDS: &str = "oracle_records";
+/// Governance proposals: key = `{id:012}`, value = JSON Proposal
+const CF_GOVERNANCE_PROPOSALS: &str = "governance_proposals";
+/// Governance votes: key = `{proposal_id:012}:{voter}`, value = JSON Vote
+const CF_GOVERNANCE_VOTES: &str = "governance_votes";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -90,6 +94,8 @@ const ALL_CFS: &[&str] = &[
     CF_AUDIT_LOG,
     CF_SANDBOX_REPORTS,
     CF_ORACLE_RECORDS,
+    CF_GOVERNANCE_PROPOSALS,
+    CF_GOVERNANCE_VOTES,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -749,6 +755,92 @@ impl BlockStore for RocksDbBlockStore {
             }
         }
         Ok(removed)
+    }
+
+    // ── Governance persistence ─────────────────────────────────────────────
+
+    fn write_proposal(
+        &self,
+        proposal: &crate::governance::proposals::Proposal,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_GOVERNANCE_PROPOSALS)
+            .ok_or_else(|| StorageError::RocksDbError("missing governance_proposals CF".into()))?;
+        let key = format!("{:012}", proposal.id);
+        let value = serde_json::to_vec(proposal)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn read_proposal(&self, id: u64) -> StorageResult<crate::governance::proposals::Proposal> {
+        let cf = self
+            .db
+            .cf_handle(CF_GOVERNANCE_PROPOSALS)
+            .ok_or_else(|| StorageError::RocksDbError("missing governance_proposals CF".into()))?;
+        let key = format!("{id:012}");
+        match self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Err(StorageError::KeyNotFound(format!("PROPOSAL:{key}"))),
+        }
+    }
+
+    fn list_proposals(&self) -> StorageResult<Vec<crate::governance::proposals::Proposal>> {
+        let cf = self
+            .db
+            .cf_handle(CF_GOVERNANCE_PROPOSALS)
+            .ok_or_else(|| StorageError::RocksDbError("missing governance_proposals CF".into()))?;
+        let mut proposals = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            let (_, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let p: crate::governance::proposals::Proposal = serde_json::from_slice(&value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            proposals.push(p);
+        }
+        Ok(proposals)
+    }
+
+    fn write_vote(&self, vote: &crate::governance::voting::Vote) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_GOVERNANCE_VOTES)
+            .ok_or_else(|| StorageError::RocksDbError("missing governance_votes CF".into()))?;
+        let key = format!("{:012}:{}", vote.proposal_id, vote.voter);
+        let value = serde_json::to_vec(vote)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn list_votes(&self, proposal_id: u64) -> StorageResult<Vec<crate::governance::voting::Vote>> {
+        let cf = self
+            .db
+            .cf_handle(CF_GOVERNANCE_VOTES)
+            .ok_or_else(|| StorageError::RocksDbError("missing governance_votes CF".into()))?;
+        let prefix = format!("{proposal_id:012}:");
+        let iter = self.db.iterator_cf(
+            &cf,
+            IteratorMode::From(prefix.as_bytes(), Direction::Forward),
+        );
+        let mut votes = Vec::new();
+        for item in iter {
+            let (key, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            if !key.starts_with(prefix.as_bytes()) {
+                break;
+            }
+            let v: crate::governance::voting::Vote = serde_json::from_slice(&value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            votes.push(v);
+        }
+        Ok(votes)
     }
 }
 

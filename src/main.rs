@@ -930,6 +930,43 @@ async fn async_main_inner() -> std::io::Result<()> {
     node_for_server.private_data_store = Some(private_data_store.clone());
     node_for_server.collection_registry = Some(collection_registry.clone());
 
+    // Hydrate governance stores from persistent storage
+    let proposal_store = {
+        let ps = Arc::new(governance::proposals::ProposalStore::new());
+        match gateway_store.list_proposals() {
+            Ok(proposals) => {
+                let count = proposals.len();
+                for p in proposals {
+                    ps.load_proposal(p);
+                }
+                if count > 0 {
+                    log::info!("Hydrated {count} governance proposals from store");
+                }
+            }
+            Err(e) => log::warn!("Failed to load proposals from store: {e}"),
+        }
+        ps
+    };
+    let vote_store = {
+        let vs = Arc::new(governance::voting::VoteStore::new());
+        // Load votes for all known proposals
+        if let Ok(proposals) = gateway_store.list_proposals() {
+            let mut total = 0usize;
+            for p in &proposals {
+                if let Ok(votes) = gateway_store.list_votes(p.id) {
+                    for v in votes {
+                        vs.load_vote(v);
+                        total += 1;
+                    }
+                }
+            }
+            if total > 0 {
+                log::info!("Hydrated {total} governance votes from store");
+            }
+        }
+        vs
+    };
+
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
@@ -1016,8 +1053,8 @@ async fn async_main_inner() -> std::io::Result<()> {
         ordering_backend,
         world_state: Some(world_state.clone()),
         audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
-        proposal_store: Some(Arc::new(governance::proposals::ProposalStore::new())),
-        vote_store: Some(Arc::new(governance::voting::VoteStore::new())),
+        proposal_store: Some(proposal_store),
+        vote_store: Some(vote_store),
         param_registry: Some({
             let reg = Arc::new(governance::params::ParamRegistry::with_defaults());
             // Override voting period from env for demo/testnet (default: 17280 blocks ~3 days)

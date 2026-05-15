@@ -236,6 +236,38 @@ pub trait BlockStore: Send + Sync {
         Ok(0) // Default: no-op
     }
 
+    // ── Governance persistence ─────────────────────────────────────────────
+
+    /// Write a governance proposal to persistent storage.
+    fn write_proposal(
+        &self,
+        _proposal: &crate::governance::proposals::Proposal,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+
+    /// Read a governance proposal by ID.
+    fn read_proposal(&self, _id: u64) -> StorageResult<crate::governance::proposals::Proposal> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "proposal not found".into(),
+        ))
+    }
+
+    /// List all governance proposals.
+    fn list_proposals(&self) -> StorageResult<Vec<crate::governance::proposals::Proposal>> {
+        Ok(vec![])
+    }
+
+    /// Write a governance vote to persistent storage.
+    fn write_vote(&self, _vote: &crate::governance::voting::Vote) -> StorageResult<()> {
+        Ok(())
+    }
+
+    /// List all votes for a given proposal.
+    fn list_votes(&self, _proposal_id: u64) -> StorageResult<Vec<crate::governance::voting::Vote>> {
+        Ok(vec![])
+    }
+
     /// Return a page of blocks plus the total count for pagination.
     ///
     /// Default implementation iterates `[offset, offset+limit)` by height.
@@ -313,6 +345,24 @@ impl<T: BlockStore> BlockStore for Arc<T> {
 
     fn list_blocks(&self, offset: usize, limit: usize) -> StorageResult<(Vec<Block>, usize)> {
         (**self).list_blocks(offset, limit)
+    }
+    fn write_proposal(
+        &self,
+        proposal: &crate::governance::proposals::Proposal,
+    ) -> StorageResult<()> {
+        (**self).write_proposal(proposal)
+    }
+    fn read_proposal(&self, id: u64) -> StorageResult<crate::governance::proposals::Proposal> {
+        (**self).read_proposal(id)
+    }
+    fn list_proposals(&self) -> StorageResult<Vec<crate::governance::proposals::Proposal>> {
+        (**self).list_proposals()
+    }
+    fn write_vote(&self, vote: &crate::governance::voting::Vote) -> StorageResult<()> {
+        (**self).write_vote(vote)
+    }
+    fn list_votes(&self, proposal_id: u64) -> StorageResult<Vec<crate::governance::voting::Vote>> {
+        (**self).list_votes(proposal_id)
     }
     fn mark_tx_seen(&self, tx_id: &str, timestamp: u64) -> StorageResult<()> {
         (**self).mark_tx_seen(tx_id, timestamp)

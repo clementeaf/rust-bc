@@ -351,6 +351,16 @@ impl ProposalStore {
         all
     }
 
+    /// Load a proposal from persistent storage (hydration on startup).
+    /// Bypasses validation — the proposal was already accepted when first submitted.
+    pub fn load_proposal(&self, proposal: Proposal) {
+        let mut next = self.next_id.lock().unwrap();
+        if proposal.id >= *next {
+            *next = proposal.id + 1;
+        }
+        self.proposals.lock().unwrap().insert(proposal.id, proposal);
+    }
+
     /// Total number of proposals.
     pub fn count(&self) -> usize {
         self.proposals.lock().unwrap().len()

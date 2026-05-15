@@ -20,7 +20,7 @@ const META_SCHEMA_VERSION: &[u8] = b"schema_version";
 const CF_META: &str = "meta";
 
 /// Current schema version. Increment when adding a new migration.
-pub const LATEST_VERSION: u32 = 2;
+pub const LATEST_VERSION: u32 = 3;
 
 /// A single migration step.
 struct Migration {
@@ -43,6 +43,11 @@ const MIGRATIONS: &[Migration] = &[
         version: 2,
         description: "add audit_log, sandbox_reports, oracle_records CFs",
         apply: migrate_v2,
+    },
+    Migration {
+        version: 3,
+        description: "add governance_proposals, governance_votes CFs",
+        apply: migrate_v3,
     },
 ];
 
@@ -144,6 +149,18 @@ fn migrate_v2(store: &RocksDbBlockStore) -> StorageResult<()> {
     Ok(())
 }
 
+/// v3: Add governance_proposals and governance_votes Column Families.
+fn migrate_v3(store: &RocksDbBlockStore) -> StorageResult<()> {
+    for cf_name in &["governance_proposals", "governance_votes"] {
+        if store.db.cf_handle(cf_name).is_none() {
+            return Err(StorageError::RocksDbError(format!(
+                "migration v3: CF '{cf_name}' not found — database may need re-creation"
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,14 +196,23 @@ mod tests {
     }
 
     #[test]
-    fn run_pending_from_v1_runs_v2() {
+    fn run_pending_from_v1_runs_remaining() {
         let (store, _dir) = tmp_store();
         // Simulate a v1 database
         set_version(&store, 1).unwrap();
         assert_eq!(current_version(&store).unwrap(), 1);
 
         let applied = run_pending(&store).unwrap();
-        assert_eq!(applied, 1); // v2 migration ran
+        assert_eq!(applied, 2); // v2 + v3 migrations ran
+        assert_eq!(current_version(&store).unwrap(), LATEST_VERSION);
+    }
+
+    #[test]
+    fn run_pending_from_v2_runs_v3() {
+        let (store, _dir) = tmp_store();
+        set_version(&store, 2).unwrap();
+        let applied = run_pending(&store).unwrap();
+        assert_eq!(applied, 1); // v3 migration ran
         assert_eq!(current_version(&store).unwrap(), LATEST_VERSION);
     }
 

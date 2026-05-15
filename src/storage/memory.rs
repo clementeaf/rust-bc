@@ -13,6 +13,10 @@ pub struct MemoryStore {
     identities: Mutex<HashMap<String, IdentityRecord>>,
     credentials: Mutex<HashMap<String, Credential>>,
     latest_height: Mutex<u64>,
+    /// Governance proposals: id → Proposal
+    proposals: Mutex<HashMap<u64, crate::governance::proposals::Proposal>>,
+    /// Governance votes: (proposal_id, voter) → Vote
+    votes: Mutex<HashMap<(u64, String), crate::governance::voting::Vote>>,
 }
 
 impl MemoryStore {
@@ -23,6 +27,8 @@ impl MemoryStore {
             identities: Mutex::new(HashMap::new()),
             credentials: Mutex::new(HashMap::new()),
             latest_height: Mutex::new(0),
+            proposals: Mutex::new(HashMap::new()),
+            votes: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -180,6 +186,54 @@ impl BlockStore for MemoryStore {
             .cloned()
             .collect();
         Ok(creds)
+    }
+
+    // ── Governance persistence ─────────────────────────────────────────────
+
+    fn write_proposal(
+        &self,
+        proposal: &crate::governance::proposals::Proposal,
+    ) -> StorageResult<()> {
+        self.proposals
+            .lock()
+            .unwrap()
+            .insert(proposal.id, proposal.clone());
+        Ok(())
+    }
+
+    fn read_proposal(&self, id: u64) -> StorageResult<crate::governance::proposals::Proposal> {
+        self.proposals
+            .lock()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("PROPOSAL:{id:012}")))
+    }
+
+    fn list_proposals(&self) -> StorageResult<Vec<crate::governance::proposals::Proposal>> {
+        let mut all: Vec<_> = self.proposals.lock().unwrap().values().cloned().collect();
+        all.sort_by_key(|p| p.id);
+        Ok(all)
+    }
+
+    fn write_vote(&self, vote: &crate::governance::voting::Vote) -> StorageResult<()> {
+        self.votes
+            .lock()
+            .unwrap()
+            .insert((vote.proposal_id, vote.voter.clone()), vote.clone());
+        Ok(())
+    }
+
+    fn list_votes(&self, proposal_id: u64) -> StorageResult<Vec<crate::governance::voting::Vote>> {
+        let all: Vec<_> = self
+            .votes
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|v| v.proposal_id == proposal_id)
+            .cloned()
+            .collect();
+        Ok(all)
     }
 }
 
@@ -379,6 +433,94 @@ mod tests {
             .credentials_by_subject_did("did:bc:ghost")
             .unwrap()
             .is_empty());
+    }
+
+    // ── Governance persistence ────────────────────────────────────────────────
+
+    fn sample_proposal(id: u64) -> crate::governance::proposals::Proposal {
+        crate::governance::proposals::Proposal {
+            id,
+            proposer: "alice".to_string(),
+            action: crate::governance::proposals::ProposalAction::TextProposal {
+                title: "Test".to_string(),
+                description: "A test proposal".to_string(),
+            },
+            status: crate::governance::proposals::ProposalStatus::Voting,
+            deposit: 100,
+            submitted_at: 10,
+            voting_ends_at: 110,
+            timelock_ends_at: None,
+            finalized_at: None,
+            description: "test".to_string(),
+        }
+    }
+
+    fn sample_vote(proposal_id: u64, voter: &str) -> crate::governance::voting::Vote {
+        crate::governance::voting::Vote {
+            voter: voter.to_string(),
+            proposal_id,
+            option: crate::governance::voting::VoteOption::Yes,
+            power: 1000,
+            voted_at: 50,
+        }
+    }
+
+    #[test]
+    fn write_and_read_proposal() {
+        let store = MemoryStore::new();
+        let p = sample_proposal(1);
+        store.write_proposal(&p).unwrap();
+        let fetched = store.read_proposal(1).unwrap();
+        assert_eq!(fetched.proposer, "alice");
+    }
+
+    #[test]
+    fn read_missing_proposal_returns_error() {
+        let store = MemoryStore::new();
+        assert!(store.read_proposal(999).is_err());
+    }
+
+    #[test]
+    fn list_proposals_sorted_by_id() {
+        let store = MemoryStore::new();
+        store.write_proposal(&sample_proposal(3)).unwrap();
+        store.write_proposal(&sample_proposal(1)).unwrap();
+        store.write_proposal(&sample_proposal(2)).unwrap();
+        let all = store.list_proposals().unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].id, 1);
+        assert_eq!(all[2].id, 3);
+    }
+
+    #[test]
+    fn write_and_list_votes() {
+        let store = MemoryStore::new();
+        store.write_vote(&sample_vote(1, "alice")).unwrap();
+        store.write_vote(&sample_vote(1, "bob")).unwrap();
+        store.write_vote(&sample_vote(2, "alice")).unwrap();
+        let votes = store.list_votes(1).unwrap();
+        assert_eq!(votes.len(), 2);
+        assert!(votes.iter().all(|v| v.proposal_id == 1));
+    }
+
+    #[test]
+    fn list_votes_empty_for_unknown_proposal() {
+        let store = MemoryStore::new();
+        assert!(store.list_votes(999).unwrap().is_empty());
+    }
+
+    #[test]
+    fn proposal_update_overwrites() {
+        let store = MemoryStore::new();
+        let mut p = sample_proposal(1);
+        store.write_proposal(&p).unwrap();
+        p.status = crate::governance::proposals::ProposalStatus::Passed;
+        store.write_proposal(&p).unwrap();
+        let fetched = store.read_proposal(1).unwrap();
+        assert_eq!(
+            fetched.status,
+            crate::governance::proposals::ProposalStatus::Passed
+        );
     }
 
     #[test]
