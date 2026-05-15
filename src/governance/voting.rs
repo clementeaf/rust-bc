@@ -223,6 +223,14 @@ impl VoteStore {
             .unwrap_or_default()
     }
 
+    /// Load a vote from persistent storage (hydration on startup).
+    /// Bypasses validation — the vote was already accepted when first cast.
+    pub fn load_vote(&self, vote: Vote) {
+        let mut all = self.votes.lock().unwrap();
+        let proposal_votes = all.entry(vote.proposal_id).or_default();
+        proposal_votes.insert(vote.voter.clone(), vote);
+    }
+
     /// Get a specific voter's vote.
     pub fn get_vote(&self, proposal_id: ProposalId, voter: &str) -> Option<Vote> {
         self.votes
@@ -230,6 +238,16 @@ impl VoteStore {
             .unwrap()
             .get(&proposal_id)
             .and_then(|m| m.get(voter).cloned())
+    }
+
+    /// Get all votes cast by a specific voter across all proposals.
+    pub fn votes_by_voter(&self, voter: &str) -> Vec<Vote> {
+        self.votes
+            .lock()
+            .unwrap()
+            .values()
+            .filter_map(|m| m.get(voter).cloned())
+            .collect()
     }
 }
 

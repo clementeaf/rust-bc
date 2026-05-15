@@ -117,6 +117,7 @@ impl ApiRoutes {
             .service(governance::get_governance_proposal)
             .service(governance::cast_governance_vote)
             .service(governance::get_governance_votes)
+            .service(governance::get_voter_history)
             .service(governance::tally_governance_votes)
             .service(governance::execute_governance_proposal)
             .service(governance::delegate_vote)

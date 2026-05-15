@@ -651,6 +651,88 @@ pub async fn get_governance_votes(
     Ok(HttpResponse::Ok().json(ApiResponse::success(votes, trace)))
 }
 
+/// GET /api/v1/governance/votes?voter={did}
+///
+/// Returns all proposals where the voter participated, with option and timestamp.
+/// Searches by raw voter DID and by blind voter ID (for signed votes).
+#[get("/governance/votes")]
+pub async fn get_voter_history(
+    state: web::Data<AppState>,
+    query: web::Query<VoterHistoryQuery>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let voter_did = &query.voter;
+
+    if voter_did.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_field("voter", "voter query parameter is required"),
+            400,
+        )));
+    }
+
+    let vote_store = match &state.vote_store {
+        Some(s) => s,
+        None => {
+            return Ok(HttpResponse::Ok()
+                .json(ApiResponse::success(Vec::<VoterHistoryEntry>::new(), trace)))
+        }
+    };
+    let proposal_store = match &state.proposal_store {
+        Some(s) => s,
+        None => {
+            return Ok(HttpResponse::Ok()
+                .json(ApiResponse::success(Vec::<VoterHistoryEntry>::new(), trace)))
+        }
+    };
+
+    let proposals = proposal_store.list_all();
+    let mut history: Vec<VoterHistoryEntry> = Vec::new();
+
+    for proposal in &proposals {
+        // Try raw voter DID (unsigned votes)
+        let vote = vote_store.get_vote(proposal.id, voter_did);
+        // Try blind voter ID (signed votes)
+        let vote = vote.or_else(|| {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(proposal.id.to_le_bytes());
+            hasher.update(voter_did.as_bytes());
+            let blind = hasher.finalize();
+            let blind_id = format!("blind:{}", hex::encode(&blind[..20]));
+            vote_store.get_vote(proposal.id, &blind_id)
+        });
+
+        if let Some(v) = vote {
+            history.push(VoterHistoryEntry {
+                proposal_id: proposal.id,
+                description: proposal.description.clone(),
+                status: format!("{:?}", proposal.status),
+                option: v.option,
+                voted_at: v.voted_at,
+                power: v.power,
+            });
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(history, trace)))
+}
+
+#[derive(Deserialize)]
+pub struct VoterHistoryQuery {
+    #[serde(default)]
+    pub voter: String,
+}
+
+#[derive(Serialize)]
+struct VoterHistoryEntry {
+    proposal_id: u64,
+    description: String,
+    status: String,
+    option: VoteOption,
+    voted_at: u64,
+    power: u64,
+}
+
 /// GET /api/v1/governance/proposals/{id}/tally — uses real total staked from StakingManager
 #[get("/governance/proposals/{id}/tally")]
 pub async fn tally_governance_votes(
