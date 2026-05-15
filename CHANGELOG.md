@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-14
+
+**Cerulean Voto — Asambleas, Sesiones, Actas, Administracion**
+
+- 4 new modules: Asambleas, Sesiones, Actas, Administracion
+- localStorage-backed store (`store.ts`) with correlative numbering
+- Sidebar grouped into 3 sections: Votacion, Organizacion, Administracion
+- Ley 19.418 Art. 16: convocatoria date/method, deadline validation (5d ordinaria, 3d extraordinaria)
+- Ley 19.418 Art. 16: first/second citation quorum, quorum validation with legal warning
+- Ley 19.418 Art. 17: actas with folio, org identification (name + RUT), president/secretary signatures
+- ISO 15489: actas are permanent records (no delete), SHA-256 integrity hash per acta
+- ISO 8601: all dates and timestamps in standard format
+- Auto-generated acta on session close with all legally required fields
+- Admin panel: org settings, signatory management, quorum config, normativa reference, export/import backup
+- Schema migration support: `read()` merges with defaults for backward compatibility
+
+---
+
 ### 2026-05-13
 
 **Production deployment — S3/CloudFront + EC2 backend**

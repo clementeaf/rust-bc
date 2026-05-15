@@ -181,21 +181,28 @@ Not required to run the node.
 
 Standalone voting frontend built on the same patterns as `block-explorer-vite/`. Consumes the existing governance and identity APIs.
 
-Routes:
+Routes (grouped in sidebar: Votacion / Organizacion / Administracion):
 - `/` — Landing page (hero + 3 pillars, standalone)
 - `/dashboard` — Active/closed election stats with internal scroll panels
 - `/elections` — History table + slide-over drawer for creation
 - `/vote` — Inline voter bar, per-election vote buttons (disabled without name), animated receipt with cryptographic guarantees
 - `/results` — Compact tally cards with percentage bars, quorum/threshold stats
 - `/voters` — Inline registration + verification bar, scrollable padrón table
+- `/assemblies` — Assembly CRUD (ordinaria/extraordinaria), convocatoria validation (Ley 19.418 Art. 16), folio correlativo
+- `/sessions?assembly=ID` — Sessions per assembly: citation (1a/2a), quorum check, agenda, attendees. Auto-generates acta on close
+- `/actas` — Libro de Actas: permanent records (ISO 15489), SHA-256 hash, legal format with signatures, print-friendly
+- `/admin` — Org settings (name, RUT, president, secretary), quorum config (1a/2a citation), normativa reference, export/import JSON
+
+Compliance: Ley 19.418 Art. 16 (convocatoria deadlines, quorum), Art. 17 (actas content, signatures), ISO 15489 (permanent records, integrity hash), ISO 8601 (dates).
 
 UI patterns: `h-screen` fixed layout, no page-level scroll, `border-neutral-100` borders, no shadows, compact padding. DIDs hidden from users — generated internally from names.
 
 Key structure:
 - `src/lib/api.ts` — governance + identity API client
-- `src/lib/routes.ts` — 5 lazy-loaded routes
+- `src/lib/store.ts` — localStorage CRUD for assemblies, sessions, actas, org settings (correlative counters, SHA-256 integrity, schema migration merge)
+- `src/lib/routes.ts` — 9 lazy-loaded routes, 3 sidebar groups
 - `src/lib/format.ts` — shared formatters (`timeAgo`, `pct`, `fmtDateTime`)
-- `src/components/Layout.tsx` — header + sidebar + minimal footer, `h-screen overflow-hidden`
+- `src/components/Layout.tsx` — header + grouped sidebar + minimal footer, `h-screen overflow-hidden`
 - `Dockerfile` + `nginx.conf` — containerized with API proxy to node
 
 Not required to run the node.
