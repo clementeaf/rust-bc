@@ -18,6 +18,8 @@
     { "name": "Chaincode", "description": "Chaincode lifecycle" },
     { "name": "Private Data", "description": "Private data collections" },
     { "name": "Discovery", "description": "Peer discovery service" },
+    { "name": "Governance", "description": "On-chain governance proposals and voting" },
+    { "name": "Interop", "description": "W3C DID Resolution, Verifiable Credentials, JSON-LD export" },
     { "name": "ACL", "description": "Access control lists" },
     { "name": "MSP", "description": "Membership service provider" },
     { "name": "Identity", "description": "DID and key management" },
@@ -346,6 +348,31 @@
     },
     "/chain/verify": {
       "get": { "tags": ["Chain"], "summary": "Verify chain integrity", "responses": { "200": { "description": "Verification result" } } }
+    },
+    "/governance/params": {
+      "get": { "tags": ["Governance"], "summary": "List protocol parameters", "responses": { "200": { "description": "Parameter list" } } }
+    },
+    "/governance/proposals": {
+      "get": { "tags": ["Governance"], "summary": "List all proposals", "responses": { "200": { "description": "Proposal list" } } },
+      "post": { "tags": ["Governance"], "summary": "Submit a governance proposal", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["proposer", "description", "deposit", "action"], "properties": { "proposer": { "type": "string" }, "description": { "type": "string", "maxLength": 4096 }, "deposit": { "type": "integer" }, "action": { "type": "object" } } } } } }, "responses": { "200": { "description": "Proposal created" } } }
+    },
+    "/governance/proposals/{id}": {
+      "get": { "tags": ["Governance"], "summary": "Get proposal by ID", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Proposal detail" }, "404": { "description": "Not found" } } }
+    },
+    "/governance/proposals/{id}/vote": {
+      "post": { "tags": ["Governance"], "summary": "Cast a signed vote", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["voter", "option"], "properties": { "voter": { "type": "string", "description": "DID of the voter" }, "option": { "type": "string", "enum": ["Yes", "No", "Abstain"] }, "signature": { "type": "string", "description": "Ed25519 signature (hex) over vote payload" }, "public_key": { "type": "string", "description": "Ed25519 public key (hex)" } } } } } }, "responses": { "200": { "description": "Vote accepted, returns tally" }, "400": { "description": "Validation error or signature failure" } } }
+    },
+    "/governance/proposals/{id}/tally": {
+      "get": { "tags": ["Governance"], "summary": "Get vote tally (aggregates only)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Tally result" } } }
+    },
+    "/governance/proposals/{id}/export": {
+      "get": { "tags": ["Interop"], "summary": "Export election results as JSON-LD (schema.org VoteAction)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "JSON-LD export", "content": { "application/ld+json": {} } } } }
+    },
+    "/did/{did}": {
+      "get": { "tags": ["Interop"], "summary": "W3C DID Resolution — returns DID Document", "parameters": [{ "name": "did", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "DID Document (did-core)", "content": { "application/did+ld+json": {} } }, "404": { "description": "DID not found" } } }
+    },
+    "/credentials/{id}/vc": {
+      "get": { "tags": ["Interop"], "summary": "Get credential as W3C Verifiable Credential", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Verifiable Credential (VC Data Model 2.0)", "content": { "application/vc+ld+json": {} } }, "404": { "description": "Credential not found" } } }
     }
   }
 }

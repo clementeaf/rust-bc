@@ -4,8 +4,8 @@ use actix_web::{web, Scope};
 use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
-    events, forensic, gateway, governance, identity, intelligence, legal_oracle, msp, oracle,
-    organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
+    events, forensic, gateway, governance, identity, intelligence, interop, legal_oracle, msp,
+    oracle, organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
     transactions, utilities, zkp,
 };
 
@@ -158,6 +158,10 @@ impl ApiRoutes {
             .service(regulatory::compliance_report)
             .service(stress::stress_report)
             .service(pentest::pentest_report);
+        // W3C interoperability (DID Resolution, Verifiable Credentials, JSON-LD)
+        cfg.service(interop::resolve_did)
+            .service(interop::get_credential_as_vc)
+            .service(interop::export_governance_jsonld);
     }
 
     fn identity_routes() -> Scope {

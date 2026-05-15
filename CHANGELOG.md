@@ -8,6 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-15
 
+**Interoperability — W3C DID Resolution, Verifiable Credentials, JSON-LD, OpenAPI**
+
+- `GET /api/v1/did/{did}` — W3C DID Resolution (did-core), returns DID Document with Ed25519 verification method
+- `GET /api/v1/credentials/{id}/vc` — W3C Verifiable Credential (VC Data Model 2.0) with Ed25519 proof
+- `GET /api/v1/governance/proposals/{id}/export` — JSON-LD export (schema.org VoteAction) for election results
+- OpenAPI 3.0.3 spec updated: governance endpoints (proposals, vote, tally) + interop endpoints (DID, VC, JSON-LD)
+- Content types: `application/did+ld+json`, `application/vc+ld+json`, `application/ld+json`
+- 1712 tests pass
+
+---
+
 **Cerulean Voto — Acta blockchain anchoring + vote secrecy**
 
 - Actas anchored on-chain: SHA-256 hash stored as identity record (`did:cerulean:acta:{folio}`) on session close
