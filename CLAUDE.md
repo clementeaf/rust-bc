@@ -116,7 +116,8 @@ Services initialized at startup (all use in-memory backends by default):
 - `src/tokenomics/economics.rs` — NOTA supply cap (100M), halving rewards, capped issuance, 80/20 fee burn/proposer split, EIP-1559 dynamic base fee, epoch-based `process_block()` state machine
 - `src/tokenomics/storage_deposit.rs` — `DepositLedger`: lock tokens proportional to data size on state writes, refund on delete, delta on update
 - `src/bridge/` — cross-chain bridge: chain registry, message envelope, escrow vault (lock/release outbound, mint/burn inbound), Merkle inclusion proof verifier, `BridgeEngine` with replay protection, `Relayer` with job queue, batch processing, and retry logic
-- `src/governance/` — on-chain governance: typed `ParamRegistry` with protocol defaults, `ProposalStore` (submit→vote→pass→timelock→execute lifecycle), stake-weighted `VoteStore` (Yes/No/Abstain, quorum + threshold checks). HTTP API: 7 endpoints under `/api/v1/governance/` (params, proposals CRUD, vote, tally). AppState fields: `proposal_store`, `vote_store`, `param_registry`.
+- `src/governance/` — on-chain governance: typed `ParamRegistry` with protocol defaults, `ProposalStore` (submit→vote→pass→timelock→execute lifecycle), stake-weighted `VoteStore` (Yes/No/Abstain, quorum + threshold checks). Vote handler: optional Ed25519 signature verification, blind voter ID for vote secrecy (`sha256(proposal_id || voter_did)`), DID-to-pubkey binding. HTTP API: 7 endpoints under `/api/v1/governance/` (params, proposals CRUD, vote, tally, JSON-LD export). AppState fields: `proposal_store`, `vote_store`, `param_registry`.
+- `src/api/handlers/interop.rs` — W3C interoperability: DID Resolution (`GET /did/{did}` → DID Document with Ed25519VerificationKey2020), Verifiable Credentials (`GET /credentials/{id}/vc` → VC Data Model 2.0 with Ed25519 proof), JSON-LD export (`GET /governance/proposals/{id}/export` → schema.org VoteAction). Content types: `application/did+ld+json`, `application/vc+ld+json`, `application/ld+json`.
 - `src/light_client/` — compact `BlockHeader` chain with BFT QC verification, `LightClient` for state proof verification via Merkle proofs against synced headers. Enables IoT/mobile participation without full node.
 - `src/transaction/executor.rs` — `execute_block_concurrent()` async tokio executor for true intra-wave parallelism
 - `src/testnet/` — `GenesisConfig` (testnet/devnet/mainnet presets with validation), `Faucet` (rate-limited token drip with cooldown and depletion)
@@ -179,29 +180,39 @@ Not required to run the node.
 |---|---|---|
 | `cerulean-voto/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node on port 5174. |
 
-Standalone voting frontend built on the same patterns as `block-explorer-vite/`. Consumes the existing governance and identity APIs.
+Standalone voting frontend with real Ed25519 wallet integration. Consumes governance, identity, and interop APIs.
 
 Routes (grouped in sidebar: Votacion / Organizacion / Administracion):
 - `/` — Landing page (hero + 3 pillars, standalone)
 - `/dashboard` — Active/closed election stats with internal scroll panels
 - `/elections` — History table + slide-over drawer for creation
-- `/vote` — Inline voter bar, per-election vote buttons (disabled without name), animated receipt with cryptographic guarantees
+- `/vote` — Wallet-based voting: select registered voter (dropdown), enter passphrase, Ed25519-signed vote with animated receipt
 - `/results` — Compact tally cards with percentage bars, quorum/threshold stats
-- `/voters` — Inline registration + verification bar, scrollable padrón table
+- `/voters` — Wallet registration (Ed25519 via WASM), padron table with DID, address, algorithm
 - `/assemblies` — Assembly CRUD (ordinaria/extraordinaria), convocatoria validation (Ley 19.418 Art. 16), folio correlativo
-- `/sessions?assembly=ID` — Sessions per assembly: citation (1a/2a), quorum check, agenda, attendees. Auto-generates acta on close
-- `/actas` — Libro de Actas: permanent records (ISO 15489), SHA-256 hash, legal format with signatures, print-friendly
+- `/sessions?assembly=ID` — Sessions per assembly: citation (1a/2a), quorum check, agenda linked to proposals. Auto-generates acta + blockchain anchoring on close
+- `/actas` — Libro de Actas: permanent records (ISO 15489), SHA-256 hash, blockchain anchor (`did:cerulean:acta:{folio}`), legal format with signatures, print-friendly
 - `/admin` — Org settings (name, RUT, president, secretary), quorum config (1a/2a citation), normativa reference, export/import JSON
 
-Compliance: Ley 19.418 Art. 16 (convocatoria deadlines, quorum), Art. 17 (actas content, signatures), ISO 15489 (permanent records, integrity hash), ISO 8601 (dates).
+**Wallet integration:** Uses cerulean-wallet WASM module (`src/wasm/`). Ed25519 keygen + Argon2id + AES-256-GCM encryption. Wallets cross-compatible with cerulean-wallet CLI. DID derived from `sha256(public_key)[0..20]`.
 
-UI patterns: `h-screen` fixed layout, no page-level scroll, `border-neutral-100` borders, no shadows, compact padding. DIDs hidden from users — generated internally from names.
+**Vote security:**
+- Ed25519 signature over canonical payload: `vote:{proposal_id}:{option}:{public_key}`
+- Backend verifies signature + DID-to-pubkey binding before accepting
+- Blind voter ID: `sha256(proposal_id || voter_did)` — real identity never stored with vote
+- Deduplication: `AlreadyVoted` error on same (proposal, blind_id)
+
+**Compliance:** Ley 19.418 Art. 16 (convocatoria deadlines, quorum), Art. 17 (actas content, signatures), ISO 15489 (permanent records, integrity hash), ISO 8601 (dates).
+
+UI patterns: `h-screen` fixed layout, no page-level scroll, `border-neutral-100` borders, no shadows, compact padding.
 
 Key structure:
-- `src/lib/api.ts` — governance + identity API client
+- `src/lib/api.ts` — governance + identity + acta anchoring API client
+- `src/lib/wallet.ts` — WASM wallet integration (createWallet, signVote, didFromPublicKey, localStorage persistence)
 - `src/lib/store.ts` — localStorage CRUD for assemblies, sessions, actas, org settings (correlative counters, SHA-256 integrity, schema migration merge)
 - `src/lib/routes.ts` — 9 lazy-loaded routes, 3 sidebar groups
 - `src/lib/format.ts` — shared formatters (`timeAgo`, `pct`, `fmtDateTime`)
+- `src/wasm/` — cerulean-wallet WASM module (Ed25519 keygen, signing, HD derivation)
 - `src/components/Layout.tsx` — header + grouped sidebar + minimal footer, `h-screen overflow-hidden`
 - `Dockerfile` + `nginx.conf` — containerized with API proxy to node
 

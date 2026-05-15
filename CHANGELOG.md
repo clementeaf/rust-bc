@@ -8,49 +8,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-15
 
-**Interoperability — W3C DID Resolution, Verifiable Credentials, JSON-LD, OpenAPI**
+**Cerulean Voto — Real wallet, vote secrecy, acta anchoring, W3C interoperability**
 
-- `GET /api/v1/did/{did}` — W3C DID Resolution (did-core), returns DID Document with Ed25519 verification method
-- `GET /api/v1/credentials/{id}/vc` — W3C Verifiable Credential (VC Data Model 2.0) with Ed25519 proof
-- `GET /api/v1/governance/proposals/{id}/export` — JSON-LD export (schema.org VoteAction) for election results
-- OpenAPI 3.0.3 spec updated: governance endpoints (proposals, vote, tally) + interop endpoints (DID, VC, JSON-LD)
+Wallet integration (cerulean-wallet WASM):
+- Ed25519 wallet generation via WASM (Argon2id + AES-256-GCM, same crypto as CLI)
+- DID derived from public key: `did:cerulean:{sha256(pk)[0..20]}`
+- Vote signing with passphrase-protected private key
+- Backend verifies Ed25519 signature + DID-to-pubkey binding before accepting vote
+
+Vote secrecy:
+- Blind voter ID: `sha256(proposal_id || voter_did)` stored instead of real identity
+- Cross-proposal unlinkability, deduplication preserved
+- Unsigned votes (legacy/permissive) unchanged
+
+Acta blockchain anchoring:
+- SHA-256 hash stored as `did:cerulean:acta:{folio}` on session close
+- Acta UI shows trace_id and anchoring status
+
+Voter registry:
+- Padron persisted in localStorage with real wallet files
+- Vote page validates against registered padron (dropdown, not free text)
+- Agenda items linkable to governance proposals
+
+W3C Interoperability:
+- `GET /did/{did}` — DID Resolution (did-core), Ed25519VerificationKey2020
+- `GET /credentials/{id}/vc` — Verifiable Credential (VC Data Model 2.0)
+- `GET /governance/proposals/{id}/export` — JSON-LD (schema.org VoteAction)
+- OpenAPI 3.0.3: 66 paths, governance + interop endpoints documented
 - Content types: `application/did+ld+json`, `application/vc+ld+json`, `application/ld+json`
+
+Cleanup:
+- Removed unused `PageIntro` component, 5 dead types, 2 unused API functions
 - 1712 tests pass
-
----
-
-**Cerulean Voto — Acta blockchain anchoring + vote secrecy**
-
-- Actas anchored on-chain: SHA-256 hash stored as identity record (`did:cerulean:acta:{folio}`) on session close
-- Acta UI shows "Anclado" with trace_id instead of "Pendiente de anclaje"
-- Vote secrecy via blind voter ID: `blind_id = sha256(proposal_id || voter_did)`
-- Real voter identity verified (signature check) but never stored with the vote
-- Cross-proposal unlinkability: different blind_id per proposal for same voter
-- Backward compatible: unsigned votes (legacy/permissive) use raw voter DID
-
----
-
-**Cerulean Voto — Real wallet integration (cerulean-wallet WASM)**
-
-- Voter registration now generates a real Ed25519 wallet via cerulean-wallet WASM (Argon2id + AES-256-GCM)
-- DID derived deterministically from public key (`did:cerulean:{sha256(pk)[0..20]}`)
-- Vote signing: voter enters passphrase, vote payload signed with Ed25519 private key
-- Backend signature verification: governance handler verifies Ed25519 signature + DID-to-pubkey binding
-- Voter selector dropdown (no free-text) — only registered wallets can vote
-- Passphrase input for decrypting wallet at vote time — wrong passphrase shows clear error
-- Vote receipt shows signature fragment as cryptographic proof
-- WASM module copied from cerulean-wallet (same crypto as CLI — wallets cross-compatible)
-
----
-
-**Cerulean Voto — Voter registry persistence, padron validation, agenda-election linking**
-
-- Voter registry (padron) persisted in localStorage — survives page refresh
-- Vote page validates voter against registered padron before allowing vote
-- Voter bar shows registration status: "Habilitado" (green), "No registrado" (red)
-- Session agenda items of type "votacion" can link to a governance proposal via dropdown
-- Linked elections shown as badge in session detail drawer
-- Removed dead code: `PageIntro` component, 5 unused types, 2 unused API functions
 
 ---
 
