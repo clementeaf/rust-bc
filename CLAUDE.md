@@ -180,40 +180,37 @@ Not required to run the node.
 |---|---|---|
 | `cerulean-voto/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node on port 5174. |
 
-Standalone voting frontend with real Ed25519 wallet integration. Consumes governance, identity, and interop APIs.
+Multi-tenant voting platform with Ed25519 wallet integration, Chrome extension support, and vault-backed cross-app portability.
 
-Routes (grouped in sidebar: Votacion / Organizacion / Administracion):
-- `/` — Landing page (hero + 3 pillars, standalone)
-- `/dashboard` — Active/closed election stats with internal scroll panels
-- `/elections` — History table + slide-over drawer for creation
-- `/vote` — Wallet-based voting: select registered voter (dropdown), enter passphrase, Ed25519-signed vote with animated receipt
-- `/results` — Compact tally cards with percentage bars, quorum/threshold stats
-- `/voters` — Wallet registration (Ed25519 via WASM), padron table with DID, address, algorithm
-- `/assemblies` — Assembly CRUD (ordinaria/extraordinaria), convocatoria validation (Ley 19.418 Art. 16), folio correlativo
-- `/sessions?assembly=ID` — Sessions per assembly: citation (1a/2a), quorum check, agenda linked to proposals. Auto-generates acta + blockchain anchoring on close
-- `/actas` — Libro de Actas: permanent records (ISO 15489), SHA-256 hash, blockchain anchor (`did:cerulean:acta:{folio}`), legal format with signatures, print-friendly
-- `/admin` — Org settings (name, RUT, president, secretary), quorum config (1a/2a citation), normativa reference, export/import JSON
+Routes (sidebar: Votacion / Organizacion / Administracion):
+- `/` — Landing (CTA: "Configurar mi organizacion" or "Ingresar" if configured)
+- `/setup` — 5-step wizard: wallet → org → participants → structure → first election
+- `/dashboard` — Active/closed election stats
+- `/elections` — Create and manage elections (governance proposals)
+- `/vote` — Wallet-signed voting with Ed25519, animated receipt with crypto proof
+- `/results` — Tally cards with percentage bars, quorum/threshold
+- `/voters` — Create wallets (WASM), import from vault by DID, QR codes, padron management
+- `/scopes` — Dynamic organizational structure: tree view, member roles (admin/voter/observer), permission-gated
+- `/assemblies` — Convocatoria validation (Ley 19.418 Art. 16), folio correlativo
+- `/sessions?assembly=ID` — Citation (1a/2a), quorum, agenda linked to proposals, auto-acta + blockchain anchoring
+- `/actas` — Permanent records (ISO 15489), SHA-256 hash, on-chain anchor status
+- `/admin` — Org settings, DLT channel, interop endpoints (DID/VC/JSON-LD/OpenAPI), export/import
 
-**Wallet integration:** Uses cerulean-wallet WASM module (`src/wasm/`). Ed25519 keygen + Argon2id + AES-256-GCM encryption. Wallets cross-compatible with cerulean-wallet CLI. DID derived from `sha256(public_key)[0..20]`.
+**Wallet:** WASM module from cerulean-wallet (`src/wasm/`). Wallets stored on-chain via `/vault` endpoints — cross-app portability (Voto ↔ Wallet). Chrome extension auto-detected via `window.cerulean`. DID = `did:cerulean:{sha256(pubkey)[0..20]}`.
 
-**Vote security:**
-- Ed25519 signature over canonical payload: `vote:{proposal_id}:{option}:{public_key}`
-- Backend verifies signature + DID-to-pubkey binding before accepting
-- Blind voter ID: `sha256(proposal_id || voter_did)` — real identity never stored with vote
-- Deduplication: `AlreadyVoted` error on same (proposal, blind_id)
+**Scopes:** Generic multi-tenant scopes with tree-propagated permissions. Founder = root admin. Admin role inherits downward. Each scope = own DLT channel. API interceptor sends `X-Channel-Id` based on active scope.
 
-**Compliance:** Ley 19.418 Art. 16 (convocatoria deadlines, quorum), Art. 17 (actas content, signatures), ISO 15489 (permanent records, integrity hash), ISO 8601 (dates).
+**Vote security:** Ed25519 signature, blind voter ID (`sha256(proposal_id || voter_did)`), backend verification, deduplication.
 
-UI patterns: `h-screen` fixed layout, no page-level scroll, `border-neutral-100` borders, no shadows, compact padding.
+**Compliance:** Ley 19.418 Art. 16/17, ISO 15489, ISO 8601.
 
 Key structure:
-- `src/lib/api.ts` — governance + identity + acta anchoring API client
-- `src/lib/wallet.ts` — WASM wallet integration (createWallet, signVote, didFromPublicKey, localStorage persistence)
-- `src/lib/store.ts` — localStorage CRUD for assemblies, sessions, actas, org settings (correlative counters, SHA-256 integrity, schema migration merge)
-- `src/lib/routes.ts` — 9 lazy-loaded routes, 3 sidebar groups
-- `src/lib/format.ts` — shared formatters (`timeAgo`, `pct`, `fmtDateTime`)
-- `src/wasm/` — cerulean-wallet WASM module (Ed25519 keygen, signing, HD derivation)
-- `src/components/Layout.tsx` — header + grouped sidebar + minimal footer, `h-screen overflow-hidden`
+- `src/lib/api.ts` — governance, identity, vault, acta anchoring, channel management
+- `src/lib/wallet.ts` — WASM crypto, vault persistence, DID derivation, extension support
+- `src/lib/store.ts` — scopes, assemblies, sessions, actas, org settings, permissions engine
+- `src/lib/routes.ts` — 11 lazy-loaded routes, 3 sidebar groups
+- `src/wasm/` — cerulean-wallet WASM (Ed25519, Argon2id, AES-256-GCM)
+- `src/components/Layout.tsx` — header with active scope indicator, grouped sidebar
 - `Dockerfile` + `nginx.conf` — containerized with API proxy to node
 
 Not required to run the node.

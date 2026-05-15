@@ -8,6 +8,62 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-15
 
+**Cerulean Voto — Multi-tenant platform with wallet integration and interoperability**
+
+Vault-backed wallet portability:
+- Wallets stored on-chain via `POST /vault/store`, retrieved with `GET /vault/{did}`
+- Cross-app: wallet created in Voto is available in Wallet app (and vice versa)
+- localStorage is a cache — vault on-chain is the source of truth
+- Import existing wallet by DID from any Cerulean app
+
+Chrome extension support:
+- Detects `window.cerulean` injected by Cerulean Wallet extension
+- One-click connect: gets address + publicKey, registers DID, no passphrase needed
+- Setup step 1: three tabs (Extension / Tengo DID / Crear nueva)
+
+Wallet-name separation:
+- Wallet = pure crypto (DID + keypair), no name
+- Name = padron label, assigned by admin when adding to organization
+- DID derived from address (`sha256(pubkey)[0..20]`), not raw public key slice
+
+Dynamic scopes (multi-tenant organizational structure):
+- Generic `Scope` model: name, label (user-defined type), parent, channel, members
+- No imposed hierarchy — each institution defines its own structure
+- Members with roles: admin, voter, observer per scope
+- Each scope = own DLT channel with isolated data
+- Tree-propagated permissions: founder = root admin, admin role inherits downward
+
+Setup wizard (5-step guided onboarding):
+- Step 1: Create wallet or connect existing (extension / DID import / new)
+- Step 2: Organization (name, RUT, president, secretary → auto-creates DLT channel)
+- Step 3: Register participants (wallet per person, name assigned to padron)
+- Step 4: Organizational structure (optional scopes with DLT channels)
+- Step 5: First election (optional)
+
+Governance persistence:
+- `write_proposal`/`write_vote` added to BlockStore trait
+- MemoryStore and RocksDB implementations
+- Migration v2→v3: proposals and votes column families
+
+Vault endpoints:
+- `POST /api/v1/vault/store` — store encrypted wallet blob by DID
+- `GET /api/v1/vault/{did}` — retrieve encrypted wallet backup
+- RocksDB vault column family for persistent storage
+
+Voter history endpoint:
+- `GET /api/v1/governance/votes?voter={did}` — all proposals where voter participated
+- Searches by raw DID and blind voter ID (for signed votes)
+
+UI/UX overhaul:
+- Voters: expandable rows with QR code, DID, address, public key, wallet download
+- Vote: receipt with DID, payload SHA-256, Ed25519 signature, 5 animated guarantees
+- Actas: green "Anclada" / amber "Pendiente" badge, DID on-chain link
+- Admin: interop cards (DID Resolution, VC, JSON-LD, OpenAPI), DLT channel management
+- Scopes: tree view with role badges, permission-gated member management
+- Layout: active scope indicator in header bar
+
+---
+
 **Cerulean Voto — Real wallet, vote secrecy, acta anchoring, W3C interoperability**
 
 Wallet integration (cerulean-wallet WASM):
