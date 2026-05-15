@@ -508,8 +508,7 @@ pub async fn cast_governance_vote(
                     )));
                 }
             };
-        let sig =
-            Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap_or(&[0u8; 64]));
+        let sig = Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap_or(&[0u8; 64]));
 
         if vk.verify(payload.as_bytes(), &sig).is_err() {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
@@ -529,6 +528,25 @@ pub async fn cast_governance_vote(
             )));
         }
     }
+
+    // ── Vote secrecy: blind voter identity ──
+    // When a signed vote arrives, store it under a blinded voter ID:
+    //   blind_id = sha256(proposal_id || voter_did)
+    // This preserves:
+    //   - Deduplication (same voter → same blind_id per proposal)
+    //   - Secrecy (blind_id cannot be reversed to voter DID)
+    //   - Cross-proposal unlinkability (different blind_id per proposal)
+    // Unsigned votes (legacy/permissive mode) use the raw voter DID.
+    let effective_voter = if body.signature.is_some() {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(id.to_le_bytes());
+        hasher.update(body.voter.as_bytes());
+        let blind = hasher.finalize();
+        format!("blind:{}", hex::encode(&blind[..20]))
+    } else {
+        body.voter.clone()
+    };
 
     // Resolve real voting power from StakingManager (own + delegated).
     // In permissive mode, grant power=1 so sandbox demos work without staking.
@@ -550,7 +568,7 @@ pub async fn cast_governance_vote(
 
     match vote_store.cast_vote(
         id,
-        &body.voter,
+        &effective_voter,
         body.option,
         power,
         current_height,
@@ -558,7 +576,7 @@ pub async fn cast_governance_vote(
     ) {
         Ok(()) => {
             // Persist vote to storage layer
-            if let Some(vote) = vote_store.get_vote(id, &body.voter) {
+            if let Some(vote) = vote_store.get_vote(id, &effective_voter) {
                 persist_vote(&state, &vote);
             }
 

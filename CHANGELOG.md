@@ -8,6 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-15
 
+**Cerulean Voto — Acta blockchain anchoring + vote secrecy**
+
+- Actas anchored on-chain: SHA-256 hash stored as identity record (`did:cerulean:acta:{folio}`) on session close
+- Acta UI shows "Anclado" with trace_id instead of "Pendiente de anclaje"
+- Vote secrecy via blind voter ID: `blind_id = sha256(proposal_id || voter_did)`
+- Real voter identity verified (signature check) but never stored with the vote
+- Cross-proposal unlinkability: different blind_id per proposal for same voter
+- Backward compatible: unsigned votes (legacy/permissive) use raw voter DID
+
+---
+
 **Cerulean Voto — Real wallet integration (cerulean-wallet WASM)**
 
 - Voter registration now generates a real Ed25519 wallet via cerulean-wallet WASM (Argon2id + AES-256-GCM)
