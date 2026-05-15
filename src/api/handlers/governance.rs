@@ -6,6 +6,38 @@ use crate::app_state::AppState;
 use crate::governance::params::ParamValue;
 use crate::governance::proposals::{ProposalAction, ProposalStatus, SubmitParams};
 use crate::governance::voting::VoteOption;
+use crate::storage::traits::BlockStore;
+
+/// Get the default store for governance persistence (fire-and-forget).
+fn default_store(state: &AppState) -> Option<std::sync::Arc<dyn BlockStore>> {
+    state
+        .store
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get("default")
+        .cloned()
+}
+
+/// Persist a proposal to the default store. Logs on failure.
+fn persist_proposal(state: &AppState, proposal: &crate::governance::proposals::Proposal) {
+    if let Some(store) = default_store(state) {
+        if let Err(e) = store.write_proposal(proposal) {
+            log::warn!("Failed to persist proposal {}: {e}", proposal.id);
+        }
+    }
+}
+
+/// Persist a vote to the default store. Logs on failure.
+fn persist_vote(state: &AppState, vote: &crate::governance::voting::Vote) {
+    if let Some(store) = default_store(state) {
+        if let Err(e) = store.write_vote(vote) {
+            log::warn!(
+                "Failed to persist vote for proposal {}: {e}",
+                vote.proposal_id
+            );
+        }
+    }
+}
 
 // ── Request / Response types ────────────────────────────────────────────────
 
@@ -36,6 +68,12 @@ pub struct ParamChangeEntry {
 pub struct CastVoteRequest {
     pub voter: String,
     pub option: VoteOption,
+    /// Ed25519 signature over "vote:{proposal_id}:{option}:{public_key}" (hex).
+    #[serde(default)]
+    pub signature: Option<String>,
+    /// Ed25519 public key of the voter (hex).
+    #[serde(default)]
+    pub public_key: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -299,6 +337,9 @@ pub async fn submit_governance_proposal(
     }) {
         Ok(id) => {
             let proposal = store.get(id);
+            if let Some(ref p) = proposal {
+                persist_proposal(&state, p);
+            }
             Ok(HttpResponse::Created().json(ApiResponse::success(proposal, trace)))
         }
         Err(e) => {
@@ -417,6 +458,78 @@ pub async fn cast_governance_vote(
         }
     };
 
+    // ── Signature verification (if provided) ──
+    // When both signature and public_key are present, verify the Ed25519
+    // signature over the canonical vote payload. This proves the voter
+    // controls the private key for the claimed DID.
+    if let (Some(sig_hex), Some(pk_hex)) = (&body.signature, &body.public_key) {
+        use ed25519_dalek::Verifier;
+        use ed25519_dalek::{Signature, VerifyingKey};
+
+        let pk_bytes = match hex::decode(pk_hex) {
+            Ok(b) if b.len() == 32 => b,
+            _ => {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    err_field(
+                        "public_key",
+                        "invalid Ed25519 public key (expected 32 bytes hex)",
+                    ),
+                    400,
+                )));
+            }
+        };
+        let sig_bytes = match hex::decode(sig_hex) {
+            Ok(b) if b.len() == 64 => b,
+            _ => {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    err_field(
+                        "signature",
+                        "invalid Ed25519 signature (expected 64 bytes hex)",
+                    ),
+                    400,
+                )));
+            }
+        };
+
+        let option_str = match body.option {
+            VoteOption::Yes => "Yes",
+            VoteOption::No => "No",
+            VoteOption::Abstain => "Abstain",
+        };
+        let payload = format!("vote:{id}:{option_str}:{pk_hex}");
+
+        let vk =
+            match VerifyingKey::from_bytes(pk_bytes.as_slice().try_into().unwrap_or(&[0u8; 32])) {
+                Ok(v) => v,
+                Err(_) => {
+                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                        err_field("public_key", "invalid Ed25519 public key"),
+                        400,
+                    )));
+                }
+            };
+        let sig =
+            Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap_or(&[0u8; 64]));
+
+        if vk.verify(payload.as_bytes(), &sig).is_err() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("signature verification failed — vote rejected"),
+                400,
+            )));
+        }
+
+        // Verify voter DID matches the public key
+        use sha2::{Digest, Sha256};
+        let hash = Sha256::digest(&pk_bytes);
+        let expected_did = format!("did:cerulean:{}", hex::encode(&hash[..20]));
+        if body.voter != expected_did {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("voter DID does not match public key"),
+                400,
+            )));
+        }
+    }
+
     // Resolve real voting power from StakingManager (own + delegated).
     // In permissive mode, grant power=1 so sandbox demos work without staking.
     let power = {
@@ -444,6 +557,11 @@ pub async fn cast_governance_vote(
         proposal.voting_ends_at,
     ) {
         Ok(()) => {
+            // Persist vote to storage layer
+            if let Some(vote) = vote_store.get_vote(id, &body.voter) {
+                persist_vote(&state, &vote);
+            }
+
             // Return tally (aggregates only) — never expose individual votes.
             let registry =
                 match &state.param_registry {
@@ -603,6 +721,7 @@ pub async fn execute_governance_proposal(
                     }
                 }
             }
+            persist_proposal(&state, &proposal);
             Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
         }
         Err(e) => {
@@ -705,7 +824,10 @@ pub async fn veto_governance_proposal(
     let current_height = chain_height(&state);
 
     match proposal_store.emergency_veto(id, &body.caller, &authorized, current_height) {
-        Ok(proposal) => Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace))),
+        Ok(proposal) => {
+            persist_proposal(&state, &proposal);
+            Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
+        }
         Err(e) => {
             Ok(HttpResponse::BadRequest()
                 .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)))
@@ -777,6 +899,9 @@ pub async fn close_governance_voting(
         match proposal_store.mark_passed(id, current_height, timelock) {
             Ok(()) => {
                 let proposal = proposal_store.get(id);
+                if let Some(ref p) = proposal {
+                    persist_proposal(&state, p);
+                }
                 Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
             }
             Err(e) => Ok(HttpResponse::BadRequest()
@@ -786,6 +911,9 @@ pub async fn close_governance_voting(
         match proposal_store.mark_rejected(id, current_height) {
             Ok(()) => {
                 let proposal = proposal_store.get(id);
+                if let Some(ref p) = proposal {
+                    persist_proposal(&state, p);
+                }
                 Ok(HttpResponse::Ok().json(ApiResponse::success(proposal, trace)))
             }
             Err(e) => Ok(HttpResponse::BadRequest()

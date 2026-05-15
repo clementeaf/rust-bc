@@ -8,6 +8,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-05-15
 
+**Cerulean Voto — Real wallet integration (cerulean-wallet WASM)**
+
+- Voter registration now generates a real Ed25519 wallet via cerulean-wallet WASM (Argon2id + AES-256-GCM)
+- DID derived deterministically from public key (`did:cerulean:{sha256(pk)[0..20]}`)
+- Vote signing: voter enters passphrase, vote payload signed with Ed25519 private key
+- Backend signature verification: governance handler verifies Ed25519 signature + DID-to-pubkey binding
+- Voter selector dropdown (no free-text) — only registered wallets can vote
+- Passphrase input for decrypting wallet at vote time — wrong passphrase shows clear error
+- Vote receipt shows signature fragment as cryptographic proof
+- WASM module copied from cerulean-wallet (same crypto as CLI — wallets cross-compatible)
+
+---
+
 **Cerulean Voto — Voter registry persistence, padron validation, agenda-election linking**
 
 - Voter registry (padron) persisted in localStorage — survives page refresh
