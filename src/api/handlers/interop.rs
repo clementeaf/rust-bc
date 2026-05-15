@@ -136,7 +136,7 @@ pub async fn resolve_did(
 // ── W3C Verifiable Credentials ──────────────────────────────────────────────
 
 /// GET /api/v1/credentials/{id}/vc — Return credential as W3C Verifiable Credential
-#[get("/credentials/{id}/vc")]
+#[get("/{id}/vc")]
 pub async fn get_credential_as_vc(
     state: web::Data<AppState>,
     path: web::Path<String>,

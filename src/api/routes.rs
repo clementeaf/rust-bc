@@ -158,9 +158,9 @@ impl ApiRoutes {
             .service(regulatory::compliance_report)
             .service(stress::stress_report)
             .service(pentest::pentest_report);
-        // W3C interoperability (DID Resolution, Verifiable Credentials, JSON-LD)
+        // W3C interoperability (DID Resolution, JSON-LD export)
+        // Note: get_credential_as_vc is registered in credentials_routes() scope
         cfg.service(interop::resolve_did)
-            .service(interop::get_credential_as_vc)
             .service(interop::export_governance_jsonld);
     }
 
@@ -225,7 +225,7 @@ impl ApiRoutes {
     }
 
     fn credentials_routes() -> Scope {
-        web::scope("/credentials")
+        web::scope("/credentials").service(interop::get_credential_as_vc)
     }
 
     fn transaction_routes() -> Scope {
