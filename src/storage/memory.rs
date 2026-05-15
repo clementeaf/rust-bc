@@ -17,6 +17,8 @@ pub struct MemoryStore {
     proposals: Mutex<HashMap<u64, crate::governance::proposals::Proposal>>,
     /// Governance votes: (proposal_id, voter) → Vote
     votes: Mutex<HashMap<(u64, String), crate::governance::voting::Vote>>,
+    /// Vault: DID → encrypted wallet JSON (opaque blob)
+    vault: Mutex<HashMap<String, serde_json::Value>>,
 }
 
 impl MemoryStore {
@@ -29,6 +31,7 @@ impl MemoryStore {
             latest_height: Mutex::new(0),
             proposals: Mutex::new(HashMap::new()),
             votes: Mutex::new(HashMap::new()),
+            vault: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -234,6 +237,23 @@ impl BlockStore for MemoryStore {
             .cloned()
             .collect();
         Ok(all)
+    }
+
+    fn write_vault(&self, did: &str, encrypted_wallet: &serde_json::Value) -> StorageResult<()> {
+        self.vault
+            .lock()
+            .unwrap()
+            .insert(did.to_string(), encrypted_wallet.clone());
+        Ok(())
+    }
+
+    fn read_vault(&self, did: &str) -> StorageResult<serde_json::Value> {
+        self.vault
+            .lock()
+            .unwrap()
+            .get(did)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))
     }
 }
 

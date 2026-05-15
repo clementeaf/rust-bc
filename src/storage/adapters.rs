@@ -69,6 +69,8 @@ const CF_ORACLE_RECORDS: &str = "oracle_records";
 const CF_GOVERNANCE_PROPOSALS: &str = "governance_proposals";
 /// Governance votes: key = `{proposal_id:012}:{voter}`, value = JSON Vote
 const CF_GOVERNANCE_VOTES: &str = "governance_votes";
+/// Vault: key = DID, value = encrypted wallet JSON (opaque blob)
+const CF_VAULT: &str = "vault";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -96,6 +98,7 @@ const ALL_CFS: &[&str] = &[
     CF_ORACLE_RECORDS,
     CF_GOVERNANCE_PROPOSALS,
     CF_GOVERNANCE_VOTES,
+    CF_VAULT,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -841,6 +844,32 @@ impl BlockStore for RocksDbBlockStore {
             votes.push(v);
         }
         Ok(votes)
+    }
+
+    fn write_vault(&self, did: &str, encrypted_wallet: &serde_json::Value) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_VAULT)
+            .ok_or_else(|| StorageError::RocksDbError("missing vault CF".into()))?;
+        let json = serde_json::to_vec(encrypted_wallet)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, did.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn read_vault(&self, did: &str) -> StorageResult<serde_json::Value> {
+        let cf = self
+            .db
+            .cf_handle(CF_VAULT)
+            .ok_or_else(|| StorageError::RocksDbError("missing vault CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, did.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
     }
 }
 

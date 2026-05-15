@@ -268,6 +268,20 @@ pub trait BlockStore: Send + Sync {
         Ok(vec![])
     }
 
+    // ── Vault (encrypted wallet backup) ────────────────────────────────────
+
+    /// Store an encrypted wallet blob keyed by DID. Overwrites if exists.
+    fn write_vault(&self, _did: &str, _encrypted_wallet: &serde_json::Value) -> StorageResult<()> {
+        Ok(())
+    }
+
+    /// Read an encrypted wallet blob by DID.
+    fn read_vault(&self, _did: &str) -> StorageResult<serde_json::Value> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "vault entry not found".into(),
+        ))
+    }
+
     /// Return a page of blocks plus the total count for pagination.
     ///
     /// Default implementation iterates `[offset, offset+limit)` by height.

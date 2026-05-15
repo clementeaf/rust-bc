@@ -6,7 +6,7 @@ use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
     events, forensic, gateway, governance, identity, intelligence, interop, legal_oracle, msp,
     oracle, organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
-    transactions, utilities, zkp,
+    transactions, utilities, vault, zkp,
 };
 
 /// API routes configuration
@@ -163,6 +163,8 @@ impl ApiRoutes {
         // Note: get_credential_as_vc is registered in credentials_routes() scope
         cfg.service(interop::resolve_did)
             .service(interop::export_governance_jsonld);
+        // Vault (encrypted wallet backup)
+        cfg.service(vault::vault_store).service(vault::vault_get);
     }
 
     fn identity_routes() -> Scope {
