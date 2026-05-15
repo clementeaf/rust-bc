@@ -408,6 +408,7 @@ Architecture: frontends on S3/CloudFront, backend on EC2.
 |---|---|---|
 | Explorer | S3 + CloudFront | https://ceruleanledger.com |
 | Voto | S3 + CloudFront | https://voto.ceruleanledger.com |
+| Wallet | S3 + CloudFront | https://wallet.ceruleanledger.com |
 | Node API | EC2 (t3.medium) | proxied via CloudFront `/api/*` |
 | Grafana | EC2 | http://<ec2-ip>:3000 |
 
