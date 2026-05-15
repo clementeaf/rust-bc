@@ -6,6 +6,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-15
+
+**Cerulean Voto — Voter registry persistence, padron validation, agenda-election linking**
+
+- Voter registry (padron) persisted in localStorage — survives page refresh
+- Vote page validates voter against registered padron before allowing vote
+- Voter bar shows registration status: "Habilitado" (green), "No registrado" (red)
+- Session agenda items of type "votacion" can link to a governance proposal via dropdown
+- Linked elections shown as badge in session detail drawer
+- Removed dead code: `PageIntro` component, 5 unused types, 2 unused API functions
+
+---
+
 ### 2026-05-14
 
 **Cerulean Voto — Asambleas, Sesiones, Actas, Administracion**
