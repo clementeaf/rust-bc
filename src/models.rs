@@ -312,17 +312,6 @@ impl Mempool {
     }
 
     /**
-     * Crea un mempool con tamaño máximo personalizado
-     */
-    #[allow(dead_code)]
-    pub fn with_max_size(max_size: usize) -> Mempool {
-        Mempool {
-            transactions: Vec::new(),
-            max_size,
-        }
-    }
-
-    /**
      * Calcula el saldo pendiente (gastado) de un wallet en el mempool
      * @param address - Dirección del wallet
      * @returns Total de amount + fee de todas las transacciones pendientes del wallet
@@ -457,14 +446,6 @@ impl WalletManager {
     }
 
     /**
-     * Crea un wallet con dirección específica (legacy, genera nuevo keypair)
-     */
-    #[allow(dead_code)]
-    pub fn create_wallet_with_address(&mut self, _address: String) -> &Wallet {
-        self.create_wallet()
-    }
-
-    /**
      * Obtiene un wallet y permite firmar transacciones
      */
     pub fn get_wallet_for_signing(&self, address: &str) -> Option<&Wallet> {
@@ -472,77 +453,10 @@ impl WalletManager {
     }
 
     /**
-     * Obtiene o crea un wallet con la dirección especificada
-     */
-    #[allow(dead_code)]
-    pub fn get_or_create_wallet(&mut self, address: &str) -> &mut Wallet {
-        if !self.wallets.contains_key(address) {
-            let mut wallet = Wallet::new();
-            wallet.address = address.to_string();
-            self.wallets.insert(address.to_string(), wallet);
-        }
-        self.wallets.get_mut(address).unwrap()
-    }
-
-    /**
      * Obtiene un wallet por dirección
      */
     pub fn get_wallet(&self, address: &str) -> Option<&Wallet> {
         self.wallets.get(address)
-    }
-
-    /**
-     * Obtiene un wallet mutable por dirección
-     */
-    #[allow(dead_code)]
-    pub fn get_wallet_mut(&mut self, address: &str) -> Option<&mut Wallet> {
-        self.wallets.get_mut(address)
-    }
-
-    /**
-     * Obtiene el balance de un wallet
-     * NOTA: Este método devuelve el balance almacenado en el wallet.
-     * Para obtener el balance real desde la blockchain, usar blockchain.calculate_balance()
-     */
-    #[allow(dead_code)]
-    pub fn get_balance(&self, address: &str) -> u64 {
-        self.wallets
-            .get(address)
-            .or_else(|| self.wallets.values().find(|w| w.address == address))
-            .map(|w| w.balance)
-            .unwrap_or(0)
-    }
-
-    /**
-     * Busca un wallet por dirección (puede estar con dirección como clave o en el campo address)
-     */
-    #[allow(dead_code)]
-    pub fn find_wallet_by_address(&self, address: &str) -> Option<&Wallet> {
-        self.wallets
-            .get(address)
-            .or_else(|| self.wallets.values().find(|w| w.address == address))
-    }
-
-    /**
-     * Busca un wallet mutable por dirección
-     */
-    #[allow(dead_code)]
-    pub fn find_wallet_by_address_mut(&mut self, address: &str) -> Option<&mut Wallet> {
-        if self.wallets.contains_key(address) {
-            return self.wallets.get_mut(address);
-        }
-
-        let key_to_update = self
-            .wallets
-            .iter()
-            .find(|(_, w)| w.address == address)
-            .map(|(k, _)| k.clone());
-
-        if let Some(key) = key_to_update {
-            return self.wallets.get_mut(&key);
-        }
-
-        None
     }
 
     /**
@@ -565,14 +479,6 @@ impl WalletManager {
         // Solo agregar amount al destinatario (el fee va al minero)
         to_wallet.add_balance(tx.amount);
         Ok(())
-    }
-
-    /**
-     * Obtiene todos los wallets
-     */
-    #[allow(dead_code)]
-    pub fn get_all_wallets(&self) -> Vec<&Wallet> {
-        self.wallets.values().collect()
     }
 
     /**

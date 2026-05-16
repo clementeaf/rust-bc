@@ -3,7 +3,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 // External crates
 use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Crate modules
@@ -145,57 +144,6 @@ impl Block {
         self.hash.clone()
     }
 
-    /**
-     * Minería paralela - busca nonce usando múltiples threads
-     * Particiona el espacio de nonce entre threads para máxima eficiencia
-     *
-     * PERFORMANCE:
-     * - En 4 cores: ~3.5x más rápido que secuencial
-     * - En 8 cores: ~6.5x más rápido que secuencial
-     */
-    #[allow(dead_code)]
-    pub fn mine_parallel(&mut self) -> String {
-        let target = "0".repeat(self.difficulty as usize);
-        let num_threads = num_cpus::get();
-        let chunk_size = (u64::MAX / num_threads as u64).max(1_000_000);
-
-        // Dividir búsqueda en chunks para cada thread
-        let result = (0..num_threads as u64)
-            .into_par_iter()
-            .find_map_any(|thread_id| {
-                let start_nonce = thread_id * chunk_size;
-                let end_nonce = (thread_id + 1) * chunk_size;
-
-                for nonce in start_nonce..end_nonce {
-                    let data = format!(
-                        "{}{}{}{}{}{}",
-                        self.index,
-                        self.timestamp,
-                        self.merkle_root,
-                        self.previous_hash,
-                        nonce,
-                        self.transactions.len()
-                    );
-                    let mut hasher = Sha256::new();
-                    hasher.update(data.as_bytes());
-                    let hash = format!("{:x}", hasher.finalize());
-
-                    if hash.starts_with(&target) {
-                        return Some((nonce, hash));
-                    }
-                }
-                None
-            });
-
-        if let Some((nonce, hash)) = result {
-            self.nonce = nonce;
-            self.hash = hash.clone();
-            hash
-        } else {
-            // Fallback a búsqueda secuencial completa
-            self.mine_sequential()
-        }
-    }
 
     /**
      * Verifica que el hash del bloque sea válido según la dificultad
@@ -653,18 +601,6 @@ impl Blockchain {
         true
     }
 
-    /**
-     * Encuentra el punto común más reciente entre dos cadenas
-     * Retorna el índice del último bloque común
-     */
-    #[allow(dead_code)]
-    pub fn find_common_ancestor(&self, other_chain: &[Block]) -> Option<usize> {
-        let min_len = self.chain.len().min(other_chain.len());
-
-        (0..min_len)
-            .rev()
-            .find(|&i| self.chain[i].hash == other_chain[i].hash)
-    }
 
     /**
      * Obtiene un bloque por su hash
