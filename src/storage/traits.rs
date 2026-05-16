@@ -282,6 +282,46 @@ pub trait BlockStore: Send + Sync {
         ))
     }
 
+    // ── Balance & transaction queries (migration helpers) ──────────────────
+
+    /// Calculate the balance of an address by scanning all transactions.
+    ///
+    /// Default implementation iterates all blocks — O(n). Backends with
+    /// balance indexes should override for O(1) lookups.
+    fn calculate_balance(&self, address: &str) -> StorageResult<u64> {
+        let latest = self.get_latest_height().unwrap_or(0);
+        let mut balance: u64 = 0;
+        for h in 0..=latest {
+            let txs = self.transactions_by_block_height(h).unwrap_or_default();
+            for tx in &txs {
+                if tx.output_recipient == address {
+                    balance = balance.saturating_add(tx.amount);
+                }
+                if tx.input_did == address {
+                    balance = balance.saturating_sub(tx.amount);
+                }
+            }
+        }
+        Ok(balance)
+    }
+
+    /// Return all transactions where the given address is sender or recipient.
+    ///
+    /// Default implementation scans all blocks — O(n). Override for indexed lookups.
+    fn transactions_for_address(&self, address: &str) -> StorageResult<Vec<Transaction>> {
+        let latest = self.get_latest_height().unwrap_or(0);
+        let mut result = Vec::new();
+        for h in 0..=latest {
+            let txs = self.transactions_by_block_height(h).unwrap_or_default();
+            for tx in txs {
+                if tx.input_did == address || tx.output_recipient == address {
+                    result.push(tx);
+                }
+            }
+        }
+        Ok(result)
+    }
+
     /// Return a page of blocks plus the total count for pagination.
     ///
     /// Default implementation iterates `[offset, offset+limit)` by height.
