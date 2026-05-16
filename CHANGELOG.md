@@ -36,7 +36,7 @@ Dynamic scopes (multi-tenant organizational structure):
 Setup wizard (5-step guided onboarding):
 - Step 1: Create wallet or connect existing (extension / DID import / new)
 - Step 2: Organization (name, RUT, president, secretary → auto-creates DLT channel)
-- Step 3: Register participants (wallet per person, name assigned to padron)
+- Step 3: Inscribe participants by address/DID (admin doesn't create wallets for others)
 - Step 4: Organizational structure (optional scopes with DLT channels)
 - Step 5: First election (optional)
 
