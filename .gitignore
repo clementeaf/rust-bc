@@ -76,3 +76,8 @@ caddy-config/
 # Node modules (all subprojects)
 **/node_modules/
 
+# Extracted to dedicated repos (cerulean-explorer, cerulean-voto, cerulean-sdks)
+block-explorer-vite/
+cerulean-voto/
+sdks/
+
