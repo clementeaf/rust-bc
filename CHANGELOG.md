@@ -6,6 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-16
+
+**Monorepo cleanup — extract frontends and SDKs to dedicated repos**
+
+- Removed `block-explorer-vite/`, `cerulean-voto/`, `sdks/` from monorepo
+- Each now lives in its own GitHub repo: [cerulean-explorer](https://github.com/clementeaf/cerulean-explorer), [cerulean-voto](https://github.com/clementeaf/cerulean-voto), [cerulean-sdks](https://github.com/clementeaf/cerulean-sdks)
+- Added extracted directories to `.gitignore` to prevent residual artifacts
+- Updated `CLAUDE.md` to reference dedicated repos instead of local paths
+
+---
+
 ### 2026-05-15
 
 **Cerulean Voto — Multi-tenant platform with wallet integration and interoperability**
