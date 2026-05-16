@@ -20,6 +20,7 @@ use crate::governance::params::ParamRegistry;
 use crate::governance::proposals::ProposalStore;
 use crate::governance::voting::VoteStore;
 use crate::metrics::MetricsCollector;
+use crate::mining::MiningService;
 use crate::models::{Mempool, WalletManager};
 use crate::msp::CrlStore;
 use crate::network::Node;
@@ -100,6 +101,8 @@ pub struct AppState {
     pub legal_oracle_store: Arc<dyn crate::legal_oracle::OracleRecordStore>,
     /// Legal oracle service.
     pub legal_oracle: Arc<std::sync::Mutex<crate::legal_oracle::legal::LegalOracle>>,
+    /// Mining service backed by BlockStore (new path).
+    pub mining_service: Option<Arc<MiningService>>,
 }
 
 impl AppState {
@@ -161,6 +164,7 @@ impl AppState {
             legal_oracle: Arc::new(std::sync::Mutex::new(
                 crate::legal_oracle::legal::LegalOracle::new(300),
             )),
+            mining_service: None,
         }
     }
 }

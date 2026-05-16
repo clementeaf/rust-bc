@@ -1079,6 +1079,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         legal_oracle: Arc::new(std::sync::Mutex::new(
             legal_oracle::legal::LegalOracle::new(300),
         )),
+        mining_service: Some(Arc::new(mining::MiningService::new(
+            gateway_store.clone(),
+            mining::MiningConfig::default(),
+        ))),
     };
 
     // Oracle demo feed: simulated price data for sandbox demos.
