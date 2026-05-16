@@ -6,6 +6,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+---
+
+## [0.1.0] — 2026-05-16
+
 ### 2026-05-16
 
 **Monorepo cleanup — extract frontends and SDKs to dedicated repos**
@@ -1569,8 +1573,3 @@ Tests: 1503 total (1427 lib + 76 integration), 0 failures
 - Docs reorganized: `ANALYSIS/` → `docs/analysis/`, `Documents/` → `docs/archive/`
 - Stopped tracking local `blockchain_blocks/` sample data
 
----
-
-## [0.1.0] — target Q3 2026
-
-Planned first release. Tracks when the Unreleased work above is stable and versioned.
