@@ -144,7 +144,6 @@ impl Block {
         self.hash.clone()
     }
 
-
     /**
      * Verifica que el hash del bloque sea válido según la dificultad
      */
@@ -600,7 +599,6 @@ impl Blockchain {
 
         true
     }
-
 
     /**
      * Obtiene un bloque por su hash

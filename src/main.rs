@@ -30,6 +30,7 @@ mod intelligence;
 mod legal_oracle;
 mod metrics;
 mod middleware;
+mod mining;
 mod models;
 mod msp;
 mod network;
