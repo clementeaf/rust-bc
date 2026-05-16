@@ -150,77 +150,17 @@ Services initialized at startup (all use in-memory backends by default):
 
 ### Block explorer — Cerulean Ledger UI
 
-| Path | Stack | Notes |
-|---|---|---|
-| `block-explorer-vite/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node. |
+**Repo:** [cerulean-explorer](https://github.com/clementeaf/cerulean-explorer) (Vite + React + Tailwind). Proxies `/api` to the node.
 
-Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`.
-
-Routes:
-- `/` — Landing page (hero with live network pulse, thesis, verticals selector, numbers, audit quote, CTA)
-- `/integridad` — Institutional integrity dashboard (flagship): 8 horizontal service cards with detail drawers, integrity report table, security events timeline, vertical control cards, stress performance grid. Auto-refresh 30s. Print-friendly.
-- `/dashboard` — Network stats, blocks, hub cards
-- `/identity` — Digital identity module: identity list + signed documents panel + detail drawer with cryptographic proof
-- `/demo` — 5-step RRHH credential verification demo (compact single-card layout)
-- `/compliance` — Audit trail with action/org filters, summary indicators, auto-refresh
-- `/chaincode-health` — Sandbox report viewer per chaincode version
-- All other pages use sidebar Layout
-
-Key structure:
-- `src/pages/Landing.tsx` — hero + pillars + tech specs + CTAs
-- `src/lib/format.ts` — shared formatters (`timeAgo`, `shortHash`, `fmtDate`, etc.)
-- `src/lib/routes.ts` — route config with lazy loading
-- `src/lib/api.ts` — API client and types
-
-Not required to run the node.
+Branded as **Cerulean Ledger**. Full Spanish UI. DID prefix: `did:cerulean:`. Not required to run the node.
 
 ### Electronic voting — Cerulean Voto
 
-| Path | Stack | Notes |
-|---|---|---|
-| `cerulean-voto/` | Vite + React + Tailwind | `npm install` / `npm run dev`; proxies `/api` to the node on port 5174. |
+**Repo:** [cerulean-voto](https://github.com/clementeaf/cerulean-voto) (Vite + React + Tailwind). Multi-tenant voting platform with Ed25519 wallet integration, Chrome extension support, and vault-backed cross-app portability. Not required to run the node.
 
-Multi-tenant voting platform with Ed25519 wallet integration, Chrome extension support, and vault-backed cross-app portability.
+### SDKs
 
-Routes (sidebar: Votacion / Organizacion / Administracion):
-- `/` — Landing (CTA: "Configurar mi organizacion" or "Ingresar" if configured)
-- `/setup` — 5-step wizard: wallet → org → participants → structure → first election
-- `/dashboard` — Active/closed election stats
-- `/elections` — Create and manage elections (governance proposals)
-- `/vote` — Wallet-signed voting with Ed25519, animated receipt with crypto proof
-- `/results` — Tally cards with percentage bars, quorum/threshold
-- `/voters` — Create wallets (WASM), import from vault by DID, QR codes, padron management
-- `/scopes` — Dynamic organizational structure: tree view, member roles (admin/voter/observer), permission-gated
-- `/assemblies` — Convocatoria validation (Ley 19.418 Art. 16), folio correlativo
-- `/sessions?assembly=ID` — Citation (1a/2a), quorum, agenda linked to proposals, auto-acta + blockchain anchoring
-- `/actas` — Permanent records (ISO 15489), SHA-256 hash, on-chain anchor status
-- `/admin` — Org settings, DLT channel, interop endpoints (DID/VC/JSON-LD/OpenAPI), export/import
-
-**Wallet:** WASM module from cerulean-wallet (`src/wasm/`). Wallets stored on-chain via `/vault` endpoints — cross-app portability (Voto ↔ Wallet). Chrome extension auto-detected via `window.cerulean`. DID = `did:cerulean:{sha256(pubkey)[0..20]}`.
-
-**Scopes:** Generic multi-tenant scopes with tree-propagated permissions. Founder = root admin. Admin role inherits downward. Each scope = own DLT channel. API interceptor sends `X-Channel-Id` based on active scope.
-
-**Vote security:** Ed25519 signature, blind voter ID (`sha256(proposal_id || voter_did)`), backend verification, deduplication.
-
-**Compliance:** Ley 19.418 Art. 16/17, ISO 15489, ISO 8601.
-
-Key structure:
-- `src/lib/api.ts` — governance, identity, vault, acta anchoring, channel management
-- `src/lib/wallet.ts` — WASM crypto, vault persistence, DID derivation, extension support
-- `src/lib/store.ts` — scopes, assemblies, sessions, actas, org settings, permissions engine
-- `src/lib/routes.ts` — 11 lazy-loaded routes, 3 sidebar groups
-- `src/wasm/` — cerulean-wallet WASM (Ed25519, Argon2id, AES-256-GCM)
-- `src/components/Layout.tsx` — header with active scope indicator, grouped sidebar
-- `Dockerfile` + `nginx.conf` — containerized with API proxy to node
-
-Not required to run the node.
-
-### SDKs (`sdks/`)
-
-| Path | Language | Notes |
-|---|---|---|
-| `sdks/js/` | TypeScript | v1.0, axios-based client, tests, examples |
-| `sdks/python/` | Python | Client, types, exceptions, tests |
+**Repo:** [cerulean-sdks](https://github.com/clementeaf/cerulean-sdks) — TypeScript and Python clients.
 
 ### Tools (`tools/`)
 
@@ -409,20 +349,7 @@ Architecture: frontends on S3/CloudFront, backend on EC2.
 | Node API | EC2 (t3.medium) | proxied via CloudFront `/api/*` |
 | Grafana | EC2 | http://<ec2-ip>:3000 |
 
-Frontend deploy:
-```bash
-# Build and upload Explorer
-cd block-explorer-vite && npm run build
-aws s3 sync dist/ s3://ceruleanledger-explorer/ --delete
-
-# Build and upload Voto
-cd cerulean-voto && npm run build
-aws s3 sync dist/ s3://ceruleanledger-voto/ --delete
-
-# Invalidate CloudFront cache after deploy
-aws cloudfront create-invalidation --distribution-id E9QQPJR6KVMFH --paths "/*"
-aws cloudfront create-invalidation --distribution-id E2QW638B59JZ89 --paths "/*"
-```
+Frontend deploy: build and upload from each dedicated repo (cerulean-explorer, cerulean-voto). See their respective READMEs for deploy instructions.
 
 Backend deploy (EC2):
 ```bash
