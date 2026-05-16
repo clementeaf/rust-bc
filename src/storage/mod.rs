@@ -9,6 +9,7 @@
 
 #[cfg(feature = "rocksdb-storage")]
 pub mod adapters;
+pub mod compat;
 pub mod comprehensive_tests;
 pub mod couchdb;
 pub mod errors;
