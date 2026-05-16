@@ -6,6 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-16
+
+**Repo cleanup and v0.1.0 release**
+
+Monorepo restructuring:
+- Extracted `block-explorer-vite/`, `cerulean-voto/`, `sdks/` to dedicated repos
+- Added extracted directories to `.gitignore`
+- Updated `CLAUDE.md` to reference dedicated repos
+
+Docker consolidation:
+- Removed `Dockerfile.lite`, `Dockerfile.prebuilt`, `docker-compose.lite.yml`
+- Updated `scripts/build-fast.sh` to use inline Dockerfile
+
+Dead code removal:
+- Removed 25 obsolete shell scripts (debug/iteration variants)
+- Removed `docs/archive/` (116 files) and `docs/prompts/` (25 files)
+- Removed `src/Features/` (C# skeleton), `src/smart_contract.rs` (0 importers)
+- Removed `src/chain_validation.rs` and 9 standalone test binaries
+- Removed `tesseract/` prototype (2.1G, preserved in `tesseract-prototype` branch)
+
+Documentation:
+- Slimmed `CLAUDE.md` from 385 to 91 lines (env vars and deployment now in `docs/`)
+- Cut first release: `v0.1.0` tag
+
 ---
 
 ## [0.1.0] — 2026-05-16
