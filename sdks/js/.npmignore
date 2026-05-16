@@ -1,7 +1,0 @@
-src/
-examples/
-tests/
-tsconfig.json
-*.ts
-!*.d.ts
-
