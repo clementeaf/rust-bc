@@ -20,15 +20,28 @@ Docker consolidation:
 - Updated `scripts/build-fast.sh` to use inline Dockerfile
 
 Dead code removal:
-- Removed 25 obsolete shell scripts (debug/iteration variants)
-- Removed `docs/archive/` (116 files) and `docs/prompts/` (25 files)
+- Removed 60 obsolete shell scripts (85 → 25)
+- Removed `docs/archive/` (116 files), `docs/prompts/` (25 files), `docs/analysis/` (16 files)
+- Removed stale planning docs (PHASE1_QUICK_START, REPOSITORY_SETUP_COMPLETE, DECISION_MATRIX, ROADMAP_NEUROMIGRATION, WEEK7_*)
 - Removed `src/Features/` (C# skeleton), `src/smart_contract.rs` (0 importers)
 - Removed `src/chain_validation.rs` and 9 standalone test binaries
+- Removed dead functions: `mine_parallel`, `find_common_ancestor`, 7 WalletManager methods
+- Removed `num_cpus` dependency
 - Removed `tesseract/` prototype (2.1G, preserved in `tesseract-prototype` branch)
 
 Documentation:
 - Slimmed `CLAUDE.md` from 385 to 91 lines (env vars and deployment now in `docs/`)
+- Rewrote `README.md` with current branding (Cerulean Ledger) and capabilities
+- Updated `CONTRIBUTING.md` and `SECURITY.md` branding
 - Cut first release: `v0.1.0` tag
+
+Storage migration (Fase 2b):
+- Added `storage::compat` module: From<> conversions between legacy and new types
+- Added `BlockStore::calculate_balance()` and `transactions_for_address()` default impls
+- Added `MiningService` (`src/mining.rs`): standalone mining backed by BlockStore
+- Wired `MiningService` into `AppState`
+- Migrated 4 read handlers to prefer BlockStore (balance, transactions, stake, airdrop)
+- Added dual-write in `mine_block`: mined blocks persist to both legacy and BlockStore
 
 ---
 
