@@ -11,7 +11,6 @@ pub mod oracle_connector;
 pub mod oracle_demo;
 pub mod oracle_system;
 pub mod plugin_contracts;
-pub mod smart_contract;
 pub mod staking_rewards;
 pub mod transaction_validation;
 
