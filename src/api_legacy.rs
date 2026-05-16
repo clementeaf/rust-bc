@@ -71,24 +71,16 @@ pub async fn get_wallet_balance(
     state: web::Data<AppState>,
     address: web::Path<String>,
 ) -> ActixResult<HttpResponse> {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let latest_block_index = if blockchain.chain.is_empty() {
-        0
-    } else {
-        blockchain.get_latest_block().index
-    };
-
-    let balance = match state.balance_cache.get(&address, latest_block_index) {
-        Some(cached_balance) => cached_balance,
-        None => {
-            let calculated_balance = blockchain.calculate_balance(&address);
-            state
-                .balance_cache
-                .set(address.clone(), calculated_balance, latest_block_index);
-            calculated_balance
+    // Try new BlockStore first (preferred path)
+    let balance = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            store.calculate_balance(&address).unwrap_or(0)
+        } else {
+            calculate_balance_legacy(&state, &address)
         }
+    } else {
+        calculate_balance_legacy(&state, &address)
     };
-    drop(blockchain);
 
     #[derive(Serialize)]
     struct BalanceResponse {
@@ -103,6 +95,27 @@ pub async fn get_wallet_balance(
 
     let response = ApiResponse::success(response_data);
     Ok(HttpResponse::Ok().json(response))
+}
+
+/// Legacy balance calculation via Blockchain struct (fallback).
+fn calculate_balance_legacy(state: &AppState, address: &str) -> u64 {
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    let latest_block_index = if blockchain.chain.is_empty() {
+        0
+    } else {
+        blockchain.get_latest_block().index
+    };
+
+    match state.balance_cache.get(address, latest_block_index) {
+        Some(cached_balance) => cached_balance,
+        None => {
+            let calculated_balance = blockchain.calculate_balance(address);
+            state
+                .balance_cache
+                .set(address.to_string(), calculated_balance, latest_block_index);
+            calculated_balance
+        }
+    }
 }
 
 /**
