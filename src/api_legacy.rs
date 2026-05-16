@@ -180,12 +180,20 @@ pub async fn create_wallet(
  * Obtiene todas las transacciones de un wallet
  */
 pub async fn get_wallet_transactions(
-    _state: web::Data<AppState>,
+    state: web::Data<AppState>,
     address: web::Path<String>,
 ) -> ActixResult<HttpResponse> {
-    let blockchain = _state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
+    // Try BlockStore first
+    if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            let txs = store.transactions_for_address(&address).unwrap_or_default();
+            let response = ApiResponse::success(txs);
+            return Ok(HttpResponse::Ok().json(response));
+        }
+    }
+    // Fallback to legacy
+    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
     let transactions = blockchain.get_transactions_for_wallet(&address);
-
     let response = ApiResponse::success(transactions);
     Ok(HttpResponse::Ok().json(response))
 }
@@ -1827,9 +1835,15 @@ pub async fn stake(
     }
 
     // Verificar balance antes de stakear
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let balance = blockchain.calculate_balance(&req.address);
-    drop(blockchain);
+    let balance = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            store.calculate_balance(&req.address).unwrap_or(0)
+        } else {
+            calculate_balance_legacy(&state, &req.address)
+        }
+    } else {
+        calculate_balance_legacy(&state, &req.address)
+    };
 
     if balance < req.amount {
         let response: ApiResponse<String> = ApiResponse::error(format!(
@@ -2079,9 +2093,14 @@ pub async fn claim_airdrop(
     let airdrop_amount = state.airdrop_manager.calculate_airdrop_amount(&tracking);
     let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
 
-    let airdrop_wallet_balance = {
-        let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-        blockchain.calculate_balance(&airdrop_wallet)
+    let airdrop_wallet_balance = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            store.calculate_balance(&airdrop_wallet).unwrap_or(0)
+        } else {
+            calculate_balance_legacy(&state, &airdrop_wallet)
+        }
+    } else {
+        calculate_balance_legacy(&state, &airdrop_wallet)
     };
 
     if airdrop_wallet_balance < airdrop_amount {
