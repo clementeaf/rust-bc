@@ -10,7 +10,6 @@ mod block_creation;
 mod block_storage;
 mod blockchain;
 mod cache;
-mod chain_validation;
 mod chaincode;
 mod channel;
 mod checkpoint;

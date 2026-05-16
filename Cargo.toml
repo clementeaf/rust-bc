@@ -91,41 +91,5 @@ name = "pqc_performance"
 harness = false
 
 [[bin]]
-name = "test_mining"
-path = "src/bin/test_mining.rs"
-
-[[bin]]
-name = "benchmark_mining"
-path = "src/bin/benchmark_mining.rs"
-
-[[bin]]
-name = "compare_mining"
-path = "src/bin/compare_mining.rs"
-
-[[bin]]
-name = "validate_chain"
-path = "src/bin/validate_chain.rs"
-
-[[bin]]
-name = "test_network_security"
-path = "src/bin/test_network_security.rs"
-
-[[bin]]
-name = "test_transaction_validation"
-path = "src/bin/test_transaction_validation.rs"
-
-[[bin]]
-name = "mining_worker"
-path = "src/bin/mining_worker.rs"
-
-[[bin]]
-name = "test_mining_worker"
-path = "src/bin/test_mining_worker.rs"
-
-[[bin]]
-name = "test_metrics"
-path = "src/bin/test_metrics.rs"
-
-[[bin]]
 name = "cerulean"
 path = "src/bin/cerulean.rs"

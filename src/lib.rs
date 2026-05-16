@@ -1,6 +1,5 @@
 // Librería para tests de integración
 pub mod blockchain;
-pub mod chain_validation;
 pub mod contract_validation;
 pub mod governance_contracts;
 pub mod models;
