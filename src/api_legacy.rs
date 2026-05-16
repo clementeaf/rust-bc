@@ -435,10 +435,27 @@ pub async fn mine_block(
         }
     }
 
-    // Guardar en BlockStorage
+    // Guardar en BlockStorage (legacy file-based)
     if let Some(ref storage) = state.block_storage {
         if let Err(e) = storage.save_block(&latest) {
             eprintln!("⚠️  Error al guardar bloque en archivos: {e}");
+        }
+    }
+
+    // Also persist to new BlockStore (dual-write for migration)
+    if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            let store_block: crate::storage::traits::Block = (&latest).into();
+            if let Err(e) = store.write_block(&store_block) {
+                eprintln!("⚠️  Error writing block to BlockStore: {e}");
+            }
+            // Write transactions to BlockStore
+            for tx in &latest.transactions {
+                let store_tx: crate::storage::traits::Transaction = tx.into();
+                let mut store_tx_with_height = store_tx;
+                store_tx_with_height.block_height = latest.index;
+                let _ = store.write_transaction(&store_tx_with_height);
+            }
         }
     }
 
