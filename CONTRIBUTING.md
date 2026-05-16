@@ -1,6 +1,6 @@
-# Contributing to rust-bc Digital ID System
+# Contributing to cerulean-ledger Digital ID System
 
-Welcome! This document provides guidelines for contributing to the rust-bc project.
+Welcome! This document provides guidelines for contributing to the cerulean-ledger project.
 
 **Table of Contents**
 - [Code of Conduct](#code-of-conduct)
@@ -33,8 +33,8 @@ We are committed to providing a welcoming and inclusive environment. All contrib
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-org/rust-bc.git
-cd rust-bc
+git clone https://github.com/clementeaf/cerulean-ledger.git
+cd cerulean-ledger
 
 # 2. Install pre-commit hooks
 pre-commit install
@@ -53,7 +53,7 @@ cargo check
 ### 1. Issue Tracking
 
 **Before starting work:**
-- Check [Issues](https://github.com/your-org/rust-bc/issues) for existing work
+- Check [Issues](https://github.com/clementeaf/cerulean-ledger/issues) for existing work
 - Create issue if not exists (use templates below)
 - Link your PR to the issue
 
@@ -353,15 +353,15 @@ RUST_BACKTRACE=1 cargo build 2>&1 | head -50
 - **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - **API Contract:** [docs/API_CONTRACT.md](docs/API_CONTRACT.md)
 - **Branching Strategy:** [docs/dev/BRANCHING_STRATEGY.md](docs/dev/BRANCHING_STRATEGY.md)
-- **GitHub Issues:** [issues](https://github.com/your-org/rust-bc/issues)
-- **Discussions:** [discussions](https://github.com/your-org/rust-bc/discussions)
+- **GitHub Issues:** [issues](https://github.com/clementeaf/cerulean-ledger/issues)
+- **Discussions:** [discussions](https://github.com/clementeaf/cerulean-ledger/discussions)
 
 ---
 
 ## Questions?
 
 - Create a GitHub Discussion
-- Ask in #rust-bc Slack channel
+- Ask in #cerulean-ledger Slack channel
 - Contact maintainers
 
 ---

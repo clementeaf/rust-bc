@@ -127,7 +127,7 @@ Reject if: timestamp < (current_time - 3600000) OR timestamp > (current_time + 3
 
 If you discover a security vulnerability in this project, please report it responsibly.
 
-**Contact:** security@rust-bc.dev
+**Contact:** security@ceruleanledger.com
 
 **Process:**
 1. Send a description of the vulnerability to the contact above
