@@ -186,11 +186,9 @@ Organized into subdirectories:
 | `docs/compliance/` | FIPS 140, certification roadmap, compliance framework, PQC enterprise |
 | `docs/compliance/fips_submission/` | CMVP submission package (lab selection, gap analysis, timeline) |
 | `docs/compliance/pre_lab_audit/` | Pre-lab mock audit (findings, traceability, ACVP plan) |
-| `docs/prompts/` | Test generation prompts (POE, PROMPT1–10) |
 | `docs/analysis/` | Phase analysis, architecture notes, decision matrices |
 | `docs/dev/` | Developer onboarding, branching strategy, setup |
 | `docs/es/` | Spanish translations |
-| `docs/archive/` | Legacy documentation |
 | `docs/book/` | mdBook documentation site |
 
 All `.md` presentation docs in `docs/camara/` have corresponding `.pdf` via pandoc + weasyprint.
