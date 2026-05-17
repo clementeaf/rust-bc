@@ -71,6 +71,10 @@ const CF_GOVERNANCE_PROPOSALS: &str = "governance_proposals";
 const CF_GOVERNANCE_VOTES: &str = "governance_votes";
 /// Vault: key = DID, value = encrypted wallet JSON (opaque blob)
 const CF_VAULT: &str = "vault";
+const CF_SCOPES: &str = "scopes";
+const CF_ASSEMBLIES: &str = "assemblies";
+const CF_SESSIONS: &str = "sessions";
+const CF_ACTAS: &str = "actas";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -99,6 +103,10 @@ const ALL_CFS: &[&str] = &[
     CF_GOVERNANCE_PROPOSALS,
     CF_GOVERNANCE_VOTES,
     CF_VAULT,
+    CF_SCOPES,
+    CF_ASSEMBLIES,
+    CF_SESSIONS,
+    CF_ACTAS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -870,6 +878,187 @@ impl BlockStore for RocksDbBlockStore {
             .map_err(|e| StorageError::RocksDbError(e.to_string()))?
             .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))?;
         serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+
+    // ── Governance entities ─────────────────────────────────────────────
+
+    fn write_scope(&self, scope: &super::traits::Scope) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_SCOPES)
+            .ok_or_else(|| StorageError::RocksDbError("missing scopes CF".into()))?;
+        let json = serde_json::to_vec(scope)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, scope.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_scope(&self, id: &str) -> StorageResult<super::traits::Scope> {
+        let cf = self
+            .db
+            .cf_handle(CF_SCOPES)
+            .ok_or_else(|| StorageError::RocksDbError("missing scopes CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("scope:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_scopes(&self) -> StorageResult<Vec<super::traits::Scope>> {
+        let cf = self
+            .db
+            .cf_handle(CF_SCOPES)
+            .ok_or_else(|| StorageError::RocksDbError("missing scopes CF".into()))?;
+        let mut result = Vec::new();
+        let iter = self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start);
+        for item in iter {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let scope: super::traits::Scope = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            result.push(scope);
+        }
+        Ok(result)
+    }
+    fn delete_scope(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_SCOPES)
+            .ok_or_else(|| StorageError::RocksDbError("missing scopes CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn write_assembly(&self, assembly: &super::traits::Assembly) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSEMBLIES)
+            .ok_or_else(|| StorageError::RocksDbError("missing assemblies CF".into()))?;
+        let json = serde_json::to_vec(assembly)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, assembly.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_assembly(&self, id: &str) -> StorageResult<super::traits::Assembly> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSEMBLIES)
+            .ok_or_else(|| StorageError::RocksDbError("missing assemblies CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("assembly:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_assemblies(&self) -> StorageResult<Vec<super::traits::Assembly>> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSEMBLIES)
+            .ok_or_else(|| StorageError::RocksDbError("missing assemblies CF".into()))?;
+        let mut result = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            result.push(
+                serde_json::from_slice(&v)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+            );
+        }
+        Ok(result)
+    }
+    fn list_assemblies_by_scope(
+        &self,
+        scope_id: &str,
+    ) -> StorageResult<Vec<super::traits::Assembly>> {
+        Ok(self
+            .list_assemblies()?
+            .into_iter()
+            .filter(|a| a.scope_id == scope_id)
+            .collect())
+    }
+
+    fn write_session(&self, session: &super::traits::Session) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_SESSIONS)
+            .ok_or_else(|| StorageError::RocksDbError("missing sessions CF".into()))?;
+        let json = serde_json::to_vec(session)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, session.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_session(&self, id: &str) -> StorageResult<super::traits::Session> {
+        let cf = self
+            .db
+            .cf_handle(CF_SESSIONS)
+            .ok_or_else(|| StorageError::RocksDbError("missing sessions CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("session:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_sessions_by_assembly(
+        &self,
+        assembly_id: &str,
+    ) -> StorageResult<Vec<super::traits::Session>> {
+        let cf = self
+            .db
+            .cf_handle(CF_SESSIONS)
+            .ok_or_else(|| StorageError::RocksDbError("missing sessions CF".into()))?;
+        let mut result = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let s: super::traits::Session = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            if s.assembly_id == assembly_id {
+                result.push(s);
+            }
+        }
+        Ok(result)
+    }
+
+    fn write_acta(&self, acta: &super::traits::Acta) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ACTAS)
+            .ok_or_else(|| StorageError::RocksDbError("missing actas CF".into()))?;
+        let json = serde_json::to_vec(acta)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, acta.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_acta(&self, id: &str) -> StorageResult<super::traits::Acta> {
+        let cf = self
+            .db
+            .cf_handle(CF_ACTAS)
+            .ok_or_else(|| StorageError::RocksDbError("missing actas CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("acta:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_actas(&self) -> StorageResult<Vec<super::traits::Acta>> {
+        let cf = self
+            .db
+            .cf_handle(CF_ACTAS)
+            .ok_or_else(|| StorageError::RocksDbError("missing actas CF".into()))?;
+        let mut result = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            result.push(
+                serde_json::from_slice(&v)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+            );
+        }
+        Ok(result)
     }
 }
 
