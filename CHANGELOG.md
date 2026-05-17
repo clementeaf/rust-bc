@@ -6,42 +6,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-17
+
+**Legacy storage removal — API layer fully migrated to BlockStore**
+
+New modules:
+- `src/mining.rs` — MiningService backed by BlockStore (replaces Blockchain::mine_block_with_reward)
+- `src/transaction/mempool.rs` — TransactionPool using storage::Transaction (replaces models::Mempool)
+- `src/storage/compat.rs` — From<> conversions between legacy and new types
+- `src/api/handlers/governance_entities.rs` — 14 CRUD endpoints for scopes, assemblies, sessions, actas
+- `BlockStore::calculate_balance()`, `transactions_for_address()` — default impls for handler migration
+
+Legacy files removed:
+- `state_reconstructor.rs`, `state_snapshot.rs`, `pruning.rs`, `block_storage.rs`
+- `fee_validation_test.rs`, `integration_test.rs` (tested legacy Blockchain directly)
+
+Handlers migrated to BlockStore:
+- `mine_block` — uses MiningService exclusively
+- `get_wallet_balance`, `get_wallet_transactions` — read from BlockStore
+- `get_stats` — reads chain data from BlockStore
+- `create_transaction` — validates and enqueues via TransactionPool
+- `stake`, `unstake`, `claim_airdrop` — create storage::Transaction directly
+- `list_blocks`, `get_block_by_index` — read from BlockStore
+- `verify_chain`, `get_blockchain_info` — read from BlockStore
+- `health_check`, `get_version` — read height from BlockStore
+
+Legacy types (`blockchain.rs`, `models.rs`) are now `pub(crate)` — not exported, only used internally by `network/mod.rs` for P2P sync (not exercised in single-node mode).
+
+RocksDB column families added: `scopes`, `assemblies`, `sessions`, `actas`.
+
+CI workflows disabled (renamed to `.yml.disabled`).
+
+---
+
 ### 2026-05-16
 
 **Repo cleanup and v0.1.0 release**
 
-Monorepo restructuring:
-- Extracted `block-explorer-vite/`, `cerulean-voto/`, `sdks/` to dedicated repos
-- Added extracted directories to `.gitignore`
-- Updated `CLAUDE.md` to reference dedicated repos
-
-Docker consolidation:
-- Removed `Dockerfile.lite`, `Dockerfile.prebuilt`, `docker-compose.lite.yml`
-- Updated `scripts/build-fast.sh` to use inline Dockerfile
-
-Dead code removal:
-- Removed 60 obsolete shell scripts (85 → 25)
-- Removed `docs/archive/` (116 files), `docs/prompts/` (25 files), `docs/analysis/` (16 files)
-- Removed stale planning docs (PHASE1_QUICK_START, REPOSITORY_SETUP_COMPLETE, DECISION_MATRIX, ROADMAP_NEUROMIGRATION, WEEK7_*)
-- Removed `src/Features/` (C# skeleton), `src/smart_contract.rs` (0 importers)
-- Removed `src/chain_validation.rs` and 9 standalone test binaries
-- Removed dead functions: `mine_parallel`, `find_common_ancestor`, 7 WalletManager methods
-- Removed `num_cpus` dependency
-- Removed `tesseract/` prototype (2.1G, preserved in `tesseract-prototype` branch)
-
-Documentation:
-- Slimmed `CLAUDE.md` from 385 to 91 lines (env vars and deployment now in `docs/`)
-- Rewrote `README.md` with current branding (Cerulean Ledger) and capabilities
-- Updated `CONTRIBUTING.md` and `SECURITY.md` branding
-- Cut first release: `v0.1.0` tag
-
-Storage migration (Fase 2b):
-- Added `storage::compat` module: From<> conversions between legacy and new types
-- Added `BlockStore::calculate_balance()` and `transactions_for_address()` default impls
-- Added `MiningService` (`src/mining.rs`): standalone mining backed by BlockStore
-- Wired `MiningService` into `AppState`
-- Migrated 4 read handlers to prefer BlockStore (balance, transactions, stake, airdrop)
-- Added dual-write in `mine_block`: mined blocks persist to both legacy and BlockStore
+- Extracted frontends and SDKs to dedicated repos
+- Removed 60 obsolete scripts, 9 test binaries, 160+ stale docs
+- Removed `num_cpus` dependency, dead functions, `tesseract/` prototype
+- Slimmed `CLAUDE.md` from 385 to 91 lines
+- Rewrote `README.md` with Cerulean Ledger branding
+- Tagged `v0.1.0`
 
 ---
 
