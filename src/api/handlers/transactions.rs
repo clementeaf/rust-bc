@@ -8,11 +8,10 @@ use crate::api::handlers::channels::{
 };
 use crate::api::models::CreateTransactionRequest;
 use crate::app_state::AppState;
-use crate::models::Transaction;
 
 use super::validation::validate_store_transaction;
 
-/// POST /api/v1/transactions — valida y encola en el mempool.
+/// POST /api/v1/transactions — validates and enqueues in the transaction pool.
 #[post("/transactions")]
 pub async fn create_transaction(
     state: web::Data<AppState>,
@@ -46,73 +45,23 @@ pub async fn create_transaction(
         }
     }
 
-    let fee = req.fee.unwrap_or(0);
-    if req.from != "0" && fee == 0 {
-        return Err(ApiError::ValidationError {
-            field: "fee".to_string(),
-            reason: "Fee requerido: todas las transacciones deben incluir un fee > 0".to_string(),
-        });
-    }
+    // Build storage::Transaction
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let tx = crate::storage::traits::Transaction {
+        id: uuid::Uuid::new_v4().to_string(),
+        block_height: 0,
+        timestamp: now,
+        input_did: req.from.clone(),
+        output_recipient: req.to.clone(),
+        amount: req.amount,
+        state: "pending".to_string(),
+    };
 
-    let mut tx = Transaction::new_with_fee(
-        req.from.clone(),
-        req.to.clone(),
-        req.amount,
-        fee,
-        req.data.clone(),
-    );
-
-    if !tx.is_valid() {
-        return Err(ApiError::ValidationError {
-            field: "transaction".to_string(),
-            reason: "Transacción inválida".to_string(),
-        });
-    }
-
+    // Validate via Validatable trait
     if req.from != "0" {
-        let wallet_manager = state
-            .wallet_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let wallet = match wallet_manager.get_wallet_for_signing(&req.from) {
-            Some(w) => w,
-            None => {
-                return Err(ApiError::ValidationError {
-                    field: "from".to_string(),
-                    reason: "Wallet no encontrado para firmar".to_string(),
-                });
-            }
-        };
-
-        if let Some(sig) = &req.signature {
-            if !sig.is_empty() {
-                tx.signature = sig.clone();
-            } else {
-                wallet.sign_transaction(&mut tx);
-            }
-        } else {
-            wallet.sign_transaction(&mut tx);
-        }
-        drop(wallet_manager);
-
-        let (balance, validation_result) = {
-            let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-            let wallet_manager = state
-                .wallet_manager
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
-            let bal = blockchain.calculate_balance(&req.from);
-            let validation = blockchain.validate_transaction(&tx, &wallet_manager);
-            (bal, validation)
-        };
-
-        if let Err(e) = validation_result {
-            return Err(ApiError::ValidationError {
-                field: "transaction".to_string(),
-                reason: e,
-            });
-        }
-
         let validation_result = {
             let mut validator = state
                 .transaction_validator
@@ -129,51 +78,25 @@ pub async fn create_transaction(
             });
         }
 
-        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
+        // Balance check via BlockStore
+        let balance = if let Ok(store_map) = state.store.read() {
+            if let Some(store) = store_map.get("default") {
+                store.calculate_balance(&req.from).unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
 
-        if mempool.has_double_spend(&tx) {
-            return Err(ApiError::ValidationError {
-                field: "transaction".to_string(),
-                reason: "Doble gasto detectado en mempool".to_string(),
-            });
-        }
-
-        let pending_spent = mempool.calculate_pending_spent(&req.from);
-        let total_required = tx.amount + tx.fee;
-        let available_balance = balance.saturating_sub(pending_spent);
-
-        if available_balance < total_required {
+        if balance < req.amount {
             return Err(ApiError::ValidationError {
                 field: "balance".to_string(),
                 reason: format!(
-                    "Saldo insuficiente de token nativo. Disponible: {}, Requerido: {} (amount: {} + fee: {}). Pendiente en mempool: {}. Los fees solo se pueden pagar con el token nativo.",
-                    available_balance, total_required, tx.amount, tx.fee, pending_spent
+                    "Saldo insuficiente. Disponible: {balance}, Requerido: {}",
+                    req.amount
                 ),
             });
-        }
-
-        if let Err(e) = mempool.add_transaction(tx.clone()) {
-            drop(mempool);
-            return Err(ApiError::ValidationError {
-                field: "mempool".to_string(),
-                reason: e,
-            });
-        }
-        drop(mempool);
-
-        // Dual-write: also add to new TransactionPool
-        {
-            let store_tx = crate::storage::traits::Transaction {
-                id: tx.id.clone(),
-                block_height: 0,
-                timestamp: tx.timestamp,
-                input_did: tx.from.clone(),
-                output_recipient: tx.to.clone(),
-                amount: tx.amount,
-                state: "pending".to_string(),
-            };
-            let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
-            let _ = pool.add(store_tx);
         }
 
         if let Some(key) = &api_key {
@@ -189,12 +112,15 @@ pub async fn create_transaction(
         }
     }
 
-    if let Some(node) = &state.node {
-        let tx_clone = tx.clone();
-        let node_clone = node.clone();
-        tokio::spawn(async move {
-            node_clone.broadcast_transaction(&tx_clone).await;
-        });
+    // Add to transaction pool
+    {
+        let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        if let Err(e) = pool.add(tx.clone()) {
+            return Err(ApiError::ValidationError {
+                field: "mempool".to_string(),
+                reason: e,
+            });
+        }
     }
 
     let body = ApiResponse::success(tx, trace_id);
