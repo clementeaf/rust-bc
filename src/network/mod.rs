@@ -194,7 +194,6 @@ pub struct Node {
     pub peers: Arc<Mutex<HashSet<String>>>,
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-    pub block_storage: Option<Arc<()>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -405,7 +404,6 @@ impl Node {
             peers: Arc::new(Mutex::new(HashSet::new())),
             blockchain,
             wallet_manager: None,
-            block_storage: None,
             contract_manager: None,
             checkpoint_manager: None,
             transaction_validator: None,
@@ -561,7 +559,6 @@ impl Node {
         let peers = self.peers.clone();
         let blockchain = self.blockchain.clone();
         let wallet_manager = self.wallet_manager.clone();
-        let block_storage = self.block_storage.clone();
         let contract_manager = self.contract_manager.clone();
         let checkpoint_manager = self.checkpoint_manager.clone();
         let transaction_validator = self.transaction_validator.clone();
@@ -614,7 +611,6 @@ impl Node {
                     let peers_clone = peers.clone();
                     let blockchain_clone = blockchain.clone();
                     let wallet_manager_clone = wallet_manager.clone();
-                    let block_storage_clone = block_storage.clone();
                     let contract_manager_clone = contract_manager.clone();
                     let checkpoint_manager_clone = checkpoint_manager.clone();
                     let transaction_validator_clone = transaction_validator.clone();
@@ -656,7 +652,7 @@ impl Node {
                             peers_clone,
                             blockchain_clone,
                             wallet_manager_clone,
-                            block_storage_clone,
+                            None, // block_storage removed
                             contract_manager_clone,
                             checkpoint_manager_clone,
                             transaction_validator_clone,
@@ -702,7 +698,7 @@ impl Node {
         peers: Arc<Mutex<HashSet<String>>>,
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        block_storage: Option<Arc<()>>,
+        _block_storage: Option<Arc<()>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
         transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -818,7 +814,7 @@ impl Node {
                     &peers,
                     &blockchain,
                     wallet_manager.clone(),
-                    block_storage.clone(),
+                    None, // block_storage removed
                     contract_manager.clone(),
                     checkpoint_manager.clone(),
                     transaction_validator.clone(),

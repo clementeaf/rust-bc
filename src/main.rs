@@ -735,7 +735,6 @@ async fn async_main_inner() -> std::io::Result<()> {
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
-        block_storage: None,
         node: Some(node_arc.clone()),
         mempool: mempool.clone(),
         balance_cache: balance_cache.clone(),
@@ -743,7 +742,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         contract_manager: contract_manager.clone(),
         staking_manager: staking_manager.clone(),
         airdrop_manager: airdrop_manager.clone(),
-        pruning_manager: None,
         checkpoint_manager: checkpoint_manager.clone(),
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),

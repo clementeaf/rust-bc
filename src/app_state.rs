@@ -36,7 +36,6 @@ use crate::transaction_validation::TransactionValidator;
 pub struct AppState {
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Arc<Mutex<WalletManager>>,
-    pub block_storage: Option<Arc<()>>,
     pub node: Option<Arc<Node>>,
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
@@ -44,7 +43,6 @@ pub struct AppState {
     pub contract_manager: Arc<RwLock<ContractManager>>,
     pub staking_manager: Arc<StakingManager>,
     pub airdrop_manager: Arc<AirdropManager>,
-    pub pruning_manager: Option<Arc<()>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Arc<Mutex<TransactionValidator>>,
     pub metrics: Arc<MetricsCollector>,
@@ -119,7 +117,6 @@ impl AppState {
         Self {
             blockchain: Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),
             wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
-            block_storage: None,
             node: None,
             mempool: Arc::new(Mutex::new(Mempool::new())),
             balance_cache: Arc::new(BalanceCache::new()),
@@ -127,7 +124,6 @@ impl AppState {
             contract_manager: Arc::new(RwLock::new(ContractManager::new())),
             staking_manager: Arc::new(StakingManager::new(None, None, None)),
             airdrop_manager: Arc::new(AirdropManager::new(100, 10, "test-wallet".to_string())),
-            pruning_manager: None,
             checkpoint_manager: None,
             transaction_validator: Arc::new(Mutex::new(TransactionValidator::with_defaults())),
             metrics: Arc::new(MetricsCollector::new()),
