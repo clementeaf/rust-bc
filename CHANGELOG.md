@@ -44,6 +44,11 @@ Security fixes:
 - TransactionPool double-spend prevention via `add_checked()` (validates pending spend vs balance)
 - Blind voter ID nonce: `sha256(proposal_id || voter_did || client_nonce)` prevents brute-force deanonymization
 
+Enterprise core modules (`src/registry/`):
+- Asset Registry: 10 endpoints — asset CRUD, event history, bulk telemetry ingestion, node-signed certified export
+- RWA Tokenization: 5 endpoints — asset tokens with collateral lifecycle (Free/Pledged/Released/Seized)
+- Compliance Automation: 6 endpoints — configurable rules, bulk evaluation against asset events, result history
+
 CI workflows disabled (renamed to `.yml.disabled`).
 
 ---
