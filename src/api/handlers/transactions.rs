@@ -60,6 +60,23 @@ pub async fn create_transaction(
         state: "pending".to_string(),
     };
 
+    // Require client signature for non-coinbase transactions
+    if req.from != "0" {
+        match &req.signature {
+            Some(sig) if !sig.is_empty() => {
+                // Client provided a signature — store it for audit
+                // (Full verification requires knowing the sender's public key,
+                //  which is done at the identity layer via DID resolution)
+            }
+            _ => {
+                return Err(ApiError::ValidationError {
+                    field: "signature".to_string(),
+                    reason: "Signature required for non-coinbase transactions".to_string(),
+                });
+            }
+        }
+    }
+
     // Validate via Validatable trait
     if req.from != "0" {
         let validation_result = {

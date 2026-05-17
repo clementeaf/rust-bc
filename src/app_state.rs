@@ -99,6 +99,8 @@ pub struct AppState {
     pub legal_oracle: Arc<std::sync::Mutex<crate::legal_oracle::legal::LegalOracle>>,
     /// Mining service backed by BlockStore (new path).
     pub mining_service: Option<Arc<MiningService>>,
+    /// Node signing provider (Ed25519 or ML-DSA-65).
+    pub signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
     /// New transaction pool backed by storage::Transaction.
     pub tx_pool: Arc<Mutex<crate::transaction::mempool::TransactionPool>>,
 }
@@ -160,6 +162,7 @@ impl AppState {
                 crate::legal_oracle::legal::LegalOracle::new(300),
             )),
             mining_service: None,
+            signing_provider: None,
             tx_pool: Arc::new(Mutex::new(
                 crate::transaction::mempool::TransactionPool::new(),
             )),

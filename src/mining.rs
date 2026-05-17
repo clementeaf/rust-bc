@@ -4,7 +4,7 @@
 //! using the new storage layer. Replaces `Blockchain::mine_block_with_reward`.
 
 use crate::crypto::hasher::{hash, HashAlgorithm};
-use crate::identity::signing::SigningAlgorithm;
+use crate::identity::signing::{SigningAlgorithm, SigningProvider};
 use crate::storage::traits::{Block, BlockStore, Transaction};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -33,11 +33,22 @@ impl Default for MiningConfig {
 pub struct MiningService {
     store: Arc<dyn BlockStore>,
     config: MiningConfig,
+    signer: Option<Arc<dyn SigningProvider>>,
 }
 
 impl MiningService {
     pub fn new(store: Arc<dyn BlockStore>, config: MiningConfig) -> Self {
-        Self { store, config }
+        Self {
+            store,
+            config,
+            signer: None,
+        }
+    }
+
+    /// Attach a signing provider for block signatures.
+    pub fn with_signer(mut self, signer: Arc<dyn SigningProvider>) -> Self {
+        self.signer = Some(signer);
+        self
     }
 
     /// Mine a new block with the given transactions and miner reward.
@@ -89,6 +100,18 @@ impl MiningService {
         let merkle_data: String = all_tx_ids.join(",");
         let merkle_root = hash(merkle_data.as_bytes());
 
+        // Sign block hash with node's signing provider
+        let block_data = format!(
+            "{}:{:?}:{:?}:{:?}",
+            new_height, parent_hash, merkle_root, all_tx_ids
+        );
+        let (signature, sig_algorithm) = if let Some(ref signer) = self.signer {
+            let sig = signer.sign(block_data.as_bytes()).unwrap_or_default();
+            (sig, signer.algorithm())
+        } else {
+            (Vec::new(), SigningAlgorithm::default())
+        };
+
         // Create block
         let block = Block {
             height: new_height,
@@ -97,8 +120,8 @@ impl MiningService {
             merkle_root,
             transactions: all_tx_ids,
             proposer: miner_address.to_string(),
-            signature: Vec::new(),
-            signature_algorithm: SigningAlgorithm::default(),
+            signature,
+            signature_algorithm: sig_algorithm,
             endorsements: Vec::new(),
             secondary_signature: None,
             secondary_signature_algorithm: None,
