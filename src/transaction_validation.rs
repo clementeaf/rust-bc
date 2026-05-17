@@ -8,9 +8,68 @@
  * - Double-spend prevention
  * - Amount and format validation
  */
-use crate::models::Transaction;
 use std::collections::HashMap;
 use std::time::SystemTime;
+
+/// Trait for any transaction type that can be validated.
+/// Implemented for both legacy `models::Transaction` and `storage::Transaction`.
+pub trait Validatable {
+    fn id(&self) -> &str;
+    fn sender(&self) -> &str;
+    fn recipient(&self) -> &str;
+    fn amount(&self) -> u64;
+    fn fee(&self) -> u64;
+    fn timestamp(&self) -> u64;
+    fn data(&self) -> Option<&str>;
+}
+
+impl Validatable for crate::models::Transaction {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn sender(&self) -> &str {
+        &self.from
+    }
+    fn recipient(&self) -> &str {
+        &self.to
+    }
+    fn amount(&self) -> u64 {
+        self.amount
+    }
+    fn fee(&self) -> u64 {
+        self.fee
+    }
+    fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+    fn data(&self) -> Option<&str> {
+        self.data.as_deref()
+    }
+}
+
+impl Validatable for crate::storage::traits::Transaction {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn sender(&self) -> &str {
+        &self.input_did
+    }
+    fn recipient(&self) -> &str {
+        &self.output_recipient
+    }
+    fn amount(&self) -> u64 {
+        self.amount
+    }
+    fn fee(&self) -> u64 {
+        0
+    }
+    fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+    fn data(&self) -> Option<&str> {
+        None
+    }
+}
 
 /**
  * Transaction validation configuration
@@ -184,7 +243,7 @@ impl TransactionValidator {
     /**
      * Comprehensive transaction validation
      */
-    pub fn validate(&mut self, tx: &Transaction) -> ValidationResult {
+    pub fn validate(&mut self, tx: &dyn Validatable) -> ValidationResult {
         let mut result = ValidationResult::valid();
 
         // 1. Format validation
@@ -195,7 +254,7 @@ impl TransactionValidator {
         }
 
         // 2. Duplicate check (by ID)
-        if self.seen_transaction_ids.contains_key(&tx.id) {
+        if self.seen_transaction_ids.contains_key(tx.id()) {
             result.is_valid = false;
             result
                 .errors
@@ -262,25 +321,26 @@ impl TransactionValidator {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        self.seen_transaction_ids.insert(tx.id.clone(), now);
+        self.seen_transaction_ids.insert(tx.id().to_string(), now);
         self.seen_content_hashes.insert(content_hash, now);
         if let Some(store) = &self.store {
-            let _ = store.mark_tx_seen(&tx.id, now);
+            let _ = store.mark_tx_seen(tx.id(), now);
         }
 
         // Initialize sender state if needed
-        if !self.sender_states.contains_key(&tx.from) {
+        let sender = tx.sender().to_string();
+        if !self.sender_states.contains_key(&sender) {
             self.sender_states
-                .insert(tx.from.clone(), SenderState::new(tx.from.clone()));
+                .insert(sender.clone(), SenderState::new(sender.clone()));
         }
 
         // Update sender state
         if self.config.enable_sequence_tracking {
             let sender_state = self
                 .sender_states
-                .entry(tx.from.clone())
-                .or_insert_with(|| SenderState::new(tx.from.clone()));
-            let _ = sender_state.add_pending(tx.timestamp);
+                .entry(sender.clone())
+                .or_insert_with(|| SenderState::new(sender.clone()));
+            let _ = sender_state.add_pending(tx.timestamp());
         }
 
         result
@@ -288,37 +348,39 @@ impl TransactionValidator {
 
     /// Compute a content hash of a transaction's payload (excluding ID).
     /// Used to detect replayed transactions submitted with different UUIDs.
-    fn content_hash(tx: &Transaction) -> String {
+    fn content_hash(tx: &dyn Validatable) -> String {
         use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
         let data = format!(
             "{}:{}:{}:{}:{}",
-            tx.from,
-            tx.to,
-            tx.amount,
-            tx.fee,
-            tx.data.as_deref().unwrap_or(""),
+            tx.sender(),
+            tx.recipient(),
+            tx.amount(),
+            tx.fee(),
+            tx.data().unwrap_or(""),
         );
         hex::encode(Sha256::digest(data.as_bytes()))
     }
 
     /// Reject transactions whose timestamp is too far in the future or too old.
-    fn validate_timestamp(&self, tx: &Transaction) -> Result<(), String> {
+    fn validate_timestamp(&self, tx: &dyn Validatable) -> Result<(), String> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        if tx.timestamp > now.saturating_add(self.config.max_future_drift_secs) {
+        if tx.timestamp() > now.saturating_add(self.config.max_future_drift_secs) {
             return Err(format!(
                 "Transaction timestamp {} is too far in the future (max drift {}s)",
-                tx.timestamp, self.config.max_future_drift_secs
+                tx.timestamp(),
+                self.config.max_future_drift_secs
             ));
         }
 
-        if now.saturating_sub(tx.timestamp) > self.config.max_past_age_secs {
+        if now.saturating_sub(tx.timestamp()) > self.config.max_past_age_secs {
             return Err(format!(
                 "Transaction timestamp {} is too old (max age {}s)",
-                tx.timestamp, self.config.max_past_age_secs
+                tx.timestamp(),
+                self.config.max_past_age_secs
             ));
         }
 
@@ -328,16 +390,16 @@ impl TransactionValidator {
     /**
      * Validate transaction format
      */
-    fn validate_format(&self, tx: &Transaction) -> Result<(), String> {
-        if tx.id.is_empty() {
+    fn validate_format(&self, tx: &dyn Validatable) -> Result<(), String> {
+        if tx.id().is_empty() {
             return Err("Transaction ID cannot be empty".to_string());
         }
 
-        if tx.id.len() > 256 {
+        if tx.id().len() > 256 {
             return Err("Transaction ID too long (max 256 chars)".to_string());
         }
 
-        if tx.from == tx.to {
+        if tx.sender() == tx.recipient() {
             return Err("Sender and receiver cannot be the same".to_string());
         }
 
@@ -347,23 +409,25 @@ impl TransactionValidator {
     /**
      * Validate amounts
      */
-    fn validate_amounts(&self, tx: &Transaction) -> Result<(), String> {
+    fn validate_amounts(&self, tx: &dyn Validatable) -> Result<(), String> {
         let total = tx
-            .amount
-            .checked_add(tx.fee)
+            .amount()
+            .checked_add(tx.fee())
             .ok_or("Amount + fee overflow")?;
 
-        if tx.amount < self.config.min_amount {
+        if tx.amount() < self.config.min_amount {
             return Err(format!(
                 "Amount {} is below minimum {}",
-                tx.amount, self.config.min_amount
+                tx.amount(),
+                self.config.min_amount
             ));
         }
 
-        if tx.amount > self.config.max_amount {
+        if tx.amount() > self.config.max_amount {
             return Err(format!(
                 "Amount {} exceeds maximum {}",
-                tx.amount, self.config.max_amount
+                tx.amount(),
+                self.config.max_amount
             ));
         }
 
@@ -377,19 +441,20 @@ impl TransactionValidator {
     /**
      * Validate fees
      */
-    fn validate_fees(&self, tx: &Transaction) -> Result<(), String> {
+    fn validate_fees(&self, tx: &dyn Validatable) -> Result<(), String> {
         let adjusted_min_fee = (self.config.min_fee as f64 * self.config.fee_multiplier) as u64;
 
-        if tx.fee < adjusted_min_fee {
+        if tx.fee() < adjusted_min_fee {
             return Err(format!(
                 "Fee {} is below minimum {}",
-                tx.fee, adjusted_min_fee
+                tx.fee(),
+                adjusted_min_fee
             ));
         }
 
         // Warn if fee seems low relative to amount
-        let fee_ratio = tx.fee as f64 / (tx.amount as f64).max(1.0);
-        if fee_ratio < 0.001 && tx.amount > 1000 {
+        let fee_ratio = tx.fee() as f64 / (tx.amount() as f64).max(1.0);
+        if fee_ratio < 0.001 && tx.amount() > 1000 {
             // Could be a warning but not a failure
         }
 
@@ -399,37 +464,37 @@ impl TransactionValidator {
     /**
      * Validate addresses
      */
-    fn validate_addresses(&self, tx: &Transaction) -> Result<(), String> {
+    fn validate_addresses(&self, tx: &dyn Validatable) -> Result<(), String> {
         // Validate sender
-        if tx.from != "0" && tx.from != "genesis" {
-            if tx.from.len() < self.config.min_address_length {
+        if tx.sender() != "0" && tx.sender() != "genesis" {
+            if tx.sender().len() < self.config.min_address_length {
                 return Err(format!(
                     "Sender address too short: {} < {}",
-                    tx.from.len(),
+                    tx.sender().len(),
                     self.config.min_address_length
                 ));
             }
-            if tx.from.len() > self.config.max_address_length {
+            if tx.sender().len() > self.config.max_address_length {
                 return Err(format!(
                     "Sender address too long: {} > {}",
-                    tx.from.len(),
+                    tx.sender().len(),
                     self.config.max_address_length
                 ));
             }
         }
 
         // Validate recipient
-        if tx.to.len() < self.config.min_address_length {
+        if tx.recipient().len() < self.config.min_address_length {
             return Err(format!(
                 "Recipient address too short: {} < {}",
-                tx.to.len(),
+                tx.recipient().len(),
                 self.config.min_address_length
             ));
         }
-        if tx.to.len() > self.config.max_address_length {
+        if tx.recipient().len() > self.config.max_address_length {
             return Err(format!(
                 "Recipient address too long: {} > {}",
-                tx.to.len(),
+                tx.recipient().len(),
                 self.config.max_address_length
             ));
         }
@@ -440,17 +505,19 @@ impl TransactionValidator {
     /**
      * Validate sequence (prevent replay attacks)
      */
-    fn validate_sequence(&self, tx: &Transaction) -> Result<(), String> {
+    fn validate_sequence(&self, tx: &dyn Validatable) -> Result<(), String> {
+        let sender = tx.sender();
         let sender_state = self
             .sender_states
-            .get(&tx.from)
+            .get(sender)
             .cloned()
-            .unwrap_or_else(|| SenderState::new(tx.from.clone()));
+            .unwrap_or_else(|| SenderState::new(sender.to_string()));
 
-        if !sender_state.is_valid_sequence(tx.timestamp) {
+        if !sender_state.is_valid_sequence(tx.timestamp()) {
             return Err(format!(
                 "Invalid sequence number: {} (expected > {})",
-                tx.timestamp, sender_state.last_confirmed_sequence
+                tx.timestamp(),
+                sender_state.last_confirmed_sequence
             ));
         }
 
@@ -460,9 +527,9 @@ impl TransactionValidator {
     /**
      * Check for double-spend within mempool state
      */
-    fn check_double_spend(&self, tx: &Transaction) -> Result<(), String> {
+    fn check_double_spend(&self, tx: &dyn Validatable) -> Result<(), String> {
         // Check if this sender has pending transactions that would exceed balance
-        if let Some(sender_state) = self.sender_states.get(&tx.from) {
+        if let Some(sender_state) = self.sender_states.get(tx.sender()) {
             let pending_count = sender_state.pending_transactions.len();
             if pending_count >= self.config.max_pending_per_sender {
                 return Err(format!(
@@ -478,9 +545,9 @@ impl TransactionValidator {
      * Confirm transaction (mark as processed)
      */
     #[allow(dead_code)]
-    pub fn confirm_transaction(&mut self, tx: &Transaction) {
-        if let Some(sender_state) = self.sender_states.get_mut(&tx.from) {
-            sender_state.confirm_sequence(tx.timestamp);
+    pub fn confirm_transaction(&mut self, tx: &dyn Validatable) {
+        if let Some(sender_state) = self.sender_states.get_mut(tx.sender()) {
+            sender_state.confirm_sequence(tx.timestamp());
         }
     }
 
@@ -548,6 +615,7 @@ pub struct ValidationStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::Transaction;
 
     fn now_secs() -> u64 {
         SystemTime::now()
