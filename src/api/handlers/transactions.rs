@@ -161,6 +161,21 @@ pub async fn create_transaction(
         }
         drop(mempool);
 
+        // Dual-write: also add to new TransactionPool
+        {
+            let store_tx = crate::storage::traits::Transaction {
+                id: tx.id.clone(),
+                block_height: 0,
+                timestamp: tx.timestamp,
+                input_did: tx.from.clone(),
+                output_recipient: tx.to.clone(),
+                amount: tx.amount,
+                state: "pending".to_string(),
+            };
+            let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+            let _ = pool.add(store_tx);
+        }
+
         if let Some(key) = &api_key {
             match state.billing_manager.try_record_transaction(key) {
                 Ok(()) => {}
