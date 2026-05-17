@@ -376,8 +376,6 @@ pub async fn mine_block(
         }
     }
 
-    state.balance_cache.invalidate(height);
-
     #[derive(Serialize)]
     struct MineResponse {
         hash: String,
