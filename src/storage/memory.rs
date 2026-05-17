@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::errors::{StorageError, StorageResult};
-use super::traits::{Block, BlockStore, Credential, IdentityRecord, Transaction};
+use super::traits::{
+    Acta, Assembly, Block, BlockStore, Credential, IdentityRecord, Scope, Session, Transaction,
+};
 
 /// In-memory store backed by HashMaps; safe for concurrent use via Mutex.
 pub struct MemoryStore {
@@ -19,6 +21,14 @@ pub struct MemoryStore {
     votes: Mutex<HashMap<(u64, String), crate::governance::voting::Vote>>,
     /// Vault: DID → encrypted wallet JSON (opaque blob)
     vault: Mutex<HashMap<String, serde_json::Value>>,
+    /// Scopes: id → Scope
+    scopes: Mutex<HashMap<String, Scope>>,
+    /// Assemblies: id → Assembly
+    assemblies: Mutex<HashMap<String, Assembly>>,
+    /// Sessions: id → Session
+    sessions: Mutex<HashMap<String, Session>>,
+    /// Actas: id → Acta
+    actas: Mutex<HashMap<String, Acta>>,
 }
 
 impl MemoryStore {
@@ -32,6 +42,10 @@ impl MemoryStore {
             proposals: Mutex::new(HashMap::new()),
             votes: Mutex::new(HashMap::new()),
             vault: Mutex::new(HashMap::new()),
+            scopes: Mutex::new(HashMap::new()),
+            assemblies: Mutex::new(HashMap::new()),
+            sessions: Mutex::new(HashMap::new()),
+            actas: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -254,6 +268,105 @@ impl BlockStore for MemoryStore {
             .get(did)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))
+    }
+
+    // ── Governance entities ─────────────────────────────────────────────
+
+    fn write_scope(&self, scope: &Scope) -> StorageResult<()> {
+        self.scopes
+            .lock()
+            .unwrap()
+            .insert(scope.id.clone(), scope.clone());
+        Ok(())
+    }
+    fn read_scope(&self, id: &str) -> StorageResult<Scope> {
+        self.scopes
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("scope:{id}")))
+    }
+    fn list_scopes(&self) -> StorageResult<Vec<Scope>> {
+        Ok(self.scopes.lock().unwrap().values().cloned().collect())
+    }
+    fn delete_scope(&self, id: &str) -> StorageResult<()> {
+        self.scopes.lock().unwrap().remove(id);
+        Ok(())
+    }
+
+    fn write_assembly(&self, assembly: &Assembly) -> StorageResult<()> {
+        self.assemblies
+            .lock()
+            .unwrap()
+            .insert(assembly.id.clone(), assembly.clone());
+        Ok(())
+    }
+    fn read_assembly(&self, id: &str) -> StorageResult<Assembly> {
+        self.assemblies
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("assembly:{id}")))
+    }
+    fn list_assemblies(&self) -> StorageResult<Vec<Assembly>> {
+        Ok(self.assemblies.lock().unwrap().values().cloned().collect())
+    }
+    fn list_assemblies_by_scope(&self, scope_id: &str) -> StorageResult<Vec<Assembly>> {
+        Ok(self
+            .assemblies
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|a| a.scope_id == scope_id)
+            .cloned()
+            .collect())
+    }
+
+    fn write_session(&self, session: &Session) -> StorageResult<()> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .insert(session.id.clone(), session.clone());
+        Ok(())
+    }
+    fn read_session(&self, id: &str) -> StorageResult<Session> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("session:{id}")))
+    }
+    fn list_sessions_by_assembly(&self, assembly_id: &str) -> StorageResult<Vec<Session>> {
+        Ok(self
+            .sessions
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|s| s.assembly_id == assembly_id)
+            .cloned()
+            .collect())
+    }
+
+    fn write_acta(&self, acta: &Acta) -> StorageResult<()> {
+        self.actas
+            .lock()
+            .unwrap()
+            .insert(acta.id.clone(), acta.clone());
+        Ok(())
+    }
+    fn read_acta(&self, id: &str) -> StorageResult<Acta> {
+        self.actas
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("acta:{id}")))
+    }
+    fn list_actas(&self) -> StorageResult<Vec<Acta>> {
+        Ok(self.actas.lock().unwrap().values().cloned().collect())
     }
 }
 
