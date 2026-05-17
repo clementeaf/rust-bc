@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use crate::api::errors::enforce_acl;
 use crate::app_state::AppState;
 use crate::billing::{BillingTier, UsageStats};
-use crate::models::{Transaction, Wallet};
 use crate::smart_contracts::{ContractFunction, NFTMetadata, SmartContract};
 
 /// Enforce ACL for legacy handlers. Returns `Ok(())` on success or an
@@ -71,16 +70,7 @@ pub async fn get_wallet_balance(
     state: web::Data<AppState>,
     address: web::Path<String>,
 ) -> ActixResult<HttpResponse> {
-    // Try new BlockStore first (preferred path)
-    let balance = if let Ok(store_map) = state.store.read() {
-        if let Some(store) = store_map.get("default") {
-            store.calculate_balance(&address).unwrap_or(0)
-        } else {
-            calculate_balance_legacy(&state, &address)
-        }
-    } else {
-        calculate_balance_legacy(&state, &address)
-    };
+    let balance = store_balance(&state, &address);
 
     #[derive(Serialize)]
     struct BalanceResponse {
@@ -97,25 +87,14 @@ pub async fn get_wallet_balance(
     Ok(HttpResponse::Ok().json(response))
 }
 
-/// Legacy balance calculation via Blockchain struct (fallback).
-fn calculate_balance_legacy(state: &AppState, address: &str) -> u64 {
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let latest_block_index = if blockchain.chain.is_empty() {
-        0
-    } else {
-        blockchain.get_latest_block().index
-    };
-
-    match state.balance_cache.get(address, latest_block_index) {
-        Some(cached_balance) => cached_balance,
-        None => {
-            let calculated_balance = blockchain.calculate_balance(address);
-            state
-                .balance_cache
-                .set(address.to_string(), calculated_balance, latest_block_index);
-            calculated_balance
+/// Calculate balance via BlockStore.
+fn store_balance(state: &AppState, address: &str) -> u64 {
+    if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            return store.calculate_balance(address).unwrap_or(0);
         }
     }
+    0
 }
 
 /**
@@ -139,28 +118,31 @@ pub async fn create_wallet(
         match state.billing_manager.can_create_wallet(key) {
             Ok(can_create) => {
                 if !can_create {
-                    let response: ApiResponse<Wallet> =
+                    let response: ApiResponse<serde_json::Value> =
                         ApiResponse::error("Límite de wallets alcanzado para tu tier".to_string());
                     return Ok(HttpResponse::PaymentRequired().json(response));
                 }
             }
             Err(e) => {
-                let response: ApiResponse<Wallet> = ApiResponse::error(e);
+                let response: ApiResponse<serde_json::Value> = ApiResponse::error(e);
                 return Ok(HttpResponse::Unauthorized().json(response));
             }
         }
     }
 
-    let mut wallet_manager = state
-        .wallet_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    let wallet = wallet_manager.create_wallet();
-    let _address = wallet.address.clone();
+    // Create wallet via legacy WalletManager (generates Ed25519 keypair)
+    let (address, public_key_hex) = {
+        let mut wm = state
+            .wallet_manager
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let wallet = wm.create_wallet();
+        (wallet.address.clone(), wallet.get_public_key_hex())
+    };
 
     if let Some(key) = &api_key {
         if let Err(e) = state.billing_manager.record_wallet_creation(key) {
-            let response: ApiResponse<Wallet> = ApiResponse::error(e);
+            let response: ApiResponse<serde_json::Value> = ApiResponse::error(e);
             return Ok(HttpResponse::InternalServerError().json(response));
         }
     }
@@ -169,10 +151,13 @@ pub async fn create_wallet(
         &state.audit_store,
         crate::audit::AuditAction::WalletCreated,
         api_key.as_deref().unwrap_or("unknown"),
-        Some(format!("address={}", wallet.address)),
+        Some(format!("address={address}")),
     );
 
-    let response = ApiResponse::success(wallet);
+    let response = ApiResponse::success(serde_json::json!({
+        "address": address,
+        "public_key": public_key_hex,
+    }));
     Ok(HttpResponse::Created().json(response))
 }
 
@@ -183,18 +168,16 @@ pub async fn get_wallet_transactions(
     state: web::Data<AppState>,
     address: web::Path<String>,
 ) -> ActixResult<HttpResponse> {
-    // Try BlockStore first
-    if let Ok(store_map) = state.store.read() {
+    let txs = if let Ok(store_map) = state.store.read() {
         if let Some(store) = store_map.get("default") {
-            let txs = store.transactions_for_address(&address).unwrap_or_default();
-            let response = ApiResponse::success(txs);
-            return Ok(HttpResponse::Ok().json(response));
+            store.transactions_for_address(&address).unwrap_or_default()
+        } else {
+            vec![]
         }
-    }
-    // Fallback to legacy
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let transactions = blockchain.get_transactions_for_wallet(&address);
-    let response = ApiResponse::success(transactions);
+    } else {
+        vec![]
+    };
+    let response = ApiResponse::success(txs);
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -339,12 +322,6 @@ pub async fn mine_block(
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
         pool.drain_for_block(max_txs)
     };
-    // Also drain legacy mempool to keep in sync
-    {
-        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = mempool.get_transactions_for_block(max_txs);
-    }
-
     // PoS validator selection
     let validator_address = state.staking_manager.select_validator(&req.miner_address);
     let address_to_use = validator_address.as_deref().unwrap_or(&req.miner_address);
@@ -461,7 +438,7 @@ pub async fn get_metrics(state: web::Data<AppState>) -> ActixResult<HttpResponse
  * Obtiene estadísticas del sistema
  */
 pub async fn get_stats(state: web::Data<AppState>) -> ActixResult<HttpResponse> {
-    // Obtener datos de blockchain (liberar lock rápidamente)
+    // Read stats from BlockStore
     let (
         block_count,
         difficulty,
@@ -475,65 +452,79 @@ pub async fn get_stats(state: web::Data<AppState>) -> ActixResult<HttpResponse> 
         max_transactions_per_block,
         max_block_size_bytes,
     ) = {
-        let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-        let block_count = blockchain.chain.len();
-        let difficulty = blockchain.difficulty;
-        let latest_block = blockchain.get_latest_block();
-        let latest_block_hash = latest_block.hash.clone();
-        let latest_block_index = latest_block.index;
+        let store = state
+            .store
+            .read()
+            .ok()
+            .and_then(|m| m.get("default").cloned());
+        if let Some(store) = store {
+            let latest_height = store.get_latest_height().unwrap_or(0);
+            let block_count = if store.block_exists(0).unwrap_or(false) {
+                (latest_height + 1) as usize
+            } else {
+                0
+            };
 
-        let total_transactions: usize = blockchain.chain.iter().map(|b| b.transactions.len()).sum();
+            let latest_block = store.read_block(latest_height).ok();
+            let latest_block_hash = latest_block
+                .as_ref()
+                .map(|b| format!("{:x?}", &b.parent_hash[..4]))
+                .unwrap_or_default();
 
-        let total_coinbase: u64 = blockchain
-            .chain
-            .iter()
-            .flat_map(|b| &b.transactions)
-            .filter(|tx| tx.from == "0")
-            .map(|tx| tx.amount)
-            .sum();
+            // Count transactions across all blocks
+            let mut total_tx = 0usize;
+            let mut total_coinbase_amount = 0u64;
+            let mut unique = std::collections::HashSet::new();
+            let mut block_times = Vec::new();
+            let mut prev_timestamp = 0u64;
 
-        let mut unique_addresses = std::collections::HashSet::new();
-        for block in &blockchain.chain {
-            for tx in &block.transactions {
-                if !tx.from.is_empty() && tx.from != "0" {
-                    unique_addresses.insert(tx.from.clone());
-                }
-                if !tx.to.is_empty() {
-                    unique_addresses.insert(tx.to.clone());
+            for h in 0..block_count as u64 {
+                if let Ok(block) = store.read_block(h) {
+                    total_tx += block.transactions.len();
+                    if h > 0 && block.timestamp > prev_timestamp {
+                        block_times.push(block.timestamp.saturating_sub(prev_timestamp));
+                    }
+                    prev_timestamp = block.timestamp;
+
+                    // Count coinbase and unique addresses from transactions
+                    if let Ok(txs) = store.transactions_by_block_height(h) {
+                        for tx in &txs {
+                            if tx.input_did == "coinbase" {
+                                total_coinbase_amount += tx.amount;
+                            }
+                            if !tx.input_did.is_empty() && tx.input_did != "coinbase" {
+                                unique.insert(tx.input_did.clone());
+                            }
+                            if !tx.output_recipient.is_empty() {
+                                unique.insert(tx.output_recipient.clone());
+                            }
+                        }
+                    }
                 }
             }
-        }
 
-        let mut block_times = Vec::new();
-        if blockchain.chain.len() > 1 {
-            for i in 1..blockchain.chain.len() {
-                // Usar saturating_sub para evitar overflow si timestamps están desordenados
-                let time_diff = blockchain.chain[i]
-                    .timestamp
-                    .saturating_sub(blockchain.chain[i - 1].timestamp);
-                block_times.push(time_diff);
-            }
-        }
+            let avg_bt = if !block_times.is_empty() {
+                block_times.iter().sum::<u64>() as f64 / block_times.len() as f64
+            } else {
+                0.0
+            };
 
-        let avg_block_time = if !block_times.is_empty() {
-            block_times.iter().sum::<u64>() as f64 / block_times.len() as f64
+            (
+                block_count,
+                1u8,
+                latest_block_hash,
+                latest_height,
+                total_tx,
+                total_coinbase_amount,
+                unique.len(),
+                avg_bt,
+                60u64,
+                1000usize,
+                1_000_000usize,
+            )
         } else {
-            0.0
-        };
-
-        (
-            block_count,
-            difficulty,
-            latest_block_hash,
-            latest_block_index,
-            total_transactions,
-            total_coinbase,
-            unique_addresses.len(),
-            avg_block_time,
-            blockchain.target_block_time,
-            blockchain.max_transactions_per_block,
-            blockchain.max_block_size_bytes,
-        )
+            (0, 1, String::new(), 0, 0, 0, 0, 0.0, 60, 1000, 1_000_000)
+        }
     };
 
     // Obtener datos de mempool from new TransactionPool
@@ -1742,10 +1733,10 @@ pub async fn stake(
         if let Some(store) = store_map.get("default") {
             store.calculate_balance(&req.address).unwrap_or(0)
         } else {
-            calculate_balance_legacy(&state, &req.address)
+            store_balance(&state, &req.address)
         }
     } else {
-        calculate_balance_legacy(&state, &req.address)
+        store_balance(&state, &req.address)
     };
 
     if balance < req.amount {
@@ -1773,42 +1764,23 @@ pub async fn stake(
         .stake(&req.address, req.amount, wallet_exists)
     {
         Ok(_) => {
-            // Crear transacción especial de staking: from -> "STAKING"
-            // Esta transacción "lockea" los tokens en el sistema de staking
-            let wallet = wallet_manager
-                .get_wallet_for_signing(&req.address)
-                .ok_or_else(|| actix_web::error::ErrorBadRequest("Wallet not found"))?;
-
-            let mut tx = Transaction::new_with_fee(
-                req.address.clone(),
-                "STAKING".to_string(), // Dirección especial para staking
-                req.amount,
-                0,
-                Some(format!("Staking: {} tokens", req.amount)),
-            );
-
-            wallet.sign_transaction(&mut tx);
-            let _ = wallet;
             drop(wallet_manager);
 
-            // Agregar al mempool (legacy + new pool)
-            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-            if let Err(e) = mempool.add_transaction(tx.clone()) {
-                drop(mempool);
-                let response: ApiResponse<String> = ApiResponse::error(e);
-                return Ok(HttpResponse::BadRequest().json(response));
-            }
-            drop(mempool);
+            // Add staking transaction to pool
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let store_tx = crate::storage::traits::Transaction {
+                id: uuid::Uuid::new_v4().to_string(),
+                block_height: 0,
+                timestamp: now,
+                input_did: req.address.clone(),
+                output_recipient: "STAKING".to_string(),
+                amount: req.amount,
+                state: "pending".to_string(),
+            };
             {
-                let store_tx = crate::storage::traits::Transaction {
-                    id: tx.id.clone(),
-                    block_height: 0,
-                    timestamp: tx.timestamp,
-                    input_did: tx.from.clone(),
-                    output_recipient: tx.to.clone(),
-                    amount: tx.amount,
-                    state: "pending".to_string(),
-                };
                 let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = pool.add(store_tx);
             }
@@ -1878,40 +1850,24 @@ pub async fn complete_unstake(
 
     match state.staking_manager.complete_unstake(&address) {
         Ok(amount) => {
-            // Crear transacción especial de unstaking: "STAKING" -> address
-            // Esta transacción devuelve los tokens del sistema de staking al usuario
-            let tx = Transaction::new_with_fee(
-                "STAKING".to_string(), // Dirección especial para staking
-                address.clone(),
-                amount,
-                0,
-                Some(format!("Unstaking: {amount} tokens")),
-            );
-
-            // Las transacciones desde "STAKING" no requieren firma (son del sistema)
-            // Agregar al mempool (legacy + new pool)
-            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-            if let Err(e) = mempool.add_transaction(tx.clone()) {
-                drop(mempool);
-                let response: ApiResponse<String> = ApiResponse::error(e);
-                return Ok(HttpResponse::BadRequest().json(response));
-            }
-            drop(mempool);
+            // Add unstaking transaction to pool
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
             {
                 let store_tx = crate::storage::traits::Transaction {
-                    id: tx.id.clone(),
+                    id: uuid::Uuid::new_v4().to_string(),
                     block_height: 0,
-                    timestamp: tx.timestamp,
-                    input_did: tx.from.clone(),
-                    output_recipient: tx.to.clone(),
-                    amount: tx.amount,
+                    timestamp: now,
+                    input_did: "STAKING".to_string(),
+                    output_recipient: address.clone(),
+                    amount,
                     state: "pending".to_string(),
                 };
                 let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
                 let _ = pool.add(store_tx);
             }
-
-            // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
 
             let response: ApiResponse<u64> = ApiResponse::success(amount);
             Ok(HttpResponse::Ok().json(response))
@@ -2033,10 +1989,10 @@ pub async fn claim_airdrop(
         if let Some(store) = store_map.get("default") {
             store.calculate_balance(&airdrop_wallet).unwrap_or(0)
         } else {
-            calculate_balance_legacy(&state, &airdrop_wallet)
+            store_balance(&state, &airdrop_wallet)
         }
     } else {
-        calculate_balance_legacy(&state, &airdrop_wallet)
+        store_balance(&state, &airdrop_wallet)
     };
 
     if airdrop_wallet_balance < airdrop_amount {
@@ -2052,35 +2008,26 @@ pub async fn claim_airdrop(
         .lock()
         .unwrap_or_else(|e| e.into_inner());
 
-    let wallet_for_signing = match wallet_manager.get_wallet_for_signing(&airdrop_wallet) {
-        Some(w) => w,
-        None => {
-            drop(wallet_manager);
-            let response: ApiResponse<String> = ApiResponse::error(
-                format!(
-                    "Airdrop wallet '{airdrop_wallet}' not found. Please ensure the wallet exists (create it via /api/v1/wallets/create) and has sufficient balance. You can configure AIRDROP_WALLET environment variable to use a specific wallet address."
-                ),
-            );
-            return Ok(HttpResponse::BadRequest().json(response));
-        }
-    };
-
-    let mut airdrop_tx = Transaction::new_with_fee(
-        airdrop_wallet.clone(),
-        node_address.clone(),
-        airdrop_amount,
-        0,
-        None,
-    );
-
-    wallet_for_signing.sign_transaction(&mut airdrop_tx);
-    let transaction_id = airdrop_tx.id.clone();
     drop(wallet_manager);
 
-    // Agregar transacción al mempool
+    // Create airdrop transaction
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let transaction_id = uuid::Uuid::new_v4().to_string();
     {
-        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = mempool.add_transaction(airdrop_tx.clone());
+        let store_tx = crate::storage::traits::Transaction {
+            id: transaction_id.clone(),
+            block_height: 0,
+            timestamp: now,
+            input_did: airdrop_wallet.clone(),
+            output_recipient: node_address.clone(),
+            amount: airdrop_amount,
+            state: "pending".to_string(),
+        };
+        let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = pool.add(store_tx);
     }
 
     // Marcar como reclamado y agregar a pending claims
