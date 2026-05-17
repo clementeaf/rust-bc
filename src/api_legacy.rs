@@ -344,6 +344,11 @@ pub async fn mine_block(
         let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
         mempool.get_transactions_for_block(max_txs)
     };
+    // Also drain from new pool to keep them in sync
+    {
+        let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = pool.drain_for_block(max_txs);
+    }
 
     let blockchain_state = state.blockchain.clone();
     let wallet_manager_state = state.wallet_manager.clone();
@@ -634,12 +639,10 @@ pub async fn get_stats(state: web::Data<AppState>) -> ActixResult<HttpResponse> 
         )
     };
 
-    // Obtener datos de mempool (liberar lock rápidamente)
+    // Obtener datos de mempool from new TransactionPool
     let (mempool_size, total_fees) = {
-        let mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-        let size = mempool.len();
-        let fees: u64 = mempool.get_all_transactions().iter().map(|tx| tx.fee).sum();
-        (size, fees)
+        let pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        (pool.len(), 0u64) // fees not tracked in storage::Transaction
     };
 
     // Obtener datos de red
@@ -1891,7 +1894,7 @@ pub async fn stake(
             let _ = wallet;
             drop(wallet_manager);
 
-            // Agregar al mempool
+            // Agregar al mempool (legacy + new pool)
             let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
             if let Err(e) = mempool.add_transaction(tx.clone()) {
                 drop(mempool);
@@ -1899,6 +1902,19 @@ pub async fn stake(
                 return Ok(HttpResponse::BadRequest().json(response));
             }
             drop(mempool);
+            {
+                let store_tx = crate::storage::traits::Transaction {
+                    id: tx.id.clone(),
+                    block_height: 0,
+                    timestamp: tx.timestamp,
+                    input_did: tx.from.clone(),
+                    output_recipient: tx.to.clone(),
+                    amount: tx.amount,
+                    state: "pending".to_string(),
+                };
+                let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+                let _ = pool.add(store_tx);
+            }
 
             // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
 
@@ -1976,7 +1992,7 @@ pub async fn complete_unstake(
             );
 
             // Las transacciones desde "STAKING" no requieren firma (son del sistema)
-            // Agregar al mempool
+            // Agregar al mempool (legacy + new pool)
             let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
             if let Err(e) = mempool.add_transaction(tx.clone()) {
                 drop(mempool);
@@ -1984,6 +2000,19 @@ pub async fn complete_unstake(
                 return Ok(HttpResponse::BadRequest().json(response));
             }
             drop(mempool);
+            {
+                let store_tx = crate::storage::traits::Transaction {
+                    id: tx.id.clone(),
+                    block_height: 0,
+                    timestamp: tx.timestamp,
+                    input_did: tx.from.clone(),
+                    output_recipient: tx.to.clone(),
+                    amount: tx.amount,
+                    state: "pending".to_string(),
+                };
+                let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+                let _ = pool.add(store_tx);
+            }
 
             // Los validadores se reconstruyen desde blockchain, no necesitan persistencia adicional
 
