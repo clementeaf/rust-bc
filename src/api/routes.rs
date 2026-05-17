@@ -4,9 +4,9 @@ use actix_web::{web, Scope};
 use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
-    events, forensic, gateway, governance, identity, intelligence, interop, legal_oracle, msp,
-    oracle, organizations, pentest, pin, private_data, proposals, regulatory, snapshots, stress,
-    transactions, utilities, vault, zkp,
+    events, forensic, gateway, governance, governance_entities, identity, intelligence, interop,
+    legal_oracle, msp, oracle, organizations, pentest, pin, private_data, proposals, regulatory,
+    snapshots, stress, transactions, utilities, vault, zkp,
 };
 
 /// API routes configuration
@@ -61,7 +61,21 @@ impl ApiRoutes {
             .service(organizations::store_list_organizations)
             .service(organizations::store_get_organization)
             .service(organizations::store_set_policy)
-            .service(organizations::store_get_policy);
+            .service(organizations::store_get_policy)
+            // Governance entities (Cerulean Voto)
+            .service(governance_entities::create_scope)
+            .service(governance_entities::list_scopes)
+            .service(governance_entities::get_scope)
+            .service(governance_entities::remove_scope)
+            .service(governance_entities::create_assembly)
+            .service(governance_entities::list_assemblies)
+            .service(governance_entities::get_assembly)
+            .service(governance_entities::create_session)
+            .service(governance_entities::list_sessions)
+            .service(governance_entities::get_session)
+            .service(governance_entities::create_acta)
+            .service(governance_entities::list_actas)
+            .service(governance_entities::get_acta);
     }
 
     fn register_tx_handlers(cfg: &mut web::ServiceConfig) {

@@ -16,6 +16,7 @@ pub mod evm;
 pub mod forensic;
 pub mod gateway;
 pub mod governance;
+pub mod governance_entities;
 pub mod identity;
 pub mod intelligence;
 pub mod interop;
