@@ -1,79 +1,40 @@
 use crate::api::models::CreateBlockRequest;
 use crate::app_state::AppState;
-use crate::models::Transaction;
 
-/// Builds transactions, mines a block, persists, broadcasts, updates cache.
-/// Returns the new block hash on success.
+/// Builds transactions, mines a block via MiningService, broadcasts.
+/// Returns the new block height as string on success.
 pub fn try_create_block(state: &AppState, req: &CreateBlockRequest) -> Result<String, String> {
-    let mut blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let mut wallet_manager = state
-        .wallet_manager
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mining_service = state
+        .mining_service
+        .as_ref()
+        .ok_or_else(|| "MiningService not available".to_string())?;
 
-    let transactions: Result<Vec<Transaction>, String> = req
+    let txs: Vec<crate::storage::traits::Transaction> = req
         .transactions
         .iter()
         .map(|tx_req| {
-            let fee = tx_req.fee.unwrap_or(0);
-            let mut tx = Transaction::new_with_fee(
-                tx_req.from.clone(),
-                tx_req.to.clone(),
-                tx_req.amount,
-                fee,
-                tx_req.data.clone(),
-            );
-
-            if tx_req.from != "0" {
-                let wallet = wallet_manager
-                    .get_wallet_for_signing(&tx_req.from)
-                    .ok_or_else(|| "Wallet no encontrado para firmar".to_string())?;
-                wallet.sign_transaction(&mut tx);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            crate::storage::traits::Transaction {
+                id: uuid::Uuid::new_v4().to_string(),
+                block_height: 0,
+                timestamp: now,
+                input_did: tx_req.from.clone(),
+                output_recipient: tx_req.to.clone(),
+                amount: tx_req.amount,
+                state: "pending".to_string(),
             }
-
-            Ok(tx)
         })
         .collect();
 
-    match transactions {
-        Ok(txs) => {
-            let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-            for tx in &txs {
-                if tx.from != "0" {
-                    mempool.remove_transaction(&tx.id);
-                }
-            }
-            drop(mempool);
+    let miner = req
+        .transactions
+        .first()
+        .map(|t| t.from.as_str())
+        .unwrap_or("system");
 
-            match blockchain.add_block(txs.clone(), &wallet_manager) {
-                Ok(hash) => {
-                    for tx in &txs {
-                        if tx.from == "0" {
-                            let _ = wallet_manager.process_coinbase_transaction(tx);
-                        } else {
-                            let _ = wallet_manager.process_transaction(tx);
-                        }
-                    }
-
-                    let latest = blockchain.get_latest_block();
-                    let latest_index = latest.index;
-                    let latest_block_clone = latest.clone();
-
-                    if let Some(node) = &state.node {
-                        let node_clone = node.clone();
-                        tokio::spawn(async move {
-                            node_clone.broadcast_block(&latest_block_clone).await;
-                        });
-                    }
-
-                    drop(blockchain);
-                    state.balance_cache.invalidate(latest_index);
-
-                    Ok(hash)
-                }
-                Err(e) => Err(e),
-            }
-        }
-        Err(e) => Err(e),
-    }
+    let height = mining_service.mine_block(miner, txs)?;
+    Ok(format!("block-{height}"))
 }
