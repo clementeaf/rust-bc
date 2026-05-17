@@ -75,6 +75,11 @@ const CF_SCOPES: &str = "scopes";
 const CF_ASSEMBLIES: &str = "assemblies";
 const CF_SESSIONS: &str = "sessions";
 const CF_ACTAS: &str = "actas";
+const CF_ASSETS: &str = "assets";
+const CF_ASSET_EVENTS: &str = "asset_events";
+const CF_ASSET_TOKENS: &str = "asset_tokens";
+const CF_COMPLIANCE_RULES: &str = "compliance_rules";
+const CF_COMPLIANCE_RESULTS: &str = "compliance_results";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -107,6 +112,11 @@ const ALL_CFS: &[&str] = &[
     CF_ASSEMBLIES,
     CF_SESSIONS,
     CF_ACTAS,
+    CF_ASSETS,
+    CF_ASSET_EVENTS,
+    CF_ASSET_TOKENS,
+    CF_COMPLIANCE_RULES,
+    CF_COMPLIANCE_RESULTS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -1089,6 +1099,245 @@ impl BlockStore for RocksDbBlockStore {
             );
         }
         Ok(result)
+    }
+
+    // ── Asset Registry ──────────────────────────────────────────────────
+
+    fn write_asset(&self, asset: &crate::registry::types::Asset) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSETS)
+            .ok_or_else(|| StorageError::RocksDbError("missing assets CF".into()))?;
+        let json = serde_json::to_vec(asset)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, asset.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_asset(&self, id: &str) -> StorageResult<crate::registry::types::Asset> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSETS)
+            .ok_or_else(|| StorageError::RocksDbError("missing assets CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("asset:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_assets(&self) -> StorageResult<Vec<crate::registry::types::Asset>> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSETS)
+            .ok_or_else(|| StorageError::RocksDbError("missing assets CF".into()))?;
+        let mut r = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            r.push(
+                serde_json::from_slice(&v)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+            );
+        }
+        Ok(r)
+    }
+    fn delete_asset(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSETS)
+            .ok_or_else(|| StorageError::RocksDbError("missing assets CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn write_asset_event(&self, event: &crate::registry::types::AssetEvent) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_EVENTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_events CF".into()))?;
+        let json = serde_json::to_vec(event)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, event.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_asset_event(&self, id: &str) -> StorageResult<crate::registry::types::AssetEvent> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_EVENTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_events CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("asset_event:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_asset_events(
+        &self,
+        asset_id: &str,
+    ) -> StorageResult<Vec<crate::registry::types::AssetEvent>> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_EVENTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_events CF".into()))?;
+        let mut r = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let e: crate::registry::types::AssetEvent = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            if e.asset_id == asset_id {
+                r.push(e);
+            }
+        }
+        Ok(r)
+    }
+
+    // ── RWA Tokenization ────────────────────────────────────────────────
+
+    fn write_asset_token(
+        &self,
+        token: &crate::registry::tokenization::AssetToken,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_TOKENS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_tokens CF".into()))?;
+        let json = serde_json::to_vec(token)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, token.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_asset_token(
+        &self,
+        id: &str,
+    ) -> StorageResult<crate::registry::tokenization::AssetToken> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_TOKENS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_tokens CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("token:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_asset_tokens(&self) -> StorageResult<Vec<crate::registry::tokenization::AssetToken>> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_TOKENS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_tokens CF".into()))?;
+        let mut r = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            r.push(
+                serde_json::from_slice(&v)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+            );
+        }
+        Ok(r)
+    }
+    fn delete_asset_token(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSET_TOKENS)
+            .ok_or_else(|| StorageError::RocksDbError("missing asset_tokens CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    // ── Compliance Automation ───────────────────────────────────────────
+
+    fn write_compliance_rule(
+        &self,
+        rule: &crate::registry::compliance::ComplianceRule,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RULES)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_rules CF".into()))?;
+        let json = serde_json::to_vec(rule)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, rule.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn read_compliance_rule(
+        &self,
+        id: &str,
+    ) -> StorageResult<crate::registry::compliance::ComplianceRule> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RULES)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_rules CF".into()))?;
+        let data = self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound(format!("rule:{id}")))?;
+        serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+    fn list_compliance_rules(
+        &self,
+    ) -> StorageResult<Vec<crate::registry::compliance::ComplianceRule>> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RULES)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_rules CF".into()))?;
+        let mut r = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            r.push(
+                serde_json::from_slice(&v)
+                    .map_err(|e| StorageError::DeserializationError(e.to_string()))?,
+            );
+        }
+        Ok(r)
+    }
+    fn delete_compliance_rule(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RULES)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_rules CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn write_compliance_result(
+        &self,
+        result: &crate::registry::compliance::ComplianceResult,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RESULTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_results CF".into()))?;
+        let json = serde_json::to_vec(result)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, result.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+    fn list_compliance_results(
+        &self,
+        asset_id: &str,
+    ) -> StorageResult<Vec<crate::registry::compliance::ComplianceResult>> {
+        let cf = self
+            .db
+            .cf_handle(CF_COMPLIANCE_RESULTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing compliance_results CF".into()))?;
+        let mut r = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, v) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let res: crate::registry::compliance::ComplianceResult = serde_json::from_slice(&v)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            if res.asset_id == asset_id {
+                r.push(res);
+            }
+        }
+        Ok(r)
     }
 }
 
