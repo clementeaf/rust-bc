@@ -8,4 +8,6 @@
 //! (e.g., MyScania telemetry) feed data into this module via the
 //! ingestion endpoints.
 
+pub mod compliance;
+pub mod tokenization;
 pub mod types;

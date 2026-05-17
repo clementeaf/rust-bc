@@ -7,6 +7,8 @@ use super::errors::{StorageError, StorageResult};
 use super::traits::{
     Acta, Assembly, Block, BlockStore, Credential, IdentityRecord, Scope, Session, Transaction,
 };
+use crate::registry::compliance::{ComplianceResult, ComplianceRule};
+use crate::registry::tokenization::AssetToken;
 use crate::registry::types::{Asset, AssetEvent};
 
 /// In-memory store backed by HashMaps; safe for concurrent use via Mutex.
@@ -34,6 +36,12 @@ pub struct MemoryStore {
     assets: Mutex<HashMap<String, Asset>>,
     /// Asset events: id → AssetEvent
     asset_events: Mutex<HashMap<String, AssetEvent>>,
+    /// Asset tokens: id → AssetToken
+    asset_tokens: Mutex<HashMap<String, AssetToken>>,
+    /// Compliance rules: id → ComplianceRule
+    compliance_rules: Mutex<HashMap<String, ComplianceRule>>,
+    /// Compliance results: id → ComplianceResult
+    compliance_results: Mutex<HashMap<String, ComplianceResult>>,
 }
 
 impl MemoryStore {
@@ -53,6 +61,9 @@ impl MemoryStore {
             actas: Mutex::new(HashMap::new()),
             assets: Mutex::new(HashMap::new()),
             asset_events: Mutex::new(HashMap::new()),
+            asset_tokens: Mutex::new(HashMap::new()),
+            compliance_rules: Mutex::new(HashMap::new()),
+            compliance_results: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -437,6 +448,86 @@ impl BlockStore for MemoryStore {
             .unwrap()
             .values()
             .filter(|e| e.asset_id == asset_id)
+            .cloned()
+            .collect())
+    }
+
+    // ── RWA Tokenization ────────────────────────────────────────────────
+
+    fn write_asset_token(&self, token: &AssetToken) -> StorageResult<()> {
+        self.asset_tokens
+            .lock()
+            .unwrap()
+            .insert(token.id.clone(), token.clone());
+        Ok(())
+    }
+    fn read_asset_token(&self, id: &str) -> StorageResult<AssetToken> {
+        self.asset_tokens
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("token:{id}")))
+    }
+    fn list_asset_tokens(&self) -> StorageResult<Vec<AssetToken>> {
+        Ok(self
+            .asset_tokens
+            .lock()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect())
+    }
+    fn delete_asset_token(&self, id: &str) -> StorageResult<()> {
+        self.asset_tokens.lock().unwrap().remove(id);
+        Ok(())
+    }
+
+    // ── Compliance Automation ───────────────────────────────────────────
+
+    fn write_compliance_rule(&self, rule: &ComplianceRule) -> StorageResult<()> {
+        self.compliance_rules
+            .lock()
+            .unwrap()
+            .insert(rule.id.clone(), rule.clone());
+        Ok(())
+    }
+    fn read_compliance_rule(&self, id: &str) -> StorageResult<ComplianceRule> {
+        self.compliance_rules
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("rule:{id}")))
+    }
+    fn list_compliance_rules(&self) -> StorageResult<Vec<ComplianceRule>> {
+        Ok(self
+            .compliance_rules
+            .lock()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect())
+    }
+    fn delete_compliance_rule(&self, id: &str) -> StorageResult<()> {
+        self.compliance_rules.lock().unwrap().remove(id);
+        Ok(())
+    }
+
+    fn write_compliance_result(&self, result: &ComplianceResult) -> StorageResult<()> {
+        self.compliance_results
+            .lock()
+            .unwrap()
+            .insert(result.id.clone(), result.clone());
+        Ok(())
+    }
+    fn list_compliance_results(&self, asset_id: &str) -> StorageResult<Vec<ComplianceResult>> {
+        Ok(self
+            .compliance_results
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|r| r.asset_id == asset_id)
             .cloned()
             .collect())
     }

@@ -471,6 +471,67 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
 
+    // ── RWA Tokenization ──────────────────────────────────────────────────
+
+    fn write_asset_token(
+        &self,
+        _token: &crate::registry::tokenization::AssetToken,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_asset_token(
+        &self,
+        _id: &str,
+    ) -> StorageResult<crate::registry::tokenization::AssetToken> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "token not found".into(),
+        ))
+    }
+    fn list_asset_tokens(&self) -> StorageResult<Vec<crate::registry::tokenization::AssetToken>> {
+        Ok(vec![])
+    }
+    fn delete_asset_token(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
+
+    // ── Compliance Automation ────────────────────────────────────────────
+
+    fn write_compliance_rule(
+        &self,
+        _rule: &crate::registry::compliance::ComplianceRule,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_compliance_rule(
+        &self,
+        _id: &str,
+    ) -> StorageResult<crate::registry::compliance::ComplianceRule> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "rule not found".into(),
+        ))
+    }
+    fn list_compliance_rules(
+        &self,
+    ) -> StorageResult<Vec<crate::registry::compliance::ComplianceRule>> {
+        Ok(vec![])
+    }
+    fn delete_compliance_rule(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
+
+    fn write_compliance_result(
+        &self,
+        _result: &crate::registry::compliance::ComplianceResult,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+    fn list_compliance_results(
+        &self,
+        _asset_id: &str,
+    ) -> StorageResult<Vec<crate::registry::compliance::ComplianceResult>> {
+        Ok(vec![])
+    }
+
     // ── Balance & transaction queries (migration helpers) ──────────────────
 
     /// Calculate the balance of an address by scanning all transactions.

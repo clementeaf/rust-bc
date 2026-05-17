@@ -3,10 +3,11 @@ use actix_web::{web, Scope};
 #[cfg(feature = "evm")]
 use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
-    events, forensic, gateway, governance, governance_entities, identity, intelligence, interop,
-    legal_oracle, msp, oracle, organizations, pentest, pin, private_data, proposals, registry,
-    regulatory, snapshots, stress, transactions, utilities, vault, zkp,
+    acl, audit, blocks, chain, chaincode, channels, compliance, compliance_auto, contact,
+    credentials, discovery, events, forensic, gateway, governance, governance_entities, identity,
+    intelligence, interop, legal_oracle, msp, oracle, organizations, pentest, pin, private_data,
+    proposals, registry, regulatory, snapshots, stress, tokenization, transactions, utilities,
+    vault, zkp,
 };
 
 /// API routes configuration
@@ -93,7 +94,20 @@ impl ApiRoutes {
             .service(registry::create_asset_events_batch)
             .service(registry::list_asset_events)
             .service(registry::get_asset_event)
-            .service(registry::export_asset);
+            .service(registry::export_asset)
+            // RWA Tokenization
+            .service(tokenization::create_token)
+            .service(tokenization::list_tokens)
+            .service(tokenization::get_token)
+            .service(tokenization::update_token)
+            .service(tokenization::remove_token)
+            // Compliance Automation
+            .service(compliance_auto::create_rule)
+            .service(compliance_auto::list_rules)
+            .service(compliance_auto::get_rule)
+            .service(compliance_auto::remove_rule)
+            .service(compliance_auto::evaluate_asset)
+            .service(compliance_auto::get_results);
     }
 
     fn register_tx_handlers(cfg: &mut web::ServiceConfig) {
