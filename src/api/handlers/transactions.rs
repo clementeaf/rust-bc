@@ -6,7 +6,7 @@ use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::api::handlers::channels::{
     channel_id_from_req, enforce_channel_membership, get_channel_store,
 };
-use crate::api::models::{CreateTransactionRequest, MempoolResponse};
+use crate::api::models::CreateTransactionRequest;
 use crate::app_state::AppState;
 use crate::models::Transaction;
 
@@ -298,10 +298,18 @@ pub async fn get_tx_by_id(
 #[get("/mempool")]
 pub async fn get_mempool(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-    let transactions = mempool.get_all_transactions().to_vec();
-    drop(mempool);
-    let data = MempoolResponse {
+
+    // Read from new TransactionPool
+    let pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+    let transactions = pool.all().to_vec();
+    drop(pool);
+
+    #[derive(serde::Serialize)]
+    struct PoolResponse {
+        count: usize,
+        transactions: Vec<crate::storage::traits::Transaction>,
+    }
+    let data = PoolResponse {
         count: transactions.len(),
         transactions,
     };

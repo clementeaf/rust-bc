@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::models::Transaction;
-
 /// Request body for creating a transaction (shared with legacy handlers).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTransactionRequest {
@@ -20,13 +18,6 @@ pub struct CreateTransactionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateBlockRequest {
     pub transactions: Vec<CreateTransactionRequest>,
-}
-
-/// Pending mempool listing (`GET /api/v1/mempool`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MempoolResponse {
-    pub count: usize,
-    pub transactions: Vec<Transaction>,
 }
 
 /// Identity creation request
