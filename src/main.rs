@@ -853,6 +853,12 @@ async fn async_main_inner() -> std::io::Result<()> {
         )),
     };
 
+    // Telemetry adapter: polls external APIs and ingests into Asset Registry.
+    // Activated by TELEMETRY_SOURCE_URL env var.
+    if let Some(adapter_config) = registry::adapter::AdapterConfig::from_env() {
+        registry::adapter::spawn_telemetry_poller(adapter_config, gateway_store.clone());
+    }
+
     // Oracle demo feed: simulated price data for sandbox demos.
     let demo_config = oracle_demo::DemoFeedConfig::from_env();
     oracle_demo::spawn_demo_feed(demo_config, app_state.oracle_registry.clone());
