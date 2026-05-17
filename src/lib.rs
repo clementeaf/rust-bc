@@ -27,11 +27,8 @@ pub mod cache;
 pub mod checkpoint;
 pub mod metrics;
 pub mod network;
-pub mod pruning;
 pub mod smart_contracts;
 pub mod staking;
-pub mod state_reconstructor;
-pub mod state_snapshot;
 
 // Phase 3 Week 5: REST API Gateway
 pub mod acl;

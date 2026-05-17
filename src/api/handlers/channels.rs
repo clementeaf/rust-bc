@@ -334,7 +334,6 @@ mod tests {
     use crate::checkpoint::CheckpointManager;
     use crate::metrics::MetricsCollector;
     use crate::models::{Mempool, WalletManager};
-    use crate::pruning::PruningManager;
     use crate::smart_contracts::ContractManager;
     use crate::staking::StakingManager;
     use crate::storage::memory::MemoryStore;

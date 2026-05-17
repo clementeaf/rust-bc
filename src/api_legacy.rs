@@ -497,18 +497,6 @@ pub async fn mine_block(
         }
     }
 
-    // Pruning y snapshots cada 1000 bloques
-    if let Some(ref pruning_mgr) = state.pruning_manager {
-        if pruning_mgr.should_create_snapshot(latest.index) {
-            println!("📸 Creando snapshot en bloque {}", latest.index);
-            // El snapshot se creará en background desde main.rs
-            // Aquí solo ejecutamos pruning
-            if let Err(e) = pruning_mgr.prune_old_blocks(latest.index) {
-                eprintln!("⚠️  Error durante pruning: {e}");
-            }
-        }
-    }
-
     // Verificar transacciones de airdrop en el bloque minado
     let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
     (*state.airdrop_manager).verify_pending_claims_in_block(

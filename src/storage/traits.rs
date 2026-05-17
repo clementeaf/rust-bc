@@ -369,7 +369,9 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
     fn read_scope(&self, _id: &str) -> StorageResult<Scope> {
-        Err(super::errors::StorageError::KeyNotFound("scope not found".into()))
+        Err(super::errors::StorageError::KeyNotFound(
+            "scope not found".into(),
+        ))
     }
     fn list_scopes(&self) -> StorageResult<Vec<Scope>> {
         Ok(vec![])
@@ -382,7 +384,9 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
     fn read_assembly(&self, _id: &str) -> StorageResult<Assembly> {
-        Err(super::errors::StorageError::KeyNotFound("assembly not found".into()))
+        Err(super::errors::StorageError::KeyNotFound(
+            "assembly not found".into(),
+        ))
     }
     fn list_assemblies(&self) -> StorageResult<Vec<Assembly>> {
         Ok(vec![])
@@ -395,7 +399,9 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
     fn read_session(&self, _id: &str) -> StorageResult<Session> {
-        Err(super::errors::StorageError::KeyNotFound("session not found".into()))
+        Err(super::errors::StorageError::KeyNotFound(
+            "session not found".into(),
+        ))
     }
     fn list_sessions_by_assembly(&self, _assembly_id: &str) -> StorageResult<Vec<Session>> {
         Ok(vec![])
@@ -405,7 +411,9 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
     fn read_acta(&self, _id: &str) -> StorageResult<Acta> {
-        Err(super::errors::StorageError::KeyNotFound("acta not found".into()))
+        Err(super::errors::StorageError::KeyNotFound(
+            "acta not found".into(),
+        ))
     }
     fn list_actas(&self) -> StorageResult<Vec<Acta>> {
         Ok(vec![])

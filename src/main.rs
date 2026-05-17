@@ -42,12 +42,9 @@ mod ordering;
 mod pin;
 mod pki;
 mod private_data;
-mod pruning;
 mod regulatory;
 mod smart_contracts;
 mod staking;
-mod state_reconstructor;
-mod state_snapshot;
 mod storage;
 mod stress;
 mod tls;
@@ -69,10 +66,7 @@ use metrics::MetricsCollector;
 use middleware::RateLimitMiddleware;
 use models::{Mempool, WalletManager};
 use network::{parse_peer_allowlist, Node};
-use pruning::PruningManager;
-use staking::{StakingManager, Validator};
-use state_reconstructor::ReconstructedState;
-use state_snapshot::{StateSnapshot, StateSnapshotManager};
+use staking::StakingManager;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, RwLock};
@@ -200,14 +194,12 @@ async fn async_main_inner() -> std::io::Result<()> {
 
     let db_path = format!("{db_name}.db");
     let blocks_dir = format!("{db_name}_blocks");
-    let snapshots_dir = format!("{db_name}_snapshots");
     let checkpoints_dir = format!("{db_name}_checkpoints");
 
     println!("🚀 Iniciando Blockchain API Server...");
     println!("📊 Dificultad: {difficulty}");
     println!("💾 Base de datos: {db_path}");
     println!("📁 Directorio de bloques: {blocks_dir}");
-    println!("📸 Directorio de snapshots: {snapshots_dir}");
     println!("🌐 Puerto API: {api_port}");
     println!("📡 Puerto P2P: {p2p_port}");
     println!("🌍 Network ID: {network_id}");
@@ -235,18 +227,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         }
         Err(e) => {
             eprintln!("⚠️  Error al inicializar BlockStorage: {e}");
-            None
-        }
-    };
-
-    // Inicializar StateSnapshotManager
-    let snapshot_manager = match StateSnapshotManager::new(&snapshots_dir) {
-        Ok(manager) => {
-            println!("✅ StateSnapshotManager inicializado");
-            Some(manager)
-        }
-        Err(e) => {
-            eprintln!("⚠️  Error al inicializar StateSnapshotManager: {e}");
             None
         }
     };
@@ -308,96 +288,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         bc.create_genesis_block();
         bc
     };
-
-    // Intentar cargar estado desde snapshot (más rápido que reconstruir)
-    let reconstructed_state = if let Some(ref snapshot_mgr) = snapshot_manager {
-        match snapshot_mgr.load_latest_snapshot() {
-            Ok(Some(snapshot)) => {
-                // Verificar que el snapshot corresponde al último bloque
-                let latest_block = blockchain.get_latest_block();
-                if snapshot.block_index == latest_block.index
-                    && snapshot.block_hash == latest_block.hash
-                {
-                    println!(
-                        "✅ Estado cargado desde snapshot (bloque {})",
-                        snapshot.block_index
-                    );
-                    // Convertir snapshot a ReconstructedState
-                    let mut state = ReconstructedState::new();
-                    for (addr, wallet_snap) in snapshot.wallets {
-                        state.wallets.insert(
-                            addr.clone(),
-                            state_reconstructor::WalletState {
-                                balance: wallet_snap.balance,
-                            },
-                        );
-                    }
-                    state.contracts = snapshot.contracts;
-                    state.validators = snapshot.validators;
-                    // airdrop_tracking se reconstruye desde bloques
-                    state.airdrop_tracking =
-                        ReconstructedState::from_blockchain(&blockchain.chain).airdrop_tracking;
-                    state
-                } else {
-                    println!(
-                        "⚠️  Snapshot desactualizado (bloque {} vs {}), reconstruyendo...",
-                        snapshot.block_index, latest_block.index
-                    );
-                    ReconstructedState::from_blockchain(&blockchain.chain)
-                }
-            }
-            Ok(None) => {
-                println!("📸 No hay snapshot disponible, reconstruyendo estado...");
-                ReconstructedState::from_blockchain(&blockchain.chain)
-            }
-            Err(e) => {
-                eprintln!("⚠️  Error al cargar snapshot: {e}, reconstruyendo...");
-                ReconstructedState::from_blockchain(&blockchain.chain)
-            }
-        }
-    } else {
-        // Sin snapshot manager, reconstruir normalmente
-        let block_count = blockchain.chain.len();
-        if block_count > 10 {
-            println!("🔄 Reconstruyendo estado desde {block_count} bloques...");
-        }
-        let state = ReconstructedState::from_blockchain(&blockchain.chain);
-        if block_count > 10 {
-            println!("✅ Estado reconstruido desde blockchain");
-        }
-        state
-    };
-
-    // Guardar snapshot si hay muchos bloques y no existe uno reciente
-    let block_count = blockchain.chain.len();
-    if block_count > 50 {
-        if let Some(ref snapshot_mgr) = snapshot_manager {
-            // Verificar si necesitamos crear un snapshot
-            let should_create_snapshot = match snapshot_mgr.load_latest_snapshot() {
-                Ok(Some(snapshot)) => {
-                    let latest_block = blockchain.get_latest_block();
-                    // Crear snapshot si el último tiene más de 100 bloques de diferencia
-                    snapshot.block_index + 100 < latest_block.index
-                }
-                _ => true, // No hay snapshot, crear uno
-            };
-
-            if should_create_snapshot {
-                let latest_block = blockchain.get_latest_block();
-                let snapshot = StateSnapshot::from_state(
-                    latest_block,
-                    reconstructed_state.wallets.clone(),
-                    reconstructed_state.contracts.clone(),
-                    reconstructed_state.validators.clone(),
-                );
-                if let Err(e) = snapshot_mgr.save_snapshot(&snapshot, latest_block.index) {
-                    eprintln!("⚠️  Error al guardar snapshot: {e}");
-                } else {
-                    println!("📸 Snapshot guardado (bloque {})", latest_block.index);
-                }
-            }
-        }
-    }
 
     let mut wallet_manager = WalletManager::new();
     wallet_manager.sync_from_blockchain(&blockchain.chain);
@@ -554,18 +444,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         Some(slash_percentage),
     ));
 
-    // Cargar validadores desde estado reconstruido
-    let validators_from_state: Vec<Validator> =
-        reconstructed_state.validators.values().cloned().collect();
-    if !validators_from_state.is_empty() {
-        println!(
-            "📋 Cargando {} validadores desde estado reconstruido...",
-            validators_from_state.len()
-        );
-        staking_manager.load_validators(validators_from_state);
-        println!("✅ Validadores cargados exitosamente");
-    }
-
     // Inicializar AirdropManager
     let max_eligible_nodes = env::var("AIRDROP_MAX_NODES")
         .ok()
@@ -584,41 +462,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         airdrop_amount_per_node,
         airdrop_wallet.clone(),
     ));
-
-    // El tracking de airdrop se reconstruye desde blockchain
-    let airdrop_tracking = reconstructed_state.get_airdrop_tracking();
-    if !airdrop_tracking.is_empty() {
-        println!(
-            "📋 Tracking de airdrop reconstruido: {} nodos",
-            airdrop_tracking.len()
-        );
-    }
-
-    // Inicializar PruningManager
-    let pruning_manager = if block_storage_arc.is_some() && snapshot_manager.is_some() {
-        let storage_clone = BlockStorage::new(&blocks_dir).ok();
-        let snapshot_mgr_clone = StateSnapshotManager::new(&snapshots_dir).ok();
-        if let (Some(storage), Some(snapshot_mgr)) = (storage_clone, snapshot_mgr_clone) {
-            let keep_blocks = std::env::var("PRUNING_KEEP_BLOCKS")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(1000);
-            let snapshot_interval = std::env::var("SNAPSHOT_INTERVAL")
-                .ok()
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(1000);
-            Some(Arc::new(PruningManager::new(
-                storage,
-                snapshot_mgr,
-                Some(keep_blocks),
-                Some(snapshot_interval),
-            )))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
 
     // Inicializar MetricsCollector
     let metrics_collector = Arc::new(MetricsCollector::new());
@@ -978,7 +821,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         contract_manager: contract_manager.clone(),
         staking_manager: staking_manager.clone(),
         airdrop_manager: airdrop_manager.clone(),
-        pruning_manager: pruning_manager.clone(),
+        pruning_manager: None,
         checkpoint_manager: checkpoint_manager.clone(),
         transaction_validator: transaction_validator.clone(),
         metrics: metrics_collector.clone(),
@@ -1102,117 +945,6 @@ async fn async_main_inner() -> std::io::Result<()> {
             app_state.oracle_registry.clone(),
             symbol,
         );
-    }
-
-    // Tarea periódica para crear snapshots cada 1000 bloques
-    if pruning_manager.is_some() && snapshot_manager.is_some() {
-        let blockchain_for_snapshot = blockchain_arc.clone();
-        let pruning_mgr_clone = match pruning_manager.clone() {
-            Some(pruning) => pruning,
-            None => {
-                eprintln!("⚠️  Pruning manager no disponible para tarea periódica");
-                return Err(std::io::Error::other("Pruning manager not available"));
-            }
-        };
-
-        match StateSnapshotManager::new(&snapshots_dir) {
-            Ok(snapshot_mgr_clone) => {
-                tokio::spawn(async move {
-                    let mut last_snapshot_block = 0u64;
-                    loop {
-                        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-
-                        let (current_block_index, should_create) = {
-                            let lock_result = blockchain_for_snapshot.lock();
-                            match lock_result {
-                                Ok(blockchain) => {
-                                    let latest = blockchain.get_latest_block();
-                                    let current = latest.index;
-                                    let should = pruning_mgr_clone.should_create_snapshot(current)
-                                        && current > last_snapshot_block;
-                                    (current, should)
-                                }
-                                Err(_e) => {
-                                    eprintln!(
-                                        "⚠️  Error al adquirir lock de blockchain en snapshot task"
-                                    );
-                                    continue;
-                                }
-                            }
-                        };
-
-                        if should_create {
-                            println!(
-                                "📸 Creando snapshot automático en bloque {current_block_index}"
-                            );
-
-                            // Reconstruir estado para el snapshot
-                            let latest_block = {
-                                let lock_result = blockchain_for_snapshot.lock();
-                                match lock_result {
-                                    Ok(blockchain) => {
-                                        let block = blockchain.get_latest_block().clone();
-                                        drop(blockchain);
-                                        block
-                                    }
-                                    Err(_e) => {
-                                        eprintln!("⚠️  Error al adquirir lock de blockchain para snapshot");
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            // Reconstruir estado desde blockchain
-                            let reconstructed = {
-                                let lock_result = blockchain_for_snapshot.lock();
-                                match lock_result {
-                                    Ok(blockchain) => {
-                                        let reconstructed = crate::state_reconstructor::ReconstructedState::from_blockchain(
-                                            &blockchain.chain,
-                                        );
-                                        drop(blockchain);
-                                        reconstructed
-                                    }
-                                    Err(_e) => {
-                                        eprintln!("⚠️  Error al adquirir lock de blockchain para reconstrucción");
-                                        continue;
-                                    }
-                                }
-                            };
-
-                            let snapshot = StateSnapshot::from_state(
-                                &latest_block,
-                                reconstructed.wallets,
-                                reconstructed.contracts,
-                                reconstructed.validators,
-                            );
-
-                            if let Err(e) =
-                                snapshot_mgr_clone.save_snapshot(&snapshot, latest_block.index)
-                            {
-                                eprintln!("⚠️  Error al guardar snapshot automático: {e}");
-                            } else {
-                                println!(
-                                    "✅ Snapshot automático guardado (bloque {})",
-                                    latest_block.index
-                                );
-                                last_snapshot_block = current_block_index;
-
-                                // Ejecutar pruning después de crear snapshot
-                                if let Err(e) =
-                                    pruning_mgr_clone.prune_old_blocks(current_block_index)
-                                {
-                                    eprintln!("⚠️  Error durante pruning automático: {e}");
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-            Err(e) => {
-                eprintln!("⚠️  No se pudo crear StateSnapshotManager para tarea periódica: {e}");
-            }
-        }
     }
 
     println!("🌐 Servidor API iniciado en http://127.0.0.1:{api_port}");

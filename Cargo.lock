@@ -4689,7 +4689,6 @@ dependencies = [
  "log",
  "metrics",
  "metrics-exporter-prometheus",
- "num_cpus",
  "pqc_crypto_module",
  "pqcrypto-mldsa",
  "pqcrypto-traits",

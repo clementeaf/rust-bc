@@ -27,7 +27,6 @@ use crate::network::Node;
 use crate::ordering::OrderingBackend;
 use crate::pin::store::PinStore;
 use crate::private_data::{CollectionRegistry, PrivateDataStore};
-use crate::pruning::PruningManager;
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
 use crate::storage::traits::BlockStore;
@@ -46,7 +45,7 @@ pub struct AppState {
     pub contract_manager: Arc<RwLock<ContractManager>>,
     pub staking_manager: Arc<StakingManager>,
     pub airdrop_manager: Arc<AirdropManager>,
-    pub pruning_manager: Option<Arc<PruningManager>>,
+    pub pruning_manager: Option<Arc<()>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Arc<Mutex<TransactionValidator>>,
     pub metrics: Arc<MetricsCollector>,
