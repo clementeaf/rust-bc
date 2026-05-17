@@ -312,7 +312,6 @@ pub async fn mine_block(
             ApiResponse::error("mining already in progress — try again shortly".to_string());
         return Ok(HttpResponse::ServiceUnavailable().json(response));
     }
-    // Ensure flag is cleared on all exit paths
     struct MiningGuard;
     impl Drop for MiningGuard {
         fn drop(&mut self) {
@@ -325,198 +324,82 @@ pub async fn mine_block(
         return Ok(resp);
     }
 
-    // Verify miner_address belongs to a known wallet
-    {
-        let wm = state
-            .wallet_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if wm.get_wallet(&req.miner_address).is_none() {
-            let response: ApiResponse<String> = ApiResponse::error(
-                "miner_address does not correspond to a registered wallet".to_string(),
-            );
-            return Ok(HttpResponse::Forbidden().json(response));
+    let mining_service = match state.mining_service.as_ref() {
+        Some(ms) => ms,
+        None => {
+            return Err(actix_web::error::ErrorInternalServerError(
+                "MiningService not available",
+            ));
         }
-    }
+    };
 
+    // Drain pending transactions from pool
     let max_txs = req.max_transactions.unwrap_or(10);
-    let transactions = {
-        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
-        mempool.get_transactions_for_block(max_txs)
-    };
-    // Also drain from new pool to keep them in sync
-    {
+    let pool_txs = {
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
-        let _ = pool.drain_for_block(max_txs);
+        pool.drain_for_block(max_txs)
+    };
+    // Also drain legacy mempool to keep in sync
+    {
+        let mut mempool = state.mempool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = mempool.get_transactions_for_block(max_txs);
     }
 
-    let blockchain_state = state.blockchain.clone();
-    let wallet_manager_state = state.wallet_manager.clone();
-    let staking_manager_state = state.staking_manager.clone();
-    let airdrop_manager_state = state.airdrop_manager.clone();
+    // PoS validator selection
+    let validator_address = state.staking_manager.select_validator(&req.miner_address);
+    let address_to_use = validator_address.as_deref().unwrap_or(&req.miner_address);
 
-    // Seleccionar validador usando PoS
-    let previous_hash = {
-        let blockchain = blockchain_state.lock().unwrap_or_else(|e| e.into_inner());
-        blockchain.get_latest_block().hash.clone()
-    };
-
-    let validator_address = staking_manager_state.select_validator(&previous_hash);
-
-    let miner_address_clone = req.miner_address.clone();
-    let (hash, latest, reward, validator) = match actix_web::web::block(move || {
-        let mut blockchain = blockchain_state.lock().unwrap_or_else(|e| e.into_inner());
-        let wallet_manager = wallet_manager_state
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-
-        // Si hay validadores, usar PoS; si no, usar PoW con miner_address
-        let validator_addr = validator_address.clone();
-        let address_to_use = validator_addr.as_ref().unwrap_or(&miner_address_clone);
-
-        let reward = blockchain.calculate_mining_reward();
-        match blockchain.mine_block_with_reward(address_to_use, transactions, &wallet_manager) {
-            Ok(h) => {
-                let latest = blockchain.get_latest_block().clone();
-
-                // Registrar validación si usamos PoS
-                if let Some(validator_addr) = &validator_addr {
-                    // Detectar doble firma antes de registrar
-                    let block_hash = latest.hash.clone();
-                    if staking_manager_state.detect_and_slash_double_sign(
-                        validator_addr,
-                        latest.index,
-                        &block_hash,
-                    ) {
-                        // Slashing aplicado, no registrar validación
-                        eprintln!("⚠️  Validación no registrada debido a slashing por doble firma");
-                    } else {
-                        staking_manager_state.record_validation(
-                            validator_addr,
-                            latest.index,
-                            reward,
-                        );
-                    }
-                }
-
-                // Registrar tracking de airdrop
-                airdrop_manager_state.record_block_validation(
-                    address_to_use,
-                    latest.index,
-                    latest.timestamp,
-                );
-
-                Ok((h, latest, reward, validator_addr))
-            }
-            Err(e) => Err(e),
-        }
-    })
-    .await
-    {
-        Ok(Ok((h, l, r, v))) => (h, l, r, v),
-        Ok(Err(e)) => {
-            let error_msg = format!("Mining error: {e}");
-            return Err(actix_web::error::ErrorInternalServerError(error_msg));
-        }
+    // Mine via MiningService (writes block + txs to BlockStore)
+    let height = match mining_service.mine_block(address_to_use, pool_txs) {
+        Ok(h) => h,
         Err(e) => {
-            let error_msg = format!("Mining error: {e:?}");
-            return Err(actix_web::error::ErrorInternalServerError(error_msg));
+            return Err(actix_web::error::ErrorInternalServerError(format!(
+                "Mining error: {e}"
+            )));
         }
     };
 
-    // Guardar tracking en base de datos
+    let reward = 50u64; // MiningService calculates internally, expose default
 
-    {
-        let mut wallet_manager = state
-            .wallet_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        for tx in &latest.transactions {
-            if tx.from == "0" {
-                let _ = wallet_manager.process_coinbase_transaction(tx);
-            } else {
-                let _ = wallet_manager.process_transaction(tx);
-            }
+    // Staking: record validation
+    if let Some(ref validator_addr) = validator_address {
+        let block_hash = format!("block-{height}");
+        if state
+            .staking_manager
+            .detect_and_slash_double_sign(validator_addr, height, &block_hash)
+        {
+            eprintln!("⚠️  Validación no registrada debido a slashing por doble firma");
+        } else {
+            state
+                .staking_manager
+                .record_validation(validator_addr, height, reward);
         }
     }
 
-    // Persist to BlockStore
-    if let Ok(store_map) = state.store.read() {
-        if let Some(store) = store_map.get("default") {
-            let store_block: crate::storage::traits::Block = (&latest).into();
-            if let Err(e) = store.write_block(&store_block) {
-                eprintln!("⚠️  Error writing block to BlockStore: {e}");
-            }
-            // Write transactions to BlockStore
-            for tx in &latest.transactions {
-                let store_tx: crate::storage::traits::Transaction = tx.into();
-                let mut store_tx_with_height = store_tx;
-                store_tx_with_height.block_height = latest.index;
-                let _ = store.write_transaction(&store_tx_with_height);
-            }
-        }
-    }
+    // Airdrop tracking
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    state
+        .airdrop_manager
+        .record_block_validation(address_to_use, height, now);
 
-    // Checkpointing cada 2000 bloques (protección anti-51%)
-    if let Some(ref checkpoint_mgr) = state.checkpoint_manager {
-        let mut checkpoint_manager = match checkpoint_mgr.lock() {
-            Ok(manager) => manager,
-            Err(e) => {
-                eprintln!("⚠️  Error al adquirir lock de checkpoint manager: {e}");
-                return Err(actix_web::error::ErrorInternalServerError(
-                    "Service temporarily unavailable",
-                ));
-            }
-        };
-        if checkpoint_manager.should_create_checkpoint(latest.index) {
-            let blockchain = match state.blockchain.lock() {
-                Ok(bc) => bc,
-                Err(e) => {
-                    eprintln!("⚠️  Error al adquirir lock de blockchain: {e}");
-                    return Err(actix_web::error::ErrorInternalServerError(
-                        "Service temporarily unavailable",
-                    ));
-                }
-            };
-            let cumulative_difficulty =
-                blockchain.calculate_cumulative_difficulty(Some(latest.index));
-            let block_hash = latest.hash.clone();
-            let block_timestamp = latest.timestamp;
-            drop(blockchain);
-
-            if let Err(e) = checkpoint_manager.create_checkpoint(
-                latest.index,
-                block_hash,
-                block_timestamp,
-                cumulative_difficulty,
-            ) {
-                eprintln!("⚠️  Error creando checkpoint: {e}");
-            }
-        }
-    }
-
-    // Verificar transacciones de airdrop en el bloque minado
-    let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
-    let tx_senders: Vec<(&str, &str)> = latest
-        .transactions
-        .iter()
-        .map(|tx| (tx.id.as_str(), tx.from.as_str()))
-        .collect();
-    (*state.airdrop_manager).verify_pending_claims_in_block(
-        &tx_senders,
-        latest.index,
-        &airdrop_wallet,
-    );
-
+    // P2P broadcast via ordered block
     if let Some(node) = &state.node {
-        let latest_block = latest.clone();
-        let node_clone = node.clone();
-        tokio::spawn(async move {
-            node_clone.broadcast_block(&latest_block).await;
-        });
+        if let Ok(store_map) = state.store.read() {
+            if let Some(store) = store_map.get("default") {
+                if let Ok(block) = store.read_block(height) {
+                    let node_clone = node.clone();
+                    tokio::spawn(async move {
+                        node_clone.broadcast_ordered_block(&block).await;
+                    });
+                }
+            }
+        }
     }
 
-    state.balance_cache.invalidate(latest.index);
+    state.balance_cache.invalidate(height);
 
     #[derive(Serialize)]
     struct MineResponse {
@@ -527,12 +410,29 @@ pub async fn mine_block(
         consensus: String,
     }
 
-    let consensus = if validator.is_some() { "PoS" } else { "PoW" };
+    let tx_count = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            store
+                .read_block(height)
+                .map(|b| b.transactions.len())
+                .unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+
+    let consensus = if validator_address.is_some() {
+        "PoS"
+    } else {
+        "PoW"
+    };
     let response_data = MineResponse {
-        hash,
+        hash: format!("block-{height}"),
         reward,
-        transactions_count: latest.transactions.len(),
-        validator,
+        transactions_count: tx_count,
+        validator: validator_address,
         consensus: consensus.to_string(),
     };
 
@@ -540,10 +440,7 @@ pub async fn mine_block(
         &state.audit_store,
         crate::audit::AuditAction::BlockMined,
         &req.miner_address,
-        Some(format!(
-            "height={},hash={}",
-            latest.index, response_data.hash
-        )),
+        Some(format!("height={height}")),
     );
 
     let response = ApiResponse::success(response_data);
