@@ -1,8 +1,8 @@
 // Librería para tests de integración
-pub mod blockchain;
+pub(crate) mod blockchain;
 pub mod contract_validation;
 pub mod governance_contracts;
-pub mod models;
+pub(crate) mod models;
 pub mod multisig_contracts;
 pub mod network_security;
 pub mod oracle_collateral;

@@ -157,11 +157,18 @@ proptest! {
         amount in any::<u64>(),
         fee in 0u64..1000,
     ) {
-        use rust_bc::models::Transaction;
+        use rust_bc::storage::traits::Transaction;
 
-        let tx = Transaction::new_with_fee(from, to, amount, fee, None);
+        let tx = Transaction {
+            id: uuid::Uuid::new_v4().to_string(),
+            block_height: 0,
+            timestamp: 0,
+            input_did: from,
+            output_recipient: to,
+            amount,
+            state: "pending".to_string(),
+        };
         prop_assert_eq!(tx.amount, amount);
-        prop_assert_eq!(tx.fee, fee);
         prop_assert!(!tx.id.is_empty());
     }
 
@@ -174,17 +181,16 @@ proptest! {
         timestamp in any::<u64>(),
     ) {
         use rust_bc::transaction_validation::{TransactionValidator, ValidationConfig};
-        use rust_bc::models::Transaction;
+        use rust_bc::storage::traits::Transaction;
 
         let tx = Transaction {
             id: format!("fuzz-{}", rand::random::<u64>()),
-            from,
-            to,
-            amount,
-            fee,
+            block_height: 0,
             timestamp,
-            signature: "fuzz".to_string(),
-            data: None,
+            input_did: from,
+            output_recipient: to,
+            amount,
+            state: "pending".to_string(),
         };
 
         let mut config = ValidationConfig::default();

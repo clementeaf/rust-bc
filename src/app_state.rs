@@ -108,7 +108,6 @@ impl AppState {
     ///
     /// All `Option` fields are `None`, all stores use in-memory implementations.
     /// Callers can override specific fields after construction.
-    #[cfg(test)]
     pub fn test_default() -> Self {
         use crate::storage::MemoryStore;
 
