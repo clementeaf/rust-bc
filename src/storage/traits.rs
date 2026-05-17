@@ -146,6 +146,87 @@ impl Default for Credential {
     }
 }
 
+// ── Institutional governance entities (Cerulean Voto) ────────────────────
+
+/// A scope is a generic organizational unit (department, committee, branch).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Scope {
+    pub id: String,
+    pub name: String,
+    pub label: String,
+    pub parent_id: Option<String>,
+    pub channel_id: String,
+    pub members: Vec<ScopeMember>,
+    pub created_at: u64,
+}
+
+/// A member of a scope with a specific role.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ScopeMember {
+    pub did: String,
+    pub name: String,
+    pub role: String, // "admin", "voter", "observer"
+    pub added_at: u64,
+}
+
+/// An assembly (asamblea) — a formal convocation.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Assembly {
+    pub id: String,
+    pub folio: u64,
+    pub name: String,
+    pub assembly_type: String, // "ordinaria", "extraordinaria"
+    pub date: String,
+    pub location: String,
+    pub description: String,
+    pub convocatoria_date: String,
+    pub convocatoria_method: String,
+    pub scope_id: String,
+    pub created_at: u64,
+}
+
+/// A session within an assembly (first/second citation, quorum, agenda).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Session {
+    pub id: String,
+    pub assembly_id: String,
+    pub number: u64,
+    pub citation: String, // "primera", "segunda"
+    pub status: String,   // "planificada", "en_curso", "cerrada"
+    pub started_at: Option<String>,
+    pub closed_at: Option<String>,
+    pub agenda: Vec<AgendaItem>,
+    pub attendees: Vec<String>,
+    pub quorum_required: u64,
+    pub quorum_met: bool,
+    pub notes: String,
+    pub convocante: String,
+}
+
+/// An item on a session's agenda.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AgendaItem {
+    pub id: String,
+    pub title: String,
+    pub item_type: String, // "informativo", "votacion", "debate"
+    pub proposal_id: Option<u64>,
+    pub resolved: bool,
+    pub resolution: String,
+}
+
+/// An acta — permanent record of a session (ISO 15489).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Acta {
+    pub id: String,
+    pub folio: u64,
+    pub session_id: String,
+    pub assembly_id: String,
+    pub generated_at: u64,
+    pub content: serde_json::Value, // ActaContent as free-form JSON
+    pub integrity_hash: String,
+    pub blockchain_tx: Option<String>,
+}
+
 /// A single entry in the history of a world-state key.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HistoryEntry {
@@ -280,6 +361,54 @@ pub trait BlockStore: Send + Sync {
         Err(super::errors::StorageError::KeyNotFound(
             "vault entry not found".into(),
         ))
+    }
+
+    // ── Institutional governance (Cerulean Voto) ──────────────────────────
+
+    fn write_scope(&self, _scope: &Scope) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_scope(&self, _id: &str) -> StorageResult<Scope> {
+        Err(super::errors::StorageError::KeyNotFound("scope not found".into()))
+    }
+    fn list_scopes(&self) -> StorageResult<Vec<Scope>> {
+        Ok(vec![])
+    }
+    fn delete_scope(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
+
+    fn write_assembly(&self, _assembly: &Assembly) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_assembly(&self, _id: &str) -> StorageResult<Assembly> {
+        Err(super::errors::StorageError::KeyNotFound("assembly not found".into()))
+    }
+    fn list_assemblies(&self) -> StorageResult<Vec<Assembly>> {
+        Ok(vec![])
+    }
+    fn list_assemblies_by_scope(&self, _scope_id: &str) -> StorageResult<Vec<Assembly>> {
+        Ok(vec![])
+    }
+
+    fn write_session(&self, _session: &Session) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_session(&self, _id: &str) -> StorageResult<Session> {
+        Err(super::errors::StorageError::KeyNotFound("session not found".into()))
+    }
+    fn list_sessions_by_assembly(&self, _assembly_id: &str) -> StorageResult<Vec<Session>> {
+        Ok(vec![])
+    }
+
+    fn write_acta(&self, _acta: &Acta) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_acta(&self, _id: &str) -> StorageResult<Acta> {
+        Err(super::errors::StorageError::KeyNotFound("acta not found".into()))
+    }
+    fn list_actas(&self) -> StorageResult<Vec<Acta>> {
+        Ok(vec![])
     }
 
     // ── Balance & transaction queries (migration helpers) ──────────────────
