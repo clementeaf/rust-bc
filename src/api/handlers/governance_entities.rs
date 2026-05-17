@@ -3,7 +3,7 @@
 //! Scopes, assemblies, sessions, actas — persisted to BlockStore
 //! with channel-aware routing via X-Channel-Id header.
 
-use actix_web::{delete, get, post, web, HttpRequest, HttpResponse};
+use actix_web::{delete, get, post, put, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
@@ -139,6 +139,53 @@ pub async fn get_assembly(
     Ok(HttpResponse::Ok().json(ApiResponse::success(assembly, trace)))
 }
 
+#[put("/store/assemblies/{id}")]
+pub async fn update_assembly(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    body: web::Json<Assembly>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let mut assembly = body.into_inner();
+    assembly.id = id.into_inner();
+    store
+        .write_assembly(&assembly)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(assembly, trace)))
+}
+
+#[delete("/store/assemblies/{id}")]
+pub async fn remove_assembly(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store
+        .delete_assembly(&id)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success("deleted", trace)))
+}
+
 // ── Sessions ────────────────────────────────────────────────────────────
 
 #[post("/store/sessions")]
@@ -199,6 +246,53 @@ pub async fn get_session(
     Ok(HttpResponse::Ok().json(ApiResponse::success(session, trace)))
 }
 
+#[put("/store/sessions/{id}")]
+pub async fn update_session(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    body: web::Json<Session>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let mut session = body.into_inner();
+    session.id = id.into_inner();
+    store
+        .write_session(&session)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(session, trace)))
+}
+
+#[delete("/store/sessions/{id}")]
+pub async fn remove_session(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store
+        .delete_session(&id)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success("deleted", trace)))
+}
+
 // ── Actas ───────────────────────────────────────────────────────────────
 
 #[post("/store/actas")]
@@ -245,4 +339,49 @@ pub async fn get_acta(
         reason: e.to_string(),
     })?;
     Ok(HttpResponse::Ok().json(ApiResponse::success(acta, trace)))
+}
+
+#[put("/store/actas/{id}")]
+pub async fn update_acta(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    body: web::Json<Acta>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let mut acta = body.into_inner();
+    acta.id = id.into_inner();
+    store
+        .write_acta(&acta)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(acta, trace)))
+}
+
+#[delete("/store/actas/{id}")]
+pub async fn remove_acta(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    store.delete_acta(&id).map_err(|e| ApiError::StorageError {
+        reason: e.to_string(),
+    })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success("deleted", trace)))
 }

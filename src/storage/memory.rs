@@ -324,6 +324,11 @@ impl BlockStore for MemoryStore {
             .collect())
     }
 
+    fn delete_assembly(&self, id: &str) -> StorageResult<()> {
+        self.assemblies.lock().unwrap().remove(id);
+        Ok(())
+    }
+
     fn write_session(&self, session: &Session) -> StorageResult<()> {
         self.sessions
             .lock()
@@ -350,6 +355,11 @@ impl BlockStore for MemoryStore {
             .collect())
     }
 
+    fn delete_session(&self, id: &str) -> StorageResult<()> {
+        self.sessions.lock().unwrap().remove(id);
+        Ok(())
+    }
+
     fn write_acta(&self, acta: &Acta) -> StorageResult<()> {
         self.actas
             .lock()
@@ -367,6 +377,10 @@ impl BlockStore for MemoryStore {
     }
     fn list_actas(&self) -> StorageResult<Vec<Acta>> {
         Ok(self.actas.lock().unwrap().values().cloned().collect())
+    }
+    fn delete_acta(&self, id: &str) -> StorageResult<()> {
+        self.actas.lock().unwrap().remove(id);
+        Ok(())
     }
 }
 

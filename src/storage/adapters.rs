@@ -979,6 +979,16 @@ impl BlockStore for RocksDbBlockStore {
             .collect())
     }
 
+    fn delete_assembly(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ASSEMBLIES)
+            .ok_or_else(|| StorageError::RocksDbError("missing assemblies CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
     fn write_session(&self, session: &super::traits::Session) -> StorageResult<()> {
         let cf = self
             .db
@@ -1022,6 +1032,16 @@ impl BlockStore for RocksDbBlockStore {
         Ok(result)
     }
 
+    fn delete_session(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_SESSIONS)
+            .ok_or_else(|| StorageError::RocksDbError("missing sessions CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
     fn write_acta(&self, acta: &super::traits::Acta) -> StorageResult<()> {
         let cf = self
             .db
@@ -1045,6 +1065,16 @@ impl BlockStore for RocksDbBlockStore {
             .ok_or_else(|| StorageError::KeyNotFound(format!("acta:{id}")))?;
         serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
     }
+    fn delete_acta(&self, id: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_ACTAS)
+            .ok_or_else(|| StorageError::RocksDbError("missing actas CF".into()))?;
+        self.db
+            .delete_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
     fn list_actas(&self) -> StorageResult<Vec<super::traits::Acta>> {
         let cf = self
             .db

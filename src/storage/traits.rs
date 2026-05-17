@@ -394,6 +394,9 @@ pub trait BlockStore: Send + Sync {
     fn list_assemblies_by_scope(&self, _scope_id: &str) -> StorageResult<Vec<Assembly>> {
         Ok(vec![])
     }
+    fn delete_assembly(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
 
     fn write_session(&self, _session: &Session) -> StorageResult<()> {
         Ok(())
@@ -406,6 +409,9 @@ pub trait BlockStore: Send + Sync {
     fn list_sessions_by_assembly(&self, _assembly_id: &str) -> StorageResult<Vec<Session>> {
         Ok(vec![])
     }
+    fn delete_session(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
 
     fn write_acta(&self, _acta: &Acta) -> StorageResult<()> {
         Ok(())
@@ -417,6 +423,9 @@ pub trait BlockStore: Send + Sync {
     }
     fn list_actas(&self) -> StorageResult<Vec<Acta>> {
         Ok(vec![])
+    }
+    fn delete_acta(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
     }
 
     // ── Balance & transaction queries (migration helpers) ──────────────────

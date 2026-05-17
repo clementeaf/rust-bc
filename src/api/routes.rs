@@ -70,12 +70,18 @@ impl ApiRoutes {
             .service(governance_entities::create_assembly)
             .service(governance_entities::list_assemblies)
             .service(governance_entities::get_assembly)
+            .service(governance_entities::update_assembly)
+            .service(governance_entities::remove_assembly)
             .service(governance_entities::create_session)
             .service(governance_entities::list_sessions)
             .service(governance_entities::get_session)
+            .service(governance_entities::update_session)
+            .service(governance_entities::remove_session)
             .service(governance_entities::create_acta)
             .service(governance_entities::list_actas)
-            .service(governance_entities::get_acta);
+            .service(governance_entities::get_acta)
+            .service(governance_entities::update_acta)
+            .service(governance_entities::remove_acta);
     }
 
     fn register_tx_handlers(cfg: &mut web::ServiceConfig) {
