@@ -846,6 +846,9 @@ async fn async_main_inner() -> std::io::Result<()> {
             gateway_store.clone(),
             mining::MiningConfig::default(),
         ))),
+        tx_pool: Arc::new(std::sync::Mutex::new(
+            transaction::mempool::TransactionPool::new(),
+        )),
     };
 
     // Oracle demo feed: simulated price data for sandbox demos.
