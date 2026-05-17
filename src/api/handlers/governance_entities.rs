@@ -58,6 +58,31 @@ pub async fn get_scope(
     Ok(HttpResponse::Ok().json(ApiResponse::success(scope, trace)))
 }
 
+#[put("/store/scopes/{id}")]
+pub async fn update_scope(
+    state: web::Data<AppState>,
+    id: web::Path<String>,
+    body: web::Json<Scope>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Propose",
+        &req,
+    )?;
+    let trace = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, channel_id_from_req(&req))?;
+    let mut scope = body.into_inner();
+    scope.id = id.into_inner();
+    store
+        .write_scope(&scope)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    Ok(HttpResponse::Ok().json(ApiResponse::success(scope, trace)))
+}
+
 #[delete("/store/scopes/{id}")]
 pub async fn remove_scope(
     state: web::Data<AppState>,

@@ -66,6 +66,7 @@ impl ApiRoutes {
             .service(governance_entities::create_scope)
             .service(governance_entities::list_scopes)
             .service(governance_entities::get_scope)
+            .service(governance_entities::update_scope)
             .service(governance_entities::remove_scope)
             .service(governance_entities::create_assembly)
             .service(governance_entities::list_assemblies)
