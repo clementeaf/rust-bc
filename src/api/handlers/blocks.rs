@@ -27,18 +27,21 @@ pub async fn create_block(
     }
 }
 
-/// GET /api/v1/blocks — lista la cadena completa.
+/// GET /api/v1/blocks — list blocks from store.
 #[get("")]
 pub async fn list_blocks(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let chain = blockchain.chain.clone();
-    drop(blockchain);
-    let body = ApiResponse::success(chain, trace_id);
+    let store = get_channel_store(&state, "default")?;
+    let (blocks, _) = store
+        .list_blocks(0, 100)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+    let body = ApiResponse::success(blocks, trace_id);
     Ok(HttpResponse::Ok().json(body))
 }
 
-/// GET /api/v1/blocks/index/{index} — bloque por altura (antes de `/{hash}`).
+/// GET /api/v1/blocks/index/{index} — block by height.
 #[get("/index/{index}")]
 pub async fn get_block_by_index(
     state: web::Data<AppState>,
@@ -46,40 +49,25 @@ pub async fn get_block_by_index(
 ) -> ApiResult<HttpResponse> {
     let idx = *path;
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let result = blockchain.get_block_by_index(idx).cloned();
-    drop(blockchain);
-    match result {
-        Some(block) => {
-            let body = ApiResponse::success(block, trace_id);
-            Ok(HttpResponse::Ok().json(body))
-        }
-        None => Err(ApiError::NotFound {
+    let store = get_channel_store(&state, "default")?;
+    match store.read_block(idx) {
+        Ok(block) => Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id))),
+        Err(_) => Err(ApiError::NotFound {
             resource: format!("block index {idx}"),
         }),
     }
 }
 
-/// GET /api/v1/blocks/{hash} — bloque por hash.
+/// GET /api/v1/blocks/{hash} — block by hash (legacy, not indexed in BlockStore).
 #[get("/{hash}")]
 pub async fn get_block_by_hash(
-    state: web::Data<AppState>,
+    _state: web::Data<AppState>,
     path: web::Path<String>,
 ) -> ApiResult<HttpResponse> {
     let hash = path.into_inner();
-    let trace_id = uuid::Uuid::new_v4().to_string();
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let result = blockchain.get_block_by_hash(&hash).cloned();
-    drop(blockchain);
-    match result {
-        Some(block) => {
-            let body = ApiResponse::success(block, trace_id);
-            Ok(HttpResponse::Ok().json(body))
-        }
-        None => Err(ApiError::NotFound {
-            resource: format!("block {hash}"),
-        }),
-    }
+    Err(ApiError::NotFound {
+        resource: format!("block {hash}"),
+    })
 }
 
 /// GET /api/v1/store/blocks/latest — altura del bloque más reciente en el store.

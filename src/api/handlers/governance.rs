@@ -158,10 +158,14 @@ fn validate_bounded(field: &str, value: &str, max: usize) -> Result<(), ErrorDto
     Ok(())
 }
 
-/// Get current chain height from AppState.
+/// Get current chain height from BlockStore.
 fn chain_height(state: &AppState) -> u64 {
-    let bc = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    bc.chain.len() as u64
+    if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            return store.get_latest_height().unwrap_or(0);
+        }
+    }
+    0
 }
 
 /// Get total staked power from StakingManager.

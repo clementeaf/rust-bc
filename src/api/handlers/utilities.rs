@@ -15,11 +15,16 @@ pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse>
     let trace_id = uuid::Uuid::new_v4().to_string();
     let uptime_seconds = SCAFFOLD_HTTP_SINCE.elapsed().as_secs();
 
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let latest = blockchain.get_latest_block().clone();
-    let height = latest.index;
-    let last_block_hash = latest.hash;
-    drop(blockchain);
+    let (height, last_block_hash) = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            let h = store.get_latest_height().unwrap_or(0);
+            (h, format!("height-{h}"))
+        } else {
+            (0, String::new())
+        }
+    } else {
+        (0, String::new())
+    };
 
     let validators_count = state.staking_manager.get_active_validators().len();
 
@@ -75,9 +80,15 @@ pub async fn health_check(state: web::Data<AppState>) -> ApiResult<HttpResponse>
 /// GET /api/v1/version — API and crate version metadata with live chain height.
 pub async fn get_version(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let blockchain = state.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-    let blockchain_height = blockchain.get_latest_block().index;
-    drop(blockchain);
+    let blockchain_height = if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            store.get_latest_height().unwrap_or(0)
+        } else {
+            0
+        }
+    } else {
+        0
+    };
 
     let response = VersionResponse {
         api_version: "1.0.0".to_string(),
