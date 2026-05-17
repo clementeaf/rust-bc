@@ -74,6 +74,11 @@ pub struct CastVoteRequest {
     /// Ed25519 public key of the voter (hex).
     #[serde(default)]
     pub public_key: Option<String>,
+    /// Client-generated blinding nonce (hex). Mixed into the blind voter ID
+    /// to prevent brute-force deanonymization from the member list.
+    /// The nonce is never stored — only its contribution to the blind ID.
+    #[serde(default)]
+    pub nonce: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -546,6 +551,10 @@ pub async fn cast_governance_vote(
         let mut hasher = Sha256::new();
         hasher.update(id.to_le_bytes());
         hasher.update(body.voter.as_bytes());
+        // Mix in client nonce to prevent brute-force deanonymization
+        if let Some(ref nonce) = body.nonce {
+            hasher.update(nonce.as_bytes());
+        }
         let blind = hasher.finalize();
         format!("blind:{}", hex::encode(&blind[..20]))
     } else {
