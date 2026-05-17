@@ -1,7 +1,7 @@
 //! Transaction mempool backed by `storage::Transaction`.
 //!
 //! Replaces the legacy `models::Mempool` with the same API surface
-//! but using the new storage types.
+//! but using the new storage types. Includes double-spend prevention.
 
 use crate::storage::traits::Transaction;
 
@@ -28,6 +28,36 @@ impl TransactionPool {
         if self.transactions.iter().any(|t| t.id == tx.id) {
             return Err("Transaction already in mempool".to_string());
         }
+        self.transactions.push(tx);
+        Ok(())
+    }
+
+    /// Add a transaction with balance validation.
+    /// Rejects if sender's pending spend + new amount exceeds available balance.
+    pub fn add_checked(&mut self, tx: Transaction, sender_balance: u64) -> Result<(), String> {
+        if self.transactions.len() >= self.max_size {
+            return Err("Mempool full".to_string());
+        }
+        if self.transactions.iter().any(|t| t.id == tx.id) {
+            return Err("Transaction already in mempool".to_string());
+        }
+
+        // Double-spend check: sum all pending amounts from the same sender
+        let pending_spent: u64 = self
+            .transactions
+            .iter()
+            .filter(|t| t.input_did == tx.input_did)
+            .map(|t| t.amount)
+            .sum();
+
+        let total_required = pending_spent.saturating_add(tx.amount);
+        if total_required > sender_balance {
+            return Err(format!(
+                "Double-spend: pending {pending_spent} + new {} = {total_required} exceeds balance {sender_balance}",
+                tx.amount
+            ));
+        }
+
         self.transactions.push(tx);
         Ok(())
     }
@@ -120,5 +150,35 @@ mod tests {
         };
         pool.add(sample_tx("tx1", "a", "b", 1)).unwrap();
         assert!(pool.add(sample_tx("tx2", "a", "b", 1)).is_err());
+    }
+
+    #[test]
+    fn add_checked_allows_within_balance() {
+        let mut pool = TransactionPool::new();
+        pool.add_checked(sample_tx("tx1", "alice", "bob", 50), 100)
+            .unwrap();
+        pool.add_checked(sample_tx("tx2", "alice", "carol", 30), 100)
+            .unwrap();
+        assert_eq!(pool.len(), 2);
+    }
+
+    #[test]
+    fn add_checked_rejects_double_spend() {
+        let mut pool = TransactionPool::new();
+        pool.add_checked(sample_tx("tx1", "alice", "bob", 80), 100)
+            .unwrap();
+        let result = pool.add_checked(sample_tx("tx2", "alice", "carol", 30), 100);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Double-spend"));
+    }
+
+    #[test]
+    fn add_checked_different_senders_independent() {
+        let mut pool = TransactionPool::new();
+        pool.add_checked(sample_tx("tx1", "alice", "bob", 80), 100)
+            .unwrap();
+        pool.add_checked(sample_tx("tx2", "bob", "carol", 90), 100)
+            .unwrap();
+        assert_eq!(pool.len(), 2);
     }
 }

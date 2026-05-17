@@ -95,27 +95,6 @@ pub async fn create_transaction(
             });
         }
 
-        // Balance check via BlockStore
-        let balance = if let Ok(store_map) = state.store.read() {
-            if let Some(store) = store_map.get("default") {
-                store.calculate_balance(&req.from).unwrap_or(0)
-            } else {
-                0
-            }
-        } else {
-            0
-        };
-
-        if balance < req.amount {
-            return Err(ApiError::ValidationError {
-                field: "balance".to_string(),
-                reason: format!(
-                    "Saldo insuficiente. Disponible: {balance}, Requerido: {}",
-                    req.amount
-                ),
-            });
-        }
-
         if let Some(key) = &api_key {
             match state.billing_manager.try_record_transaction(key) {
                 Ok(()) => {}
@@ -129,10 +108,20 @@ pub async fn create_transaction(
         }
     }
 
-    // Add to transaction pool
+    // Add to transaction pool with double-spend protection
     {
+        let balance = if let Ok(store_map) = state.store.read() {
+            if let Some(store) = store_map.get("default") {
+                store.calculate_balance(&tx.input_did).unwrap_or(0)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
-        if let Err(e) = pool.add(tx.clone()) {
+        if let Err(e) = pool.add_checked(tx.clone(), balance) {
             return Err(ApiError::ValidationError {
                 field: "mempool".to_string(),
                 reason: e,
