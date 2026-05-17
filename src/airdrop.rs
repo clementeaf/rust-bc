@@ -1,5 +1,4 @@
 // use crate::database::BlockchainDB; // Eliminado - ya no usamos BD
-use crate::models::Transaction;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -565,21 +564,21 @@ impl AirdropManager {
      */
     pub fn verify_pending_claims_in_block(
         &self,
-        transactions: &[Transaction],
+        tx_senders: &[(&str, &str)], // (tx_id, sender_address)
         block_index: u64,
         airdrop_wallet: &str,
     ) {
         let mut verified_nodes = Vec::new();
 
         // Buscar transacciones de airdrop en el bloque
-        for tx in transactions {
-            if tx.from == airdrop_wallet {
+        for &(tx_id, sender) in tx_senders {
+            if sender == airdrop_wallet {
                 let pending = self
                     .pending_claims
                     .lock()
                     .unwrap_or_else(|e| e.into_inner());
                 for (node_address, (pending_tx_id, _)) in pending.iter() {
-                    if pending_tx_id == &tx.id {
+                    if pending_tx_id == tx_id {
                         verified_nodes.push((node_address.clone(), pending_tx_id.clone()));
                         break;
                     }

@@ -492,8 +492,13 @@ pub async fn mine_block(
 
     // Verificar transacciones de airdrop en el bloque minado
     let airdrop_wallet = state.airdrop_manager.get_airdrop_wallet().to_string();
+    let tx_senders: Vec<(&str, &str)> = latest
+        .transactions
+        .iter()
+        .map(|tx| (tx.id.as_str(), tx.from.as_str()))
+        .collect();
     (*state.airdrop_manager).verify_pending_claims_in_block(
-        &latest.transactions,
+        &tx_senders,
         latest.index,
         &airdrop_wallet,
     );
