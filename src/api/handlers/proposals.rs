@@ -139,22 +139,13 @@ mod tests {
 
     use actix_web::{test, web, App};
 
-    use crate::airdrop::AirdropManager;
     use crate::app_state::AppState;
-    use crate::billing::BillingManager;
-    use crate::blockchain::Blockchain;
-    use crate::cache::BalanceCache;
     use crate::endorsement::types::Endorsement;
     use crate::endorsement::{MemoryOrgRegistry, MemoryPolicyStore};
-    use crate::metrics::MetricsCollector;
-    use crate::models::{Mempool, WalletManager};
-    use crate::smart_contracts::ContractManager;
-    use crate::staking::StakingManager;
-    use crate::storage::{traits::Transaction, MemoryStore};
+    use crate::storage::traits::Transaction;
     use crate::transaction::endorsed::EndorsedTransaction;
     use crate::transaction::proposal::TransactionProposal;
     use crate::transaction::rwset::{KVRead, KVWrite, ReadWriteSet};
-    use crate::transaction_validation::{TransactionValidator, ValidationConfig};
 
     fn make_state() -> web::Data<AppState> {
         let mut state = AppState::test_default();

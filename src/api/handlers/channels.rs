@@ -325,19 +325,9 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, RwLock};
 
-    use crate::airdrop::AirdropManager;
     use crate::app_state::AppState;
-    use crate::billing::BillingManager;
-    use crate::blockchain::Blockchain;
-    use crate::cache::BalanceCache;
-    use crate::checkpoint::CheckpointManager;
-    use crate::metrics::MetricsCollector;
-    use crate::models::{Mempool, WalletManager};
-    use crate::smart_contracts::ContractManager;
-    use crate::staking::StakingManager;
     use crate::storage::memory::MemoryStore;
     use crate::storage::traits::BlockStore;
-    use crate::transaction_validation::TransactionValidator;
 
     use super::{create_channel, get_channel_store, list_channels};
 
