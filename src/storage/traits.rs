@@ -428,6 +428,49 @@ pub trait BlockStore: Send + Sync {
         Ok(())
     }
 
+    // ── Asset Registry ────────────────────────────────────────────────────
+
+    fn write_asset(&self, _asset: &crate::registry::types::Asset) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_asset(&self, _id: &str) -> StorageResult<crate::registry::types::Asset> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "asset not found".into(),
+        ))
+    }
+    fn list_assets(&self) -> StorageResult<Vec<crate::registry::types::Asset>> {
+        Ok(vec![])
+    }
+    fn delete_asset(&self, _id: &str) -> StorageResult<()> {
+        Ok(())
+    }
+
+    fn write_asset_event(&self, _event: &crate::registry::types::AssetEvent) -> StorageResult<()> {
+        Ok(())
+    }
+    fn read_asset_event(&self, _id: &str) -> StorageResult<crate::registry::types::AssetEvent> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "asset event not found".into(),
+        ))
+    }
+    fn list_asset_events(
+        &self,
+        _asset_id: &str,
+    ) -> StorageResult<Vec<crate::registry::types::AssetEvent>> {
+        Ok(vec![])
+    }
+
+    /// Bulk write asset events (for telemetry ingestion).
+    fn write_asset_events_batch(
+        &self,
+        events: &[crate::registry::types::AssetEvent],
+    ) -> StorageResult<()> {
+        for event in events {
+            self.write_asset_event(event)?;
+        }
+        Ok(())
+    }
+
     // ── Balance & transaction queries (migration helpers) ──────────────────
 
     /// Calculate the balance of an address by scanning all transactions.

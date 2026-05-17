@@ -5,8 +5,8 @@ use crate::api::handlers::evm;
 use crate::api::handlers::{
     acl, audit, blocks, chain, chaincode, channels, compliance, contact, credentials, discovery,
     events, forensic, gateway, governance, governance_entities, identity, intelligence, interop,
-    legal_oracle, msp, oracle, organizations, pentest, pin, private_data, proposals, regulatory,
-    snapshots, stress, transactions, utilities, vault, zkp,
+    legal_oracle, msp, oracle, organizations, pentest, pin, private_data, proposals, registry,
+    regulatory, snapshots, stress, transactions, utilities, vault, zkp,
 };
 
 /// API routes configuration
@@ -82,7 +82,18 @@ impl ApiRoutes {
             .service(governance_entities::list_actas)
             .service(governance_entities::get_acta)
             .service(governance_entities::update_acta)
-            .service(governance_entities::remove_acta);
+            .service(governance_entities::remove_acta)
+            // Asset Registry
+            .service(registry::create_asset)
+            .service(registry::list_assets)
+            .service(registry::get_asset)
+            .service(registry::update_asset)
+            .service(registry::remove_asset)
+            .service(registry::create_asset_event)
+            .service(registry::create_asset_events_batch)
+            .service(registry::list_asset_events)
+            .service(registry::get_asset_event)
+            .service(registry::export_asset);
     }
 
     fn register_tx_handlers(cfg: &mut web::ServiceConfig) {

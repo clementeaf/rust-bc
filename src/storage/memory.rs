@@ -7,6 +7,7 @@ use super::errors::{StorageError, StorageResult};
 use super::traits::{
     Acta, Assembly, Block, BlockStore, Credential, IdentityRecord, Scope, Session, Transaction,
 };
+use crate::registry::types::{Asset, AssetEvent};
 
 /// In-memory store backed by HashMaps; safe for concurrent use via Mutex.
 pub struct MemoryStore {
@@ -29,6 +30,10 @@ pub struct MemoryStore {
     sessions: Mutex<HashMap<String, Session>>,
     /// Actas: id → Acta
     actas: Mutex<HashMap<String, Acta>>,
+    /// Assets: id → Asset
+    assets: Mutex<HashMap<String, Asset>>,
+    /// Asset events: id → AssetEvent
+    asset_events: Mutex<HashMap<String, AssetEvent>>,
 }
 
 impl MemoryStore {
@@ -46,6 +51,8 @@ impl MemoryStore {
             assemblies: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
             actas: Mutex::new(HashMap::new()),
+            assets: Mutex::new(HashMap::new()),
+            asset_events: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -381,6 +388,57 @@ impl BlockStore for MemoryStore {
     fn delete_acta(&self, id: &str) -> StorageResult<()> {
         self.actas.lock().unwrap().remove(id);
         Ok(())
+    }
+
+    // ── Asset Registry ──────────────────────────────────────────────────
+
+    fn write_asset(&self, asset: &Asset) -> StorageResult<()> {
+        self.assets
+            .lock()
+            .unwrap()
+            .insert(asset.id.clone(), asset.clone());
+        Ok(())
+    }
+    fn read_asset(&self, id: &str) -> StorageResult<Asset> {
+        self.assets
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("asset:{id}")))
+    }
+    fn list_assets(&self) -> StorageResult<Vec<Asset>> {
+        Ok(self.assets.lock().unwrap().values().cloned().collect())
+    }
+    fn delete_asset(&self, id: &str) -> StorageResult<()> {
+        self.assets.lock().unwrap().remove(id);
+        Ok(())
+    }
+
+    fn write_asset_event(&self, event: &AssetEvent) -> StorageResult<()> {
+        self.asset_events
+            .lock()
+            .unwrap()
+            .insert(event.id.clone(), event.clone());
+        Ok(())
+    }
+    fn read_asset_event(&self, id: &str) -> StorageResult<AssetEvent> {
+        self.asset_events
+            .lock()
+            .unwrap()
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("asset_event:{id}")))
+    }
+    fn list_asset_events(&self, asset_id: &str) -> StorageResult<Vec<AssetEvent>> {
+        Ok(self
+            .asset_events
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|e| e.asset_id == asset_id)
+            .cloned()
+            .collect())
     }
 }
 

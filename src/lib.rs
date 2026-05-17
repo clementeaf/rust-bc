@@ -58,6 +58,7 @@ pub mod ordering;
 pub mod pin;
 pub mod pki;
 pub mod private_data;
+pub mod registry;
 pub mod regulatory;
 pub mod stress;
 pub mod testnet;

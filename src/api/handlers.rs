@@ -28,6 +28,7 @@ pub mod pentest;
 pub mod pin;
 pub mod private_data;
 pub mod proposals;
+pub mod registry;
 pub mod regulatory;
 pub mod snapshots;
 pub mod stress;
