@@ -59,12 +59,6 @@ pub fn try_create_block(state: &AppState, req: &CreateBlockRequest) -> Result<St
                     let latest_index = latest.index;
                     let latest_block_clone = latest.clone();
 
-                    if let Some(ref storage) = state.block_storage {
-                        if let Err(e) = storage.save_block(&latest_block_clone) {
-                            eprintln!("⚠️  Error al guardar bloque en archivos: {e}");
-                        }
-                    }
-
                     if let Some(node) = &state.node {
                         let node_clone = node.clone();
                         tokio::spawn(async move {

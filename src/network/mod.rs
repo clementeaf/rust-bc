@@ -22,7 +22,6 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 // Crate modules
-use crate::block_storage::BlockStorage;
 use crate::blockchain::{Block, Blockchain};
 use crate::checkpoint::CheckpointManager;
 use crate::models::{Transaction, WalletManager};
@@ -195,7 +194,7 @@ pub struct Node {
     pub peers: Arc<Mutex<HashSet<String>>>,
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-    pub block_storage: Option<Arc<BlockStorage>>,
+    pub block_storage: Option<Arc<()>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -459,13 +458,6 @@ impl Node {
     }
 
     /**
-     * Configura el block storage para el nodo
-     */
-    pub fn set_block_storage(&mut self, block_storage: Arc<BlockStorage>) {
-        self.block_storage = Some(block_storage);
-    }
-
-    /**
      * Configura el contract manager para el nodo
      */
     pub fn set_contract_manager(&mut self, contract_manager: Arc<RwLock<ContractManager>>) {
@@ -710,7 +702,7 @@ impl Node {
         peers: Arc<Mutex<HashSet<String>>>,
         blockchain: Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        block_storage: Option<Arc<BlockStorage>>,
+        block_storage: Option<Arc<()>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
         transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -891,7 +883,7 @@ impl Node {
         peers: &Arc<Mutex<HashSet<String>>>,
         blockchain: &Arc<Mutex<Blockchain>>,
         wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        block_storage: Option<Arc<BlockStorage>>,
+        _block_storage: Option<Arc<()>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
         transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -944,15 +936,6 @@ impl Node {
                         if let Some(wm) = &wallet_manager {
                             let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                             wm_guard.sync_from_blockchain(&blockchain.chain);
-                        }
-
-                        // Guardar bloques en BlockStorage
-                        if let Some(ref storage) = block_storage {
-                            for block in &blockchain.chain {
-                                if let Err(e) = storage.save_block(block) {
-                                    eprintln!("⚠️  Error guardando bloque en archivos: {e}");
-                                }
-                            }
                         }
                     } else {
                         println!("⚠️  Cadena recibida no pasó validación de transacciones");
@@ -1076,13 +1059,6 @@ impl Node {
                                 eprintln!("⚠️  Error procesando transacción: {e}");
                             }
                         }
-                    }
-                }
-
-                // Guardar bloque en BlockStorage
-                if let Some(ref storage) = block_storage {
-                    if let Err(e) = storage.save_block(&block_clone) {
-                        eprintln!("⚠️  Error guardando bloque en archivos: {e}");
                     }
                 }
 
@@ -2492,15 +2468,6 @@ impl Node {
                             let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                             wm_guard.sync_from_blockchain(&blockchain.chain);
                         }
-
-                        // Guardar bloques en BlockStorage
-                        if let Some(ref storage) = self.block_storage {
-                            for block in &blockchain.chain {
-                                if let Err(e) = storage.save_block(block) {
-                                    eprintln!("⚠️  Error guardando bloque en archivos: {e}");
-                                }
-                            }
-                        }
                     }
                 }
                 return Ok(());
@@ -2526,15 +2493,6 @@ impl Node {
                     if let Some(wm) = &self.wallet_manager {
                         let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
                         wm_guard.sync_from_blockchain(&blockchain.chain);
-                    }
-
-                    // Guardar bloques en BlockStorage
-                    if let Some(ref storage) = self.block_storage {
-                        for block in &blockchain.chain {
-                            if let Err(e) = storage.save_block(block) {
-                                eprintln!("⚠️  Error guardando bloque en archivos: {e}");
-                            }
-                        }
                     }
                 } else {
                     println!("⚠️  Cadena recibida no pasó validación de transacciones");

@@ -5,7 +5,6 @@ pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 use crate::acl::AclProvider;
 use crate::airdrop::AirdropManager;
 use crate::billing::BillingManager;
-use crate::block_storage::BlockStorage;
 use crate::blockchain::Blockchain;
 use crate::cache::BalanceCache;
 use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
@@ -37,7 +36,7 @@ use crate::transaction_validation::TransactionValidator;
 pub struct AppState {
     pub blockchain: Arc<Mutex<Blockchain>>,
     pub wallet_manager: Arc<Mutex<WalletManager>>,
-    pub block_storage: Option<Arc<BlockStorage>>,
+    pub block_storage: Option<Arc<()>>,
     pub node: Option<Arc<Node>>,
     pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,

@@ -7,7 +7,6 @@ mod app_state;
 mod audit;
 mod billing;
 mod block_creation;
-mod block_storage;
 mod blockchain;
 mod cache;
 mod chaincode;
@@ -59,7 +58,6 @@ use api::routes::ApiRoutes;
 use api_legacy::config_routes;
 use app_state::AppState;
 use billing::BillingManager;
-use block_storage::BlockStorage;
 use blockchain::Blockchain;
 use cache::BalanceCache;
 use metrics::MetricsCollector;
@@ -192,14 +190,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(30);
 
-    let db_path = format!("{db_name}.db");
-    let blocks_dir = format!("{db_name}_blocks");
     let checkpoints_dir = format!("{db_name}_checkpoints");
 
     println!("🚀 Iniciando Blockchain API Server...");
     println!("📊 Dificultad: {difficulty}");
-    println!("💾 Base de datos: {db_path}");
-    println!("📁 Directorio de bloques: {blocks_dir}");
     println!("🌐 Puerto API: {api_port}");
     println!("📡 Puerto P2P: {p2p_port}");
     println!("🌍 Network ID: {network_id}");
@@ -219,75 +213,9 @@ async fn async_main_inner() -> std::io::Result<()> {
         "🔍 Auto-discovery: intervalo {auto_discovery_interval}s, max conexiones {auto_discovery_max_connections}, delay inicial {auto_discovery_initial_delay}s"
     );
 
-    // Inicializar BlockStorage (nuevo sistema)
-    let block_storage = match BlockStorage::new(&blocks_dir) {
-        Ok(storage) => {
-            println!("✅ BlockStorage inicializado");
-            Some(storage)
-        }
-        Err(e) => {
-            eprintln!("⚠️  Error al inicializar BlockStorage: {e}");
-            None
-        }
-    };
-
-    // Cargar blockchain: solo desde archivos (sin BD)
-    let blockchain = if let Some(ref storage) = block_storage {
-        // Intentar cargar desde archivos
-        match storage.load_all_blocks() {
-            Ok(blocks) if !blocks.is_empty() => {
-                println!(
-                    "✅ Blockchain cargada desde archivos: {} bloques",
-                    blocks.len()
-                );
-                Blockchain {
-                    chain: blocks,
-                    difficulty,
-                    target_block_time: 60,
-                    difficulty_adjustment_interval: 10,
-                    max_transactions_per_block: 1000,
-                    max_block_size_bytes: 1_000_000,
-                }
-            }
-            Ok(_) => {
-                // No hay bloques en archivos, crear nueva blockchain
-                println!("📦 Creando bloque génesis...");
-                let mut bc = Blockchain::new(difficulty);
-                bc.create_genesis_block();
-                // Guardar bloque génesis en archivos
-                if let Some(ref storage) = block_storage {
-                    for block in &bc.chain {
-                        if let Err(e) = storage.save_block(block) {
-                            eprintln!("⚠️  Error al guardar bloque génesis: {e}");
-                        }
-                    }
-                }
-                bc
-            }
-            Err(e) => {
-                eprintln!(
-                    "⚠️  Error al cargar bloques desde archivos: {e}, creando nueva blockchain"
-                );
-                let mut bc = Blockchain::new(difficulty);
-                bc.create_genesis_block();
-                // Guardar bloque génesis
-                if let Some(ref storage) = block_storage {
-                    for block in &bc.chain {
-                        if let Err(e) = storage.save_block(block) {
-                            eprintln!("⚠️  Error al guardar bloque génesis: {e}");
-                        }
-                    }
-                }
-                bc
-            }
-        }
-    } else {
-        // Sin BlockStorage, crear nueva blockchain
-        eprintln!("⚠️  BlockStorage no disponible, creando nueva blockchain");
-        let mut bc = Blockchain::new(difficulty);
-        bc.create_genesis_block();
-        bc
-    };
+    // Legacy Blockchain (in-memory, used by legacy handlers — will be removed)
+    let mut blockchain = Blockchain::new(difficulty);
+    blockchain.create_genesis_block();
 
     let mut wallet_manager = WalletManager::new();
     wallet_manager.sync_from_blockchain(&blockchain.chain);
@@ -307,9 +235,6 @@ async fn async_main_inner() -> std::io::Result<()> {
     // Se reconstruyen desde blockchain si es necesario
     let contract_manager = smart_contracts::ContractManager::new();
     let contract_manager = Arc::new(RwLock::new(contract_manager));
-
-    // Crear Arc<BlockStorage> para AppState y Node (antes de crear Node)
-    let block_storage_arc = block_storage.map(Arc::new);
 
     // Inicializar CheckpointManager (protección anti-51%) - ANTES de crear Node
     let checkpoint_interval = env::var("CHECKPOINT_INTERVAL")
@@ -354,9 +279,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         peer_allowlist.clone(),
     );
     node_arc.set_resources(wallet_manager_arc.clone());
-    if let Some(storage) = block_storage_arc.as_ref() {
-        node_arc.set_block_storage(Arc::clone(storage));
-    }
     node_arc.set_contract_manager(contract_manager.clone());
     if let Some(ref checkpoint_mgr) = checkpoint_manager {
         node_arc.set_checkpoint_manager(checkpoint_mgr.clone());
@@ -813,7 +735,7 @@ async fn async_main_inner() -> std::io::Result<()> {
     let app_state = AppState {
         blockchain: blockchain_arc.clone(),
         wallet_manager: wallet_manager_arc.clone(),
-        block_storage: block_storage_arc.clone(),
+        block_storage: None,
         node: Some(node_arc.clone()),
         mempool: mempool.clone(),
         balance_cache: balance_cache.clone(),

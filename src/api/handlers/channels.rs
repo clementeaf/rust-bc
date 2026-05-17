@@ -328,7 +328,6 @@ mod tests {
     use crate::airdrop::AirdropManager;
     use crate::app_state::AppState;
     use crate::billing::BillingManager;
-    use crate::block_storage::BlockStorage;
     use crate::blockchain::Blockchain;
     use crate::cache::BalanceCache;
     use crate::checkpoint::CheckpointManager;

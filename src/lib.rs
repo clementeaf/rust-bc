@@ -22,7 +22,6 @@ pub mod storage;
 // Runtime stack (shared with binary for AppState and scaffold handlers)
 pub mod airdrop;
 pub mod billing;
-pub mod block_storage;
 pub mod cache;
 pub mod checkpoint;
 pub mod metrics;

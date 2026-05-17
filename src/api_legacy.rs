@@ -435,14 +435,7 @@ pub async fn mine_block(
         }
     }
 
-    // Guardar en BlockStorage (legacy file-based)
-    if let Some(ref storage) = state.block_storage {
-        if let Err(e) = storage.save_block(&latest) {
-            eprintln!("⚠️  Error al guardar bloque en archivos: {e}");
-        }
-    }
-
-    // Also persist to new BlockStore (dual-write for migration)
+    // Persist to BlockStore
     if let Ok(store_map) = state.store.read() {
         if let Some(store) = store_map.get("default") {
             let store_block: crate::storage::traits::Block = (&latest).into();
