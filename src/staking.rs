@@ -1,4 +1,3 @@
-use crate::models::WalletManager;
 use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -132,12 +131,7 @@ impl StakingManager {
      * @param wallet_manager - Gestor de wallets para validar balance
      * @returns Resultado de la operación
      */
-    pub fn stake(
-        &self,
-        address: &str,
-        amount: u64,
-        wallet_manager: &WalletManager,
-    ) -> Result<(), String> {
+    pub fn stake(&self, address: &str, amount: u64, wallet_exists: bool) -> Result<(), String> {
         if amount < self.min_stake {
             return Err(format!(
                 "Stake mínimo requerido: {} tokens (intentaste stakear: {})",
@@ -145,13 +139,9 @@ impl StakingManager {
             ));
         }
 
-        // Verificar que el wallet existe
-        wallet_manager
-            .get_wallet(address)
-            .ok_or_else(|| "Wallet no encontrado".to_string())?;
-
-        // Nota: El balance se verifica en la blockchain, no en el wallet manager
-        // Aquí solo verificamos que el wallet existe
+        if !wallet_exists {
+            return Err("Wallet no encontrado".to_string());
+        }
 
         let mut validators = self.validators.lock().unwrap_or_else(|e| e.into_inner());
 

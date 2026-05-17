@@ -1856,6 +1856,13 @@ pub async fn stake(
         return Ok(HttpResponse::BadRequest().json(response));
     }
 
+    let wallet_exists = {
+        let wm = state
+            .wallet_manager
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        wm.get_wallet(&req.address).is_some()
+    };
     let wallet_manager = state
         .wallet_manager
         .lock()
@@ -1863,7 +1870,7 @@ pub async fn stake(
 
     match state
         .staking_manager
-        .stake(&req.address, req.amount, &wallet_manager)
+        .stake(&req.address, req.amount, wallet_exists)
     {
         Ok(_) => {
             // Crear transacción especial de staking: from -> "STAKING"
