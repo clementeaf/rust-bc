@@ -35,6 +35,15 @@ Legacy types (`blockchain.rs`, `models.rs`) are now `pub(crate)` — not exporte
 
 RocksDB column families added: `scopes`, `assemblies`, `sessions`, `actas`.
 
+Governance entity CRUD (20 endpoints):
+- Scopes, assemblies, sessions, actas: POST, GET, GET/{id}, PUT/{id}, DELETE/{id}
+
+Security fixes:
+- Blocks signed with node's SigningProvider (Ed25519/ML-DSA-65)
+- `POST /transactions` rejects unsigned non-coinbase transactions
+- TransactionPool double-spend prevention via `add_checked()` (validates pending spend vs balance)
+- Blind voter ID nonce: `sha256(proposal_id || voter_did || client_nonce)` prevents brute-force deanonymization
+
 CI workflows disabled (renamed to `.yml.disabled`).
 
 ---
