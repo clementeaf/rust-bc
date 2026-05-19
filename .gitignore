@@ -81,3 +81,6 @@ block-explorer-vite/
 cerulean-voto/
 sdks/
 
+
+# Build artifacts
+dist/

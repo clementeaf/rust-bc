@@ -851,6 +851,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         tx_pool: Arc::new(std::sync::Mutex::new(
             transaction::mempool::TransactionPool::new(),
         )),
+        vault_recovery_secret: std::env::var("VAULT_RECOVERY_SECRET")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(|s| hex::decode(s.as_str()).unwrap_or_else(|_| s.into_bytes())),
     };
 
     // Telemetry adapter: polls external APIs and ingests into Asset Registry.

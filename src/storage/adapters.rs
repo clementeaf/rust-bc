@@ -890,6 +890,32 @@ impl BlockStore for RocksDbBlockStore {
         serde_json::from_slice(&data).map_err(|e| StorageError::DeserializationError(e.to_string()))
     }
 
+    fn write_vault_recovery(&self, blind_index: &str, did: &str) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_VAULT)
+            .ok_or_else(|| StorageError::RocksDbError("missing vault CF".into()))?;
+        let key = format!("recovery:{blind_index}");
+        self.db
+            .put_cf(&cf, key.as_bytes(), did.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn read_vault_by_recovery(&self, blind_index: &str) -> StorageResult<String> {
+        let cf = self
+            .db
+            .cf_handle(CF_VAULT)
+            .ok_or_else(|| StorageError::RocksDbError("missing vault CF".into()))?;
+        let key = format!("recovery:{blind_index}");
+        let data = self
+            .db
+            .get_cf(&cf, key.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+            .ok_or_else(|| StorageError::KeyNotFound("vault recovery entry not found".into()))?;
+        String::from_utf8(data).map_err(|e| StorageError::DeserializationError(e.to_string()))
+    }
+
     // ── Governance entities ─────────────────────────────────────────────
 
     fn write_scope(&self, scope: &super::traits::Scope) -> StorageResult<()> {

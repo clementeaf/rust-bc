@@ -363,6 +363,18 @@ pub trait BlockStore: Send + Sync {
         ))
     }
 
+    /// Store a vault recovery index: blind_index → DID.
+    fn write_vault_recovery(&self, _blind_index: &str, _did: &str) -> StorageResult<()> {
+        Ok(())
+    }
+
+    /// Look up a DID by vault recovery blind index.
+    fn read_vault_by_recovery(&self, _blind_index: &str) -> StorageResult<String> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "vault recovery entry not found".into(),
+        ))
+    }
+
     // ── Institutional governance (Cerulean Voto) ──────────────────────────
 
     fn write_scope(&self, _scope: &Scope) -> StorageResult<()> {

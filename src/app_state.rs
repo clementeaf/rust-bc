@@ -103,6 +103,9 @@ pub struct AppState {
     pub signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
     /// New transaction pool backed by storage::Transaction.
     pub tx_pool: Arc<Mutex<crate::transaction::mempool::TransactionPool>>,
+    /// HMAC secret for vault recovery blind indexing (NIST SP 800-185).
+    /// Recovery is disabled when this is `None`.
+    pub vault_recovery_secret: Option<Vec<u8>>,
 }
 
 impl AppState {
@@ -166,6 +169,7 @@ impl AppState {
             tx_pool: Arc::new(Mutex::new(
                 crate::transaction::mempool::TransactionPool::new(),
             )),
+            vault_recovery_secret: None,
         }
     }
 }

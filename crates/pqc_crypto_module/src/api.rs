@@ -54,6 +54,13 @@ pub fn sha3_256(data: &[u8]) -> Result<Hash256, CryptoError> {
     crate::hashing::sha3_256(data)
 }
 
+/// Compute HMAC-SHA3-256 (SP 800-185 aligned).
+///
+/// Used for server-side blind indexing in vault recovery.
+pub fn hmac_sha3_256(secret: &[u8], data: &[u8]) -> Result<Hash256, CryptoError> {
+    crate::hashing::hmac_sha3_256(secret, data)
+}
+
 /// Generate an ML-KEM-768 keypair.
 pub fn generate_mlkem_keypair() -> Result<crate::mlkem::MlKemKeyPair, CryptoError> {
     crate::mlkem::generate_keypair()

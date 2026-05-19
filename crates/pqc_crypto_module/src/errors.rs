@@ -22,4 +22,6 @@ pub enum CryptoError {
     NonApprovedAlgorithm,
     #[error("serialization error: {0}")]
     SerializationError(String),
+    #[error("invalid key length for HMAC")]
+    InvalidKeyLength,
 }

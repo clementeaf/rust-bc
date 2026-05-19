@@ -24,6 +24,8 @@ pub struct MemoryStore {
     votes: Mutex<HashMap<(u64, String), crate::governance::voting::Vote>>,
     /// Vault: DID → encrypted wallet JSON (opaque blob)
     vault: Mutex<HashMap<String, serde_json::Value>>,
+    /// Vault recovery: blind_index → DID
+    vault_recovery: Mutex<HashMap<String, String>>,
     /// Scopes: id → Scope
     scopes: Mutex<HashMap<String, Scope>>,
     /// Assemblies: id → Assembly
@@ -55,6 +57,7 @@ impl MemoryStore {
             proposals: Mutex::new(HashMap::new()),
             votes: Mutex::new(HashMap::new()),
             vault: Mutex::new(HashMap::new()),
+            vault_recovery: Mutex::new(HashMap::new()),
             scopes: Mutex::new(HashMap::new()),
             assemblies: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
@@ -286,6 +289,23 @@ impl BlockStore for MemoryStore {
             .get(did)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))
+    }
+
+    fn write_vault_recovery(&self, blind_index: &str, did: &str) -> StorageResult<()> {
+        self.vault_recovery
+            .lock()
+            .unwrap()
+            .insert(blind_index.to_string(), did.to_string());
+        Ok(())
+    }
+
+    fn read_vault_by_recovery(&self, blind_index: &str) -> StorageResult<String> {
+        self.vault_recovery
+            .lock()
+            .unwrap()
+            .get(blind_index)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound("vault recovery entry not found".into()))
     }
 
     // ── Governance entities ─────────────────────────────────────────────

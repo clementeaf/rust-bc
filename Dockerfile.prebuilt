@@ -1,0 +1,45 @@
+# Runtime-only image — uses a precompiled binary. Zero compilation.
+#
+# Usage:
+#   # First, place the binary at dist/cerulean-node-linux-amd64
+#   docker build -f Dockerfile.prebuilt -t cerulean-node:latest .
+#
+# Or pull from S3:
+#   aws s3 cp s3://ceruleanledger-releases/releases/latest/cerulean-node-linux-amd64 dist/
+#   docker build -f Dockerfile.prebuilt -t cerulean-node:latest .
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates libssl3 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 1000 rustbc && \
+    mkdir -p /app/data && \
+    chown -R rustbc:rustbc /app
+
+WORKDIR /app
+
+COPY dist/cerulean-node-linux-amd64 /usr/local/bin/rust-bc
+RUN chmod +x /usr/local/bin/rust-bc
+
+COPY --chown=cerulean:cerulean scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
+USER root
+
+ARG BUILD_VERSION=dev
+ENV BUILD_VERSION=${BUILD_VERSION}
+ENV API_PORT=8080
+ENV P2P_PORT=8081
+ENV DB_NAME=blockchain
+ENV DIFFICULTY=1
+ENV RUST_LOG=info
+
+EXPOSE 8080 8081
+VOLUME ["/app/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${API_PORT}/api/v1/health || curl -fk https://localhost:${API_PORT}/api/v1/health || exit 1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

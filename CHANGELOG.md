@@ -6,6 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-05-19
+
+**Vault recovery via passphrase-derived key (NIST SP 800-185)**
+
+- `POST /vault/store` now accepts optional `recovery_key` (64 hex chars, client-derived via KDF)
+- `POST /vault/recover` — recover wallet by recovery key; returns DID + encrypted wallet
+- Server-side blind index via HMAC-SHA3-256 prevents brute-force on DB leak
+- `VAULT_RECOVERY_SECRET` env var enables recovery (disabled when absent)
+- `hmac_sha3_256()` added to `pqc_crypto_module` public API
+- Storage trait: `write_vault_recovery()` / `read_vault_by_recovery()` with MemoryStore and RocksDB implementations
+- Recovery key validated as exactly 32 bytes hex; wrong key returns 404
+
+**Release distribution pipeline**
+
+- `scripts/install-cerulean.sh` — one-line installer for Linux servers (systemd service, zero dependencies)
+- `scripts/build-release.sh` — disposable EC2 spot build (~$0.03 per release)
+- `Dockerfile.prebuilt` — runtime-only image from precompiled binary (no compilation)
+- Binaries hosted at `s3://ceruleanledger-releases/`
+- Production downsized from t3.medium to t3.small ($15/mo)
+
+---
+
 ### 2026-05-17
 
 **Legacy storage removal — API layer fully migrated to BlockStore**
